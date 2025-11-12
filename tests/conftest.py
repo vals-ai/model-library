@@ -181,6 +181,10 @@ requires_openai_api = pytest.mark.skipif(
     not os.getenv("OPENAI_API_KEY"), reason="OpenAI API key not available"
 )
 
+requires_anthropic_api = pytest.mark.skipif(
+    not os.getenv("ANTHROPIC_API_KEY"), reason="Anthropic API key not available"
+)
+
 
 def has_mercury_api_key() -> bool:
     """Check if Mercury API key is available."""

@@ -8,11 +8,13 @@ from anthropic.types.message import Message
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
+    BatchResult,
     FileInput,
     FileWithBase64,
     FileWithId,
     FileWithUrl,
     InputItem,
+    LLMBatchMixin,
     LLMConfig,
     QueryResult,
     QueryResultCost,
@@ -36,6 +38,207 @@ from model_library.utils import (
     normalize_tool_result,
 )
 from typing_extensions import override
+
+
+class AnthropicBatchMixin(LLMBatchMixin):
+    """Batch processing support for Anthropic's Message Batches API."""
+
+    COMPLETED_RESULT_TYPES = ["succeeded", "errored", "canceled", "expired"]
+
+    def __init__(self, model: "AnthropicModel"):
+        self._root = model
+
+    @override
+    async def create_batch_query_request(
+        self,
+        custom_id: str,
+        input: Sequence[InputItem],
+        **kwargs: object,
+    ) -> dict[str, Any]:
+        """Create a single batch request in Anthropic's format.
+
+        Format: {"custom_id": str, "params": {...message params...}}
+        """
+        # Build the message body using the parent model's create_body method
+        tools = cast(list[ToolDefinition], kwargs.pop("tools", []))
+        body = await self._root.create_body(input, tools=tools, **kwargs)
+
+        return {
+            "custom_id": custom_id,
+            "params": body,
+        }
+
+    @override
+    async def batch_query(
+        self,
+        batch_name: str,
+        requests: list[dict[str, Any]],
+    ) -> str:
+        """Submit a batch of requests to Anthropic's Message Batches API.
+
+        Returns the batch ID for status tracking.
+        """
+        client = self._root.get_client()
+
+        # Create the batch using Anthropic's batches API
+        batch = await client.messages.batches.create(
+            requests=cast(Any, requests),  # Type mismatch in SDK, cast to Any
+        )
+
+        self._root.logger.info(
+            f"Created Anthropic batch {batch.id} with {len(requests)} requests"
+        )
+
+        return batch.id
+
+    @override
+    async def get_batch_results(self, batch_id: str) -> list[BatchResult]:
+        """Retrieve results from a completed batch.
+
+        Streams results using the SDK's batches.results() method.
+        """
+        client = self._root.get_client()
+
+        # Get batch status to verify it's completed
+        batch = await client.messages.batches.retrieve(batch_id)
+
+        if batch.processing_status != "ended":
+            raise ValueError(
+                f"Batch {batch_id} is not completed yet. Status: {batch.processing_status}"
+            )
+
+        # Stream results using the SDK's results method
+        batch_results: list[BatchResult] = []
+        async for result_item in await client.messages.batches.results(batch_id):
+            # result_item is a MessageBatchIndividualResponse - convert to dict
+            result_dict = result_item.model_dump()
+            custom_id = cast(str, result_dict["custom_id"])
+            result_type = cast(str, result_dict["result"]["type"])
+
+            if result_type not in self.COMPLETED_RESULT_TYPES:
+                self._root.logger.warning(
+                    f"Unknown result type '{result_type}' for request {custom_id}"
+                )
+                continue
+
+            if result_type == "succeeded":
+                # Extract the message from the successful result
+                message_data = cast(dict[str, Any], result_dict["result"]["message"])
+
+                # Parse the message content to extract text, reasoning, and tool calls
+                text = ""
+                reasoning = ""
+                tool_calls: list[ToolCall] = []
+
+                for content in message_data.get("content", []):
+                    if content.get("type") == "text":
+                        text += content.get("text", "")
+                    elif content.get("type") == "thinking":
+                        reasoning += content.get("thinking", "")
+                    elif content.get("type") == "tool_use":
+                        tool_calls.append(
+                            ToolCall(
+                                id=content["id"],
+                                name=content["name"],
+                                args=content.get("input", {}),
+                            )
+                        )
+
+                # Extract usage information
+                usage = message_data.get("usage", {})
+                metadata = QueryResultMetadata(
+                    in_tokens=usage.get("input_tokens", 0),
+                    out_tokens=usage.get("output_tokens", 0),
+                    cache_read_tokens=usage.get("cache_read_input_tokens", 0),
+                    cache_write_tokens=usage.get("cache_creation_input_tokens", 0),
+                )
+
+                query_result = QueryResult(
+                    output_text=text,
+                    reasoning=reasoning,
+                    metadata=metadata,
+                    tool_calls=tool_calls,
+                    history=[],  # History not available in batch results
+                )
+
+                batch_results.append(
+                    BatchResult(
+                        custom_id=custom_id,
+                        output=query_result,
+                    )
+                )
+
+            elif result_type == "errored":
+                # Handle errored results
+                error = cast(dict[str, Any], result_dict["result"]["error"])
+                error_message = f"{error.get('type', 'unknown_error')}: {error.get('message', 'Unknown error')}"
+                output = QueryResult(output_text=error_message)
+                batch_results.append(
+                    BatchResult(
+                        custom_id=custom_id,
+                        output=output,
+                        error_message=error_message,
+                    )
+                )
+
+            elif result_type in ["canceled", "expired"]:
+                # Handle canceled/expired results
+                error_message = f"Request {result_type}"
+                batch_results.append(
+                    BatchResult(
+                        custom_id=custom_id,
+                        output=QueryResult(output_text=""),
+                        error_message=error_message,
+                    )
+                )
+
+        return batch_results
+
+    @override
+    async def get_batch_progress(self, batch_id: str) -> int:
+        """Get the number of completed requests in a batch."""
+        client = self._root.get_client()
+        batch = await client.messages.batches.retrieve(batch_id)
+
+        # Return the number of processed requests
+        request_counts = batch.request_counts
+        return (
+            request_counts.succeeded
+            + request_counts.errored
+            + request_counts.canceled
+            + request_counts.expired
+        )
+
+    @override
+    async def cancel_batch_request(self, batch_id: str) -> None:
+        """Cancel a running batch request."""
+        client = self._root.get_client()
+        await client.messages.batches.cancel(batch_id)
+        self._root.logger.info(f"Canceled Anthropic batch {batch_id}")
+
+    @override
+    async def get_batch_status(self, batch_id: str) -> str:
+        """Get the current status of a batch."""
+        client = self._root.get_client()
+        batch = await client.messages.batches.retrieve(batch_id)
+        return batch.processing_status
+
+    @classmethod
+    def is_batch_status_completed(cls, batch_status: str) -> bool:
+        """Check if a batch status indicates completion."""
+        return batch_status == "ended"
+
+    @classmethod
+    def is_batch_status_failed(cls, batch_status: str) -> bool:
+        """Check if a batch status indicates failure."""
+        # Anthropic batches can have individual request failures but the batch
+        # itself doesn't have a "failed" status - it just ends
+        return False
+
+    @classmethod
+    def is_batch_status_cancelled(cls, batch_status: str) -> bool:
+        """Check if a batch status indicates cancellation."""
+        return batch_status == "canceling" or batch_status == "canceled"
 
 
 class AnthropicModel(LLM):
@@ -78,6 +281,12 @@ class AnthropicModel(LLM):
             )
         )
 
+        # Initialize batch support if enabled
+        self.supports_batch: bool = self.supports_batch and self.native
+        self.batch: LLMBatchMixin | None = (
+            AnthropicBatchMixin(self) if self.supports_batch else None
+        )
+
     @override
     async def parse_input(
         self,
@@ -88,7 +297,6 @@ class AnthropicModel(LLM):
         content_user: list[dict[str, Any]] = []
 
         # First pass: collect all tool calls from Message objects for validation
-        # This handles both Message and BetaMessage types
         tool_calls_in_input: set[str] = set()
         for item in input:
             if hasattr(item, "content") and hasattr(item, "role"):

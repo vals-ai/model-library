@@ -23,6 +23,10 @@ base-config:
     temperature: 1
 
 claude-4-models:
+  base-config:
+    class_properties:
+      supports_batch_requests: true
+
   anthropic/claude-opus-4-1-20250805:
     label: Claude Opus 4.1 (Nonthinking)
     description: Advanced model for specialized complex

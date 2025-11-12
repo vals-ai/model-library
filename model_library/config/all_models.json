@@ -187,6 +187,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": true,
             "supports_tools": true,
             "deprecated": false,
@@ -234,6 +235,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": true,
             "supports_tools": true,
             "deprecated": false,
@@ -451,6 +453,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": true,
             "supports_tools": true,
             "deprecated": false,
@@ -508,6 +511,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": true,
             "supports_tools": true,
             "deprecated": false,
@@ -1979,6 +1983,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": true,
             "supports_tools": true,
             "deprecated": false,
@@ -2026,6 +2031,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": true,
             "supports_tools": true,
             "deprecated": false,
@@ -3350,6 +3356,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": false,
             "supports_tools": true,
             "deprecated": false,
@@ -3407,6 +3414,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": true,
             "supports_tools": true,
             "deprecated": false,
@@ -3475,6 +3483,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": true,
             "supports_tools": true,
             "deprecated": false,
@@ -3522,6 +3531,7 @@
         "class_properties": {
             "supports_images": true,
             "supports_files": true,
+            "supports_batch_requests": true,
             "supports_temperature": true,
             "supports_tools": true,
             "deprecated": false,
