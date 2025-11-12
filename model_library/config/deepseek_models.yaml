@@ -10,7 +10,7 @@ base-config:
     ignored_for_cost: false
   properties:
     reasoning_model: false
-
+    
 deepseek-v3p2-exp-models:
   base-config:
     class_properties:
@@ -23,6 +23,8 @@ deepseek-v3p2-exp-models:
     costs_per_million_token:
       input: 0.28
       output: 0.42
+      cache:
+        read_discount: 0.1
 
   deepseek/deepseek-chat:
     label: DeepSeek V3.2-Exp (Nonthinking)

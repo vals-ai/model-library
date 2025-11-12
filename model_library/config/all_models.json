@@ -388,7 +388,11 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 0.28,
-            "output": 0.42
+            "output": 0.42,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            }
         },
         "alternative_keys": [],
         "default_parameters": {
@@ -426,7 +430,11 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 0.28,
-            "output": 0.42
+            "output": 0.42,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            }
         },
         "alternative_keys": [],
         "default_parameters": {
