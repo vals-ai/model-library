@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 2
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -796,6 +796,7 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyyaml" },
     { name = "redis" },
+    { name = "rich" },
     { name = "tiktoken" },
     { name = "together" },
     { name = "typing-extensions" },
@@ -810,7 +811,6 @@ dev = [
     { name = "inquirerpy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "rich" },
     { name = "ruff" },
 ]
 
@@ -828,6 +828,7 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.11.7,<3.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "redis", specifier = ">=6.2.0,<7.0" },
+    { name = "rich" },
     { name = "tiktoken", specifier = "==0.11.0" },
     { name = "together", specifier = ">=1.5.25,<2.0" },
     { name = "typing-extensions", specifier = ">=4.14.1,<5.0" },
@@ -842,7 +843,6 @@ dev = [
     { name = "inquirerpy" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "rich" },
     { name = "ruff" },
 ]
 

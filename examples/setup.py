@@ -4,22 +4,12 @@ from typing import Any
 from rich.console import Console
 from rich.logging import RichHandler
 
-console = Console()
-
-# llm logger
-llm_logger = logging.getLogger("llm")
-llm_logger.setLevel(logging.INFO)
-llm_logger.handlers.clear()
-handler = RichHandler(console=console, markup=True, show_time=False)
-handler.setFormatter(logging.Formatter(("%(name)s - %(levelname)s - %(message)s")))
-llm_logger.addHandler(handler)
-
 # console logger (if you want to print specific colors)
 console_logger = logging.getLogger("console")
 console_logger.setLevel(logging.INFO)
 console_logger.handlers.clear()
 console_logger.addHandler(
-    RichHandler(console=console, markup=True, show_time=False, rich_tracebacks=True)
+    RichHandler(console=Console(), markup=True, show_time=False, rich_tracebacks=True)
 )
 
 # all other logs

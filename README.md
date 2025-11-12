@@ -26,7 +26,14 @@ Open-source model library for interacting with a variety of LLM providers. Origi
 - X AI
 - ZhipuAI (zai)
 
-Run `python -m scripts.browse_models` to browse the model registry.
+Run `python -m scripts.browse_models` to browse the model registry or
+
+```python
+from model_library.registry_utils import get_model_names_by_provider, get_provider_names
+
+print(get_provider_names())
+print(get_model_names_by_provider("chosen-provider"))
+```
 
 ### Supported Input
 
@@ -43,16 +50,26 @@ Here is a basic example of how to query a model:
 
 ```python
 import asyncio
-from model_library.registry_utils import get_registry_model
+from model_library import model
 
 async def main():
     # Load a model from the registry
-    model = get_registry_model("openai/gemini-2.5-flash")
+    llm = model("anthropic/claude-opus-4-1-20250805-thinking")
+
+    # Display the LLM instance
+    llm.logger.info(llm)
+    # or print(llm)
 
     # Query the model with a simple text input
-    response = await model.query("What is QSBS? Explain your thinking in detail and make it concise.")
+    result = await llm.query(
+        "What is QSBS? Explain your thinking in detail and make it concise."
+    )
 
-    # Logger automatically logs the response
+    # Logger automatically logs the result
+
+    # Display only the output text
+    llm.logger.info(result.output_text)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
@@ -61,7 +78,18 @@ if __name__ == "__main__":
 The model registry holds model attributes, ex. reasoning, file support, tool support, max tokens. You may also use models not included in the registry.
 
 ```python
-model = get_raw_model("openai/gpt-3.5-turbo", config=LLMConfig(max_tokens=1000))
+from model_library import raw_model
+from model_library.base import LLMConfig
+
+model = raw_model("grok/grok-code-fast", LLMConfig(max_tokens=10000))
+```
+
+Root logger is named "llm". To disable logging:
+
+```python
+from model_library import set_logging
+
+set_logging(enable=False)
 ```
 
 ### Environment Setup
