@@ -1,0 +1,266 @@
+base-config:
+  company: xAI
+  documentation_url: https://docs.x.ai/docs#models
+  open_source: false
+  class_properties:
+    supports_images: true
+    available_as_evaluator: false
+    supports_files: false
+    available_for_everyone: true
+    ignored_for_cost: false
+    supports_tools: false
+  properties:
+    reasoning_model: false
+
+xai-models:
+  base-config:
+    class_properties:
+      supports_temperature: true
+    costs_per_million_token:
+      cache:
+        read_discount: 0.25
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.95
+
+  grok/grok-code-fast-1:
+    label: Grok Code Fast
+    description: A speedy and economical reasoning model that excels at agentic coding. Tailored specifically for code generation and debugging across multiple programming languages.
+    release_date: 2025-08-25
+    properties:
+      context_window: 256_000
+      max_token_output: 40_000
+      reasoning_model: true
+    class_properties:
+      supports_images: false
+      supports_tools: true
+    costs_per_million_token:
+      input: 0.20
+      output: 1.50
+      cache:
+        read: 0.02
+    documentation_url: https://docs.x.ai/docs/models/grok-code-fast-1
+    default_parameters:
+      temperature: 0.7
+      max_output_tokens: 40000
+    alternative_keys:
+      - grok/grok-code-fast
+      - grok/grok-code-fast-1-0825
+
+  grok/grok-4-fast-reasoning:
+    label: Grok 4 Fast (Reasoning)
+    description: Latest advancement in cost-efficient reasoning models with unified architecture. Handles complex requests with deep chain-of-thought reasoning. Features 2M token context window and native tool use.
+    release_date: 2025-09-19
+    open_source: false
+    class_properties:
+      supports_images: true
+      available_as_evaluator: true
+      supports_metadata: true
+      supports_files: false
+      available_for_everyone: true
+      ignored_for_cost: false
+    properties:
+      context_window: 2_000_000
+      max_token_output: 2_000_000 # from openrouter
+      training_cutoff: null
+      reasoning_model: true
+    documentation_url: https://docs.x.ai/docs/models/grok-4-fast-reasoning
+    costs_per_million_token:
+      input: 0.20
+      output: 0.5
+      cache:
+        read: 0.05
+      context:
+        threshold: 128_000
+        input: 0.4
+        output: 1.0
+    default_parameters:
+      temperature: 0.7
+      max_output_tokens: 128000
+    alternative_keys:
+      - grok/grok-4-fast
+      - grok/grok-4-fast-reasoning-latest
+
+  grok/grok-4-fast-non-reasoning:
+    label: Grok 4 Fast (Non-Reasoning)
+    description: Cost-efficient model focused on speed and efficiency for straightforward tasks like summarization or classification without deep logical processing. Unified architecture with reasoning variant, steered via system prompts.
+    release_date: 2025-09-19
+    open_source: false
+    class_properties:
+      supports_images: true
+      available_as_evaluator: true
+      supports_metadata: true
+      supports_files: false
+      available_for_everyone: true
+      ignored_for_cost: false
+    properties:
+      context_window: 2_000_000
+      max_token_output: 2_000_000 # from openrouter
+      training_cutoff: null
+      reasoning_model: false
+    documentation_url: https://docs.x.ai/docs/models/grok-4-fast-non-reasoning
+    costs_per_million_token:
+      input: 0.20
+      output: 0.5
+      cache:
+        read: 0.05
+      context:
+        threshold: 128_000
+        input: 0.4
+        output: 1.0
+    default_parameters:
+      temperature: 0.7
+      max_output_tokens: 2000000
+    alternative_keys:
+      - grok/grok-4-fast-non-reasoning-latest
+
+  grok/grok-4-0709:
+    label: Grok 4
+    description: Latest and greatest flagship model offering unparalleled performance in natural language, math and reasoning. The perfect jack of all trades with native tool use and structured outputs support.
+    release_date: 2025-07-09
+    class_properties:
+      supports_images: true
+      available_for_everyone: false
+      supports_tools: true
+    properties:
+      context_window: 256_000
+      max_token_output: 128_000
+      training_cutoff: null
+      reasoning_model: true
+    documentation_url: https://docs.x.ai/docs/models/grok-4-0709
+    costs_per_million_token:
+      input: 3.00
+      output: 15.00
+      cache:
+        read: 0.75
+      context:
+        threshold: 128_000
+        input: 6.00
+        output: 30.00
+    default_parameters:
+      temperature: 0.7
+      max_output_tokens: 128000
+    alternative_keys:
+      - grok/grok-4
+      - grok/grok-4-latest
+
+  grok/grok-3-mini:
+    label: Grok 3 Mini Reasoning
+    description: Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.
+    release_date: 2025-04-09
+    properties:
+      context_window: 131_072
+      max_token_output: null
+      training_cutoff: null
+      reasoning_model: true
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 0.30
+      output: 0.50
+      cached:
+        read: 0.075
+    documentation_url: https://docs.x.ai/docs/models/grok-3-mini
+    default_parameters:
+      temperature: 0.7
+    alternative_keys:
+      - grok/grok-3-mini-latest
+      - grok/grok-3-mini-beta
+      - grok/grok-3-mini-fast
+      - grok/grok-3-mini-fast-latest
+      - grok/grok-3-mini-fast-beta
+      - grok/grok-3-mini-high-reasoning:
+          default_parameters:
+            reasoning_effort: "high"
+      - grok/grok-3-mini-low-reasoning:
+          default_parameters:
+            reasoning_effort: "low"
+      - grok/grok-3-mini-fast-high-reasoning:
+          default_parameters:
+            reasoning_effort: "high"
+      - grok/grok-3-mini-fast-low-reasoning:
+          default_parameters:
+            reasoning_effort: "low"
+
+  grok/grok-3:
+    label: Grok 3
+    description: Excels at enterprise use cases like data extraction, coding, and text summarization. Possesses deep domain knowledge in finance, healthcare, law, and science.
+    release_date: 2025-04-09
+    properties:
+      context_window: 131_072
+      max_token_output: null
+      training_cutoff: null
+    costs_per_million_token:
+      input: 3.00
+      output: 15.00
+      cache:
+        read: 0.75
+    documentation_url: https://docs.x.ai/docs/models/grok-3
+    default_parameters:
+      temperature: 0.7
+    alternative_keys:
+      - grok/grok-3-latest
+      - grok/grok-3-beta
+      - grok/grok-3-fast
+      - grok/grok-3-fast-latest
+      - grok/grok-3-fast-beta
+
+  grok/grok-2-vision-1212:
+    label: Grok 2 Vision
+    description: ""
+    release_date: 2024-12-12
+    properties:
+      context_window: 8_192
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      supports_images: true
+    costs_per_million_token:
+      input: 2.00
+      output: 10.00
+    alternative_keys:
+      - grok/grok-2-vision
+      - grok/grok-2-vision-latest
+
+  grok/grok-2-1212:
+    label: Grok 2
+    description: ""
+    release_date: 2024-12-11
+    properties:
+      context_window: 131_072
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 2.00
+      output: 10.00
+
+  grok/grok-vision-beta:
+    label: Grok Vision Beta
+    description: ""
+    release_date: 2024-12-12
+    properties:
+      context_window: 8_192
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      supports_images: true
+      deprecated: true
+    costs_per_million_token:
+      input: 5.00
+      output: 15.00
+
+  grok/grok-beta:
+    label: Grok Beta
+    description: ""
+    release_date: 2024-12-11
+    properties:
+      context_window: 131_072
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 5.00
+      output: 15.00

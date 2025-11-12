@@ -1,0 +1,143 @@
+base-config:
+  company: Mistral
+  documentation_url: https://docs.mistral.ai/getting-started/models/models_overview/
+  open_source: false
+  class_properties:
+    supports_images: false
+    available_as_evaluator: false
+    supports_files: false
+    available_for_everyone: true
+    ignored_for_cost: false
+    supports_tools: true
+  properties:
+    context_window: null
+    max_token_output: null
+    training_cutoff: null
+
+magistral-models:
+  base-config:
+    properties:
+      reasoning_model: true
+    class_properties:
+      supports_temperature: true
+    default_parameters:
+      temperature: 0.7
+
+  mistralai/magistral-medium-2506:
+    label: Magistral Medium 1.0 (06/2025)
+    description: Magistral Medium 2506
+    documentation_url: https://mistral.ai/news/magistral
+    release_date: 2025-06-10
+    properties:
+      context_window: 131_072
+      max_token_output: 40_000
+      training_cutoff: "2024-05"
+    class_properties:
+      supports_images: true
+    costs_per_million_token:
+      input: 2
+      output: 5
+
+  mistralai/magistral-medium-2509:
+    label: Magistral Medium 1.2 (09/2025)
+    description: Reasoning model with vision support released in September 2025.
+    release_date: 2025-09-18
+    properties:
+      context_window: 128_000
+      max_token_output: 128_000
+    class_properties:
+      supports_images: true
+    costs_per_million_token:
+      input: 2
+      output: 5
+
+  mistralai/magistral-small-2509:
+    label: Magistral Small 1.2 (09/2025)
+    open_source: true
+    description: Small reasoning model with vision support released in September 2025.
+    release_date: 2025-09-18
+    properties:
+      context_window: 128_000
+      max_token_output: 128_000
+    class_properties:
+      supports_images: true
+    costs_per_million_token:
+      input: 0.5
+      output: 1.5
+
+mistralai-models:
+  base-config:
+    properties:
+      reasoning_model: false
+    class_properties:
+      supports_temperature: true
+    default_parameters:
+      temperature: 0.7
+
+  # Standard Mistral Models
+  mistralai/mistral-medium-2505:
+    label: Mistral Medium 3.1 (05/2025)
+    description: Mistral Medium 2505
+    documentation_url: https://mistral.ai/news/mistral-medium-3
+    release_date: 2025-05-07
+    properties:
+      context_window: 131_072
+      max_token_output: 32768
+      training_cutoff: "2024-05"
+    class_properties:
+      supports_images: true
+    costs_per_million_token:
+      input: 0.4
+      output: 2.0
+
+  mistralai/mistral-small-2503:
+    label: Mistral Small 3.1 (03/2025)
+    description: Mistral Small 2503
+    documentation_url: https://mistral.ai/news/mistral-small-3-1
+    release_date: 2025-03-17
+    properties:
+      context_window: 131_072
+      max_token_output: 8192
+      training_cutoff: "2024-05"
+    class_properties:
+      supports_images: true
+    costs_per_million_token:
+      input: 0.075
+      output: 0.3
+
+  mistralai/pixtral-large-2411:
+    label: Pixtral Large (11/2024)
+    description: Latest version of the Pixtral Large model.
+    release_date: 2024-11-18
+    properties:
+      context_window: 128_000
+    class_properties:
+      supports_images: true
+      deprecated: true
+    costs_per_million_token:
+      input: 2.00
+      output: 6.00
+
+  mistralai/mistral-large-2411:
+    label: Mistral Large (11/2024)
+    description: Latest version of the Mistral Large model.
+    release_date: 2024-11-18
+    properties:
+      context_window: 128_000
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 2.00
+      output: 6.00
+
+  mistralai/mistral-small-2402:
+    label: Mistral Small (02/2024)
+    description: Latest version of the Mistral Small model.
+    release_date: 2024-09-17
+    properties:
+      context_window: 32_000
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 0.20
+      output: 0.60

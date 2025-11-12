@@ -1,0 +1,228 @@
+base-config:
+  company: Fireworks
+  documentation_url: https://fireworks.ai/models
+  open_source: false
+  class_properties:
+    available_as_evaluator: false
+    supports_files: false
+    available_for_everyone: true
+    ignored_for_cost: false
+    supports_tools: true
+  properties:
+    reasoning_model: false
+  costs_per_million_token:
+    cache:
+      read_discount: 1
+    batch:
+      input_discount: 0.5
+      output_discount: 0.5
+
+qwen-models:
+  base-config:
+    company: Alibaba
+    open_source: true
+    class_properties:
+      supports_temperature: true
+    default_parameters:
+      temperature: 0.7
+
+  fireworks/qwen3-235b-a22b:
+    label: Qwen 3 (235B)
+    description: ""
+    release_date: 2025-04-28
+    properties:
+      context_window: 128_000
+      max_token_output: 32_768
+      training_cutoff: "2024-08"
+      reasoning_model: true
+    class_properties:
+      supports_images: false
+    costs_per_million_token:
+      input: 0.22
+      output: 0.88
+
+llama-4-models:
+  base-config:
+    company: Meta
+    open_source: true
+
+  fireworks/llama4-maverick-instruct-basic:
+    label: Llama 4 Maverick
+    description: Llama 4 Maverick SOTA 128-expert MoE powerhouse for multilingual image/text understanding.
+    release_date: 2025-04-05
+    properties:
+      context_window: 1_000_000
+      max_token_output: 16_384
+      training_cutoff: "2024-08"
+    costs_per_million_token:
+      input: 0.22
+      output: 0.88
+    class_properties:
+      supports_images: true
+      deprecated: true
+
+  fireworks/llama4-scout-instruct-basic:
+    label: Llama 4 Scout
+    description: Llama 4 Scout SOTA 128-expert MoE powerhouse for multilingual image/text understanding.
+    release_date: 2025-04-05
+    properties:
+      context_window: 10_000_000
+      max_token_output: 16_384
+      training_cutoff: "2024-08"
+    costs_per_million_token:
+      input: 0.18
+      output: 0.59
+    class_properties:
+      supports_images: true
+      deprecated: true
+
+deepseek-models:
+  base-config:
+    company: DeepSeek
+    open_source: true
+    class_properties:
+      supports_images: false
+      supports_temperature: true
+      deprecated: true
+    default_parameters:
+      temperature: 1
+
+  fireworks/deepseek-r1:
+    label: DeepSeek R1
+    description: ""
+    release_date: 2025-01-20
+    properties:
+      context_window: 163_840
+      max_token_output: 163_840
+      training_cutoff: null
+      reasoning_model: true
+    costs_per_million_token:
+      input: 3.00
+      output: 8.00
+
+  fireworks/deepseek-v3-0324:
+    label: DeepSeek V3 (03/24/2025)
+    description: ""
+    release_date: 2025-03-24
+    properties:
+      context_window: 131_072
+      max_token_output: 131_072
+    costs_per_million_token:
+      input: 1.20
+      output: 1.20
+
+  fireworks/deepseek-v3:
+    label: DeepSeek V3
+    description: ""
+    release_date: 2024-12-26
+    properties:
+      context_window: 131_072
+      max_token_output: 131_072
+    costs_per_million_token:
+      input: 0.90
+      output: 0.90
+
+  fireworks/deepseek-v3p1:
+    label: DeepSeek V3.1
+    description: ""
+    release_date: 2025-08-21
+    properties:
+      context_window: 163_840
+      max_token_output: 163_840
+      reasoning_model: false # actually hybrid
+      deprecated: false # still using this one
+    costs_per_million_token:
+      input: 0.56
+      output: 1.68
+
+openai-models:
+  base-config:
+    company: OpenAI
+    open_source: true
+    class_properties:
+      supports_images: false
+
+  fireworks/gpt-oss-120b:
+    label: GPT OSS 120B
+    description: ""
+    release_date: 2025-08-05
+    properties:
+      context_window: 128_000
+      max_token_output: 32_768
+      training_cutoff: null
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.15
+      output: 0.60
+
+  fireworks/gpt-oss-20b:
+    label: GPT OSS 20B
+    description: ""
+    release_date: 2025-08-05
+    properties:
+      context_window: 128_000
+      max_token_output: 32_768
+      training_cutoff: null
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.05
+      output: 0.20
+
+kimi-models:
+  base-config:
+    company: Kimi
+    open_source: true
+    documentation_url: https://www.kimi.com/
+    class_properties:
+      supports_images: false
+
+  fireworks/kimi-k2-instruct-0905:
+    label: Kimi K2 Instruct 0905
+    description: Kimi K2 0905 is an updated version of Kimi K2, a state-of-the-art mixture-of-experts (MoE) language model with 32 billion activated parameters and 1 trillion total parameters. Kimi K2 0905 has improved coding abilities, a longer context window, and agentic tool use, and a longer (262K) context window.
+    release_date: 2025-09-04
+    properties:
+      context_window: 256_000
+      max_token_output: 256_000
+      training_cutoff: null
+      reasoning_model: false
+    class_properties:
+      supports_images: false
+    costs_per_million_token:
+      input: 0.60
+      output: 2.50
+
+minimax-models:
+  base-config:
+    company: MiniMax AI
+    documentation_url: https://platform.minimax.io/docs
+    open_source: true
+    class_properties:
+      available_as_evaluator: false
+      supports_images: false
+      supports_files: false
+      supports_tools: true
+      available_for_everyone: true
+      ignored_for_cost: false
+      supports_temperature: true
+    
+
+  fireworks/minimax-m2:
+    label: MiniMax-M2
+    description: MiniMax-M2 is a cost-efficient open-source model optimized for agentic applications and coding in particular.
+    release_date: 2025-10-26
+    properties:
+      context_window: 204_800 
+      max_token_output: 131_000
+      reasoning_model: true
+      training_cutoff: null
+    class_properties:
+      supports_tools: true
+      supports_temperature: true
+    default_parameters: # taken from https://huggingface.co/MiniMaxAI/MiniMax-M2#inference-parameters 
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 40
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+

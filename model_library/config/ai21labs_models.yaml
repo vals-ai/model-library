@@ -1,0 +1,99 @@
+base-config:
+  company: AI21 Labs
+  documentation_url: https://www.ai21.com/jamba
+  class_properties:
+    supports_images: false
+    available_as_evaluator: false
+    supports_files: false
+    available_for_everyone: false
+    ignored_for_cost: false
+  properties:
+    context_window: null
+    max_token_output: 4096
+    training_cutoff: null
+
+ai21labs-models:
+  base-config:
+    open_source: true
+    class_properties:
+      supports_temperature: true
+    default_parameters:
+      temperature: 0.4
+
+  ai21labs/jamba-large-1.7:
+    label: Jamba 1.7 Large
+    description: The most powerful and efficient long context model
+    release_date: 2025-07-03
+    properties:
+      context_window: 256_000
+      training_cutoff: "2024-08"
+    costs_per_million_token:
+      input: 2.00
+      output: 8.00
+
+  ai21labs/jamba-mini-1.7:
+    label: Jamba 1.7 Mini
+    description: The most powerful and efficient long context model
+    release_date: 2025-07-03
+    properties:
+      context_window: 256_000
+      training_cutoff: "2024-08"
+    costs_per_million_token:
+      input: 0.2
+      output: 0.4
+
+  ai21labs/jamba-large-1.6:
+    label: Jamba 1.6 Large
+    description: The most powerful and efficient long context model
+    release_date: 2025-03-06
+    class_properties:
+      deprecated: true
+    properties:
+      context_window: 256_000
+    costs_per_million_token:
+      input: 2.00
+      output: 8.00
+    alternative_keys:
+      - ai21labs/jamba-1.6-large
+
+  ai21labs/jamba-mini-1.6:
+    label: Jamba 1.6 Mini
+    description: The most powerful and efficient long context model
+    release_date: 2025-03-06
+    class_properties:
+      deprecated: true
+    properties:
+      context_window: 256_000
+    costs_per_million_token:
+      input: 0.2
+      output: 0.4
+    alternative_keys:
+      - ai21labs/jamba-1.6-mini
+
+  ai21labs/jamba-large-1.5:
+    label: Jamba 1.5 Large
+    description: The most powerful and efficient long context model
+    release_date: 2024-08-22
+    properties:
+      context_window: 256_000
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 2.00
+      output: 8.00
+    alternative_keys:
+      - ai21labs/jamba-1.5-large
+
+  ai21labs/jamba-mini-1.5:
+    label: Jamba 1.5 Mini
+    description: Efficient & lightweight model for a wide range of tasks
+    release_date: 2024-08-22
+    properties:
+      context_window: 256_000
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 0.2
+      output: 0.4
+    alternative_keys:
+      - ai21labs/jamba-1.5-mini

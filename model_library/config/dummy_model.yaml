@@ -1,0 +1,38 @@
+vals-models:
+  base-config:
+    company: Vals AI
+    documentation_url: ""
+    class_properties:
+      supports_batch_requests: true
+    properties:
+      context_window: 128_000
+      max_token_output: 16_384
+      training_cutoff: ""
+
+  vals/dumbmar-5o-ultra-thinking:
+    label: Dummy Model
+    open_source: false
+    description: Vals Dummy Model for testing
+    release_date: null
+    class_properties:
+      supports_images: false
+      available_as_evaluator: false
+    costs_per_million_token:
+      input: 0.15
+      output: 0.60
+      cache:
+        read: 0.075
+
+  vals/dumbmar-5o-evaluator:
+    label: Dummy Evaluator Model
+    open_source: false
+    description: Vals Dummy Model for evaluating
+    release_date: null
+    class_properties:
+      supports_images: false
+      available_as_evaluator: true
+    costs_per_million_token:
+      input: 0.15
+      output: 0.60
+      cache:
+        read: 0.075

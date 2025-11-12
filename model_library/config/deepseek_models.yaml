@@ -1,0 +1,47 @@
+base-config:
+  company: DeepSeek
+  documentation_url: https://api-docs.deepseek.com/
+  open_source: true
+  class_properties:
+    supports_images: false
+    available_as_evaluator: false
+    supports_files: false
+    available_for_everyone: true
+    ignored_for_cost: false
+  properties:
+    reasoning_model: false
+
+deepseek-v3p2-exp-models:
+  base-config:
+    class_properties:
+      supports_images: false
+      supports_files: false
+      supports_batch_requests: false
+      supports_temperature: true
+    default_parameters:
+      temperature: 1
+    costs_per_million_token:
+      input: 0.28
+      output: 0.42
+
+  deepseek/deepseek-chat:
+    label: DeepSeek V3.2-Exp (Nonthinking)
+    description: DeepSeek V3.2-Exp model for general conversation
+    release_date: 2025-09-29
+    properties:
+      context_window: 128_000
+      max_token_output: 8_000
+      reasoning_model: false
+    class_properties:
+      supports_tools: true
+
+  deepseek/deepseek-reasoner:
+    label: DeepSeek V3.2-Exp (Thinking)  
+    description: DeepSeek V3.2-Exp model with thinking mode for complex reasoning
+    release_date: 2025-09-29
+    properties:
+      context_window: 128_000
+      max_token_output: 64_000
+      reasoning_model: true
+    class_properties:
+      supports_tools: false

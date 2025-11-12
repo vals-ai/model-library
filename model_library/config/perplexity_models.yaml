@@ -1,0 +1,91 @@
+base-config:
+  company: Perplexity
+  documentation_url: https://docs.perplexity.ai
+  open_source: false
+  class_properties:
+    supports_images: false
+    supports_metadata: true
+    supports_files: false
+    supports_batch_requests: false
+    supports_temperature: true
+    supports_tools: false
+    available_for_everyone: true
+    available_as_evaluator: false
+    ignored_for_cost: false
+  properties:
+    context_window: 128000
+    max_token_output: null
+    training_cutoff: null
+
+perplexity-models:
+  base-config:
+    properties:
+      reasoning_model: false
+
+  perplexity/sonar:
+    label: Sonar
+    description: Lightweight web search model optimized for fast factual answers with citations.
+    documentation_url: https://docs.perplexity.ai/models/models/sonar
+    properties:
+      context_window: 128000
+    costs_per_million_token:
+      input: 1.0
+      output: 1.0
+      request_low_context_per_1000: 5.0
+      request_medium_context_per_1000: 8.0
+      request_high_context_per_1000: 12.0
+
+  perplexity/sonar-pro:
+    label: Sonar Pro
+    description: Premium search model for deeper research and analytical tasks with higher context window.
+    documentation_url: https://docs.perplexity.ai/models/models/sonar-pro
+    properties:
+      context_window: 200000
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      request_low_context_per_1000: 6.0
+      request_medium_context_per_1000: 10.0
+      request_high_context_per_1000: 14.0
+
+  perplexity/sonar-reasoning:
+    label: Sonar Reasoning
+    description: Reasoning-focused search model that exposes intermediate thinking for step-by-step answers.
+    documentation_url: https://docs.perplexity.ai/models/models/sonar-reasoning
+    properties:
+      context_window: 128000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.0
+      output: 5.0
+      request_low_context_per_1000: 5.0
+      request_medium_context_per_1000: 8.0
+      request_high_context_per_1000: 12.0
+
+  perplexity/sonar-reasoning-pro:
+    label: Sonar Reasoning Pro
+    description: Advanced reasoning model combining multi-step analysis with rich web retrieval.
+    documentation_url: https://docs.perplexity.ai/models/models/sonar-reasoning-pro
+    properties:
+      context_window: 128000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 2.0
+      output: 8.0
+      request_low_context_per_1000: 6.0
+      request_medium_context_per_1000: 10.0
+      request_high_context_per_1000: 14.0
+
+  perplexity/sonar-deep-research:
+    label: Sonar Deep Research
+    description: Exhaustive research agent that performs multi-engine search, reasoning, and source synthesis.
+    documentation_url: https://docs.perplexity.ai/models/models/sonar-deep-research
+    properties:
+      context_window: 128000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 2.0
+      output: 8.0
+      citations: 2.0
+      search_queries_per_1000: 5.0
+      reasoning: 3.0

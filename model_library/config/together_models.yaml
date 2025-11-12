@@ -1,0 +1,866 @@
+# Base model configuration for shared information
+base-config:
+  open_source: true
+  documentation_url: https://docs.together.ai/docs/serverless-models
+  class_properties:
+    supports_images: true
+    available_as_evaluator: false
+    supports_files: false
+    available_for_everyone: true
+    ignored_for_cost: false
+    supports_tools: false
+  properties:
+    reasoning_model: false
+    cache:
+      read_discount: 1
+    batch:
+      input_discount: 0.5
+      output_discount: 0.5
+
+# kimi models
+kimi-models:
+  base-config:
+    company: Kimi
+    open_source: true
+    documentation_url: https://www.kimi.com/
+    class_properties:
+      supports_tools: true
+      supports_temperature: true
+    default_parameters:
+      temperature: 0.3
+
+  together/moonshotai/Kimi-K2-Instruct:
+    label: Kimi K2 Instruct
+    description: Kimi K2 Instruct
+    release_date: 2025-07-11
+    properties:
+      context_window: 128_000
+      max_token_output: 16_384
+      training_cutoff: null
+      reasoning_model: false
+    class_properties:
+      supports_images: false
+    costs_per_million_token:
+      input: 1.00
+      output: 3.00
+
+# Meta Llama Models
+llama-4-models:
+  base-config:
+    company: Meta
+    open_source: true
+    class_properties:
+      supports_tools: true
+      supports_images: true
+
+  together/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8:
+    label: Llama 4 Maverick
+    description: Llama 4 Maverick 17B 128E Instruct FP8
+    documentation_url: https://ai.meta.com/blog/llama-4-multimodal-intelligence/
+    release_date: 2025-04-05
+    properties:
+      context_window: 1_000_000
+      max_token_output: 16_384
+      training_cutoff: "2024-08"
+    costs_per_million_token:
+      input: 0.27
+      output: 0.85
+
+
+  together/meta-llama/Llama-4-Scout-17B-16E-Instruct:
+    label: Llama 4 Scout
+    description: Llama 4 Scout 17B 16E Instruct FP8
+    documentation_url: https://ai.meta.com/blog/llama-4-multimodal-intelligence/
+    release_date: 2025-04-05
+    properties:
+      context_window: 10_000_000
+      max_token_output: 16_384
+      training_cutoff: "2024-08"
+    costs_per_million_token:
+      input: 0.18
+      output: 0.59
+
+old-llama-models:
+  base-config:
+    company: Meta
+    class_properties:
+      deprecated: true
+
+  together/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo:
+    label: Llama 3.1 Instruct Turbo (8B)
+    description: Llama 3.1 Instruct Turbo, 8B parameters with FP8 quantization.
+    release_date: 2024-07-23
+    properties:
+      context_window: 131_072
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.18
+      output: 0.18
+    alternative_keys:
+      - together/llama-3.1-8b-instruct
+  
+  together/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo:
+    label: Llama 3.1 Instruct Turbo (70B)
+    description: Llama 3.1 Instruct Turbo, 70B parameters with FP8 quantization.
+    release_date: 2024-07-23
+    properties:
+      context_window: 131_072
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    class_properties:
+      available_as_evaluator: true
+    costs_per_million_token:
+      input: 0.88
+      output: 0.88
+    alternative_keys:
+      - together/llama-3.1-70b-instruct
+
+  together/meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo:
+    label: Llama 3.1 Instruct Turbo (405B)
+    description: Llama 3.1 Instruct Turbo, 405B parameters with FP8 quantization and reduced context.
+    release_date: 2024-07-23
+    properties:
+      context_window: 130_815
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 3.50
+      output: 3.50
+    alternative_keys:
+      - together/llama-3.1-405b-instruct
+
+  together/meta-llama/Llama-3-8b-hf:
+    label: Llama 3 (8B)
+    description: Llama 3 Reference Model, 8B parameters with FP16 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-03"
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+    alternative_keys:
+      - together/llama-3-8b
+
+  together/meta-llama/Llama-3-8b-chat-hf:
+    label: Llama 3 Chat (8B)
+    description: Llama 3 Reference Model, 8B parameters with FP16 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.90
+      output: 0.90
+    alternative_keys:
+      - together/llama-3-8b-chat
+
+  together/meta-llama/Llama-3-70B:
+    label: Llama 3 (70B)
+    description: Llama 3 Reference Model, 70B parameters with FP16 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.90
+      output: 0.90
+    alternative_keys:
+      - together/llama-3-70b
+
+  together/meta-llama/Llama-3-70b-chat-hf:
+    label: Llama 3 Chat (70B)
+    description: Llama 3 Reference Model, 70B parameters with FP16 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.90
+      output: 0.90
+    alternative_keys:
+      - together/llama-3-70b-chat
+
+  together/meta-llama/Meta-Llama-3-8B-Instruct-Turbo:
+    label: Llama 3 Instruct Turbo (8B)
+    description: Llama 3 Instruct Turbo, 8B parameters with FP8 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.18
+      output: 0.18
+    alternative_keys:
+      - together/llama-3-8b-instruct
+
+  together/meta-llama/Meta-Llama-3-70B-Instruct-Turbo:
+    label: Llama 3 Instruct Turbo (70B)
+    description: Llama 3 Instruct Turbo, 70B parameters with FP8 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.88
+      output: 0.88
+    alternative_keys:
+      - together/llama-3-70b-instruct
+
+  together/meta-llama/Llama-3.2-3B-Instruct-Turbo:
+    label: Llama 3.2 Instruct Turbo (3B)
+    description: Llama 3.2 Instruct Turbo, 3B parameters with FP16 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 131_072
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.06
+      output: 0.06
+    alternative_keys:
+      - together/llama-3.2-3b-instruct
+
+  together/meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo:
+    label: Llama 3.2 Instruct Turbo (11B)
+    description: Llama 3.2 Instruct Turbo, 11B parameters with FP16 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 131_072
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.18
+      output: 0.18
+    class_properties:
+      supports_images: true
+    alternative_keys:
+      - together/llama-3.2-11b-instruct
+
+  together/meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo:
+    label: Llama 3.2 Instruct Turbo (90B)
+    description: Llama 3.2 Instruct Turbo, 90B parameters with FP16 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 131_072
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 1.2
+      output: 1.2
+    class_properties:
+      supports_images: true
+      deprecated: true
+    alternative_keys:
+      - together/llama-3.2-90b-instruct
+
+  together/meta-llama/Llama-3.3-70B-Instruct-Turbo:
+    label: Llama 3.3 Instruct Turbo (70B)
+    description: Llama 3.3 Instruct Turbo, 70B parameters with FP16 quantization.
+    release_date: 2024-12-06
+    properties:
+      context_window: 128_000
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    class_properties:
+      supports_images: false
+    costs_per_million_token:
+      input: 0.88
+      output: 0.88
+    alternative_keys:
+      - together/llama-3.3-70b-instruct
+
+  together/meta-llama/Meta-Llama-3-8B-Instruct-Lite:
+    label: Llama 3 Instruct Lite (8B)
+    description: Llama 3 Instruct Lite, 8B parameters with INT4 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.10
+      output: 0.10
+
+  together/meta-llama/Meta-Llama-3-70B-Instruct-Lite:
+    label: Llama 3 Instruct Lite (70B)
+    description: Llama 3 Instruct Lite, 70B parameters with INT4 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.54
+      output: 0.54
+
+  together/meta-llama/Llama-3-8b-chat-hf:
+    label: Llama 3 Chat (8B)
+    description: Llama 3 Reference Model, 8B parameters with FP16 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+    alternative_keys:
+      - together/llama-3-8b-chat
+
+  together/meta-llama/Llama-2-7b-chat-hf:
+    label: Llama 2 Chat (7B)
+    description: Llama 2 Reference Model, 7B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+
+  together/togethercomputer/llama-2-7b-chat:
+    label: Llama 2 Chat (7B)
+    description: Llama 2 Reference Model, 7B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+    alternative_keys:
+      - together/llama-2-7b-chat
+
+  together/meta-llama/Llama-2-13b-chat-hf:
+    label: Llama 2 Chat (13B)
+    description: Llama 2 Reference Model, 13B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    costs_per_million_token:
+      input: 0.30
+      output: 0.30
+
+  together/togethercomputer/llama-2-13b-chat:
+    label: Llama 2 Chat (13B)
+    description: Llama 2 Reference Model, 13B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    costs_per_million_token:
+      input: 0.30
+      output: 0.30
+    alternative_keys:
+      - together/llama-2-13b-chat
+
+  together/meta-llama/Llama-2-70b-chat-hf:
+    label: Llama 2 Chat (70B)
+    description: Llama 2 Reference Model, 70B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    costs_per_million_token:
+      input: 0.90
+      output: 0.90
+
+  together/togethercomputer/llama-2-70b-chat:
+    label: Llama 2 Chat (70B)
+    description: Llama 2 Reference Model, 70B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 0.90
+      output: 0.90
+    alternative_keys:
+      - together/llama-2-70b-chat
+
+  together/meta-llama/Llama-2-7b-hf:
+    label: Llama 2 (7B)
+    description: Llama 2 Reference Model, 7B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+
+  together/togethercomputer/llama-2-7b:
+    label: Llama 2 (7B)
+    description: Llama 2 Reference Model, 7B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+    alternative_keys:
+      - together/llama-2-7b
+
+  together/meta-llama/Llama-2-13b-hf:
+    label: Llama 2 (13B)
+    description: Llama 2 Reference Model, 13B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 0.30
+      output: 0.30
+
+  together/togethercomputer/llama-2-13b:
+    label: Llama 2 (13B)
+    description: Llama 2 Reference Model, 13B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+    alternative_keys:
+      - together/llama-2-13b
+
+  together/meta-llama/Llama-2-70b-hf:
+    label: Llama 2 (70B)
+    description: Llama 2 Reference Model, 70B parameters with FP16 quantization.
+    release_date: 2023-07-18
+    properties:
+      context_window: 4_096
+      max_token_output: 4_096
+      training_cutoff: "2022-09"
+    costs_per_million_token:
+      input: 0.90
+      output: 0.90
+    alternative_keys:
+      - together/llama-2-70b
+
+# Nvidia Models
+nvidia-models:
+  base-config:
+    company: NVIDIA
+    class_properties:
+      deprecated: true
+
+  together/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF:
+    label: Llama 3.1 Nemotron (70B)
+    description: Nvidia's 70B Nemotron model, fine-tuned with Llama 3.1 weights.
+    release_date: 2024-04-18
+    properties:
+      context_window: 32_768
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.90
+      output: 0.90
+# Qwen Models
+qwen-models:
+  base-config:
+    company: Alibaba
+    class_properties:
+      deprecated: true
+      supports_temperature: true
+    default_parameters:
+      temperature: 0.7
+
+  together/Qwen/Qwen2.5-Coder-32B-Instruct:
+    label: Qwen 2.5 Coder (32B)
+    description: Qwen Coder 2.5, 32B parameters fine-tuned for coding tasks.
+    release_date: 2024-04-18
+    properties:
+      context_window: 32_768
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.80
+      output: 0.80
+    class_properties:
+      available_for_everyone: false
+      supports_images: false
+
+  together/Qwen/Qwen2.5-7B-Instruct-Turbo:
+    label: Qwen 2.5 Instruct Turbo (7B)
+    description: Qwen 2.5 Instruct Turbo, 7B parameters with FP8 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 32_768
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.30
+      output: 0.30
+    class_properties:
+      available_for_everyone: false
+      supports_images: false
+    alternative_keys:
+      - together/qwen-2.5-7b-instruct
+
+  together/Qwen/Qwen2.5-72B-Instruct-Turbo:
+    label: Qwen 2.5 Instruct Turbo (72B)
+    description: Qwen 2.5 Instruct Turbo, 72B parameters with FP8 quantization.
+    release_date: 2024-04-18
+    properties:
+      context_window: 32_768
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 1.20
+      output: 1.20
+    class_properties:
+      available_for_everyone: false
+      supports_images: false
+    alternative_keys:
+      - together/qwen-2.5-72b-instruct
+
+# Mistral Models
+mistralai-models:
+  base-config:
+    company: Mistral
+    class_properties:
+      deprecated: true
+      supports_images: false
+
+  together/mistralai/Mistral-7B-v0.1:
+    label: Mistral (7B)
+    description: First version of Mistral 7B model.
+    release_date: 2023-09-27
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-06"
+    costs_per_million_token:
+      input: 0.18
+      output: 0.18
+    alternative_keys:
+      - together/Mistral-7B-v0.1
+
+  together/mistralai/Mistral-7B-Instruct-v0.1:
+    label: Mistral Instruct (7B) v0.1
+    description: First version of Mistral 7B Instruct model.
+    release_date: 2023-09-27
+    properties:
+      context_window: 32_768
+      max_token_output: 4_096
+      training_cutoff: "2023-06"
+    costs_per_million_token:
+      input: 0.18
+      output: 0.18
+    alternative_keys:
+      - together/Mistral-7B-Instruct-v0.1
+
+  together/mistralai/Mistral-7B-Instruct-v0.2:
+    label: Mistral Instruct (7B) v0.2
+    description: Improved second version of Mistral 7B Instruct model.
+    release_date: 2023-12-15
+    properties:
+      context_window: 32_768
+      max_token_output: 4_096
+      training_cutoff: "2023-09"
+    costs_per_million_token:
+      input: 0.18
+      output: 0.18
+    alternative_keys:
+      - together/Mistral-7B-Instruct-v0.2
+
+  together/mistralai/Mistral-7B-Instruct-v0.3:
+    label: Mistral Instruct (7B) v0.3
+    description: Latest third version of Mistral 7B Instruct model.
+    release_date: 2024-04-18
+    properties:
+      context_window: 32_768
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.18
+      output: 0.18
+    alternative_keys:
+      - together/Mistral-7B-Instruct-v0.3
+
+  together/mistralai/Mixtral-8x7B-v0.1:
+    label: Mixtral (8x7B)
+    description: Mixtral model, combining 8x7B modules fine-tuned for complex tasks.
+    release_date: 2023-12-15
+    properties:
+      context_window: 32_768
+      max_token_output: 4_096
+      training_cutoff: "2023-09"
+    costs_per_million_token:
+      input: 0.60
+      output: 0.60
+    alternative_keys:
+      - together/Mixtral-8x7B-v0.1
+
+  together/mistralai/Mixtral-8x7B-Instruct-v0.1:
+    label: Mixtral Instruct (8x7B)
+    description: Mixtral model, combining 8x7B Instruct modules fine-tuned for complex tasks.
+    release_date: 2023-12-15
+    properties:
+      context_window: 32_768
+      max_token_output: 4_096
+      training_cutoff: "2023-09"
+    costs_per_million_token:
+      input: 0.60
+      output: 0.60
+    alternative_keys:
+      - together/Mixtral-8x7B-Instruct-v0.1
+
+  together/mistralai/Mixtral-8x22B-Instruct-v0.1:
+    label: Mixtral Instruct (8x22B)
+    description: Mixtral model with 8x22B modules for large-scale inference.
+    release_date: 2024-02-15
+    properties:
+      context_window: 65_536
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    class_properties:
+      available_as_evaluator: true
+    costs_per_million_token:
+      input: 1.20
+      output: 1.20
+    alternative_keys:
+      - together/Mixtral-8x22B-Instruct-v0.1
+      - together/Mixtral-8x22B-v0.1
+
+# Vision Models
+meta-llama-vision:
+  together/meta-llama/Llama-Vision-Free:
+    label: Llama Vision Free
+    company: Meta
+    description: Free version of Llama Vision 11B Turbo with reduced rate limits.
+    release_date: 2024-04-18
+    properties:
+      context_window: 131_072
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    class_properties:
+      supports_images: true
+      available_for_everyone: false
+      deprecated: true
+
+  together/meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo:
+    label: Llama 3.2 Vision (11B)
+    company: Meta
+    description: Paid version of Llama Vision 11B Turbo for high-performance visual tasks.
+    release_date: 2024-04-18
+    properties:
+      context_window: 131_072
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    class_properties:
+      supports_images: true
+      available_for_everyone: true
+      deprecated: true
+    costs_per_million_token:
+      input: 0.18
+      output: 0.18
+    alternative_keys:
+      - together/llama-3.2-11b-vision-instruct
+
+  together/meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo:
+    label: Llama 3.2 Vision (90B)
+    company: Meta
+    description: Vision-enabled Llama model with 90B parameters for advanced use cases.
+    release_date: 2024-04-18
+    properties:
+      context_window: 131_072
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    class_properties:
+      supports_images: true
+      available_for_everyone: true
+      deprecated: true
+    costs_per_million_token:
+      input: 1.20
+      output: 1.20
+    alternative_keys:
+      - together/llama-3.2-90b-vision-instruct
+
+# Google Models
+google-models:
+  together/google/gemma-2-27b-it:
+    label: Gemma 2 (27B)
+    company: Google
+    description: Gemini 27B Instruct Turbo model.
+    release_date: 2024-02-21
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.50
+      output: 0.50
+    class_properties:
+      available_for_everyone: false
+      deprecated: true
+      supports_images: false
+    alternative_keys:
+      - together/gemma-2-27b-instruct
+
+  together/google/gemma-2-9b-it:
+    label: Gemma 2 (9B)
+    company: Google
+    description: Gemini 9B Instruct Turbo model.
+    release_date: 2024-02-21
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+    class_properties:
+      available_for_everyone: false
+      deprecated: true
+    alternative_keys:
+      - together/gemma-2-9b-instruct
+
+  together/google/gemma-2-2b-it:
+    label: Gemma 2 (2B)
+    company: Google
+    description: Gemini 2B Instruct Turbo model.
+    release_date: 2024-02-21
+    properties:
+      context_window: 8_192
+      max_token_output: 4_096
+      training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0.10
+      output: 0.10
+    class_properties:
+      available_for_everyone: false
+      deprecated: true
+    alternative_keys:
+      - together/gemma-2-2b-instruct
+
+# Falcon Models
+falcon-models:
+  base-config:
+    company: Technology Innovation Institute
+    class_properties:
+      deprecated: true
+
+  together/togethercomputer/falcon-7b-instruct:
+    label: Falcon Instruct (7B)
+    description: Falcon 7B Instruct model.
+    release_date: 2023-06-20
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+    alternative_keys:
+      - together/falcon-7b-instruct
+
+  together/togethercomputer/falcon-40b-instruct:
+    label: Falcon Instruct (40B)
+    description: Falcon 40B Instruct model.
+    release_date: 2023-05-25
+    costs_per_million_token:
+      input: 0.80
+      output: 0.80
+    alternative_keys:
+      - together/falcon-40b-instruct
+
+  together/togethercomputer/falcon-7b:
+    label: Falcon (7B)
+    description: Falcon 7B model.
+    release_date: 2023-06-20
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+    alternative_keys:
+      - together/falcon-7b
+
+  together/togethercomputer/falcon-40b:
+    label: Falcon (40B)
+    description: Falcon 40B model.
+    release_date: 2023-05-25
+    costs_per_million_token:
+      input: 0.80
+      output: 0.80
+    alternative_keys:
+      - together/falcon-40b
+
+# Alpaca Models
+alpaca-models:
+  together/togethercomputer/alpaca-7b:
+    label: Alpaca (7B)
+    company: Stanford
+    description: Alpaca 7B Instruct model.
+    release_date: 2023-03-13
+    costs_per_million_token:
+      input: 0.20
+      output: 0.20
+    class_properties:
+      deprecated: true
+    alternative_keys:
+      - together/alpaca-7b
+
+# DeepSeek Models
+deepseek-models:
+  base-config:
+    company: DeepSeek
+    open_source: true
+    class_properties:
+      supports_images: false
+      supports_temperature: true
+    default_parameters:
+      temperature: 1
+
+  together/deepseek-ai/DeepSeek-V3:
+    label: DeepSeek V3
+    description: ""
+    release_date: 2024-12-26
+    properties:
+      context_window: 131_072
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 1.25
+      output: 1.25
+
+
+  together/deepseek-ai/DeepSeek-R1:
+    label: DeepSeek V3
+    description: ""
+    release_date: 2025-01-20
+    properties:
+      context_window: 163_840
+      max_token_output: null
+      training_cutoff: null
+      reasoning_model: true
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 3.00
+      output: 7.00

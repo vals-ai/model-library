@@ -1,0 +1,276 @@
+base-config:
+  company: Amazon
+  open_source: false
+  class_properties:
+    supports_images: false
+    available_as_evaluator: false
+    supports_files: false
+    supports_tools: true
+    available_for_everyone: true
+    ignored_for_cost: false
+  properties:
+    reasoning_model: false
+nova-models:
+  base-config:
+    documentation_url: https://www.aboutamazon.com/news/aws/amazon-nova-artificial-intelligence-bedrock-aws
+  amazon/amazon.nova-pro-v1:0:
+    label: Nova Pro
+    description: Highly capable multimodal model offering the best combination of accuracy, speed, and cost for a wide range of tasks.
+    release_date: 2024-12-03
+    properties:
+      context_window: 300_000
+      max_token_output: 10_000
+      training_cutoff: null
+    class_properties:
+      supports_images: true
+      supports_files: true
+      supports_videos: true
+    costs_per_million_token:
+      input: 0.8
+      output: 3.2
+    documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+  amazon/amazon.nova-lite-v1:0:
+    label: Nova Lite
+    description:
+      Very low cost multimodal model that is lightning fast for processing
+      image, video, and text inputs. Features 300k token context window and supports
+      document processing. Optimized for 15 languages.
+    release_date: 2024-12-03
+    properties:
+      context_window: 300_000
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      supports_images: true
+      supports_files: true
+      supports_videos: true
+    costs_per_million_token:
+      input: 0.06
+      output: 0.24
+    documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+  amazon/amazon.nova-micro-v1:0:
+    label: Nova Micro
+    description:
+      Text-only model that delivers the lowest latency responses at very
+      low cost. Features 128k token context window and supports 200+ languages, optimized
+      for 15 key languages.
+    release_date: 2024-12-03
+    properties:
+      context_window: 128_000
+      max_token_output: null
+      training_cutoff: null
+    costs_per_million_token:
+      input: 0.035
+      output: 0.14
+    documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+claude-models:
+  base-config:
+    documentation_url: https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet
+    class_properties:
+      supports_temperature: true
+    default_parameters:
+      temperature: 1
+  bedrock/claude-3-5-sonnet-20240620-v2:
+    label: Claude 3.5 Sonnet (Bedrock)
+    description:
+      Claude 3.5 Sonnet is a multimodal understanding foundation model.
+      It is multilingual and can reason over text, images and videos.
+    release_date: 2024-10-22
+    properties:
+      context_window: 100_000
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      supports_images: false
+      available_as_evaluator: true
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+    provider_endpoint: us.anthropic.claude-3-5-sonnet-20241022-v2:0
+  bedrock/claude-3-7-sonnet-20250219-v1:
+    label: Claude 3.7 Sonnet (Bedrock)
+    description: Claude 3.7 Sonnet, hosted on Bedrock.
+    release_date: 2025-02-19
+    properties:
+      context_window: 200_000
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      supports_images: true
+      available_as_evaluator: true
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache:
+        read: 0.3
+        write: 3.75
+    provider_endpoint: us.anthropic.claude-3-7-sonnet-20250219-v1:0
+  bedrock/claude-sonnet-4-20250514-v1:
+    label: Claude Sonnet 4 (Nonthinking)
+    description:
+      Anthropic's latest-generation workhorse model, offering a balance
+      of performance and speed.
+    release_date: 2025-05-22
+    documentation_url: https://www.anthropic.com/claude/sonnet
+    properties:
+      context_window: 200_000
+      max_token_output: 64_000
+      extending_thinking: 64_000
+      training_cutoff: 2025-03
+    class_properties:
+      available_as_evaluator: true
+      available_for_everyone: true
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+    provider_endpoint: us.anthropic.claude-sonnet-4-20250514-v1:0
+  bedrock/claude-sonnet-4-20250514-v1-thinking:
+    label: Claude Sonnet 4 (Thinking)
+    description:
+      Anthropic's latest-generation workhorse model, offering a balance
+      of performance and speed.
+    release_date: 2025-05-22
+    documentation_url: https://www.anthropic.com/claude/sonnet
+    properties:
+      context_window: 200_000
+      max_token_output: 64_000
+      extending_thinking: 64_000
+      training_cutoff: 2025-03
+    class_properties:
+      supports_temperature: false
+      supports_tools: true
+      available_as_evaluator: true
+      available_for_everyone: true
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+    provider_endpoint: us.anthropic.claude-sonnet-4-20250514-v1:0-thinking
+  bedrock/claude-opus-4-20250514-v1:
+    label: Claude Opus 4 (Nonthinking)
+    description: Anthropic's most powerful model.
+    release_date: 2025-05-22
+    properties:
+      context_window: 200_000
+      max_token_output: 32_000
+      extending_thinking: 32_000
+      training_cutoff: 2025-03
+    class_properties:
+      supports_tools: true
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 15.0
+      output: 75.0
+    provider_endpoint: us.anthropic.claude-opus-4-20250514-v1:0
+  bedrock/claude-opus-4-20250514-v1-thinking:
+    label: Claude Opus 4 (Thinking)
+    description: Anthropic's most powerful model.
+    release_date: 2025-05-22
+    properties:
+      context_window: 200_000
+      max_token_output: 32_000
+      extending_thinking: 32_000
+      training_cutoff: 2025-03
+    class_properties:
+      supports_temperature: false
+      available_for_everyone: false
+      supports_tools: true
+    costs_per_million_token:
+      input: 15.0
+      output: 75.0
+    provider_endpoint: us.anthropic.claude-opus-4-20250514-v1:0-thinking
+  bedrock/claude-opus-4-1-20250805-v1:
+    label: Claude Opus 4.1 (Nonthinking)
+    description:
+    release_date: 2025-08-05
+    properties:
+      context_window: 200_000
+      max_token_output: 32_000
+      extending_thinking: 32_000
+      training_cutoff: 2025-03
+    class_properties:
+      available_for_everyone: false
+      supports_tools: true
+    costs_per_million_token:
+      input: 15.0
+      output: 75.0
+    provider_endpoint: us.anthropic.claude-opus-4-1-20250805-v1:0
+  bedrock/claude-opus-4-1-20250805-v1-thinking:
+    label: Claude Opus 4.1 (Thinking)
+    description:
+    release_date: 2025-08-05
+    properties:
+      context_window: 200_000
+      max_token_output: 32_000
+      extending_thinking: 32_000
+      training_cutoff: 2025-03
+    class_properties:
+      supports_temperature: false
+      available_for_everyone: false
+      supports_tools: true
+    costs_per_million_token:
+      input: 15.0
+      output: 75.0
+    provider_endpoint: us.anthropic.claude-opus-4-1-20250805-v1:0-thinking
+  bedrock/claude-3-5-haiku-20241022-v1:
+    label: Claude 3.5 Haiku (Bedrock)
+    description: Claude 3.5 Haiku, hosted on Bedrock.
+    release_date: 2024-10-22
+    properties:
+      context_window: 200_000
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      supports_images: false
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 0.8
+      output: 4
+      cache:
+        read: 0.08
+        write: 1
+    provider_endpoint: us.anthropic.claude-3-5-haiku-20241022-v1:0
+deepseek_models:
+  base-config:
+    documentation_url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-deepseek.html
+    class_properties:
+      supports_temperature: true
+    default_parameters:
+      temperature: 1
+  bedrock/deepseek-r1-v1:
+    label: DeepSeek R1 (Bedrock)
+    description: DeepSeek R1, hosted on Bedrock.
+    release_date: 2025-03-03
+    properties:
+      context_window: 128_000
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      supports_images: false
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 1.35
+      output: 5.4
+    provider_endpoint: us.deepseek.r1-v1:0
+llama_models:
+  base-config:
+    documentation_url: https://aws.amazon.com/bedrock/meta/
+    class_properties:
+      supports_temperature: true
+  bedrock/llama3-3-70b-instruct-v1:
+    label: Llama 3.3 70B Instruct (Bedrock)
+    description: Llama 3.3 70B Instruct, hosted on Bedrock.
+    release_date: 2024-12-18
+    properties:
+      context_window: 128_000
+      max_token_output: null
+      training_cutoff: null
+    class_properties:
+      supports_images: false
+      available_as_evaluator: true
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 0.72
+      output: 0.72
+    provider_endpoint: us.meta.llama3-3-70b-instruct-v1:0

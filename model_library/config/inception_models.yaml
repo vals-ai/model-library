@@ -1,0 +1,24 @@
+base-config:
+  company: Inception
+  documentation_url: https://docs.inceptionlabs.ai/get-started/models
+  open_source: false
+  class_properties:
+    supports_images: false
+    supports_tools: true
+    available_as_evaluator: false
+    supports_files: false
+    available_for_everyone: true
+    ignored_for_cost: false
+
+inception-models:
+  inception/mercury:
+    label: Mercury
+    release_date: 2025-11-06
+    properties:
+      reasoning_model: false
+      context_window: 128_000
+    default_parameters:
+      max_output_tokens: 16_400 # number lifted from https://openrouter.ai/inception/mercury
+    costs_per_million_token:
+      input: 0.25
+      output: 1

@@ -1,0 +1,177 @@
+base-config:
+  company: Cohere
+  open_source: false
+  documentation_url: https://docs.cohere.com/v2/docs/models
+  class_properties:
+    available_as_evaluator: false
+    supports_images: false
+    supports_files: false
+    supports_tools: true
+    available_for_everyone: true
+    ignored_for_cost: false
+  properties:
+    training_cutoff: null
+
+command-models:
+  base-config:
+    properties:
+      context_window: 128000
+    class_properties:
+      supports_temperature: true
+    default_parameters:
+      temperature: 0.3
+
+  cohere/command-a-03-2025:
+    label: Command A
+    description:
+      Command A is Cohere's most performant model to date, excelling at
+      tool use, agents, retrieval augmented generation (RAG), and multilingual use
+      cases. It supports a context length of 256K tokens with high throughput.
+    release_date: 2025-03-13
+    properties:
+      context_window: 256000
+      max_token_output: 8000
+    costs_per_million_token:
+      input: 2.5
+      output: 10.0
+
+  cohere/command-light:
+    label: Command Light
+    description:
+      A smaller, faster version of the Command model that remains highly
+      capable but optimized for speed with a shorter 4K context length.
+    release_date: 2024-04-24
+    properties:
+      context_window: 4000
+      max_token_output: 4000
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 0.3
+      output: 0.6
+
+  cohere/command:
+    label: Command
+    description:
+      Command is the base instruction-following conversational model delivering
+      high-quality language task performance, with a context of 4K tokens.
+    release_date: 2024-03-24
+    properties:
+      context_window: 4000
+      max_token_output: 4000
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 1.0
+      output: 2.0
+
+  cohere/command-r:
+    label: Command R
+    description:
+      Alias for Command R 03-2024, an instruction-following conversational
+      model focused on reliability and extended context for complex workflows.
+    release_date: 2024-04-24
+    properties:
+      context_window: 128000
+      max_token_output: 4000
+    class_properties:
+      available_for_everyone: false
+      deprecated: true
+    costs_per_million_token:
+      input: 0.15
+      output: 0.6
+
+  cohere/command-r-03-2024:
+    label: Command R (03/2024)
+    description:
+      Command R 03-2024 is an instruction-following conversational model
+      with improved quality, longer context (128K tokens), suitable for code generation,
+      RAG, and complex workflows.
+    release_date: 2024-03-24
+    properties:
+      context_window: 128000
+      max_token_output: 4000
+    class_properties:
+      available_for_everyone: false
+      deprecated: true
+    costs_per_million_token:
+      input: 0.15
+      output: 0.6
+
+  cohere/command-r-08-2024:
+    label: Command R (08/2024)
+    description:
+      Command R (August 2024) is an updated instruction-following conversational
+      model suitable for complex workflows including code generation, retrieval augmentations,
+      and tool use, with 128K context.
+    release_date: 2024-08-30
+    properties:
+      context_window: 128000
+      max_token_output: 4000
+    class_properties:
+      available_for_everyone: false
+      deprecated: true
+    costs_per_million_token:
+      input: 0.15
+      output: 0.6
+
+  cohere/command-r-plus:
+    label: Command R+
+    description:
+      Alias for Command R+ 04-2024, featuring high-quality instruction
+      following, long context support, and optimized for complex reasoning and retrieval
+      augmented generation.
+    release_date: 2024-04-24
+    properties:
+      context_window: 128000
+      max_token_output: 4000
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 2.5
+      output: 10.0
+
+  cohere/command-r-plus-04-2024:
+    label: Command R+ (04/2024)
+    description:
+      Command R+ (April 2024) supports high-quality language tasks with
+      reliable performance over long contexts (128K tokens), optimized for complex
+      reasoning and multi-step tool use.
+    release_date: 2024-04-24
+    properties:
+      context_window: 128000
+      max_token_output: 4000
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 2.5
+      output: 10.0
+
+  cohere/command-r-plus-08-2024:
+    label: Command R+ (08/2024)
+    description:
+      Command R+ (August 2024) is designed for complex RAG workflows and
+      multi-step tool use, supporting 128K context length.
+    release_date: 2024-08-30
+    properties:
+      context_window: 128000
+      max_token_output: 4000
+    class_properties:
+      deprecated: true
+    costs_per_million_token:
+      input: 2.5
+      output: 10.0
+
+  cohere/command-r7b-12-2024:
+    label: Command R7B
+    description:
+      Command R7B is a small, fast update from December 2024. It excels
+      at RAG, tool use, agents, and complex reasoning with multiple steps. It supports
+      a context length of 128K tokens.
+    release_date: 2024-12-13
+    properties:
+      context_window: 128000
+      max_token_output: 4000
+    costs_per_million_token:
+      input: 0.0375
+      output: 0.15

@@ -1,0 +1,91 @@
+[project]
+name = "model-library"
+authors = [
+  { name = "Vals AI, Inc.", email = "contact@vals.ai" },
+]
+dynamic = ["version"]
+description = "Model Library for vals.ai "
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+  # base
+  "typing-extensions>=4.14.1,<5.0",
+  "pydantic>=2.11.7,<3.0",
+  "pyyaml>=6.0.2",
+  # core
+  "backoff>=2.2.1,<3.0",
+  "redis>=6.2.0,<7.0",
+  "tiktoken==0.11.0",
+  "pillow",
+  # providers
+  "openai>=1.97.1,<2.0",
+  "anthropic>=0.57.1,<1.0",
+  "together>=1.5.25,<2.0",
+  "mistralai>=1.9.10,<2.0",
+  "xai-sdk>=1.0.0,<2.0",
+  "ai21>=4.0.3,<5.0",
+  "boto3>=1.38.27,<2.0",
+  "google-genai[aiohttp]>=1.48.0,<2.0",
+  "google-cloud-storage>=1.26.0",
+]
+
+[dependency-groups]
+dev = [
+  # test
+  "pytest",
+  "pytest-asyncio",
+  # style
+  "ruff",
+  "basedpyright",
+  # log
+  "rich",
+  # tui
+  "inquirerpy",
+  # env
+  "boto3",
+  "dotenv",
+]
+
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["model_library"]
+
+[tool.setuptools.package-data]
+"model_library" = ["py.typed", "config/*.yaml", "config/defaults/*.yaml", "config/defaults/*.json", "config/all_models.json"]
+
+[tool.setuptools_scm]
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+tag_regex = "^v(?P<version>.*)$"
+
+[tool.ruff]
+exclude = ["model_library/config"]
+
+[tool.basedpyright]
+exclude = [
+  "model_library/config",
+  ".*",
+  "tests/**",
+]
+typeCheckingMode = "strict"
+reportExplicitAny = false
+reportMissingTypeStubs = false
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: Unit tests that don't require external resources",
+    "integration: Integration tests that require API keys and external services",
+]
+# Async test configuration
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"

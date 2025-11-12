@@ -1,0 +1,91 @@
+qwen-models:
+  base-config:
+    company: Alibaba
+    open_source: false
+
+    class_properties:
+      available_for_everyone: false
+      available_as_evaluator: false
+      supports_metadata: true
+      supports_files: false
+      ignored_for_cost: false
+      supports_temperature: true
+    default_parameters:
+      temperature: 0.7
+    properties:
+      reasoning_model: false
+
+  alibaba/qwen3-max-preview:
+    label: Qwen 3 Max Preview
+    description: Preview of the largest and most recent Qwen Model
+    release_date: 2025-09-05
+    properties:
+      context_window: 262_144
+      max_token_output: 65_536
+      training_cutoff: ""
+    costs_per_million_token:
+      input: 1.2
+      output: 6
+    class_properties:
+      available_for_everyone: false
+      supports_images: false
+      supports_tools: true
+
+  alibaba/qwen3-max-2025-09-23:
+    label: Qwen 3 Max 2025-09-23
+    description: Largest and most recent Qwen Model
+    release_date: 2025-09-23
+    properties:
+      context_window: 262_144
+      max_token_output: 65_536
+      training_cutoff: ""
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.2
+      output: 6
+    class_properties:
+      available_for_everyone: false
+      supports_images: false
+      supports_tools: true
+
+  alibaba/qwen3-max:
+    label: Qwen 3 Max
+    description: Largest and most recent Qwen Model
+    release_date: 2025-09-23
+    properties:
+      context_window: 262_144
+      max_token_output: 65_536
+      training_cutoff: ""
+      reasoning_model: false
+    costs_per_million_token:
+      input: 1.2
+      output: 6
+      cache:
+        read_discount: 0.8
+        write_markup: 1
+      context:
+        threshold: 32_000
+        input: 2.4
+        output: 12
+
+
+    class_properties:
+      available_for_everyone: false
+      supports_images: false
+      supports_tools: true
+
+  alibaba/qwen3-vl-plus-2025-09-23:
+    label: Qwen 3 VL Plus
+    open_source: true
+    description: Qwen 3 VL Plus (2025-09-23)
+    release_date: 2025-09-23
+    properties:
+      context_window: 262_144
+      max_token_output: 32_768
+      training_cutoff: ""
+      reasoning_model: false
+    costs_per_million_token:
+      input: 0.2
+      output: 1.6
+    class_properties:
+      supports_images: true

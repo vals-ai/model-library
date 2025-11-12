@@ -1,0 +1,65 @@
+base-config:
+  company: zAI
+  open_source: true
+  documentation_url: https://docs.z.ai/
+  class_properties:
+    supports_images: false
+    supports_files: false
+    reasoning_model: true
+    supports_temperature: true
+    supports_tools: true
+  default_parameters:
+    temperature: 0.6
+    top_p: 1
+  costs_per_million_token:
+    cache:
+      read_discount: 1
+      write_markup: 1
+
+zai-models:
+  zai/glm-4.5:
+    label: GLM 4.5
+    description: "z.AI old model"
+    release_date: 2025-07-28
+    properties:
+      context_window: 128_000
+      max_token_output: 81_920
+    costs_per_million_token:
+      input: 0.6
+      output: 2.2
+      cache:
+        read: 0.11
+    alternative_keys:
+      - fireworks/glm-4p5
+
+  zai/glm-4.5-air:
+    label: GLM 4.5 Air
+    description: "z.AI lightweight model"
+    release_date: 2025-07-28
+    properties:
+      context_window: 128_000
+      max_token_output: 81_920
+    costs_per_million_token:
+      input: 0.2
+      output: 1.1
+      cache: 
+        read: 0.03
+    alternative_keys:
+      - together/zai-org/GLM-4.5-Air-FP8
+
+  zai/glm-4.6:
+    label: GLM 4.6
+    description: "z.AI flagship model"
+    release_date: 2025-09-30
+    properties:
+      context_window: 200_000
+      max_token_output: 122_880
+    costs_per_million_token:
+      input: 0.6
+      output: 2.2
+      cache: 
+        read: 0.11
+    alternative_keys:
+      - fireworks/glm-4p6
+
+    
