@@ -86,5 +86,5 @@ examples: venv_check
 	@echo "\n✅ All examples completed!"
 	
 browse_models: venv_check
-	@uv run python -m scripts.explore_models
+	@uv run python -m scripts.browse_models
 
