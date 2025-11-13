@@ -1,4 +1,52 @@
 {
+    "openai/gpt-5.1-2025-11-13": {
+        "company": "OpenAI",
+        "label": "GPT 5.1",
+        "description": "GPT-5 is OpenAI's flagship model for coding, reasoning, and agentic tasks across domains.",
+        "release_date": "2025-11-13",
+        "open_source": false,
+        "documentation_url": "https://platform.openai.com/docs/models/gpt-5",
+        "properties": {
+            "context_window": 400000,
+            "max_token_output": 128000,
+            "training_cutoff": "2024-09",
+            "reasoning_model": true
+        },
+        "class_properties": {
+            "supports_images": true,
+            "supports_files": true,
+            "supports_batch_requests": true,
+            "supports_temperature": false,
+            "supports_tools": true,
+            "deprecated": false,
+            "available_for_everyone": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.25,
+            "output": 10.0,
+            "cache": {
+                "read": 0.125,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_output_tokens": 128000,
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_name": "openai",
+        "provider_endpoint": "gpt-5.1-2025-11-13",
+        "full_key": "openai/gpt-5.1-2025-11-13",
+        "slug": "openai_gpt-5.1-2025-11-13"
+    },
     "kimi/kimi-k2-thinking": {
         "company": "Kimi",
         "label": "Kimi K2 Thinking",
