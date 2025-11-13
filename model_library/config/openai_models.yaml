@@ -31,6 +31,32 @@ gpt-5-models:
       supports_temperature: false
       supports_files: true
       supports_tools: true
+  
+  openai/gpt-5.1-codex:
+    label: GPT 5.1 Codex
+    description: OpenAI's latest coding model
+    release_date: 2025-11-13
+    costs_per_million_token:
+      input: 1.25
+      output: 10.0
+      cache:
+        read: 0.125
+    default_parameters:
+      temperature: 1
+      max_output_tokens: 128_000
+
+  openai/gpt-5.1-codex-mini:
+    label: GPT 5.1 Codex Mini
+    description: OpenAI's miniature coding model
+    release_date: 2025-11-13
+    costs_per_million_token:
+      input: 0.25
+      output: 2.00
+      cache:
+        read: 0.025
+    default_parameters:
+      temperature: 1
+      max_output_tokens: 128_000
 
   openai/gpt-5-codex:
     label: GPT 5 Codex
