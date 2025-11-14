@@ -189,6 +189,8 @@ RETRIABLE_EXCEPTION_CODES = [
     "internal_error",
     "server_error",
     "overloaded",
+    "throttling",  # AWS throttling errors
+    "throttlingexception",  # AWS throttling errors
 ]
 
 
