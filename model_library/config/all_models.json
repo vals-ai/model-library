@@ -101,7 +101,7 @@
         "description": "GPT-5 is OpenAI's flagship model for coding, reasoning, and agentic tasks across domains.",
         "release_date": "2025-11-13",
         "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-5",
+        "documentation_url": "https://platform.openai.com/docs/models/gpt-5.1",
         "properties": {
             "context_window": 400000,
             "max_token_output": 128000,
@@ -1773,7 +1773,7 @@
         "description": "GPT-5 is OpenAI's flagship model for coding, reasoning, and agentic tasks across domains.",
         "release_date": "2025-08-07",
         "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-5.1",
+        "documentation_url": "https://platform.openai.com/docs/models/gpt-5",
         "properties": {
             "context_window": 400000,
             "max_token_output": 128000,
@@ -1919,7 +1919,7 @@
         "description": "GPT-5 is OpenAI's flagship model for coding, reasoning, and agentic tasks across domains.",
         "release_date": "2025-08-07",
         "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-5.1",
+        "documentation_url": "https://platform.openai.com/docs/models/gpt-5",
         "properties": {
             "context_window": 400000,
             "max_token_output": 128000,
