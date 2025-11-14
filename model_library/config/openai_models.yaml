@@ -34,6 +34,7 @@ gpt-5-models:
   
   openai/gpt-5.1-codex:
     label: GPT 5.1 Codex
+    documentation_url: https://platform.openai.com/docs/models/gpt-5.1-codex
     description: OpenAI's latest coding model
     release_date: 2025-11-13
     costs_per_million_token:
@@ -47,6 +48,7 @@ gpt-5-models:
 
   openai/gpt-5.1-codex-mini:
     label: GPT 5.1 Codex Mini
+    documentation_url: https://platform.openai.com/docs/models/gpt-5.1-codex-mini
     description: OpenAI's miniature coding model
     release_date: 2025-11-13
     costs_per_million_token:
@@ -81,7 +83,7 @@ gpt-5-models:
   openai/gpt-5.1-2025-11-13:
     label: GPT 5.1
     documentation_url: https://platform.openai.com/docs/models/gpt-5.1
-    description: GPT-5 is OpenAI's flagship model for coding, reasoning, and agentic tasks across domains.
+    description: GPT-5.1 is OpenAI's flagship model for coding and agentic tasks with configurable reasoning and non-reasoning effort.
     release_date: 2025-11-13
     costs_per_million_token:
       input: 1.25
