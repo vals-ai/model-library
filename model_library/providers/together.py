@@ -31,9 +31,11 @@ from model_library.exceptions import (
 from model_library.file_utils import trim_images
 from model_library.model_utils import get_reasoning_in_tag
 from model_library.providers.openai import OpenAIModel
+from model_library.register_models import register_provider
 from model_library.utils import create_openai_client_with_defaults
 
 
+@register_provider("together")
 class TogetherModel(LLM):
     _client: AsyncTogether | None = None
 

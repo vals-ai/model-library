@@ -16,9 +16,11 @@ from model_library.base import (
     ToolDefinition,
 )
 from model_library.providers.openai import OpenAIModel
+from model_library.register_models import register_provider
 from model_library.utils import create_openai_client_with_defaults
 
 
+@register_provider("alibaba")
 class AlibabaModel(LLM):
     @override
     def get_client(self) -> None:

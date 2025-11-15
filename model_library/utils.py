@@ -1,4 +1,3 @@
-import inspect
 import logging
 from collections.abc import Mapping, Sequence
 from typing import Any
@@ -8,6 +7,7 @@ from openai import AsyncOpenAI
 from pydantic.main import BaseModel
 
 MAX_LLM_LOG_LENGTH = 100
+logger = logging.getLogger("llm")
 
 
 def truncate_str(s: str | None, max_len: int = MAX_LLM_LOG_LENGTH) -> str:
@@ -21,20 +21,8 @@ def truncate_str(s: str | None, max_len: int = MAX_LLM_LOG_LENGTH) -> str:
 
 def get_logger(name: str | None = None):
     if not name:
-        caller = inspect.stack()[1]
-        module = inspect.getmodule(caller[0])
-        name = module.__name__ if module else "__main__"
-
-    logger = logging.getLogger(name)
-    if not logger.handlers:
-        logger.setLevel(logging.DEBUG)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter(
-            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-    return logger
+        return logger
+    return logging.getLogger(f"{logger.name}.{name}")
 
 
 def deep_model_dump(obj: object) -> object:
@@ -88,9 +76,7 @@ def get_context_window_for_model(model_name: str, default: int = 128_000) -> int
     """
     # import here to avoid circular imports
     from model_library.register_models import get_model_registry
-    from model_library.utils import get_logger
 
-    logger = get_logger(__name__)
     model_config = get_model_registry().get(model_name, None)
     if (
         model_config

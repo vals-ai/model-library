@@ -27,6 +27,7 @@ from model_library.base import (
     TextInput,
     ToolDefinition,
 )
+from model_library.register_models import register_provider
 from model_library.utils import truncate_str
 
 FAIL_RATE = 0.1
@@ -145,6 +146,7 @@ class DummyAIBatchMixin(LLMBatchMixin):
         return batch_status == "failed"
 
 
+@register_provider("vals")
 class DummyAIModel(LLM):
     _client: Redis | None = None
 

@@ -31,9 +31,11 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
 )
 from model_library.file_utils import trim_images
+from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
 
 
+@register_provider("mistralai")
 class MistralModel(LLM):
     _client: Mistral | None = None
 

@@ -50,6 +50,7 @@ from model_library.exceptions import (
     ModelNoOutputError,
 )
 from model_library.model_utils import get_reasoning_in_tag
+from model_library.register_models import register_provider
 from model_library.utils import create_openai_client_with_defaults
 
 
@@ -226,6 +227,7 @@ class OpenAIConfig(ProviderConfig):
     deep_research: bool = False
 
 
+@register_provider("openai")
 class OpenAIModel(LLM):
     provider_config = OpenAIConfig()
 

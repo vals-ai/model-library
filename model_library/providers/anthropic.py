@@ -5,6 +5,8 @@ from anthropic import AsyncAnthropic
 from anthropic.types import TextBlock, ToolUseBlock
 from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
 from anthropic.types.message import Message
+from typing_extensions import override
+
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
@@ -31,13 +33,13 @@ from model_library.exceptions import (
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.providers.openai import OpenAIModel
+from model_library.register_models import register_provider
 from model_library.utils import (
     create_openai_client_with_defaults,
     default_httpx_client,
     filter_empty_text_blocks,
     normalize_tool_result,
 )
-from typing_extensions import override
 
 
 class AnthropicBatchMixin(LLMBatchMixin):
@@ -241,6 +243,7 @@ class AnthropicBatchMixin(LLMBatchMixin):
         return batch_status == "canceling" or batch_status == "canceled"
 
 
+@register_provider("anthropic")
 class AnthropicModel(LLM):
     _client: AsyncAnthropic | None = None
 

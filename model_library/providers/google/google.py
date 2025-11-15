@@ -2,6 +2,26 @@ import base64
 import io
 from typing import Any, Literal, Sequence, cast
 
+from typing_extensions import override
+
+from google.genai import Client
+from google.genai import errors as genai_errors
+from google.genai.types import (
+    Content,
+    File,
+    FunctionDeclaration,
+    GenerateContentConfig,
+    GenerateContentResponse,
+    GenerateContentResponseUsageMetadata,
+    HarmBlockThreshold,
+    HarmCategory,
+    Part,
+    SafetySetting,
+    ThinkingConfig,
+    Tool,
+    ToolListUnion,
+    UploadFileConfig,
+)
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
@@ -30,27 +50,8 @@ from model_library.exceptions import (
     ModelNoOutputError,
 )
 from model_library.providers.google.batch import GoogleBatchMixin
+from model_library.register_models import register_provider
 from model_library.utils import normalize_tool_result
-from typing_extensions import override
-
-from google.genai import Client
-from google.genai import errors as genai_errors
-from google.genai.types import (
-    Content,
-    File,
-    FunctionDeclaration,
-    GenerateContentConfig,
-    GenerateContentResponse,
-    GenerateContentResponseUsageMetadata,
-    HarmBlockThreshold,
-    HarmCategory,
-    Part,
-    SafetySetting,
-    ThinkingConfig,
-    Tool,
-    ToolListUnion,
-    UploadFileConfig,
-)
 
 
 class GoogleConfig(ProviderConfig):
@@ -58,6 +59,7 @@ class GoogleConfig(ProviderConfig):
     use_interactions: bool = False
 
 
+@register_provider("google")
 class GoogleModel(LLM):
     provider_config = GoogleConfig()
 

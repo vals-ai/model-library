@@ -39,6 +39,7 @@ from model_library.exceptions import (
     RateLimitException,
 )
 from model_library.providers.openai import OpenAIModel
+from model_library.register_models import register_provider
 from model_library.utils import create_openai_client_with_defaults
 
 Chat = AsyncChat | SyncChat
@@ -48,6 +49,7 @@ class XAIConfig(ProviderConfig):
     sync_client: bool = False
 
 
+@register_provider("grok")
 class XAIModel(LLM):
     provider_config = XAIConfig()
 

@@ -26,9 +26,11 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
 )
+from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
 
 
+@register_provider("ai21labs")
 class AI21LabsModel(LLM):
     _client: AsyncAI21Client | None = None
 

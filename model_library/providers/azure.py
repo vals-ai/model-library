@@ -8,9 +8,11 @@ from model_library.base import (
     LLMConfig,
 )
 from model_library.providers.openai import OpenAIModel
+from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
 
 
+@register_provider("azure")
 class AzureOpenAIModel(OpenAIModel):
     _azure_client: AsyncAzureOpenAI | None = None
 

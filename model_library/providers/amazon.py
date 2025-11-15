@@ -31,8 +31,11 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
 )
 from model_library.model_utils import get_default_budget_tokens
+from model_library.register_models import register_provider
 
 
+@register_provider("amazon")
+@register_provider("bedrock")
 class AmazonModel(LLM):
     _client: BaseClient | None = None
 

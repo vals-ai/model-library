@@ -5,10 +5,10 @@ import tiktoken
 
 from model_library.base import LLM, LLMConfig, ProviderConfig
 from model_library.register_models import (
-    MAPPING_PROVIDERS,
     CostProperties,
     ModelConfig,
     get_model_registry,
+    get_provider_registry,
 )
 
 ALL_MODELS_PATH = Path(__file__).parent / "config" / "all_models.json"
@@ -51,7 +51,7 @@ def create_config(
 
     # load provider config with correct type
     if provider_properties:
-        ModelClass: type[LLM] = MAPPING_PROVIDERS[registry_config.provider_name]
+        ModelClass: type[LLM] = get_provider_registry()[registry_config.provider_name]
         if hasattr(ModelClass, "provider_config"):
             ProviderConfigClass: type[ProviderConfig] = type(ModelClass.provider_config)  # type: ignore
             provider_config: ProviderConfig = ProviderConfigClass.model_validate(
@@ -89,7 +89,7 @@ def _get_model_from_registry(
 
     provider_name: str = registry_config.provider_name
     provider_endpoint: str = registry_config.provider_endpoint
-    ModelClass: type[LLM] = MAPPING_PROVIDERS[provider_name]
+    ModelClass: type[LLM] = get_provider_registry()[provider_name]
 
     return ModelClass(
         model_name=provider_endpoint,
@@ -115,7 +115,7 @@ def get_registry_model(model_str: str, override_config: LLMConfig | None = None)
 def get_raw_model(model_str: str, config: LLMConfig | None = None) -> LLM:
     """Get a model exluding default config"""
     provider, model_name = model_str.split("/", 1)
-    ModelClass = MAPPING_PROVIDERS[provider]
+    ModelClass = get_provider_registry()[provider]
     return ModelClass(model_name=model_name, provider=provider, config=config)
 
 
@@ -130,7 +130,7 @@ def get_model_cost(model_str: str) -> CostProperties | None:
 @cache
 def get_provider_names() -> list[str]:
     """Return all provider names in the registry"""
-    return sorted([provider_name for provider_name in MAPPING_PROVIDERS.keys()])
+    return sorted([provider_name for provider_name in get_provider_registry().keys()])
 
 
 @cache

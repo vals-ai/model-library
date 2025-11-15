@@ -1,61 +1,23 @@
+import importlib
+import pkgutil
 import threading
 from copy import deepcopy
 from datetime import date
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast, get_type_hints
+from typing import Any, Callable, Type, TypeVar, cast, get_type_hints
 
 import yaml
 from pydantic import create_model, model_validator
 from pydantic.fields import Field
 from pydantic.main import BaseModel
 
+from model_library import providers
 from model_library.base import LLM, ProviderConfig
-from model_library.providers.ai21labs import AI21LabsModel
-from model_library.providers.alibaba import AlibabaModel
-from model_library.providers.amazon import AmazonModel
-from model_library.providers.anthropic import AnthropicModel
-from model_library.providers.azure import AzureOpenAIModel
-from model_library.providers.cohere import CohereModel
-from model_library.providers.deepseek import DeepSeekModel
-from model_library.providers.fireworks import FireworksModel
-from model_library.providers.google.google import GoogleModel
-from model_library.providers.inception import MercuryModel
-from model_library.providers.kimi import KimiModel
-from model_library.providers.mistral import MistralModel
-from model_library.providers.openai import OpenAIModel
-from model_library.providers.perplexity import PerplexityModel
-from model_library.providers.together import TogetherModel
-from model_library.providers.vals import DummyAIModel
-from model_library.providers.xai import XAIModel
-from model_library.providers.zai import ZAIModel
 from model_library.utils import get_logger
 
-MAPPING_PROVIDERS: dict[str, type[LLM]] = {
-    "openai": OpenAIModel,
-    "azure": AzureOpenAIModel,
-    "anthropic": AnthropicModel,
-    "together": TogetherModel,
-    "mistralai": MistralModel,
-    "grok": XAIModel,
-    "fireworks": FireworksModel,
-    "ai21labs": AI21LabsModel,
-    "amazon": AmazonModel,
-    "bedrock": AmazonModel,
-    "cohere": CohereModel,
-    "google": GoogleModel,
-    "vals": DummyAIModel,
-    "alibaba": AlibabaModel,
-    "perplexity": PerplexityModel,
-    "deepseek": DeepSeekModel,
-    "zai": ZAIModel,
-    "kimi": KimiModel,
-    "inception": MercuryModel,
-}
+T = TypeVar("T", bound=LLM)
 
-logger = get_logger(__name__)
-# Folder containing provider YAMLs
-path_library = Path(__file__).parent / "config"
-
+logger = get_logger("register_models")
 
 """
 Model Registry structure
@@ -174,6 +136,7 @@ class ClassProperties(BaseModel):
 Each provider can have a set of provider-specific properties, we however want to accept
 any possible property from a provider in the yaml, and validate later. So we join all
 provider-specific properties into a single class.
+This has no effect on runtime use of ProviderConfig, only used to load the yaml
 """
 
 
@@ -210,14 +173,6 @@ def get_dynamic_provider_properties_model() -> type[BaseProviderProperties]:
     )
 
 
-ProviderProperties = get_dynamic_provider_properties_model()
-
-if TYPE_CHECKING:
-    ProviderPropertiesType = BaseProviderProperties
-else:
-    ProviderPropertiesType = ProviderProperties
-
-
 class DefaultParameters(BaseModel):
     max_output_tokens: int | None = None
     temperature: float | None = None
@@ -234,12 +189,19 @@ class RawModelConfig(BaseModel):
     documentation_url: str | None = None
     properties: Properties = Field(default_factory=Properties)
     class_properties: ClassProperties = Field(default_factory=ClassProperties)
-    provider_properties: ProviderPropertiesType = Field(
-        default_factory=ProviderProperties
-    )
+    provider_properties: BaseProviderProperties | None = None
     costs_per_million_token: CostProperties = Field(default_factory=CostProperties)
     alternative_keys: list[str | dict[str, Any]] = Field(default_factory=list)
     default_parameters: DefaultParameters = Field(default_factory=DefaultParameters)
+
+    def model_dump(self, *args: object, **kwargs: object):
+        data = super().model_dump(*args, **kwargs)
+        if self.provider_properties is not None:
+            # explicitly dump dynamic ProviderProperties instance
+            data["provider_properties"] = self.provider_properties.model_dump(
+                *args, **kwargs
+            )
+        return data
 
 
 class ModelConfig(RawModelConfig):
@@ -251,6 +213,9 @@ class ModelConfig(RawModelConfig):
 
 
 ModelRegistry = dict[str, ModelConfig]
+
+# Folder containing provider YAMLs
+path_library = Path(__file__).parent / "config"
 
 
 def deep_update(
@@ -269,6 +234,9 @@ def _register_models() -> ModelRegistry:
     logger.debug(f"Loading model registry from {path_library}")
 
     registry: ModelRegistry = {}
+
+    # generate ProviderProperties class
+    ProviderProperties = get_dynamic_provider_properties_model()
 
     # load each provider YAML
     sections = Path(path_library).glob("*.yaml")
@@ -325,6 +293,10 @@ def _register_models() -> ModelRegistry:
                             "slug": model_name.replace("/", "_"),
                         }
                     )
+                    # load provider properties separately since the model was generated at runtime
+                    model_obj.provider_properties = ProviderProperties.model_validate(
+                        current_model_config.get("provider_properties", {})
+                    )
 
                     registry[model_name] = model_obj
 
@@ -371,6 +343,50 @@ def _register_models() -> ModelRegistry:
     return registry
 
 
+_provider_registry: dict[str, type[LLM]] = {}
+_provider_registry_lock = threading.Lock()
+_imported_providers = False
+
+
+def register_provider(name: str) -> Callable[[Type[T]], Type[T]]:
+    def decorator(cls: Type[T]) -> Type[T]:
+        logger.debug(f"Registering provider {name}")
+
+        if name in _provider_registry:
+            raise ValueError(f"Provider {name} is already registered.")
+        _provider_registry[name] = cls
+        return cls
+
+    return decorator
+
+
+def _import_all_providers():
+    """Import all provider modules. Any class with @register_provider will be automatically registered upon import"""
+
+    package_name = providers.__name__
+
+    # walk all submodules recursively
+    for _, module_name, _ in pkgutil.walk_packages(
+        providers.__path__, package_name + "."
+    ):
+        # skip private modules
+        if module_name.split(".")[-1].startswith("_"):
+            continue
+        importlib.import_module(module_name)
+
+
+def get_provider_registry() -> dict[str, type[LLM]]:
+    """Return the provider registry, lazily loading all modules on first call."""
+    global _imported_providers
+    if not _imported_providers:
+        with _provider_registry_lock:
+            if not _imported_providers:
+                _import_all_providers()
+                _imported_providers = True
+
+    return _provider_registry
+
+
 _model_registry: ModelRegistry | None = None
 _model_registry_lock = threading.Lock()
 
@@ -381,5 +397,9 @@ def get_model_registry() -> ModelRegistry:
     if _model_registry is None:
         with _model_registry_lock:
             if _model_registry is None:
+                # initialize provider registry
+                global get_provider_registry
+                get_provider_registry()
+
                 _model_registry = _register_models()
     return _model_registry

@@ -7,7 +7,16 @@ from typing import Literal
 
 import pytest
 
-from model_library.register_models import ModelRegistry, get_model_registry
+from model_library.base.base import LLM
+from model_library.providers.fireworks import FireworksModel
+from model_library.providers.google import GoogleModel
+from model_library.register_models import (
+    ModelRegistry,
+    get_model_registry,
+    get_provider_registry,
+    register_provider,
+)
+from model_library.registry_utils import get_registry_model
 
 
 @pytest.mark.parametrize("concurrency_type", ["threads", "async"])
@@ -64,3 +73,47 @@ def test_concurrent_access(concurrency_type: Literal["threads", "async"]) -> Non
     # Registry should not be empty
     registry_size = registry_sizes.pop()
     assert registry_size > 0, f"Registry is empty in {concurrency_type} mode"
+
+
+def test_registry_is_singleton():
+    """Test that repeated calls return the same dict object"""
+    registry1 = get_provider_registry()
+    registry2 = get_provider_registry()
+    assert registry1 is registry2
+
+
+def test_register_provider_decorator():
+    """Decorator registers a provider correctly."""
+
+    @register_provider("test")
+    class DummyProvider(LLM):
+        pass
+
+    registry = get_provider_registry()
+    assert "test" in registry
+    assert registry["test"] is DummyProvider
+
+
+def test_registry_contains_expected_providers():
+    registry = get_provider_registry()
+    expected = ["openai", "zai", "fireworks", "azure"]
+    for name in expected:
+        assert name in registry
+
+
+def test_manual_and_registry_instantiation():
+    """
+    Test manual and registry instantiation of a provider.
+    """
+    model1 = FireworksModel("test-model-1")
+    assert model1 is not None
+
+    model2 = get_registry_model("google/gemini-2.5-flash")
+    assert model2 is not None
+
+    model3 = FireworksModel("test-model-3")
+    assert model3 is not None
+
+    assert isinstance(model1, FireworksModel)
+    assert isinstance(model2, GoogleModel)
+    assert isinstance(model3, FireworksModel)
