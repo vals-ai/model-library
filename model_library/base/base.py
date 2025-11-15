@@ -103,9 +103,6 @@ class LLM(ABC):
         config = config or LLMConfig()
         self._registry_key = config.registry_key
 
-        if config.provider_config:
-            self.provider_config = config.provider_config
-
         self.max_tokens: int = config.max_tokens
         self.temperature: float | None = config.temperature
         self.top_p: float | None = config.top_p
@@ -123,6 +120,12 @@ class LLM(ABC):
         self.native: bool = config.native
         self.delegate: "OpenAIModel | None" = None
         self.batch: LLMBatchMixin | None = None
+
+        if config.provider_config:
+            if isinstance(
+                config.provider_config, type(getattr(self, "provider_config"))
+            ):
+                self.provider_config = config.provider_config
 
         self.logger: logging.Logger = logging.getLogger(
             f"llm.{provider}.{model_name}<instance={self.instance_id}>"
