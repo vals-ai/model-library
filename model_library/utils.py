@@ -75,17 +75,6 @@ def create_openai_client_with_defaults(
     )
 
 
-def sum_optional(a: int | None, b: int | None) -> int | None:
-    """Sum two optional integers, returning None if both are None.
-
-    Preserves None to indicate "unknown/not provided" when both inputs are None,
-    otherwise treats None as 0 for summation.
-    """
-    if a is None and b is None:
-        return None
-    return (a or 0) + (b or 0)
-
-
 def get_context_window_for_model(model_name: str, default: int = 128_000) -> int:
     """
     Get the context window for a model by looking up its configuration from the registry.
