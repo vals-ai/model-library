@@ -165,7 +165,6 @@ async def process_model(model_str: str, provider_name: str):
 MODEL_OVERRIDES = [
     "dumbmar",
     "bedrock/claude-opus-4-20250514-v1",
-    "fireworks/gpt-oss-120b",
 ]
 ERROR_OVERRIDES = [
     "overloaded",
