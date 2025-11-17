@@ -43,7 +43,6 @@ gpt-5-models:
       cache:
         read: 0.125
     default_parameters:
-      temperature: 1
       max_output_tokens: 128_000
 
   openai/gpt-5.1-codex-mini:
@@ -57,7 +56,6 @@ gpt-5-models:
       cache:
         read: 0.025
     default_parameters:
-      temperature: 1
       max_output_tokens: 128_000
 
   openai/gpt-5-codex:
@@ -76,7 +74,6 @@ gpt-5-models:
       available_as_evaluator: true
       supports_images: true
     default_parameters:
-      temperature: 1
       max_output_tokens: 128_000
 
   
@@ -96,7 +93,6 @@ gpt-5-models:
       available_as_evaluator: true
       supports_images: true
     default_parameters:
-      temperature: 1
       max_output_tokens: 128_000
 
   openai/gpt-5-2025-08-07:
@@ -115,7 +111,6 @@ gpt-5-models:
       available_as_evaluator: true
       supports_images: true
     default_parameters:
-      temperature: 1
       max_output_tokens: 128_000
     alternative_keys:
       - azure/gpt-5-2025-08-07
@@ -133,7 +128,6 @@ gpt-5-models:
     properties:
       training_cutoff: "2024-05"
     default_parameters:
-      temperature: 1
       max_output_tokens: 128_000
     class_properties:
       supports_images: true
@@ -153,7 +147,6 @@ gpt-5-models:
     properties:
       training_cutoff: "2024-05"
     default_parameters:
-      temperature: 1
       max_output_tokens: 128_000
     class_properties:
       supports_images: true

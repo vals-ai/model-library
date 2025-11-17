@@ -39,7 +39,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "openai",
@@ -87,7 +86,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "openai",
@@ -135,7 +133,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "openai",
@@ -961,7 +958,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "openai",
@@ -1709,7 +1705,6 @@
         ],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "openai",
@@ -1759,7 +1754,6 @@
         ],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "openai",
@@ -1809,7 +1803,6 @@
         ],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "openai",
@@ -1857,7 +1850,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "azure",
@@ -1905,7 +1897,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "azure",
@@ -1953,7 +1944,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_output_tokens": 128000,
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_name": "azure",
