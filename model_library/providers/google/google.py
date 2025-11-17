@@ -261,14 +261,12 @@ class GoogleModel(LLM):
         bytes: io.BytesIO,
         type: Literal["image", "file"] = "file",
     ) -> FileWithId:
-        if not self.supports_batch:
-            if self.provider_config.use_vertex:
-                raise Exception(
-                    "Vertex AI does not support file uploads. "
-                    "use FileWithBase64 to pass files as inline data"
-                    "or use genai for file uploads"
-                )
-            raise Exception("Model does not support batching")
+        if self.provider_config.use_vertex:
+            raise Exception(
+                "Vertex AI does not support file uploads. "
+                "use FileWithBase64 to pass files as inline data"
+                "or use genai for file uploads"
+            )
 
         mime = f"image/{mime}" if type == "image" else mime  # TODO:
         response: File = self.client.files.upload(
