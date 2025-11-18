@@ -378,6 +378,9 @@ class GoogleModel(LLM):
                 metadata = chunk.usage_metadata
             last_content = content
 
+        if not text and not reasoning and not tool_calls:
+            raise ModelNoOutputError("Model returned empty response")
+
         result = QueryResult(
             output_text=text,
             reasoning=reasoning,
