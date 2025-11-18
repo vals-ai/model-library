@@ -20,6 +20,7 @@ from google.genai.types import (
     Tool,
     ToolListUnion,
     UploadFileConfig,
+    FinishReason,
 )
 from typing_extensions import override
 
@@ -339,6 +340,8 @@ class GoogleModel(LLM):
 
         stream = await self.client.aio.models.generate_content_stream(**body)
         contents: list[Content | None] = []
+        finish_reason: FinishReason | None = None
+
         async for chunk in stream:
             candidates = chunk.candidates
             if not candidates:
@@ -370,7 +373,13 @@ class GoogleModel(LLM):
 
             if chunk.usage_metadata:
                 metadata = chunk.usage_metadata
-            contents.append(content)
+            if content:
+                contents.append(content)
+            if candidates[0].finish_reason:
+                finish_reason = candidates[0].finish_reason
+
+        if finish_reason != FinishReason.STOP:
+            self.logger.error(f"Unexpected finish reason: {finish_reason}")
 
         if not text and not reasoning and not tool_calls:
             raise ModelNoOutputError("Model returned empty response")
@@ -381,6 +390,7 @@ class GoogleModel(LLM):
             history=[*input, *contents],
             tool_calls=tool_calls,
         )
+
         if metadata:
             # see _calculate_cost
             cache_read_tokens = metadata.cached_content_token_count or 0
