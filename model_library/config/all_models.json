@@ -10,7 +10,7 @@
             "context_window": 1048576,
             "max_token_output": 65536,
             "training_cutoff": "2025-01",
-            "reasoning_model": false
+            "reasoning_model": true
         },
         "class_properties": {
             "supports_images": true,

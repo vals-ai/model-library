@@ -59,8 +59,8 @@ gemini-3-models:
       context_window: 1048576
       max_token_output: 65536
       training_cutoff: "2025-01"
-    class_properties:
       reasoning_model: true
+    class_properties:
       supports_images: true
       supports_files: true
       supports_videos: true

@@ -308,7 +308,7 @@ class GoogleModel(LLM):
         if system_prompt and isinstance(system_prompt, str) and system_prompt.strip():
             generation_config.system_instruction = str(system_prompt)
 
-        if "gemini-2.5" in self.model_name and self.reasoning:
+        if self.reasoning:
             generation_config.thinking_config = ThinkingConfig(
                 thinking_budget=cast(
                     int, kwargs.pop("thinking_budget", self.DEFAULT_THINKING_BUDGET)
