@@ -54,6 +54,8 @@ from model_library.register_models import register_provider
 from model_library.utils import normalize_tool_result
 
 from google.genai import types
+
+
 class GoogleConfig(ProviderConfig):
     use_vertex: bool = False
     use_interactions: bool = False
@@ -315,8 +317,10 @@ class GoogleModel(LLM):
                 ),
                 include_thoughts=True,
             )
-        elif "gemini-3" in self.model_name: 
-            generation_config.thinking_config=types.ThinkingConfig(thinking_level="high")
+        elif "gemini-3" in self.model_name:
+            generation_config.thinking_config = types.ThinkingConfig(
+                thinking_level="high"
+            )
 
         if tools:
             generation_config.tools = cast(ToolListUnion, await self.parse_tools(tools))
@@ -344,17 +348,19 @@ class GoogleModel(LLM):
         text: str = ""
         reasoning: str = ""
         tool_calls: list[ToolCall] = []
-        last_content: Content | None = None
 
         metadata: GenerateContentResponseUsageMetadata | None = None
 
         stream = await self.client.aio.models.generate_content_stream(**body)
+        contents: list[Content] = []
         async for chunk in stream:
             candidates = chunk.candidates
             if not candidates:
                 continue
 
             content = candidates[0].content
+            print("CONTENT", content.model_dump())
+
             if content and content.parts:
                 for part in content.parts:
                     if part.function_call:
@@ -379,7 +385,7 @@ class GoogleModel(LLM):
 
             if chunk.usage_metadata:
                 metadata = chunk.usage_metadata
-            last_content = content
+            contents.append(content)
 
         if not text and not reasoning and not tool_calls:
             raise ModelNoOutputError("Model returned empty response")
@@ -387,7 +393,7 @@ class GoogleModel(LLM):
         result = QueryResult(
             output_text=text,
             reasoning=reasoning,
-            history=[*input, last_content],
+            history=[*input, *contents],
             tool_calls=tool_calls,
         )
         if metadata:
