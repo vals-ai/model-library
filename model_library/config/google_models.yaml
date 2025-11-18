@@ -31,6 +31,54 @@ gemma-models:
       input: 0.00
       output: 0.00
 
+
+gemini-3-models:
+  base-config:
+    properties:
+      context_window: 1_048_576
+      max_token_output: 8_192
+      training_cutoff: "2025-01"
+    class_properties:
+      supports_images: true
+      supports_files: true
+      supports_videos: true
+      supports_tools: true
+      supports_batch_requests: true
+      supports_temperature: true
+    costs_per_million_token:
+      cache:
+        read_discount: 0.1
+    default_parameters:
+      temperature: 1
+
+  google/gemini-3-pro-preview:
+    label: Gemini 3 Pro (11/25)
+    description: Gemini 3 Pro, Google's most powerful model.
+    release_date: 2025-11-18
+    properties:
+      context_window: 1048576
+      max_token_output: 65536
+      training_cutoff: "2025-01"
+    class_properties:
+      reasoning_model: true
+      supports_images: true
+      supports_files: true
+      supports_videos: true
+      supports_tools: true
+      supports_batch_requests: true
+      supports_temperature: true
+    costs_per_million_token:
+      input: 1.25
+      output: 10.0
+      cache:
+        read: 0.125
+      context:
+        threshold: 200_000
+        input: 2.5
+        output: 15.0
+        cache:
+          read: 0.25
+
 gemini-2.5-models:
   base-config:
     properties:
