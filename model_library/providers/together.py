@@ -17,6 +17,7 @@ from model_library.base import (
     FileWithUrl,
     InputItem,
     LLMConfig,
+    ProviderConfig,
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
@@ -35,8 +36,14 @@ from model_library.register_models import register_provider
 from model_library.utils import create_openai_client_with_defaults
 
 
+class TogetherConfig(ProviderConfig):
+    serverless: bool = True
+
+
 @register_provider("together")
 class TogetherModel(LLM):
+    provider_config = TogetherConfig()
+
     _client: AsyncTogether | None = None
 
     @override
@@ -55,20 +62,19 @@ class TogetherModel(LLM):
         config: LLMConfig | None = None,
     ):
         super().__init__(model_name, provider, config=config)
-
         # https://docs.together.ai/docs/openai-api-compatibility
         self.delegate: OpenAIModel | None = (
             None
             if self.native
             else OpenAIModel(
-                model_name=model_name,
-                provider=provider,
+                model_name=self.model_name,
+                provider=self.provider,
                 config=config,
                 custom_client=create_openai_client_with_defaults(
                     api_key=model_library_settings.TOGETHER_API_KEY,
                     base_url="https://api.together.xyz/v1",
                 ),
-                use_completions=False,
+                use_completions=True,
             )
         )
 
@@ -165,29 +171,6 @@ class TogetherModel(LLM):
             input = trim_images(input, max_images=5)
 
         messages: list[dict[str, Any]] = []
-
-        if "nemotron-super" in self.model_name:
-            # move system prompt to prompt
-            if "system_prompt" in kwargs:
-                first_text_item = next(
-                    (item for item in input if isinstance(item, TextInput)), None
-                )
-                if not first_text_item:
-                    raise Exception(
-                        "Given system prompt for nemotron-super model, but no text input found"
-                    )
-                system_prompt = kwargs.pop("system_prompt")
-                first_text_item.text = f"SYSTEM PROMPT: {system_prompt}\nUSER PROMPT: {first_text_item.text}"
-
-            # set system prompt to detailed thinking
-            mode = "on" if self.reasoning else "off"
-            kwargs["system_prompt"] = f"detailed thinking {mode}"
-            messages.append(
-                {
-                    "role": "system",
-                    "content": f"detailed thinking {mode}",
-                }
-            )
 
         if "system_prompt" in kwargs:
             messages.append({"role": "system", "content": kwargs.pop("system_prompt")})

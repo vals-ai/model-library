@@ -143,8 +143,6 @@ This has no effect on runtime use of ProviderConfig, only used to load the yaml
 class BaseProviderProperties(BaseModel):
     """Static base class for dynamic ProviderProperties."""
 
-    pass
-
 
 def all_subclasses(cls: type) -> list[type]:
     """Recursively find all subclasses of a class."""
