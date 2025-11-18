@@ -68,16 +68,16 @@ gemini-3-models:
       supports_batch_requests: true
       supports_temperature: true
     costs_per_million_token:
-      input: 1.25
-      output: 10.0
+      input: 2
+      output: 12
       cache:
-        read: 0.125
+        read: 0.20
       context:
         threshold: 200_000
         input: 2.5
         output: 15.0
         cache:
-          read: 0.25
+          read: 0.40
 
 gemini-2.5-models:
   base-config:
