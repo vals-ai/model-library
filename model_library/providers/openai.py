@@ -5,7 +5,11 @@ import json
 from typing import Any, Literal, Sequence, cast
 
 from openai import APIConnectionError, AsyncOpenAI
-from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageToolCall
+from openai.types.chat import (
+    ChatCompletionMessage,
+    ChatCompletionMessageToolCall,
+    ChatCompletionMessageToolCallUnion,
+)
 from openai.types.chat.chat_completion_message_tool_call import Function
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.create_embedding_response import CreateEmbeddingResponse
@@ -617,7 +621,9 @@ class OpenAIModel(LLM):
         final_message = ChatCompletionMessage(
             role="assistant",
             content=output_text if output_text else None,
-            tool_calls=raw_tool_calls if raw_tool_calls else None,
+            tool_calls=cast(list[ChatCompletionMessageToolCallUnion], raw_tool_calls)
+            if raw_tool_calls
+            else None,
         )
         if hasattr(final_message, "reasoning_content") and reasoning_text:
             setattr(final_message, "reasoning_content", reasoning_text)

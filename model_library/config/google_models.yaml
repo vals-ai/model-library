@@ -50,6 +50,7 @@ gemini-3-models:
         read_discount: 0.1
     default_parameters:
       temperature: 1
+      reasoning_effort: "high"
 
   google/gemini-3-pro-preview:
     label: Gemini 3 Pro (11/25)

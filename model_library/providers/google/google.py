@@ -2,8 +2,6 @@ import base64
 import io
 from typing import Any, Literal, Sequence, cast
 
-from typing_extensions import override
-
 from google.genai import Client
 from google.genai import errors as genai_errors
 from google.genai.types import (
@@ -18,10 +16,13 @@ from google.genai.types import (
     Part,
     SafetySetting,
     ThinkingConfig,
+    ThinkingLevel,
     Tool,
     ToolListUnion,
     UploadFileConfig,
 )
+from typing_extensions import override
+
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
@@ -52,8 +53,6 @@ from model_library.exceptions import (
 from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.register_models import register_provider
 from model_library.utils import normalize_tool_result
-
-from google.genai import types
 
 
 class GoogleConfig(ProviderConfig):
@@ -120,15 +119,6 @@ class GoogleModel(LLM):
         config: LLMConfig | None = None,
     ):
         super().__init__(model_name, provider, config=config)
-
-        # thinking tag
-        if self.model_name.endswith("-thinking"):
-            original_name = self.model_name
-            self.model_name = self.model_name.replace("-thinking", "")
-            self.reasoning = True
-            self.logger.info(
-                f"Enabled thinking mode for {original_name} -> {self.model_name}"
-            )
 
         if self.provider_config.use_vertex:
             self.supports_batch = False
@@ -294,7 +284,6 @@ class GoogleModel(LLM):
         tools: list[ToolDefinition],
         **kwargs: object,
     ) -> dict[str, Any]:
-        self.logger.debug(f"Creating request body for {self.model_name}")
         generation_config = GenerateContentConfig(
             max_output_tokens=self.max_tokens,
         )
@@ -310,17 +299,15 @@ class GoogleModel(LLM):
         if system_prompt and isinstance(system_prompt, str) and system_prompt.strip():
             generation_config.system_instruction = str(system_prompt)
 
-        if self.reasoning and "gemini-3" not in self.model_name:
-            generation_config.thinking_config = ThinkingConfig(
-                thinking_budget=cast(
+        if self.reasoning:
+            reasoning_config = ThinkingConfig(include_thoughts=True)
+            if self.reasoning_effort:
+                reasoning_config.thinking_level = ThinkingLevel(self.reasoning_effort)
+            else:
+                reasoning_config.thinking_budget = cast(
                     int, kwargs.pop("thinking_budget", self.DEFAULT_THINKING_BUDGET)
-                ),
-                include_thoughts=True,
-            )
-        elif "gemini-3" in self.model_name:
-            generation_config.thinking_config = types.ThinkingConfig(
-                thinking_level="high"
-            )
+                )
+            generation_config.thinking_config = reasoning_config
 
         if tools:
             generation_config.tools = cast(ToolListUnion, await self.parse_tools(tools))
@@ -332,7 +319,6 @@ class GoogleModel(LLM):
             "contents": await self.parse_input(input),
             "config": generation_config,
         }
-
         return body
 
     @override
@@ -352,14 +338,13 @@ class GoogleModel(LLM):
         metadata: GenerateContentResponseUsageMetadata | None = None
 
         stream = await self.client.aio.models.generate_content_stream(**body)
-        contents: list[Content] = []
+        contents: list[Content | None] = []
         async for chunk in stream:
             candidates = chunk.candidates
             if not candidates:
                 continue
 
             content = candidates[0].content
-            print("CONTENT", content.model_dump())
 
             if content and content.parts:
                 for part in content.parts:
