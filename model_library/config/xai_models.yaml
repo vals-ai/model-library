@@ -47,6 +47,8 @@ xai-models:
       - grok/grok-code-fast
       - grok/grok-code-fast-1-0825
 
+  
+
   grok/grok-4-fast-reasoning:
     label: Grok 4 Fast (Reasoning)
     description: Latest advancement in cost-efficient reasoning models with unified architecture. Handles complex requests with deep chain-of-thought reasoning. Features 2M token context window and native tool use.
@@ -80,7 +82,6 @@ xai-models:
     alternative_keys:
       - grok/grok-4-fast
       - grok/grok-4-fast-reasoning-latest
-
   grok/grok-4-fast-non-reasoning:
     label: Grok 4 Fast (Non-Reasoning)
     description: Cost-efficient model focused on speed and efficiency for straightforward tasks like summarization or classification without deep logical processing. Unified architecture with reasoning variant, steered via system prompts.
