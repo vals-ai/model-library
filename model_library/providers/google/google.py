@@ -53,7 +53,7 @@ from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.register_models import register_provider
 from model_library.utils import normalize_tool_result
 
-
+from google.genai import types
 class GoogleConfig(ProviderConfig):
     use_vertex: bool = False
     use_interactions: bool = False
@@ -308,13 +308,15 @@ class GoogleModel(LLM):
         if system_prompt and isinstance(system_prompt, str) and system_prompt.strip():
             generation_config.system_instruction = str(system_prompt)
 
-        if self.reasoning:
+        if self.reasoning and "gemini-3" not in self.model_name:
             generation_config.thinking_config = ThinkingConfig(
                 thinking_budget=cast(
                     int, kwargs.pop("thinking_budget", self.DEFAULT_THINKING_BUDGET)
                 ),
                 include_thoughts=True,
             )
+        elif "gemini-3" in self.model_name: 
+            generation_config.thinking_config=types.ThinkingConfig(thinking_level="high")
 
         if tools:
             generation_config.tools = cast(ToolListUnion, await self.parse_tools(tools))
@@ -326,6 +328,7 @@ class GoogleModel(LLM):
             "contents": await self.parse_input(input),
             "config": generation_config,
         }
+
         return body
 
     @override
@@ -447,6 +450,7 @@ class GoogleModel(LLM):
                 "response_mime_type": "application/json",
             }
         )
+
         body["config"] = config
 
         # Make the request with retry wrapper
