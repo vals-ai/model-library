@@ -59,6 +59,33 @@ class QueryResultCost(BaseModel):
             )
         )
 
+    @computed_field
+    @property
+    def total_input(self) -> float:
+        return sum(
+            filter(
+                None,
+                [
+                    self.input,
+                    self.cache_read,
+                    self.cache_write,
+                ],
+            )
+        )
+
+    @computed_field
+    @property
+    def total_output(self) -> float:
+        return sum(
+            filter(
+                None,
+                [
+                    self.output,
+                    self.reasoning,
+                ],
+            )
+        )
+
     @override
     def __repr__(self):
         use_cents = self.total < 1
@@ -91,6 +118,33 @@ class QueryResultMetadata(BaseModel):
     @property
     def default_duration_seconds(self) -> float:
         return self.duration_seconds or 0
+
+    @computed_field
+    @property
+    def total_input_tokens(self) -> int:
+        return sum(
+            filter(
+                None,
+                [
+                    self.in_tokens,
+                    self.cache_read_tokens,
+                    self.cache_write_tokens,
+                ],
+            )
+        )
+
+    @computed_field
+    @property
+    def total_output_tokens(self) -> int:
+        return sum(
+            filter(
+                None,
+                [
+                    self.out_tokens,
+                    self.reasoning_tokens,
+                ],
+            )
+        )
 
     def __add__(self, other: "QueryResultMetadata") -> "QueryResultMetadata":
         return QueryResultMetadata(

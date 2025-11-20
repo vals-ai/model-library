@@ -316,7 +316,7 @@ class LLM(ABC):
             )
 
         # costs for long context
-        total_in = metadata.in_tokens + (metadata.cache_read_tokens or 0)
+        total_in = metadata.total_input_tokens
         if costs.context and total_in > costs.context.threshold:
             input_cost, output_cost = costs.context.get_costs(
                 input_cost,
