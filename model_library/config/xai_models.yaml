@@ -46,8 +46,6 @@ xai-models:
       - grok/grok-code-fast
       - grok/grok-code-fast-1-0825
 
-  
-
   grok/grok-4-fast-reasoning:
     label: Grok 4 Fast (Reasoning)
     description: Latest advancement in cost-efficient reasoning models with unified architecture. Handles complex requests with deep chain-of-thought reasoning. Features 2M token context window and native tool use.
@@ -81,6 +79,69 @@ xai-models:
     alternative_keys:
       - grok/grok-4-fast
       - grok/grok-4-fast-reasoning-latest
+
+  grok/grok-4-1-fast-reasoning:
+    label: Grok 4.1 Fast (Reasoning)
+    description: ""
+    release_date: 2025-10-19
+    open_source: false
+    class_properties:
+      supports_images: true
+      available_as_evaluator: true
+      supports_metadata: true
+      supports_files: false
+      available_for_everyone: true
+      ignored_for_cost: false
+    properties:
+      context_window: 2_000_000
+      max_token_output: 2_000_000 # from openrouter
+      training_cutoff: null
+      reasoning_model: true
+    documentation_url: ""
+    costs_per_million_token:
+      input: 0.20
+      output: 0.5
+      cache:
+        read: 0.05
+      context:
+        threshold: 128_000
+        input: 0.4
+        output: 1.0
+    default_parameters:
+      temperature: 0.7
+      max_output_tokens: 128000
+
+  grok/grok-4-1-fast-non-reasoning:
+    label: Grok 4.1 Fast Non-Reasoning
+    description: ""
+    release_date: 2025-10-19
+    open_source: false
+    class_properties:
+      supports_images: true
+      available_as_evaluator: true
+      supports_metadata: true
+      supports_files: false
+      available_for_everyone: true
+      ignored_for_cost: false
+    properties:
+      context_window: 2_000_000
+      max_token_output: 2_000_000 # from openrouter
+      training_cutoff: null
+      reasoning_model: false
+    documentation_url: ""
+    costs_per_million_token:
+      input: 0.20
+      output: 0.5
+      cache:
+        read: 0.05
+      context:
+        threshold: 128_000
+        input: 0.4
+        output: 1.0
+    default_parameters:
+      temperature: 0.7
+      max_output_tokens: 128000
+
   grok/grok-4-fast-non-reasoning:
     label: Grok 4 Fast (Non-Reasoning)
     description: Cost-efficient model focused on speed and efficiency for straightforward tasks like summarization or classification without deep logical processing. Unified architecture with reasoning variant, steered via system prompts.

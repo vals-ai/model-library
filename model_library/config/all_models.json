@@ -370,6 +370,104 @@
         "full_key": "fireworks/minimax-m2",
         "slug": "fireworks_minimax-m2"
     },
+    "grok/grok-4-1-fast-reasoning": {
+        "company": "xAI",
+        "label": "Grok 4.1 Fast (Reasoning)",
+        "description": "",
+        "release_date": "2025-10-19",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 2000000,
+            "max_token_output": 2000000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "class_properties": {
+            "supports_images": true,
+            "supports_files": false,
+            "supports_temperature": true,
+            "supports_tools": true,
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 0.5,
+            "cache": {
+                "read": 0.05,
+                "read_discount": 0.25,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 128000.0,
+                "input": 0.4,
+                "output": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_output_tokens": 128000,
+            "temperature": 0.7,
+            "top_p": 0.95
+        },
+        "provider_name": "grok",
+        "provider_endpoint": "grok-4-1-fast-reasoning",
+        "full_key": "grok/grok-4-1-fast-reasoning",
+        "slug": "grok_grok-4-1-fast-reasoning"
+    },
+    "grok/grok-4-1-fast-non-reasoning": {
+        "company": "xAI",
+        "label": "Grok 4.1 Fast Non-Reasoning",
+        "description": "",
+        "release_date": "2025-10-19",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 2000000,
+            "max_token_output": 2000000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "class_properties": {
+            "supports_images": true,
+            "supports_files": false,
+            "supports_temperature": true,
+            "supports_tools": true,
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 0.5,
+            "cache": {
+                "read": 0.05,
+                "read_discount": 0.25,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 128000.0,
+                "input": 0.4,
+                "output": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_output_tokens": 128000,
+            "temperature": 0.7,
+            "top_p": 0.95
+        },
+        "provider_name": "grok",
+        "provider_endpoint": "grok-4-1-fast-non-reasoning",
+        "full_key": "grok/grok-4-1-fast-non-reasoning",
+        "slug": "grok_grok-4-1-fast-non-reasoning"
+    },
     "anthropic/claude-haiku-4-5-20251001-thinking": {
         "company": "Anthropic",
         "label": "Claude Haiku 4.5 (Thinking)",
