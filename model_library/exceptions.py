@@ -5,6 +5,7 @@ from typing import Any, Callable
 
 import backoff
 from ai21 import TooManyRequestsError as AI21RateLimitError
+from anthropic import InternalServerError
 from anthropic import RateLimitError as AnthropicRateLimitError
 from backoff._typing import Details
 from httpcore import ReadError as HTTPCoreReadError
@@ -166,6 +167,7 @@ RETRIABLE_EXCEPTIONS = [
     OpenAIUnprocessableEntityError,
     OpenAIAPIConnectionError,
     AnthropicRateLimitError,
+    InternalServerError,
     AI21RateLimitError,
     RemoteProtocolError,  # httpx connection closing when running models from sdk
     HTTPXReadError,
@@ -191,6 +193,7 @@ RETRIABLE_EXCEPTION_CODES = [
     "overloaded",
     "throttling",  # AWS throttling errors
     "throttlingexception",  # AWS throttling errors
+    "internal server error",
 ]
 
 
@@ -239,8 +242,9 @@ def retry_llm_call(
     logger: logging.Logger,
     max_tries: int = RETRY_MAX_TRIES,
     max_time: float | None = None,
-    backoff_callback: Callable[[int, Exception | None, float, float], None]
-    | None = None,
+    backoff_callback: (
+        Callable[[int, Exception | None, float, float], None] | None
+    ) = None,
 ):
     def on_backoff(details: Details):
         exception = details.get("exception")

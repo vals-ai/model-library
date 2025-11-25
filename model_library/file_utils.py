@@ -56,7 +56,7 @@ def concat_images(
         new_width = int(combined_image.width * scale_factor)
         new_height = int(combined_image.height * scale_factor)
 
-        combined_image = combined_image.resize(
+        combined_image = combined_image.resize(  # type: ignore
             (new_width, new_height), Image.Resampling.LANCZOS
         )
 

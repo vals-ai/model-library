@@ -165,7 +165,6 @@ async def process_model(model_str: str, provider_name: str):
 MODEL_OVERRIDES = [
     "dumbmar",
     "bedrock/claude-opus-4-20250514-v1",
-    "together/deepseek-ai/DeepSeek-V3.2-Exp-95552921",
 ]
 ERROR_OVERRIDES = [
     "overloaded",
@@ -191,6 +190,11 @@ async def main():
         if config.class_properties.deprecated:
             continue
         if "research" in key and not args.research:
+            continue
+        if (
+            config.provider_properties is not None
+            and getattr(config.provider_properties, "serverless", True) is False
+        ):
             continue
 
         tasks.append(process_model(key, config.provider_name))

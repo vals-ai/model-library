@@ -1,4 +1,110 @@
 {
+    "anthropic/claude-opus-4-5-20251101-thinking": {
+        "company": "Anthropic",
+        "label": "Claude Opus 4.5 (Thinking)",
+        "description": null,
+        "release_date": "2025-11-24",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 200000,
+            "max_token_output": 64000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "class_properties": {
+            "supports_images": true,
+            "supports_files": true,
+            "supports_batch_requests": true,
+            "supports_temperature": true,
+            "supports_tools": true,
+            "deprecated": false,
+            "available_for_everyone": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 15.0,
+            "output": 75.0,
+            "cache": {
+                "read": 1.5,
+                "write": 18.75,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_output_tokens": 64000,
+            "temperature": 1.0
+        },
+        "provider_name": "anthropic",
+        "provider_endpoint": "claude-opus-4-5-20251101",
+        "full_key": "anthropic/claude-opus-4-5-20251101-thinking",
+        "slug": "anthropic_claude-opus-4-5-20251101-thinking"
+    },
+    "anthropic/claude-opus-4-5-20251101": {
+        "company": "Anthropic",
+        "label": "Claude Opus 4.5 (Nonthinking)",
+        "description": null,
+        "release_date": "2025-11-24",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 200000,
+            "max_token_output": 64000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "class_properties": {
+            "supports_images": true,
+            "supports_files": true,
+            "supports_batch_requests": true,
+            "supports_temperature": true,
+            "supports_tools": true,
+            "deprecated": false,
+            "available_for_everyone": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 15.0,
+            "output": 75.0,
+            "cache": {
+                "read": 1.5,
+                "write": 18.75,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [
+            {
+                "anthropic/claude-opus-4-5-20251101-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_output_tokens": 64000,
+            "temperature": 1.0
+        },
+        "provider_name": "anthropic",
+        "provider_endpoint": "claude-opus-4-5-20251101",
+        "full_key": "anthropic/claude-opus-4-5-20251101",
+        "slug": "anthropic_claude-opus-4-5-20251101"
+    },
     "google/gemini-3-pro-preview": {
         "company": "Google",
         "label": "Gemini 3 Pro (11/25)",
@@ -2836,6 +2942,7 @@
         },
         "alternative_keys": [],
         "default_parameters": {
+            "max_output_tokens": 16384,
             "temperature": 0.3
         },
         "provider_name": "together",
@@ -3021,6 +3128,7 @@
         },
         "alternative_keys": [],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",
@@ -3056,6 +3164,7 @@
         },
         "alternative_keys": [],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",
@@ -5836,6 +5945,7 @@
             "ai21labs/jamba-1.6-mini"
         ],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",
@@ -5873,6 +5983,7 @@
             "ai21labs/jamba-1.6-large"
         ],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",
@@ -5908,6 +6019,7 @@
         },
         "alternative_keys": [],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",
@@ -5943,6 +6055,7 @@
         },
         "alternative_keys": [],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",
@@ -8445,6 +8558,7 @@
             "ai21labs/jamba-1.5-mini"
         ],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",
@@ -8482,6 +8596,7 @@
             "ai21labs/jamba-1.5-large"
         ],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",
@@ -8517,6 +8632,7 @@
         },
         "alternative_keys": [],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",
@@ -8552,6 +8668,7 @@
         },
         "alternative_keys": [],
         "default_parameters": {
+            "max_output_tokens": 4096,
             "temperature": 0.4
         },
         "provider_name": "ai21labs",

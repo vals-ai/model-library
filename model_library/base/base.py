@@ -218,6 +218,10 @@ class LLM(ABC):
         Join input with history
         Log, Time, and Retry
         """
+
+        # verbose on debug
+        verbose = self.logger.isEnabledFor(logging.DEBUG)
+
         # format str input
         if isinstance(input, str):
             input = [TextInput(text=input)]
@@ -226,11 +230,11 @@ class LLM(ABC):
         input = [*files, *images, *input]
 
         # format input info
-        item_info = f"--- input ({len(input)}): {get_pretty_input_types(input)}\n"
+        item_info = (
+            f"--- input ({len(input)}): {get_pretty_input_types(input, verbose)}\n"
+        )
         if history:
-            item_info += (
-                f"--- history({len(history)}): {get_pretty_input_types(history)}\n"
-            )
+            item_info += f"--- history({len(history)}): {get_pretty_input_types(history, verbose)}\n"
 
         # format tool info
         tool_results = [t for t in input if isinstance(t, ToolResult)]
@@ -251,7 +255,7 @@ class LLM(ABC):
 
         # unique logger for the query
         query_id = uuid.uuid4().hex[:14]
-        query_logger = logging.getLogger(f"{self.logger.name}<query={query_id}>")
+        query_logger = self.logger.getChild(f"query={query_id}")
 
         query_logger.info(
             "Query started:\n" + item_info + tool_info + f"--- kwargs: {short_kwargs}\n"
@@ -277,6 +281,7 @@ class LLM(ABC):
         output.metadata.cost = await self._calculate_cost(output.metadata)
 
         query_logger.info(f"Query completed: {repr(output)}")
+        query_logger.debug(output.model_dump(exclude={"history", "raw"}))
 
         return output
 

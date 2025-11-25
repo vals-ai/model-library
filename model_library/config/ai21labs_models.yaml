@@ -19,6 +19,7 @@ ai21labs-models:
       supports_temperature: true
     default_parameters:
       temperature: 0.4
+      max_output_tokens: 4096
 
   ai21labs/jamba-large-1.7:
     label: Jamba 1.7 Large

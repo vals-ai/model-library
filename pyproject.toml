@@ -23,7 +23,6 @@ dependencies = [
   # providers
   "openai>=1.97.1,<2.0",
   "anthropic>=0.57.1,<1.0",
-  "together>=1.5.25,<2.0",
   "mistralai>=1.9.10,<2.0",
   "xai-sdk>=1.0.0,<2.0",
   "ai21>=4.0.3,<5.0",

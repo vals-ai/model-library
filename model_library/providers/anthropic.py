@@ -562,12 +562,8 @@ class AnthropicModel(LLM):
 
         body = await self.create_body(input, tools=tools, **kwargs)
 
-        betas = [
-            "files-api-2025-04-14",
-            "interleaved-thinking-2025-05-14",
-        ]
-
-        if "claude-sonnet-4-5" in self.model_name:
+        betas = ["files-api-2025-04-14", "interleaved-thinking-2025-05-14"]
+        if "sonnet-4-5" in self.model_name:
             betas.append("context-1m-2025-08-07")
 
         async with self.get_client().beta.messages.stream(

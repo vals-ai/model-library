@@ -31,7 +31,6 @@ gpt-5-models:
       supports_temperature: false
       supports_files: true
       supports_tools: true
-  
   openai/gpt-5.1-codex:
     label: GPT 5.1 Codex
     documentation_url: https://platform.openai.com/docs/models/gpt-5.1-codex
@@ -76,7 +75,6 @@ gpt-5-models:
     default_parameters:
       max_output_tokens: 128_000
 
-  
   openai/gpt-5.1-2025-11-13:
     label: GPT 5.1
     documentation_url: https://platform.openai.com/docs/models/gpt-5.1

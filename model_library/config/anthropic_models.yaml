@@ -27,6 +27,28 @@ claude-4-models:
     class_properties:
       supports_batch_requests: true
 
+  anthropic/claude-opus-4-5-20251101:
+    label: Claude Opus 4.5 (Nonthinking)
+    release_date: 2025-11-24
+    properties:
+      context_window: 200_000
+      max_token_output: 64_000
+      extending_thinking: 64_000
+    class_properties:
+      available_for_everyone: false
+    default_parameters:
+      max_output_tokens: 64_000
+    costs_per_million_token:
+      input: 15.0
+      output: 75.0
+      cache:
+        read: 1.5
+        write: 18.75
+    alternative_keys:
+      - anthropic/claude-opus-4-5-20251101-thinking:
+          properties:
+            reasoning_model: true
+
   anthropic/claude-opus-4-1-20250805:
     label: Claude Opus 4.1 (Nonthinking)
     description: Advanced model for specialized complex
@@ -197,11 +219,12 @@ claude-3-5-models:
     alternative_keys:
       - anthropic/claude-3-5-sonnet-latest
       - anthropic/claude-3.5-sonnet-latest
-  
+
   anthropic/claude-3-5-sonnet-20240620:
     label: Claude 3.5 Sonnet
     release_date: 2024-06-20
-    description: Claude Sonnet 3.5 (June 2024) variant for code and content generation,
+    description:
+      Claude Sonnet 3.5 (June 2024) variant for code and content generation,
       multilingual and vision-capable, deprecated.
     class_properties:
       deprecated: true
@@ -339,7 +362,7 @@ claude-2-models:
     costs_per_million_token:
       input: 8.0
       output: 24.0
-  
+
   anthropic/claude-1.3:
     label: Claude 1.3
     release_date: null

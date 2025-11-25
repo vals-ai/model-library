@@ -21,12 +21,13 @@ def sum_optional(a: int | None, b: int | None) -> int | None:
     return (a or 0) + (b or 0)
 
 
-def get_pretty_input_types(input: Sequence["InputItem"]) -> str:
+def get_pretty_input_types(input: Sequence["InputItem"], verbose: bool = False) -> str:
     # for logging
     def process_item(item: "InputItem"):
         match item:
             case TextInput():
-                return truncate_str(repr(item))
+                item_str = repr(item)
+                return item_str if verbose else truncate_str(item_str)
             case FileBase():  # FileInput
                 return repr(item)
             case ToolResult():
