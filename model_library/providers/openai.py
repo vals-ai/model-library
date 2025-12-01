@@ -521,10 +521,6 @@ class OpenAIModel(LLM):
         metadata: QueryResultMetadata = QueryResultMetadata()
         raw_tool_calls: list[ChatCompletionMessageToolCall] = []
 
-        # enable usage data in streaming responses
-        if "stream_options" not in body:
-            body["stream_options"] = {"include_usage": True}
-
         stream = await self.get_client().chat.completions.create(
             **body,  # pyright: ignore[reportAny]
             stream=True,
