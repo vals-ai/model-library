@@ -625,7 +625,7 @@ class OpenAIModel(LLM):
             if raw_tool_calls
             else None,
         )
-        if hasattr(final_message, "reasoning_content") and reasoning_text:
+        if reasoning_text:
             setattr(final_message, "reasoning_content", reasoning_text)
 
         return QueryResult(

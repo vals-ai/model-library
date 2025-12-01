@@ -782,7 +782,7 @@
             "supports_files": false,
             "supports_batch_requests": false,
             "supports_temperature": true,
-            "supports_tools": false,
+            "supports_tools": true,
             "deprecated": false,
             "available_for_everyone": true,
             "available_as_evaluator": false,
