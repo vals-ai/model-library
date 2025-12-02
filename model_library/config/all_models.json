@@ -1,4 +1,43 @@
 {
+    "mistralai/mistral-large-2512": {
+        "company": "Mistral",
+        "label": "Mistral Large 3",
+        "description": "Mistral's latest flagship model",
+        "release_date": "2025-12-02",
+        "open_source": false,
+        "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
+        "properties": {
+            "context_window": 256000,
+            "max_tokens": 256000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "supports": {
+            "images": true,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.5,
+            "output": 1.5
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7
+        },
+        "provider_endpoint": "mistral-large-2512",
+        "provider_name": "mistralai",
+        "full_key": "mistralai/mistral-large-2512",
+        "slug": "mistralai_mistral-large-2512"
+    },
     "anthropic/claude-opus-4-5-20251101-thinking": {
         "company": "Anthropic",
         "label": "Claude Opus 4.5 (Thinking)",
@@ -7844,6 +7883,7 @@
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
         "properties": {
             "context_window": 128000,
+            "max_tokens": 256000,
             "training_cutoff": null,
             "reasoning_model": false
         },
@@ -7882,6 +7922,7 @@
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
         "properties": {
             "context_window": 128000,
+            "max_tokens": 256000,
             "training_cutoff": null,
             "reasoning_model": false
         },
@@ -8531,6 +8572,7 @@
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
         "properties": {
             "context_window": 32000,
+            "max_tokens": 256000,
             "training_cutoff": null,
             "reasoning_model": false
         },

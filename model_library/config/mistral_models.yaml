@@ -66,16 +66,30 @@ magistral-models:
       input: 0.5
       output: 1.5
 
+# Standard Mistral Models
 mistralai-models:
   base-config:
     properties:
       reasoning_model: false
+      max_tokens: 256_000
     supports:
       temperature: true
     default_parameters:
       temperature: 0.7
 
-  # Standard Mistral Models
+  mistralai/mistral-large-2512:
+    label: Mistral Large 3
+    description: Mistral's latest flagship model
+    release_date: 2025-12-02
+    properties:
+      context_window: 256_000
+    supports:
+      images: true
+      tools: true
+    costs_per_million_token:
+      input: 0.5
+      output: 1.5
+
   mistralai/mistral-medium-2505:
     label: Mistral Medium 3.1 (05/2025)
     description: Mistral Medium 2505
