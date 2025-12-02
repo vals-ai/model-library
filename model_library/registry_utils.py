@@ -25,29 +25,31 @@ def create_config(
     config: object = {}
 
     properties = registry_config.properties
-    class_properties = registry_config.class_properties
+    supports = registry_config.supports
     provider_properties = registry_config.provider_properties
     defaults = registry_config.default_parameters
 
     if properties:
-        if properties.max_token_output is not None:
-            config["max_tokens"] = properties.max_token_output
+        if properties.max_tokens is not None:
+            config["max_tokens"] = properties.max_tokens
         if properties.reasoning_model is not None:
             config["reasoning"] = properties.reasoning_model
 
-    if class_properties:
-        if class_properties.supports_images is not None:
-            config["supports_images"] = class_properties.supports_images
-        if class_properties.supports_files is not None:
-            config["supports_files"] = class_properties.supports_files
-        if class_properties.supports_videos is not None:
-            config["supports_videos"] = class_properties.supports_videos
-        if class_properties.supports_batch_requests is not None:
-            config["supports_batch"] = class_properties.supports_batch_requests
-        if class_properties.supports_temperature is not None:
-            config["supports_temperature"] = class_properties.supports_temperature
-        if class_properties.supports_tools is not None:
-            config["supports_tools"] = class_properties.supports_tools
+    if supports:
+        if supports.images is not None:
+            config["supports_images"] = supports.images
+        if supports.files is not None:
+            config["supports_files"] = supports.files
+        if supports.videos is not None:
+            config["supports_videos"] = supports.videos
+        if supports.batch is not None:
+            config["supports_batch"] = supports.batch
+        if supports.temperature is not None:
+            config["supports_temperature"] = supports.temperature
+        if supports.tools is not None:
+            config["supports_tools"] = supports.tools
+    else:
+        raise Exception(f"{registry_config.label} has no supports")
 
     # load provider config with correct type
     if provider_properties:

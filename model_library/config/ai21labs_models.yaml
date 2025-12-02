@@ -1,25 +1,25 @@
 base-config:
   company: AI21 Labs
   documentation_url: https://www.ai21.com/jamba
-  class_properties:
-    supports_images: false
+  supports:
+    images: false
+    files: false
+  metadata:
     available_as_evaluator: false
-    supports_files: false
     available_for_everyone: false
     ignored_for_cost: false
   properties:
     context_window: null
-    max_token_output: 4096
+    max_tokens: 4096
     training_cutoff: null
 
 ai21labs-models:
   base-config:
     open_source: true
-    class_properties:
-      supports_temperature: true
+    supports:
+      temperature: true
     default_parameters:
       temperature: 0.4
-      max_output_tokens: 4096
 
   ai21labs/jamba-large-1.7:
     label: Jamba 1.7 Large
@@ -47,7 +47,7 @@ ai21labs-models:
     label: Jamba 1.6 Large
     description: The most powerful and efficient long context model
     release_date: 2025-03-06
-    class_properties:
+    metadata:
       deprecated: true
     properties:
       context_window: 256_000
@@ -61,7 +61,7 @@ ai21labs-models:
     label: Jamba 1.6 Mini
     description: The most powerful and efficient long context model
     release_date: 2025-03-06
-    class_properties:
+    metadata:
       deprecated: true
     properties:
       context_window: 256_000
@@ -77,7 +77,7 @@ ai21labs-models:
     release_date: 2024-08-22
     properties:
       context_window: 256_000
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 2.00
@@ -91,7 +91,7 @@ ai21labs-models:
     release_date: 2024-08-22
     properties:
       context_window: 256_000
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 0.2

@@ -187,14 +187,11 @@ async def main():
 
     tasks: list[Coroutine[Any, Any, None]] = []
     for key, config in model_registry.items():
-        if config.class_properties.deprecated:
+        if config.metadata.deprecated:
             continue
         if "research" in key and not args.research:
             continue
-        if (
-            config.provider_properties is not None
-            and getattr(config.provider_properties, "serverless", True) is False
-        ):
+        if getattr(config.provider_properties, "serverless", True) is False:
             continue
 
         tasks.append(process_model(key, config.provider_name))

@@ -2,24 +2,25 @@ base-config:
   company: Mistral
   documentation_url: https://docs.mistral.ai/getting-started/models/models_overview/
   open_source: false
-  class_properties:
-    supports_images: false
+  supports:
+    images: false
+    files: false
+    tools: true
+  metadata:
     available_as_evaluator: false
-    supports_files: false
     available_for_everyone: true
     ignored_for_cost: false
-    supports_tools: true
   properties:
     context_window: null
-    max_token_output: null
+    max_tokens: null
     training_cutoff: null
 
 magistral-models:
   base-config:
     properties:
       reasoning_model: true
-    class_properties:
-      supports_temperature: true
+    supports:
+      temperature: true
     default_parameters:
       temperature: 0.7
 
@@ -30,10 +31,10 @@ magistral-models:
     release_date: 2025-06-10
     properties:
       context_window: 131_072
-      max_token_output: 40_000
+      max_tokens: 40_000
       training_cutoff: "2024-05"
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
     costs_per_million_token:
       input: 2
       output: 5
@@ -44,9 +45,9 @@ magistral-models:
     release_date: 2025-09-18
     properties:
       context_window: 128_000
-      max_token_output: 128_000
-    class_properties:
-      supports_images: true
+      max_tokens: 128_000
+    supports:
+      images: true
     costs_per_million_token:
       input: 2
       output: 5
@@ -58,9 +59,9 @@ magistral-models:
     release_date: 2025-09-18
     properties:
       context_window: 128_000
-      max_token_output: 128_000
-    class_properties:
-      supports_images: true
+      max_tokens: 128_000
+    supports:
+      images: true
     costs_per_million_token:
       input: 0.5
       output: 1.5
@@ -69,8 +70,8 @@ mistralai-models:
   base-config:
     properties:
       reasoning_model: false
-    class_properties:
-      supports_temperature: true
+    supports:
+      temperature: true
     default_parameters:
       temperature: 0.7
 
@@ -82,10 +83,10 @@ mistralai-models:
     release_date: 2025-05-07
     properties:
       context_window: 131_072
-      max_token_output: 32768
+      max_tokens: 32768
       training_cutoff: "2024-05"
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
     costs_per_million_token:
       input: 0.4
       output: 2.0
@@ -97,10 +98,10 @@ mistralai-models:
     release_date: 2025-03-17
     properties:
       context_window: 131_072
-      max_token_output: 8192
+      max_tokens: 8192
       training_cutoff: "2024-05"
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
     costs_per_million_token:
       input: 0.075
       output: 0.3
@@ -111,8 +112,9 @@ mistralai-models:
     release_date: 2024-11-18
     properties:
       context_window: 128_000
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 2.00
@@ -124,7 +126,7 @@ mistralai-models:
     release_date: 2024-11-18
     properties:
       context_window: 128_000
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 2.00
@@ -136,7 +138,7 @@ mistralai-models:
     release_date: 2024-09-17
     properties:
       context_window: 32_000
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 0.20

@@ -2,11 +2,12 @@ base-config:
   company: Kimi
   documentation_url: https://platform.moonshot.ai/docs
   open_source: true
-  class_properties:
-    supports_images: false
-    supports_tools: true
+  supports:
+    images: false
+    tools: true
+    files: false
+  metadata:
     available_as_evaluator: false
-    supports_files: false
     available_for_everyone: true
     ignored_for_cost: false
 
@@ -17,11 +18,10 @@ kimi-k2-models:
     release_date: 2025-11-06
     properties:
       reasoning_model: true
-      context_window: 128_000
-      max_token_output: 128_000
+      context_window: 256_000
+      max_tokens: 32_000
     default_parameters:
       temperature: 1.0
-      max_output_tokens: 128_000
     costs_per_million_token:
       input: 0.60
       output: 2.50

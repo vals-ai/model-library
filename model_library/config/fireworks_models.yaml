@@ -2,12 +2,13 @@ base-config:
   company: Fireworks
   documentation_url: https://fireworks.ai/models
   open_source: false
-  class_properties:
+  supports:
+    files: false
+    tools: true
+  metadata:
     available_as_evaluator: false
-    supports_files: false
     available_for_everyone: true
     ignored_for_cost: false
-    supports_tools: true
   properties:
     reasoning_model: false
   costs_per_million_token:
@@ -21,8 +22,8 @@ qwen-models:
   base-config:
     company: Alibaba
     open_source: true
-    class_properties:
-      supports_temperature: true
+    supports:
+      temperature: true
     default_parameters:
       temperature: 0.7
 
@@ -32,11 +33,11 @@ qwen-models:
     release_date: 2025-04-28
     properties:
       context_window: 128_000
-      max_token_output: 32_768
+      max_tokens: 32_768
       training_cutoff: "2024-08"
       reasoning_model: true
-    class_properties:
-      supports_images: false
+    supports:
+      images: false
     costs_per_million_token:
       input: 0.22
       output: 0.88
@@ -52,13 +53,14 @@ llama-4-models:
     release_date: 2025-04-05
     properties:
       context_window: 1_000_000
-      max_token_output: 16_384
+      max_tokens: 16_384
       training_cutoff: "2024-08"
     costs_per_million_token:
       input: 0.22
       output: 0.88
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
+    metadata:
       deprecated: true
 
   fireworks/llama4-scout-instruct-basic:
@@ -67,23 +69,23 @@ llama-4-models:
     release_date: 2025-04-05
     properties:
       context_window: 10_000_000
-      max_token_output: 16_384
+      max_tokens: 16_384
       training_cutoff: "2024-08"
     costs_per_million_token:
       input: 0.18
       output: 0.59
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
+    metadata:
       deprecated: true
 
 deepseek-models:
   base-config:
     company: DeepSeek
     open_source: true
-    class_properties:
-      supports_images: false
-      supports_temperature: true
-      deprecated: true
+    supports:
+      images: false
+      temperature: true
     default_parameters:
       temperature: 1
 
@@ -93,9 +95,11 @@ deepseek-models:
     release_date: 2025-01-20
     properties:
       context_window: 163_840
-      max_token_output: 163_840
+      max_tokens: 163_840
       training_cutoff: null
       reasoning_model: true
+    metadata:
+      deprecated: true
     costs_per_million_token:
       input: 3.00
       output: 8.00
@@ -106,7 +110,9 @@ deepseek-models:
     release_date: 2025-03-24
     properties:
       context_window: 131_072
-      max_token_output: 131_072
+      max_tokens: 131_072
+    metadata:
+      deprecated: true
     costs_per_million_token:
       input: 1.20
       output: 1.20
@@ -117,7 +123,9 @@ deepseek-models:
     release_date: 2024-12-26
     properties:
       context_window: 131_072
-      max_token_output: 131_072
+      max_tokens: 131_072
+    metadata:
+      deprecated: true
     costs_per_million_token:
       input: 0.90
       output: 0.90
@@ -128,19 +136,30 @@ deepseek-models:
     release_date: 2025-08-21
     properties:
       context_window: 163_840
-      max_token_output: 163_840
-      reasoning_model: false # actually hybrid
-      deprecated: false # still using this one
+      max_tokens: 163_840
+      reasoning_model: false
     costs_per_million_token:
       input: 0.56
       output: 1.68
+
+  fireworks/deepseek-v3p2:
+    label: DeepSeek V3.2
+    description: ""
+    release_date: 2025-09-29
+    properties:
+      context_window: 160_000
+      max_tokens: 20_480
+      reasoning_model: false
+    costs_per_million_token:
+      input: 1.20
+      output: 1.20
 
 openai-models:
   base-config:
     company: OpenAI
     open_source: true
-    class_properties:
-      supports_images: false
+    supports:
+      images: false
 
   fireworks/gpt-oss-120b:
     label: GPT OSS 120B
@@ -148,7 +167,7 @@ openai-models:
     release_date: 2025-08-05
     properties:
       context_window: 128_000
-      max_token_output: 32_768
+      max_tokens: 32_768
       training_cutoff: null
       reasoning_model: true
     costs_per_million_token:
@@ -161,7 +180,7 @@ openai-models:
     release_date: 2025-08-05
     properties:
       context_window: 128_000
-      max_token_output: 32_768
+      max_tokens: 32_768
       training_cutoff: null
       reasoning_model: true
     costs_per_million_token:
@@ -173,8 +192,8 @@ kimi-models:
     company: Kimi
     open_source: true
     documentation_url: https://www.kimi.com/
-    class_properties:
-      supports_images: false
+    supports:
+      images: false
 
   fireworks/kimi-k2-instruct-0905:
     label: Kimi K2 Instruct 0905
@@ -182,11 +201,11 @@ kimi-models:
     release_date: 2025-09-04
     properties:
       context_window: 256_000
-      max_token_output: 256_000
+      max_tokens: 256_000
       training_cutoff: null
       reasoning_model: false
-    class_properties:
-      supports_images: false
+    supports:
+      images: false
     costs_per_million_token:
       input: 0.60
       output: 2.50
@@ -196,28 +215,35 @@ minimax-models:
     company: MiniMax AI
     documentation_url: https://platform.minimax.io/docs
     open_source: true
-    class_properties:
+    supports:
+      images: false
+      files: false
+      tools: true
+      temperature: true
+    metadata:
       available_as_evaluator: false
-      supports_images: false
-      supports_files: false
-      supports_tools: true
       available_for_everyone: true
       ignored_for_cost: false
-      supports_temperature: true
-    
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 40
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
 
   fireworks/minimax-m2:
     label: MiniMax-M2
     description: MiniMax-M2 is a cost-efficient open-source model optimized for agentic applications and coding in particular.
     release_date: 2025-10-26
     properties:
-      context_window: 204_800 
-      max_token_output: 131_000
+      context_window: 204_800
+      max_tokens: 131_000
       reasoning_model: true
       training_cutoff: null
-    class_properties:
-      supports_tools: true
-      supports_temperature: true
+    supports:
+      tools: true
+      temperature: true
     default_parameters: # taken from https://huggingface.co/MiniMaxAI/MiniMax-M2#inference-parameters 
       temperature: 1.0
       top_p: 0.95

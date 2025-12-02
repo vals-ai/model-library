@@ -64,6 +64,7 @@ class LLMConfig(BaseModel):
     max_tokens: int = DEFAULT_MAX_TOKENS
     temperature: float | None = None
     top_p: float | None = None
+    top_k: int | None = None
     reasoning: bool = False
     reasoning_effort: str | None = None
     supports_images: bool = False
@@ -106,6 +107,7 @@ class LLM(ABC):
         self.max_tokens: int = config.max_tokens
         self.temperature: float | None = config.temperature
         self.top_p: float | None = config.top_p
+        self.top_k: int | None = config.top_k
 
         self.reasoning: bool = config.reasoning
         self.reasoning_effort: str | None = config.reasoning_effort

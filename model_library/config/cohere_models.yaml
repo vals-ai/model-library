@@ -2,11 +2,12 @@ base-config:
   company: Cohere
   open_source: false
   documentation_url: https://docs.cohere.com/v2/docs/models
-  class_properties:
+  supports:
+    images: false
+    files: false
+    tools: true
+  metadata:
     available_as_evaluator: false
-    supports_images: false
-    supports_files: false
-    supports_tools: true
     available_for_everyone: true
     ignored_for_cost: false
   properties:
@@ -16,8 +17,8 @@ command-models:
   base-config:
     properties:
       context_window: 128000
-    class_properties:
-      supports_temperature: true
+    supports:
+      temperature: true
     default_parameters:
       temperature: 0.3
 
@@ -30,7 +31,7 @@ command-models:
     release_date: 2025-03-13
     properties:
       context_window: 256000
-      max_token_output: 8000
+      max_tokens: 8000
     costs_per_million_token:
       input: 2.5
       output: 10.0
@@ -43,8 +44,8 @@ command-models:
     release_date: 2024-04-24
     properties:
       context_window: 4000
-      max_token_output: 4000
-    class_properties:
+      max_tokens: 4000
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 0.3
@@ -58,8 +59,8 @@ command-models:
     release_date: 2024-03-24
     properties:
       context_window: 4000
-      max_token_output: 4000
-    class_properties:
+      max_tokens: 4000
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 1.0
@@ -73,8 +74,8 @@ command-models:
     release_date: 2024-04-24
     properties:
       context_window: 128000
-      max_token_output: 4000
-    class_properties:
+      max_tokens: 4000
+    metadata:
       available_for_everyone: false
       deprecated: true
     costs_per_million_token:
@@ -90,8 +91,8 @@ command-models:
     release_date: 2024-03-24
     properties:
       context_window: 128000
-      max_token_output: 4000
-    class_properties:
+      max_tokens: 4000
+    metadata:
       available_for_everyone: false
       deprecated: true
     costs_per_million_token:
@@ -107,8 +108,8 @@ command-models:
     release_date: 2024-08-30
     properties:
       context_window: 128000
-      max_token_output: 4000
-    class_properties:
+      max_tokens: 4000
+    metadata:
       available_for_everyone: false
       deprecated: true
     costs_per_million_token:
@@ -124,8 +125,8 @@ command-models:
     release_date: 2024-04-24
     properties:
       context_window: 128000
-      max_token_output: 4000
-    class_properties:
+      max_tokens: 4000
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 2.5
@@ -140,8 +141,8 @@ command-models:
     release_date: 2024-04-24
     properties:
       context_window: 128000
-      max_token_output: 4000
-    class_properties:
+      max_tokens: 4000
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 2.5
@@ -155,8 +156,8 @@ command-models:
     release_date: 2024-08-30
     properties:
       context_window: 128000
-      max_token_output: 4000
-    class_properties:
+      max_tokens: 4000
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 2.5
@@ -171,7 +172,7 @@ command-models:
     release_date: 2024-12-13
     properties:
       context_window: 128000
-      max_token_output: 4000
+      max_tokens: 4000
     costs_per_million_token:
       input: 0.0375
       output: 0.15

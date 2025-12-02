@@ -1,11 +1,12 @@
 base-config:
   company: Anthropic
   open_source: false
-  class_properties:
-    supports_images: true
-    supports_files: true
-    supports_tools: true
-    supports_temperature: true
+  supports:
+    images: true
+    files: true
+    tools: true
+    temperature: true
+  metadata:
     available_for_everyone: true
     available_as_evaluator: false
     ignored_for_cost: false
@@ -24,20 +25,15 @@ base-config:
 
 claude-4-models:
   base-config:
-    class_properties:
-      supports_batch_requests: true
+    supports:
+      batch: true
 
   anthropic/claude-opus-4-5-20251101:
     label: Claude Opus 4.5 (Nonthinking)
     release_date: 2025-11-24
     properties:
       context_window: 200_000
-      max_token_output: 64_000
-      extending_thinking: 64_000
-    class_properties:
-      available_for_everyone: false
-    default_parameters:
-      max_output_tokens: 64_000
+      max_tokens: 64_000
     costs_per_million_token:
       input: 5.0
       output: 25.0
@@ -56,10 +52,9 @@ claude-4-models:
     release_date: 2025-08-05
     properties:
       context_window: 200_000
-      max_token_output: 32_000
+      max_tokens: 32_000
       training_cutoff: "2025-03"
-      extending_thinking: 32_000
-    class_properties:
+    metadata:
       available_for_everyone: false
     costs_per_million_token:
       input: 15.0
@@ -79,10 +74,9 @@ claude-4-models:
     release_date: 2025-05-22
     properties:
       context_window: 200_000
-      max_token_output: 32_000
+      max_tokens: 32_000
       training_cutoff: "2025-03"
-      extending_thinking: 32_000
-    class_properties:
+    metadata:
       available_for_everyone: false
     costs_per_million_token:
       input: 15.0
@@ -101,10 +95,9 @@ claude-4-models:
     release_date: 2025-09-29
     properties:
       context_window: 1_000_000
-      max_token_output: 64_000
+      max_tokens: 64_000
       training_cutoff: null
-      extending_thinking: 64_000
-    class_properties:
+    metadata:
       available_as_evaluator: true
     costs_per_million_token:
       input: 3.0
@@ -131,8 +124,7 @@ claude-4-models:
     release_date: 2025-05-22
     properties:
       context_window: 200_000
-      max_token_output: 64_000
-      extending_thinking: 64_000
+      max_tokens: 64_000
       training_cutoff: "2025-03"
     costs_per_million_token:
       input: 3.0
@@ -152,17 +144,16 @@ claude-4-models:
       - anthropic/claude-sonnet-4-20250514-thinking:
           properties:
             reasoning_model: true
-          class_properties:
-            supports_temperature: false
+          supports:
+            temperature: false
 
   anthropic/claude-haiku-4-5-20251001:
     label: Claude Haiku 4.5 (Nonthinking)
     release_date: 2025-10-15
     properties:
       context_window: 200_000
-      max_token_output: 64_000
+      max_tokens: 64_000
       training_cutoff: "2025-07"
-      extending_thinking: 64_000
     costs_per_million_token:
       input: 1.0
       output: 5.0
@@ -182,9 +173,8 @@ claude-3-7-models:
       vision inputs, and fast code/content generation.
     properties:
       context_window: 200_000
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-08"
-      extending_thinking: 64_000
     costs_per_million_token:
       input: 3.0
       output: 15.0
@@ -198,7 +188,7 @@ claude-3-7-models:
 
 claude-3-5-models:
   base-config:
-    class_properties:
+    metadata:
       deprecated: true
 
   anthropic/claude-3-5-sonnet-20241022:
@@ -209,12 +199,12 @@ claude-3-5-models:
       coding and analysis tasks, supports multilingual and vision input.
     properties:
       context_window: 200_000
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-04"
     costs_per_million_token:
       input: 3.0
       output: 15.0
-    class_properties:
+    metadata:
       available_as_evaluator: true
     alternative_keys:
       - anthropic/claude-3-5-sonnet-latest
@@ -226,11 +216,11 @@ claude-3-5-models:
     description:
       Claude Sonnet 3.5 (June 2024) variant for code and content generation,
       multilingual and vision-capable, deprecated.
-    class_properties:
+    metadata:
       deprecated: true
     properties:
       context_window: 200_000
-      max_token_output: 8_192
+      max_tokens: 8_192
     costs_per_million_token:
       input: 3.0
       output: 15.0
@@ -245,7 +235,7 @@ claude-3-5-models:
       instant responses and targeted tasks. Supports vision and text inputs.
     properties:
       context_window: 200_000
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-07"
     costs_per_million_token:
       input: 0.8
@@ -253,7 +243,7 @@ claude-3-5-models:
       cache:
         read: 0.08
         write: 1
-    class_properties:
+    metadata:
       available_as_evaluator: true
     alternative_keys:
       - anthropic/claude-3-5-haiku-latest
@@ -261,7 +251,7 @@ claude-3-5-models:
 
 claude-3-models:
   base-config:
-    class_properties:
+    metadata:
       deprecated: true
 
   anthropic/claude-3-opus-20240229:
@@ -272,9 +262,9 @@ claude-3-models:
       in its generation, supporting multimodal input.
     properties:
       context_window: 200_000
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-08"
-    class_properties:
+    metadata:
       available_for_everyone: false
     costs_per_million_token:
       input: 15.0
@@ -294,7 +284,7 @@ claude-3-models:
       and image input, with balanced skill for complex NLP tasks.
     properties:
       context_window: 200_000
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-08"
     costs_per_million_token:
       input: 3.0
@@ -310,7 +300,7 @@ claude-3-models:
       responsiveness and targeted queries with text/image input.
     properties:
       context_window: 200_000
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-08"
     costs_per_million_token:
       input: 0.25
@@ -324,8 +314,9 @@ claude-3-models:
 claude-2-models:
   # retired, will error
   base-config:
-    class_properties:
-      supports_images: false
+    supports:
+      images: false
+    metadata:
       available_for_everyone: false
       deprecated: true
 
@@ -339,7 +330,7 @@ claude-2-models:
     documentation_url: ""
     properties:
       context_window: 200_000
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "Early 2023"
     costs_per_million_token:
       input: 8.0
@@ -357,7 +348,7 @@ claude-2-models:
     documentation_url: ""
     properties:
       context_window: 100_000
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "Early 2023"
     costs_per_million_token:
       input: 8.0
@@ -370,7 +361,7 @@ claude-2-models:
     documentation_url: ""
     properties:
       context_window: null
-      max_token_output: null
+      max_tokens: null
       training_cutoff: null
     costs_per_million_token:
       input: 0
@@ -388,7 +379,7 @@ claude-2-models:
     documentation_url: ""
     properties:
       context_window: 100_000
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "Early 2023"
     costs_per_million_token:
       input: 0.8

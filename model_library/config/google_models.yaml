@@ -2,7 +2,14 @@ base-config:
   company: Google
   documentation_url: https://ai.google.dev/gemini-api/docs/models
   open_source: false
-  class_properties:
+  supports:
+    images: false
+    videos: false
+    files: false
+    batch: false
+    temperature: false
+    tools: false
+  metadata:
     available_for_everyone: true
     available_as_evaluator: false
     ignored_for_cost: false
@@ -21,78 +28,29 @@ gemma-models:
       use such as phones and tablets, capable of handling text, audio, and vision
       inputs with efficient parameter caching techniques.
     release_date: 2025-03-12
-    class_properties:
+    metadata:
       deprecated: true
     properties:
       context_window: 131_072
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2023-09"
     costs_per_million_token:
       input: 0.00
       output: 0.00
 
-
-gemini-3-models:
-  base-config:
-    properties:
-      context_window: 1_048_576
-      max_token_output: 8_192
-      training_cutoff: "2025-01"
-    class_properties:
-      supports_images: true
-      supports_files: true
-      supports_videos: true
-      supports_tools: true
-      supports_batch_requests: true
-      supports_temperature: true
-    costs_per_million_token:
-      cache:
-        read_discount: 0.1
-    default_parameters:
-      temperature: 1
-      reasoning_effort: "high"
-
-  google/gemini-3-pro-preview:
-    label: Gemini 3 Pro (11/25)
-    description: Gemini 3 Pro, Google's most powerful model.
-    release_date: 2025-11-18
-    properties:
-      context_window: 1048576
-      max_token_output: 65536
-      training_cutoff: "2025-01"
-      reasoning_model: true
-    class_properties:
-      supports_images: true
-      supports_files: true
-      supports_videos: true
-      supports_tools: true
-      supports_batch_requests: true
-      supports_temperature: true
-    costs_per_million_token:
-      input: 2
-      output: 12
-      cache:
-        read: 0.20
-      context:
-        threshold: 200_000
-        input: 2.5
-        output: 15.0
-        cache:
-          read: 0.40
-
 gemini-2.5-models:
   base-config:
+    supports:
+      images: true
+      files: true
+      videos: true
+      tools: true
+      batch: true
+      temperature: true
     properties:
       context_window: 1_048_576
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-05"
-    class_properties:
-      supports_images: true
-      supports_files: true
-      supports_videos: true
-      supports_tools: true
-      supports_batch_requests: true
-      supports_temperature: true
     costs_per_million_token:
       cache:
         read_discount: 0.1
@@ -107,12 +65,12 @@ gemini-2.5-models:
       using multimodal inputs including audio, images, video, and PDFs with a context
       window exceeding 1 million tokens.
     release_date: 2025-07-17
+    metadata:
+      available_as_evaluator: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_536
+      max_tokens: 65_536
       reasoning_model: true
-    class_properties:
-      available_as_evaluator: true
     costs_per_million_token:
       input: 1.25
       output: 10.0
@@ -132,12 +90,12 @@ gemini-2.5-models:
       large scale processing with support for multiple modalities, a 1 million token
       context window, and strong reasoning capabilities.
     release_date: 2025-07-17
+    metadata:
+      available_as_evaluator: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_536
+      max_tokens: 65_536
       reasoning_model: false
-    class_properties:
-      available_as_evaluator: true
     costs_per_million_token:
       input: 0.30
       output: 2.50
@@ -156,7 +114,7 @@ gemini-2.5-models:
     release_date: 2025-09-25
     properties:
       context_window: 1_048_576
-      max_token_output: 65_535
+      max_tokens: 65_535
       reasoning_model: false
     costs_per_million_token:
       input: 0.30
@@ -177,7 +135,7 @@ gemini-2.5-models:
     release_date: 2025-07-22
     properties:
       context_window: 1_048_576
-      max_token_output: 65_535
+      max_tokens: 65_535
       reasoning_model: false
     costs_per_million_token:
       input: 0.10
@@ -198,7 +156,7 @@ gemini-2.5-models:
     release_date: 2025-09-25
     properties:
       context_window: 1_048_576
-      max_token_output: 65_535
+      max_tokens: 65_535
       reasoning_model: false
     costs_per_million_token:
       input: 0.10
@@ -217,12 +175,12 @@ gemini-2.5-models:
       at scale, with support for text, images, video, and audio input modalities and
       large context length.
     release_date: 2025-06-17
+    metadata:
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_535
+      max_tokens: 65_535
       reasoning_model: false
-    class_properties:
-      deprecated: true
     costs_per_million_token:
       input: 0.10
       output: 0.40
@@ -240,13 +198,13 @@ gemini-2.5-models:
       large scale processing with support for multiple modalities, a 1 million token
       context window, and strong reasoning capabilities.
     release_date: 2025-05-20
+    metadata:
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_536
+      max_tokens: 65_536
       training_cutoff: "2025-01"
       reasoning_model: false
-    class_properties:
-      deprecated: true
     costs_per_million_token:
       input: 0.15
       output: 0.60
@@ -265,14 +223,15 @@ gemini-2.5-models:
       using multimodal inputs including audio, images, video, and PDFs with a context
       window exceeding 1 million tokens.
     release_date: 2025-06-05
+    supports:
+      batch: false
+    metadata:
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_536
+      max_tokens: 65_536
       training_cutoff: "2025-01"
       reasoning_model: true
-    class_properties:
-      supports_batch_requests: false
-      deprecated: true
     costs_per_million_token:
       input: 1.25
       output: 10.0
@@ -287,14 +246,14 @@ gemini-2.5-models:
       using multimodal inputs including audio, images, video, and PDFs with a context
       window exceeding 1 million tokens.
     release_date: 2025-05-06
+    metadata:
+      available_for_everyone: false
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_536
+      max_tokens: 65_536
       training_cutoff: "2025-01"
-      available_for_everyone: false
       reasoning_model: true
-    class_properties:
-      deprecated: true
     costs_per_million_token:
       input: 1.25
       output: 10.0
@@ -308,13 +267,13 @@ gemini-2.5-models:
       large scale processing with support for multiple modalities, a 1 million token
       context window, and strong reasoning capabilities.
     release_date: 2025-04-17
+    metadata:
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_536
+      max_tokens: 65_536
       training_cutoff: "2025-01"
       reasoning_model: false
-    class_properties:
-      deprecated: true
     costs_per_million_token:
       input: 0.3
       output: 2.5
@@ -333,14 +292,14 @@ gemini-2.5-models:
       using multimodal inputs including audio, images, video, and PDFs with a context
       window exceeding 1 million tokens.
     release_date: 2025-03-25
+    metadata:
+      available_for_everyone: false
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_536
+      max_tokens: 65_536
       training_cutoff: "2025-01"
-      available_for_everyone: false
       reasoning_model: true
-    class_properties:
-      deprecated: true
     costs_per_million_token:
       input: 1.25
       output: 10.0
@@ -355,14 +314,14 @@ gemini-2.5-models:
       using multimodal inputs including audio, images, video, and PDFs with a context
       window exceeding 1 million tokens.
     release_date: 2025-04-05
+    metadata:
+      available_for_everyone: false
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_536
+      max_tokens: 65_536
       training_cutoff: "2025-01"
-      available_for_everyone: false
       reasoning_model: true
-    class_properties:
-      deprecated: true
     costs_per_million_token:
       input: 1.25
       output: 10.0
@@ -371,12 +330,12 @@ gemini-2.5-models:
 
 old-gemini-models:
   base-config:
+    metadata:
+      deprecated: true
     properties:
       context_window: 2_097_152
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-05"
-    class_properties:
-      deprecated: true
     costs_per_million_token:
       cache:
         read_discount: 0.25
@@ -388,17 +347,18 @@ old-gemini-models:
       large context processing and multimodal inputs, with strengths in speed, native
       tool use, and dataset comprehension.
     release_date: 2025-02-05
+    supports:
+      images: true
+      files: true
+      videos: true
+    metadata:
+      available_for_everyone: false
+      deprecated: true
     properties:
       context_window: 2_097_152
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-06"
       reasoning_model: true
-      available_for_everyone: false
-    class_properties:
-      deprecated: true
-      supports_images: true
-      supports_files: true
-      supports_videos: true
     costs_per_million_token:
       input: 1.25
       output: 5.00
@@ -410,17 +370,18 @@ old-gemini-models:
       reasoning and longer contextual memory in multimodal scenarios including text,
       images, video, and audio.
     release_date: 2025-01-21
+    supports:
+      images: true
+      files: true
+      videos: true
+    metadata:
+      available_for_everyone: false
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 65_536
+      max_tokens: 65_536
       training_cutoff: "2024-05"
       reasoning_model: true
-      available_for_everyone: false
-    class_properties:
-      deprecated: true
-      supports_images: true
-      supports_files: true
-      supports_videos: true
     costs_per_million_token:
       input: 0.10
       output: 0.70
@@ -432,18 +393,17 @@ old-gemini-models:
       with a 1 million token context window and support for text, image, video, and
       audio inputs.
     release_date: 2025-02-05
+    supports:
+      images: true
+      files: true
+      videos: true
     properties:
-      properties: null
       context_window: 1_048_576
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-08"
     costs_per_million_token:
       input: 0.10
       output: 0.40
-    class_properties:
-      supports_images: true
-      supports_files: true
-      supports_videos: true
 
   google/gemini-2.0-flash-exp:
     label: Gemini 2.0 Flash Exp
@@ -451,15 +411,16 @@ old-gemini-models:
       Gemini 2.0 Flash Experimental is a developer preview for advanced
       use cases requiring extended context and multimodal reasoning capabilities.
     release_date: 2024-12-11
+    supports:
+      images: true
+      files: true
+      videos: true
+    metadata:
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-05"
-    class_properties:
-      deprecated: true
-      supports_images: true
-      supports_files: true
-      supports_videos: true
     costs_per_million_token:
       input: 0.075
       output: 0.30
@@ -470,15 +431,16 @@ old-gemini-models:
       Gemini 1.5 Flash is an efficient and speedy version of Gemini 1.5
       with support for multiple data types and large contexts.
     release_date: 2024-09-24
+    supports:
+      images: true
+      files: true
+      videos: true
+    metadata:
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-05"
-    class_properties:
-      deprecated: true
-      supports_images: true
-      supports_files: true
-      supports_videos: true
     costs_per_million_token:
       input: 0.075
       output: 0.30
@@ -489,15 +451,16 @@ old-gemini-models:
       Gemini 1.5 Flash (early release) provides fast processing with vision
       and audio capabilities along with text understanding.
     release_date: 2024-05-24
+    supports:
+      images: true
+      files: true
+      videos: true
+    metadata:
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2023-11"
-    class_properties:
-      deprecated: true
-      supports_images: true
-      supports_files: true
-      supports_videos: true
     costs_per_million_token:
       input: 0.075
       output: 0.30
@@ -508,15 +471,16 @@ old-gemini-models:
       Gemini 1.5 Pro is a high-performance model with multimodal capabilities
       useful for complex reasoning tasks and dataset analysis.
     release_date: 2024-09-24
+    supports:
+      images: true
+      files: true
+      videos: true
+    metadata:
+      deprecated: true
     properties:
       context_window: 2_097_152
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2024-05"
-    class_properties:
-      deprecated: true
-      supports_images: true
-      supports_files: true
-      supports_videos: true
     costs_per_million_token:
       input: 1.25
       output: 5.0
@@ -530,15 +494,16 @@ old-gemini-models:
       Gemini 1.5 Pro (early release) supports multimodal inputs and advanced
       reasoning on moderate context lengths.
     release_date: 2024-05-24
+    supports:
+      images: true
+      files: true
+      videos: true
+    metadata:
+      deprecated: true
     properties:
       context_window: 1_048_576
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2023-11"
-    class_properties:
-      deprecated: true
-      supports_images: true
-      supports_files: true
-      supports_videos: true
     costs_per_million_token:
       input: 1.25
       output: 5.0
@@ -549,13 +514,14 @@ old-gemini-models:
       Gemini 1.0 Pro is an earlier generation multimodal model supporting
       text, image, and audio inputs with foundational reasoning abilities.
     release_date: 2024-02-14
+    supports:
+      images: false
+    metadata:
+      deprecated: true
     properties:
       context_window: 32_760
-      max_token_output: 8_192
+      max_tokens: 8_192
       training_cutoff: "2023-02"
-    class_properties:
-      supports_images: false
-      deprecated: true
     costs_per_million_token:
       input: 0.50
       output: 1.50

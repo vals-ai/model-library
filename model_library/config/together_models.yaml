@@ -2,15 +2,17 @@
 base-config:
   open_source: true
   documentation_url: https://docs.together.ai/docs/serverless-models
-  class_properties:
-    supports_images: true
+  supports:
+    images: true
+    files: false
+    tools: false
+  metadata:
     available_as_evaluator: false
-    supports_files: false
     available_for_everyone: true
     ignored_for_cost: false
-    supports_tools: false
   properties:
     reasoning_model: false
+  costs_per_million_token:
     cache:
       read_discount: 1
     batch:
@@ -23,12 +25,11 @@ kimi-models:
     company: Kimi
     open_source: true
     documentation_url: https://www.kimi.com/
-    class_properties:
-      supports_tools: true
-      supports_temperature: true
+    supports:
+      tools: true
+      temperature: true
     default_parameters:
       temperature: 0.3
-      max_output_tokens: 16_384
 
   together/moonshotai/Kimi-K2-Instruct:
     label: Kimi K2 Instruct
@@ -36,11 +37,11 @@ kimi-models:
     release_date: 2025-07-11
     properties:
       context_window: 128_000
-      max_token_output: 16_384
+      max_tokens: 16_384
       training_cutoff: null
       reasoning_model: false
-    class_properties:
-      supports_images: false
+    supports:
+      images: false
     costs_per_million_token:
       input: 1.00
       output: 3.00
@@ -50,9 +51,9 @@ llama-4-models:
   base-config:
     company: Meta
     open_source: true
-    class_properties:
-      supports_tools: true
-      supports_images: true
+    supports:
+      tools: true
+      images: true
 
   together/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8:
     label: Llama 4 Maverick
@@ -61,7 +62,7 @@ llama-4-models:
     release_date: 2025-04-05
     properties:
       context_window: 1_000_000
-      max_token_output: 16_384
+      max_tokens: 16_384
       training_cutoff: "2024-08"
     costs_per_million_token:
       input: 0.27
@@ -75,7 +76,7 @@ llama-4-models:
     release_date: 2025-04-05
     properties:
       context_window: 10_000_000
-      max_token_output: 16_384
+      max_tokens: 16_384
       training_cutoff: "2024-08"
     costs_per_million_token:
       input: 0.18
@@ -84,7 +85,7 @@ llama-4-models:
 old-llama-models:
   base-config:
     company: Meta
-    class_properties:
+    metadata:
       deprecated: true
 
   together/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo:
@@ -93,7 +94,7 @@ old-llama-models:
     release_date: 2024-07-23
     properties:
       context_window: 131_072
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.18
@@ -107,9 +108,9 @@ old-llama-models:
     release_date: 2024-07-23
     properties:
       context_window: 131_072
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
-    class_properties:
+    metadata:
       available_as_evaluator: true
     costs_per_million_token:
       input: 0.88
@@ -123,7 +124,7 @@ old-llama-models:
     release_date: 2024-07-23
     properties:
       context_window: 130_815
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 3.50
@@ -137,7 +138,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-03"
     costs_per_million_token:
       input: 0.20
@@ -151,7 +152,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.90
@@ -165,7 +166,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.90
@@ -179,7 +180,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.90
@@ -193,7 +194,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.18
@@ -207,7 +208,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.88
@@ -221,7 +222,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 131_072
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.06
@@ -235,13 +236,13 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 131_072
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.18
       output: 0.18
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
     alternative_keys:
       - together/llama-3.2-11b-instruct
 
@@ -251,13 +252,14 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 131_072
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 1.2
       output: 1.2
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
+    metadata:
       deprecated: true
     alternative_keys:
       - together/llama-3.2-90b-instruct
@@ -268,10 +270,10 @@ old-llama-models:
     release_date: 2024-12-06
     properties:
       context_window: 128_000
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
-    class_properties:
-      supports_images: false
+    supports:
+      images: false
     costs_per_million_token:
       input: 0.88
       output: 0.88
@@ -284,7 +286,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.10
@@ -296,7 +298,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.54
@@ -308,7 +310,7 @@ old-llama-models:
     release_date: 2024-04-18
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.20
@@ -322,7 +324,7 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
     costs_per_million_token:
       input: 0.20
@@ -334,7 +336,7 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
     costs_per_million_token:
       input: 0.20
@@ -348,7 +350,7 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
     costs_per_million_token:
       input: 0.30
@@ -360,7 +362,7 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
     costs_per_million_token:
       input: 0.30
@@ -374,7 +376,7 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
     costs_per_million_token:
       input: 0.90
@@ -386,9 +388,9 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 0.90
@@ -402,7 +404,7 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
     costs_per_million_token:
       input: 0.20
@@ -414,9 +416,9 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 0.20
@@ -430,9 +432,9 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 0.30
@@ -444,7 +446,7 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
     costs_per_million_token:
       input: 0.20
@@ -458,7 +460,7 @@ old-llama-models:
     release_date: 2023-07-18
     properties:
       context_window: 4_096
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2022-09"
     costs_per_million_token:
       input: 0.90
@@ -470,7 +472,7 @@ old-llama-models:
 nvidia-models:
   base-config:
     company: NVIDIA
-    class_properties:
+    metadata:
       deprecated: true
 
   together/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF:
@@ -479,7 +481,7 @@ nvidia-models:
     release_date: 2024-04-18
     properties:
       context_window: 32_768
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.90
@@ -488,9 +490,10 @@ nvidia-models:
 qwen-models:
   base-config:
     company: Alibaba
-    class_properties:
+    supports:
+      temperature: true
+    metadata:
       deprecated: true
-      supports_temperature: true
     default_parameters:
       temperature: 0.7
 
@@ -500,14 +503,15 @@ qwen-models:
     release_date: 2024-04-18
     properties:
       context_window: 32_768
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.80
       output: 0.80
-    class_properties:
+    supports:
+      images: false
+    metadata:
       available_for_everyone: false
-      supports_images: false
 
   together/Qwen/Qwen2.5-7B-Instruct-Turbo:
     label: Qwen 2.5 Instruct Turbo (7B)
@@ -515,14 +519,15 @@ qwen-models:
     release_date: 2024-04-18
     properties:
       context_window: 32_768
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.30
       output: 0.30
-    class_properties:
+    supports:
+      images: false
+    metadata:
       available_for_everyone: false
-      supports_images: false
     alternative_keys:
       - together/qwen-2.5-7b-instruct
 
@@ -532,14 +537,15 @@ qwen-models:
     release_date: 2024-04-18
     properties:
       context_window: 32_768
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 1.20
       output: 1.20
-    class_properties:
+    supports:
+      images: false
+    metadata:
       available_for_everyone: false
-      supports_images: false
     alternative_keys:
       - together/qwen-2.5-72b-instruct
 
@@ -547,9 +553,10 @@ qwen-models:
 mistralai-models:
   base-config:
     company: Mistral
-    class_properties:
+    supports:
+      images: false
+    metadata:
       deprecated: true
-      supports_images: false
 
   together/mistralai/Mistral-7B-v0.1:
     label: Mistral (7B)
@@ -557,7 +564,7 @@ mistralai-models:
     release_date: 2023-09-27
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-06"
     costs_per_million_token:
       input: 0.18
@@ -571,7 +578,7 @@ mistralai-models:
     release_date: 2023-09-27
     properties:
       context_window: 32_768
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-06"
     costs_per_million_token:
       input: 0.18
@@ -585,7 +592,7 @@ mistralai-models:
     release_date: 2023-12-15
     properties:
       context_window: 32_768
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-09"
     costs_per_million_token:
       input: 0.18
@@ -599,7 +606,7 @@ mistralai-models:
     release_date: 2024-04-18
     properties:
       context_window: 32_768
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.18
@@ -613,7 +620,7 @@ mistralai-models:
     release_date: 2023-12-15
     properties:
       context_window: 32_768
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-09"
     costs_per_million_token:
       input: 0.60
@@ -627,7 +634,7 @@ mistralai-models:
     release_date: 2023-12-15
     properties:
       context_window: 32_768
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-09"
     costs_per_million_token:
       input: 0.60
@@ -641,9 +648,9 @@ mistralai-models:
     release_date: 2024-02-15
     properties:
       context_window: 65_536
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
-    class_properties:
+    metadata:
       available_as_evaluator: true
     costs_per_million_token:
       input: 1.20
@@ -661,10 +668,11 @@ meta-llama-vision:
     release_date: 2024-04-18
     properties:
       context_window: 131_072
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
+    metadata:
       available_for_everyone: false
       deprecated: true
 
@@ -675,10 +683,11 @@ meta-llama-vision:
     release_date: 2024-04-18
     properties:
       context_window: 131_072
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
+    metadata:
       available_for_everyone: true
       deprecated: true
     costs_per_million_token:
@@ -694,10 +703,11 @@ meta-llama-vision:
     release_date: 2024-04-18
     properties:
       context_window: 131_072
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
+    metadata:
       available_for_everyone: true
       deprecated: true
     costs_per_million_token:
@@ -715,15 +725,16 @@ google-models:
     release_date: 2024-02-21
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.50
       output: 0.50
-    class_properties:
+    metadata:
       available_for_everyone: false
       deprecated: true
-      supports_images: false
+    supports:
+      images: false
     alternative_keys:
       - together/gemma-2-27b-instruct
 
@@ -734,12 +745,12 @@ google-models:
     release_date: 2024-02-21
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.20
       output: 0.20
-    class_properties:
+    metadata:
       available_for_everyone: false
       deprecated: true
     alternative_keys:
@@ -752,12 +763,12 @@ google-models:
     release_date: 2024-02-21
     properties:
       context_window: 8_192
-      max_token_output: 4_096
+      max_tokens: 4_096
       training_cutoff: "2023-12"
     costs_per_million_token:
       input: 0.10
       output: 0.10
-    class_properties:
+    metadata:
       available_for_everyone: false
       deprecated: true
     alternative_keys:
@@ -767,7 +778,7 @@ google-models:
 falcon-models:
   base-config:
     company: Technology Innovation Institute
-    class_properties:
+    metadata:
       deprecated: true
 
   together/togethercomputer/falcon-7b-instruct:
@@ -820,7 +831,7 @@ alpaca-models:
     costs_per_million_token:
       input: 0.20
       output: 0.20
-    class_properties:
+    metadata:
       deprecated: true
     alternative_keys:
       - together/alpaca-7b
@@ -830,9 +841,9 @@ deepseek-models:
   base-config:
     company: DeepSeek
     open_source: true
-    class_properties:
-      supports_images: false
-      supports_temperature: true
+    supports:
+      images: false
+      temperature: true
     default_parameters:
       temperature: 1
 
@@ -842,9 +853,9 @@ deepseek-models:
     release_date: 2024-12-26
     properties:
       context_window: 131_072
-      max_token_output: null
+      max_tokens: null
       training_cutoff: null
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 1.25
@@ -857,10 +868,10 @@ deepseek-models:
     release_date: 2025-01-20
     properties:
       context_window: 163_840
-      max_token_output: null
+      max_tokens: null
       training_cutoff: null
       reasoning_model: true
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 3.00

@@ -31,7 +31,7 @@ async def test_context_window_error_caught_real_api_calls():
     model_keys = [
         key
         for key in model_config.keys()
-        if not model_config[key].get("class_properties", {}).get("deprecated", False)
+        if not model_config[key].get("metadata", {}).get("deprecated", False)
     ]
 
     # Group all the models together by the provider

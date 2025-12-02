@@ -2,20 +2,21 @@ base-config:
   company: xAI
   documentation_url: https://docs.x.ai/docs#models
   open_source: false
-  class_properties:
-    supports_images: true
+  supports:
+    images: true
+    files: false
+    tools: true
+  metadata:
     available_as_evaluator: false
-    supports_files: false
     available_for_everyone: true
     ignored_for_cost: false
-    supports_tools: true
   properties:
     reasoning_model: false
 
 xai-models:
   base-config:
-    class_properties:
-      supports_temperature: true
+    supports:
+      temperature: true
     costs_per_million_token:
       cache:
         read_discount: 0.25
@@ -29,19 +30,16 @@ xai-models:
     release_date: 2025-08-25
     properties:
       context_window: 256_000
-      max_token_output: 40_000
+      max_tokens: 40_000
       reasoning_model: true
-    class_properties:
-      supports_images: false
+    supports:
+      images: false
     costs_per_million_token:
       input: 0.20
       output: 1.50
       cache:
         read: 0.02
     documentation_url: https://docs.x.ai/docs/models/grok-code-fast-1
-    default_parameters:
-      temperature: 0.7
-      max_output_tokens: 40000
     alternative_keys:
       - grok/grok-code-fast
       - grok/grok-code-fast-1-0825
@@ -51,16 +49,12 @@ xai-models:
     description: Latest advancement in cost-efficient reasoning models with unified architecture. Handles complex requests with deep chain-of-thought reasoning. Features 2M token context window and native tool use.
     release_date: 2025-09-19
     open_source: false
-    class_properties:
-      supports_images: true
-      available_as_evaluator: true
-      supports_metadata: true
-      supports_files: false
-      available_for_everyone: true
-      ignored_for_cost: false
+    supports:
+      images: true
+      files: false
     properties:
       context_window: 2_000_000
-      max_token_output: 2_000_000 # from openrouter
+      max_tokens: 2_000_000
       training_cutoff: null
       reasoning_model: true
     documentation_url: https://docs.x.ai/docs/models/grok-4-fast-reasoning
@@ -73,9 +67,6 @@ xai-models:
         threshold: 128_000
         input: 0.4
         output: 1.0
-    default_parameters:
-      temperature: 0.7
-      max_output_tokens: 128000
     alternative_keys:
       - grok/grok-4-fast
       - grok/grok-4-fast-reasoning-latest
@@ -85,16 +76,12 @@ xai-models:
     description: ""
     release_date: 2025-10-19
     open_source: false
-    class_properties:
-      supports_images: true
-      available_as_evaluator: true
-      supports_metadata: true
-      supports_files: false
-      available_for_everyone: true
-      ignored_for_cost: false
+    supports:
+      images: true
+      files: false
     properties:
       context_window: 2_000_000
-      max_token_output: 2_000_000 # from openrouter
+      max_tokens: 2_000_000 # from openrouter
       training_cutoff: null
       reasoning_model: true
     documentation_url: ""
@@ -107,25 +94,18 @@ xai-models:
         threshold: 128_000
         input: 0.4
         output: 1.0
-    default_parameters:
-      temperature: 0.7
-      max_output_tokens: 128000
 
   grok/grok-4-1-fast-non-reasoning:
     label: Grok 4.1 Fast Non-Reasoning
     description: ""
     release_date: 2025-10-19
     open_source: false
-    class_properties:
-      supports_images: true
-      available_as_evaluator: true
-      supports_metadata: true
-      supports_files: false
-      available_for_everyone: true
-      ignored_for_cost: false
+    supports:
+      images: true
+      files: false
     properties:
       context_window: 2_000_000
-      max_token_output: 2_000_000 # from openrouter
+      max_tokens: 2_000_000 # from openrouter
       training_cutoff: null
       reasoning_model: false
     documentation_url: ""
@@ -138,25 +118,18 @@ xai-models:
         threshold: 128_000
         input: 0.4
         output: 1.0
-    default_parameters:
-      temperature: 0.7
-      max_output_tokens: 128000
 
   grok/grok-4-fast-non-reasoning:
     label: Grok 4 Fast (Non-Reasoning)
     description: Cost-efficient model focused on speed and efficiency for straightforward tasks like summarization or classification without deep logical processing. Unified architecture with reasoning variant, steered via system prompts.
     release_date: 2025-09-19
     open_source: false
-    class_properties:
-      supports_images: true
-      available_as_evaluator: true
-      supports_metadata: true
-      supports_files: false
-      available_for_everyone: true
-      ignored_for_cost: false
+    supports:
+      images: true
+      files: false
     properties:
       context_window: 2_000_000
-      max_token_output: 2_000_000 # from openrouter
+      max_tokens: 2_000_000
       training_cutoff: null
       reasoning_model: false
     documentation_url: https://docs.x.ai/docs/models/grok-4-fast-non-reasoning
@@ -169,9 +142,6 @@ xai-models:
         threshold: 128_000
         input: 0.4
         output: 1.0
-    default_parameters:
-      temperature: 0.7
-      max_output_tokens: 2000000
     alternative_keys:
       - grok/grok-4-fast-non-reasoning-latest
 
@@ -179,12 +149,12 @@ xai-models:
     label: Grok 4
     description: Latest and greatest flagship model offering unparalleled performance in natural language, math and reasoning. The perfect jack of all trades with native tool use and structured outputs support.
     release_date: 2025-07-09
-    class_properties:
-      supports_images: true
-      available_for_everyone: false
+    supports:
+      images: true
+      tools: true
     properties:
       context_window: 256_000
-      max_token_output: 128_000
+      max_tokens: 128_000
       training_cutoff: null
       reasoning_model: true
     documentation_url: https://docs.x.ai/docs/models/grok-4-0709
@@ -197,9 +167,6 @@ xai-models:
         threshold: 128_000
         input: 6.00
         output: 30.00
-    default_parameters:
-      temperature: 0.7
-      max_output_tokens: 128000
     alternative_keys:
       - grok/grok-4
       - grok/grok-4-latest
@@ -210,15 +177,15 @@ xai-models:
     release_date: 2025-04-09
     properties:
       context_window: 131_072
-      max_token_output: null
+      max_tokens: null
       training_cutoff: null
       reasoning_model: true
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 0.30
       output: 0.50
-      cached:
+      cache:
         read: 0.075
     documentation_url: https://docs.x.ai/docs/models/grok-3-mini
     default_parameters:
@@ -248,7 +215,7 @@ xai-models:
     release_date: 2025-04-09
     properties:
       context_window: 131_072
-      max_token_output: null
+      max_tokens: null
       training_cutoff: null
     costs_per_million_token:
       input: 3.00
@@ -271,10 +238,10 @@ xai-models:
     release_date: 2024-12-12
     properties:
       context_window: 8_192
-      max_token_output: null
+      max_tokens: null
       training_cutoff: null
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
     costs_per_million_token:
       input: 2.00
       output: 10.00
@@ -288,9 +255,9 @@ xai-models:
     release_date: 2024-12-11
     properties:
       context_window: 131_072
-      max_token_output: null
+      max_tokens: null
       training_cutoff: null
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 2.00
@@ -302,10 +269,11 @@ xai-models:
     release_date: 2024-12-12
     properties:
       context_window: 8_192
-      max_token_output: null
+      max_tokens: null
       training_cutoff: null
-    class_properties:
-      supports_images: true
+    supports:
+      images: true
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 5.00
@@ -317,9 +285,9 @@ xai-models:
     release_date: 2024-12-11
     properties:
       context_window: 131_072
-      max_token_output: null
+      max_tokens: null
       training_cutoff: null
-    class_properties:
+    metadata:
       deprecated: true
     costs_per_million_token:
       input: 5.00

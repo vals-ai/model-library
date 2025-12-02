@@ -27,9 +27,25 @@ You can set metadata configs that are not passed into the LLMConfig class here, 
 """
 
 
+class Supports(BaseModel):
+    images: bool | None = None
+    videos: bool | None = None
+    files: bool | None = None
+    batch: bool | None = None
+    temperature: bool | None = None
+    tools: bool | None = None
+
+
+class Metadata(BaseModel):
+    deprecated: bool = False
+    available_for_everyone: bool = True
+    available_as_evaluator: bool = False
+    ignored_for_cost: bool = False
+
+
 class Properties(BaseModel):
     context_window: int | None = None
-    max_token_output: int | None = None
+    max_tokens: int | None = None
     training_cutoff: str | None = None
     reasoning_model: bool | None = None
 
@@ -118,28 +134,6 @@ class CostProperties(BaseModel):
     context: ContextCost | None = None
 
 
-class ClassProperties(BaseModel):
-    supports_images: bool | None = None
-    supports_videos: bool | None = None
-    supports_files: bool | None = None
-    supports_batch_requests: bool | None = None
-    supports_temperature: bool | None = None
-    supports_tools: bool | None = None
-    # vals specific
-    deprecated: bool = False
-    available_for_everyone: bool = True
-    available_as_evaluator: bool = False
-    ignored_for_cost: bool = False
-
-
-"""
-Each provider can have a set of provider-specific properties, we however want to accept
-any possible property from a provider in the yaml, and validate later. So we join all
-provider-specific properties into a single class.
-This has no effect on runtime use of ProviderConfig, only used to load the yaml
-"""
-
-
 class BaseProviderProperties(BaseModel):
     """Static base class for dynamic ProviderProperties."""
 
@@ -172,9 +166,9 @@ def get_dynamic_provider_properties_model() -> type[BaseProviderProperties]:
 
 
 class DefaultParameters(BaseModel):
-    max_output_tokens: int | None = None
     temperature: float | None = None
     top_p: float | None = None
+    top_k: int | None = None
     reasoning_effort: str | None = None
 
 
@@ -186,26 +180,29 @@ class RawModelConfig(BaseModel):
     open_source: bool
     documentation_url: str | None = None
     properties: Properties = Field(default_factory=Properties)
-    class_properties: ClassProperties = Field(default_factory=ClassProperties)
-    provider_properties: BaseProviderProperties | None = None
+    supports: Supports
+    metadata: Metadata = Field(default_factory=Metadata)
+    provider_properties: BaseProviderProperties = Field(
+        default_factory=BaseProviderProperties
+    )
     costs_per_million_token: CostProperties = Field(default_factory=CostProperties)
     alternative_keys: list[str | dict[str, Any]] = Field(default_factory=list)
     default_parameters: DefaultParameters = Field(default_factory=DefaultParameters)
+    provider_endpoint: str | None = None
 
     def model_dump(self, *args: object, **kwargs: object):
         data = super().model_dump(*args, **kwargs)
-        if self.provider_properties is not None:
-            # explicitly dump dynamic ProviderProperties instance
-            data["provider_properties"] = self.provider_properties.model_dump(
-                *args, **kwargs
-            )
+        # explicitly dump dynamic ProviderProperties instance
+        data["provider_properties"] = self.provider_properties.model_dump(
+            *args, **kwargs
+        )
         return data
 
 
 class ModelConfig(RawModelConfig):
     # post processing fields
+    provider_endpoint: str  # pyright: ignore[reportIncompatibleVariableOverride, reportGeneralTypeIssues]
     provider_name: str
-    provider_endpoint: str
     full_key: str
     slug: str
 
@@ -272,14 +269,17 @@ def _register_models() -> ModelRegistry:
                         current_model_config, model_config
                     )
 
+                    provider_properties = current_model_config.pop(
+                        "provider_properties", {}
+                    )
+
                     # create model config object
                     raw_model_obj: RawModelConfig = RawModelConfig.model_validate(
-                        current_model_config, strict=True
+                        current_model_config, strict=True, extra="forbid"
                     )
 
                     provider_endpoint = (
-                        current_model_config.get("provider_endpoint", None)
-                        or model_name.split("/", 1)[1]
+                        raw_model_obj.provider_endpoint or model_name.split("/", 1)[1]
                     )
                     # add provider metadata
                     model_obj = ModelConfig.model_validate(
@@ -293,7 +293,7 @@ def _register_models() -> ModelRegistry:
                     )
                     # load provider properties separately since the model was generated at runtime
                     model_obj.provider_properties = ProviderProperties.model_validate(
-                        current_model_config.get("provider_properties", {})
+                        provider_properties
                     )
 
                     registry[model_name] = model_obj
