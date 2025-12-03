@@ -29,6 +29,7 @@ from model_library.base import (
 from model_library.exceptions import (
     BadInputError,
     MaxOutputTokensExceededError,
+    ModelNoOutputError,
 )
 from model_library.file_utils import trim_images
 from model_library.register_models import register_provider
@@ -250,8 +251,16 @@ class MistralModel(LLM):
             self.logger.error(f"Error: {e}", exc_info=True)
             raise e
 
-        if finish_reason == "length" and not text and not reasoning:
+        if (
+            finish_reason == "length"
+            and not text
+            and not reasoning
+            and not raw_tool_calls
+        ):
             raise MaxOutputTokensExceededError()
+
+        if not text and not reasoning and not raw_tool_calls:
+            raise ModelNoOutputError()
 
         tool_calls: list[ToolCall] = []
 
