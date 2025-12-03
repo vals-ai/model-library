@@ -4,7 +4,7 @@
         "label": "Mistral Large 3",
         "description": "Mistral's latest flagship model",
         "release_date": "2025-12-02",
-        "open_source": false,
+        "open_source": true,
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
         "properties": {
             "context_window": 256000,
