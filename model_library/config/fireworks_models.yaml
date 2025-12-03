@@ -247,7 +247,6 @@ minimax-models:
     default_parameters: # taken from https://huggingface.co/MiniMaxAI/MiniMax-M2#inference-parameters 
       temperature: 1.0
       top_p: 0.95
-      top_k: 40
     costs_per_million_token:
       input: 0.30
       output: 1.20

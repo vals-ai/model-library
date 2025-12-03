@@ -1,0 +1,37 @@
+base-config:
+  company: MiniMax
+  documentation_url: https://platform.minimax.io/docs
+  open_source: true
+  supports:
+    images: false
+    files: false
+    tools: true
+    temperature: true
+  metadata:
+    available_as_evaluator: false
+    available_for_everyone: true
+    ignored_for_cost: false
+  properties:
+    reasoning_model: false
+
+minimax-m2-models:
+
+  minimax/MiniMax-M2:
+    label: MiniMax-M2
+    description: MiniMax-M2 is a cost-efficient open-source model optimized for agentic applications and coding in particular.
+    release_date: 2025-10-26
+    properties:
+      context_window: 204_800
+      max_tokens: 131_000
+      reasoning_model: true
+      training_cutoff: null
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.03
+        write: 0.375
+

@@ -8,11 +8,11 @@ import random
 
 import pytest
 
-from vals_model_proxy.base import LLMConfig
-from vals_model_proxy.exceptions import (
+from model_library.base import LLMConfig
+from model_library.exceptions import (
     MaxContextWindowExceededError,
 )
-from vals_model_proxy.registry_utils import get_registry_model
+from model_library.registry_utils import get_registry_model
 
 
 @pytest.mark.integration
