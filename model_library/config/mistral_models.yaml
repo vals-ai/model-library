@@ -83,12 +83,15 @@ mistralai-models:
     release_date: 2025-12-02
     properties:
       context_window: 256_000
+      max_tokens: 256_000
     supports:
       images: true
       tools: true
     costs_per_million_token:
       input: 0.5
       output: 1.5
+    default_parameters:
+      temperature: 0.065
 
   mistralai/mistral-medium-2505:
     label: Mistral Medium 3.1 (05/2025)

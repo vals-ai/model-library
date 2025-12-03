@@ -31,7 +31,7 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 0.7
+            "temperature": 0.065
         },
         "provider_endpoint": "mistral-large-2512",
         "provider_name": "mistralai",
