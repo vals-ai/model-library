@@ -35,6 +35,15 @@ gpt-5-models:
       training_cutoff: "2024-09"
       reasoning_model: true
 
+  openai/gpt-5.1-codex-max:
+    label: GPT 5.1 Codex Max
+    release_date: 2025-12-04
+    description: OpenAI's frontier agentic coding model. Good at long-running coding tasks.
+    costs_per_million_token:
+      input: 1.25
+      output: 10.0
+      cache:
+        read: 0.125
   openai/gpt-5.1-codex:
     label: GPT 5.1 Codex
     documentation_url: https://platform.openai.com/docs/models/gpt-5.1-codex

@@ -1,4 +1,52 @@
 {
+    "openai/gpt-5.1-codex-max": {
+        "company": "OpenAI",
+        "label": "GPT 5.1 Codex Max",
+        "description": "OpenAI's frontier agentic coding model. Good at long-running coding tasks.",
+        "release_date": "2025-12-04",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 400000,
+            "max_tokens": 128000,
+            "training_cutoff": "2024-09",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.25,
+            "output": 10.0,
+            "cache": {
+                "read": 0.125,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-5.1-codex-max",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.1-codex-max",
+        "slug": "openai_gpt-5.1-codex-max"
+    },
     "mistralai/mistral-large-2512": {
         "company": "Mistral",
         "label": "Mistral Large 3",
