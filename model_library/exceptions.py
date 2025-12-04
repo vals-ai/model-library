@@ -98,7 +98,9 @@ CONTEXT_WINDOW_PATTERN = re.compile(
     r"sent message larger than max|"
     r"input tokens exceeded|"
     r"(messages?|total length).*too long|"
-    r"payload.*too large"
+    r"payload.*too large|"
+    r"string too long|"
+    r"input exceeded the context window"
 )
 
 
