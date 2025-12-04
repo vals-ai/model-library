@@ -19,7 +19,6 @@ base-config:
       output_discount: 0.5
   default_parameters:
     reasoning_effort: "high"
-
 gpt-5-models:
   base-config:
     documentation_url: ""
