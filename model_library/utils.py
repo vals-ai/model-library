@@ -39,9 +39,9 @@ def deep_model_dump(obj: object) -> object:
 
 def default_httpx_client():
     return httpx.AsyncClient(
-        timeout=httpx.Timeout(timeout=30 * 60, connect=60),
+        timeout=httpx.Timeout(timeout=2 * 60 * 60, connect=5 * 60),
         limits=httpx.Limits(
-            max_connections=1000, max_keepalive_connections=100
+            max_connections=2000, max_keepalive_connections=300
         ),  # TODO: increase, but make sure prod enough sockets to not hit file descriptor limit
     )
 
