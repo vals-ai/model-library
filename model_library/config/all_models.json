@@ -920,6 +920,53 @@
         "full_key": "fireworks/glm-4p6",
         "slug": "fireworks_glm-4p6"
     },
+    "fireworks/deepseek-v3p2-thinking": {
+        "company": "DeepSeek",
+        "label": "DeepSeek V3.2",
+        "description": "",
+        "release_date": "2025-09-29",
+        "open_source": true,
+        "documentation_url": "https://fireworks.ai/models",
+        "properties": {
+            "context_window": 160000,
+            "max_tokens": 20480,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.2,
+            "output": 1.2,
+            "cache": {
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0
+        },
+        "provider_endpoint": "deepseek-v3p2",
+        "provider_name": "fireworks",
+        "full_key": "fireworks/deepseek-v3p2-thinking",
+        "slug": "fireworks_deepseek-v3p2-thinking"
+    },
     "fireworks/deepseek-v3p2": {
         "company": "DeepSeek",
         "label": "DeepSeek V3.2",
@@ -958,7 +1005,15 @@
                 "output_discount": 0.5
             }
         },
-        "alternative_keys": [],
+        "alternative_keys": [
+            {
+                "fireworks/deepseek-v3p2-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    }
+                }
+            }
+        ],
         "default_parameters": {
             "temperature": 1.0
         },
@@ -969,8 +1024,8 @@
     },
     "deepseek/deepseek-reasoner": {
         "company": "DeepSeek",
-        "label": "DeepSeek V3.2-Exp (Thinking)",
-        "description": "DeepSeek V3.2-Exp model with thinking mode for complex reasoning",
+        "label": "DeepSeek Reasoner",
+        "description": "DeepSeek's latest reasoning model",
         "release_date": "2025-09-29",
         "open_source": true,
         "documentation_url": "https://api-docs.deepseek.com/",
@@ -1013,8 +1068,8 @@
     },
     "deepseek/deepseek-chat": {
         "company": "DeepSeek",
-        "label": "DeepSeek V3.2-Exp (Nonthinking)",
-        "description": "DeepSeek V3.2-Exp model for general conversation",
+        "label": "DeepSeek Chat",
+        "description": "DeepSeek's latest chat model",
         "release_date": "2025-09-29",
         "open_source": true,
         "documentation_url": "https://api-docs.deepseek.com/",

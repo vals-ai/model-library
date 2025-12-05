@@ -153,6 +153,10 @@ deepseek-models:
     costs_per_million_token:
       input: 1.20
       output: 1.20
+    alternative_keys:
+      - fireworks/deepseek-v3p2-thinking:
+          properties:
+            reasoning_model: true
 
 openai-models:
   base-config:

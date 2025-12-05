@@ -12,7 +12,7 @@ base-config:
   properties:
     reasoning_model: false
     
-deepseek-v3p2-exp-models:
+deepseek-endpoints:
   base-config:
     supports:
       images: false
@@ -29,8 +29,8 @@ deepseek-v3p2-exp-models:
         read_discount: 0.1
 
   deepseek/deepseek-chat:
-    label: DeepSeek V3.2-Exp (Nonthinking)
-    description: DeepSeek V3.2-Exp model for general conversation
+    label: DeepSeek Chat
+    description: DeepSeek's latest chat model
     release_date: 2025-09-29
     properties:
       context_window: 128_000
@@ -38,8 +38,8 @@ deepseek-v3p2-exp-models:
       reasoning_model: false
 
   deepseek/deepseek-reasoner:
-    label: DeepSeek V3.2-Exp (Thinking)
-    description: DeepSeek V3.2-Exp model with thinking mode for complex reasoning
+    label: DeepSeek Reasoner
+    description: DeepSeek's latest reasoning model
     release_date: 2025-09-29
     properties:
       context_window: 128_000
