@@ -64,14 +64,14 @@ gemini-3-models:
       training_cutoff: "2025-01"
       reasoning_model: true
     costs_per_million_token:
-      input: 2
-      output: 12
+      input: 2.0
+      output: 12.0
       cache:
         read: 0.20
       context:
         threshold: 200_000
-        input: 2.5
-        output: 15.0
+        input: 4.0
+        output: 18.0
         cache:
           read: 0.40
 
@@ -441,6 +441,8 @@ old-gemini-models:
     costs_per_million_token:
       input: 0.10
       output: 0.40
+      cache:
+        read: 0.025
 
   google/gemini-2.0-flash-exp:
     label: Gemini 2.0 Flash Exp

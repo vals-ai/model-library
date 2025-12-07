@@ -11,7 +11,7 @@ base-config:
     ignored_for_cost: false
   properties:
     reasoning_model: false
-    
+
 deepseek-endpoints:
   base-config:
     supports:
@@ -22,11 +22,6 @@ deepseek-endpoints:
       temperature: true
     default_parameters:
       temperature: 1
-    costs_per_million_token:
-      input: 0.28
-      output: 0.42
-      cache:
-        read_discount: 0.1
 
   deepseek/deepseek-chat:
     label: DeepSeek Chat
@@ -36,6 +31,11 @@ deepseek-endpoints:
       context_window: 128_000
       max_tokens: 8_000
       reasoning_model: false
+    costs_per_million_token:
+      input: 0.27
+      output: 1.10
+      cache:
+        read: 0.07
 
   deepseek/deepseek-reasoner:
     label: DeepSeek Reasoner
@@ -45,3 +45,8 @@ deepseek-endpoints:
       context_window: 128_000
       max_tokens: 64_000
       reasoning_model: true
+    costs_per_million_token:
+      input: 0.55
+      output: 2.19
+      cache:
+        read: 0.14

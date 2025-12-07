@@ -72,8 +72,8 @@ llama-4-models:
       max_tokens: 16_384
       training_cutoff: "2024-08"
     costs_per_million_token:
-      input: 0.18
-      output: 0.59
+      input: 0.15
+      output: 0.6
     supports:
       images: true
     metadata:
@@ -101,8 +101,8 @@ deepseek-models:
     metadata:
       deprecated: true
     costs_per_million_token:
-      input: 3.00
-      output: 8.00
+      input: 1.35
+      output: 5.4
 
   fireworks/deepseek-v3-0324:
     label: DeepSeek V3 (03/24/2025)
@@ -114,8 +114,8 @@ deepseek-models:
     metadata:
       deprecated: true
     costs_per_million_token:
-      input: 1.20
-      output: 1.20
+      input: 0.9
+      output: 0.9
 
   fireworks/deepseek-v3:
     label: DeepSeek V3
@@ -127,8 +127,8 @@ deepseek-models:
     metadata:
       deprecated: true
     costs_per_million_token:
-      input: 0.90
-      output: 0.90
+      input: 0.9
+      output: 0.9
 
   fireworks/deepseek-v3p1:
     label: DeepSeek V3.1
@@ -188,8 +188,8 @@ openai-models:
       training_cutoff: null
       reasoning_model: true
     costs_per_million_token:
-      input: 0.05
-      output: 0.20
+      input: 0.07
+      output: 0.3
 
 kimi-models:
   base-config:
@@ -232,9 +232,6 @@ minimax-models:
       temperature: 1.0
       top_p: 0.95
       top_k: 40
-    costs_per_million_token:
-      input: 0.30
-      output: 1.20
 
   fireworks/minimax-m2:
     label: MiniMax-M2
@@ -254,4 +251,3 @@ minimax-models:
     costs_per_million_token:
       input: 0.30
       output: 1.20
-

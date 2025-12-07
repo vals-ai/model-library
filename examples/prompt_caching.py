@@ -44,18 +44,10 @@ async def run(model: LLM) -> None:
 
     async def query_with_logging(tag: str, question: str) -> None:
         user_prompt = f"{task_spec}\n\nQUESTION: {question}"
-        result = await model.query(
+        await model.query(
             input=user_prompt,
             system_prompt=system_prefix,
             tools=tools,
-        )
-        meta = result.metadata
-        model.logger.info(
-            "%s -> cache_write=%s cache_read=%s uncached_input=%s",
-            tag,
-            meta.cache_write_tokens,
-            meta.cache_read_tokens,
-            meta.in_tokens,
         )
 
     await query_with_logging(

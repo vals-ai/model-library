@@ -236,8 +236,8 @@
             },
             "context": {
                 "threshold": 200000.0,
-                "input": 2.5,
-                "output": 15.0,
+                "input": 4.0,
+                "output": 18.0,
                 "cache": {
                     "read": 0.4,
                     "write_markup": 1.0
@@ -425,17 +425,18 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 0.6,
-            "output": 2.5
+            "output": 2.5,
+            "cache": {
+                "read": 0.15,
+                "write_markup": 1.0
+            }
         },
         "alternative_keys": [
             {
                 "fireworks/kimi-k2-thinking": {
                     "costs_per_million_token": {
-                        "input": 0.5,
-                        "output": 0.5,
-                        "cache": {
-                            "read_discount": 1
-                        }
+                        "input": 0.6,
+                        "output": 2.5
                     }
                 }
             }
@@ -510,10 +511,10 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 0.5,
-            "output": 0.5,
+            "input": 0.6,
+            "output": 2.5,
             "cache": {
-                "read_discount": 1.0,
+                "read": 0.15,
                 "write_markup": 1.0
             }
         },
@@ -864,7 +865,12 @@
             }
         },
         "alternative_keys": [
-            "fireworks/glm-4p6"
+            {
+                "costs_per_million_token": {
+                    "input": 0.55,
+                    "output": 2.19
+                }
+            }
         ],
         "default_parameters": {
             "temperature": 0.6,
@@ -1050,10 +1056,10 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 0.28,
-            "output": 0.42,
+            "input": 0.55,
+            "output": 2.19,
             "cache": {
-                "read_discount": 0.1,
+                "read": 0.14,
                 "write_markup": 1.0
             }
         },
@@ -1094,10 +1100,10 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 0.28,
-            "output": 0.42,
+            "input": 0.27,
+            "output": 1.1,
             "cache": {
-                "read_discount": 0.1,
+                "read": 0.07,
                 "write_markup": 1.0
             }
         },
@@ -2540,8 +2546,8 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 0.05,
-            "output": 0.2,
+            "input": 0.07,
+            "output": 0.3,
             "cache": {
                 "read_discount": 1.0,
                 "write_markup": 1.0
@@ -2613,12 +2619,12 @@
             "context_window": 200000,
             "max_tokens": 32000,
             "training_cutoff": "2025-03",
-            "reasoning_model": false
+            "reasoning_model": true
         },
         "supports": {
             "images": false,
             "files": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true
         },
         "metadata": {
@@ -2636,7 +2642,7 @@
         "default_parameters": {
             "temperature": 1.0
         },
-        "provider_endpoint": "us.anthropic.claude-opus-4-1-20250805-v1:0-thinking",
+        "provider_endpoint": "us.anthropic.claude-opus-4-1-20250805-v1:0",
         "provider_name": "bedrock",
         "full_key": "bedrock/claude-opus-4-1-20250805-v1-thinking",
         "slug": "bedrock_claude-opus-4-1-20250805-v1-thinking"
@@ -2671,7 +2677,15 @@
             "input": 15.0,
             "output": 75.0
         },
-        "alternative_keys": [],
+        "alternative_keys": [
+            {
+                "bedrock/claude-opus-4-1-20250805-v1-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    }
+                }
+            }
+        ],
         "default_parameters": {
             "temperature": 1.0
         },
@@ -2824,7 +2838,12 @@
             }
         },
         "alternative_keys": [
-            "together/zai-org/GLM-4.5-Air-FP8"
+            {
+                "costs_per_million_token": {
+                    "input": 0.22,
+                    "output": 0.88
+                }
+            }
         ],
         "default_parameters": {
             "temperature": 0.6,
@@ -2871,7 +2890,12 @@
             }
         },
         "alternative_keys": [
-            "fireworks/glm-4p5"
+            {
+                "costs_per_million_token": {
+                    "input": 0.55,
+                    "output": 2.19
+                }
+            }
         ],
         "default_parameters": {
             "temperature": 0.6,
@@ -3977,12 +4001,12 @@
             "context_window": 200000,
             "max_tokens": 64000,
             "training_cutoff": "2025-03",
-            "reasoning_model": false
+            "reasoning_model": true
         },
         "supports": {
             "images": false,
             "files": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true
         },
         "metadata": {
@@ -3994,13 +4018,28 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 3.0,
-            "output": 15.0
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "write": 3.75,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 6.0,
+                "output": 22.5,
+                "cache": {
+                    "read": 0.6,
+                    "write": 7.5,
+                    "write_markup": 1.0
+                }
+            }
         },
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 1.0
         },
-        "provider_endpoint": "us.anthropic.claude-sonnet-4-20250514-v1:0-thinking",
+        "provider_endpoint": "us.anthropic.claude-sonnet-4-20250514-v1:0",
         "provider_name": "bedrock",
         "full_key": "bedrock/claude-sonnet-4-20250514-v1-thinking",
         "slug": "bedrock_claude-sonnet-4-20250514-v1-thinking"
@@ -4033,9 +4072,32 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 3.0,
-            "output": 15.0
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "write": 3.75,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 6.0,
+                "output": 22.5,
+                "cache": {
+                    "read": 0.6,
+                    "write": 7.5,
+                    "write_markup": 1.0
+                }
+            }
         },
-        "alternative_keys": [],
+        "alternative_keys": [
+            {
+                "bedrock/claude-sonnet-4-20250514-v1-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    }
+                }
+            }
+        ],
         "default_parameters": {
             "temperature": 1.0
         },
@@ -4055,12 +4117,12 @@
             "context_window": 200000,
             "max_tokens": 32000,
             "training_cutoff": "2025-03",
-            "reasoning_model": false
+            "reasoning_model": true
         },
         "supports": {
             "images": false,
             "files": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true
         },
         "metadata": {
@@ -4072,13 +4134,18 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 15.0,
-            "output": 75.0
+            "output": 75.0,
+            "cache": {
+                "read": 1.5,
+                "write": 18.75,
+                "write_markup": 1.0
+            }
         },
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 1.0
         },
-        "provider_endpoint": "us.anthropic.claude-opus-4-20250514-v1:0-thinking",
+        "provider_endpoint": "us.anthropic.claude-opus-4-20250514-v1:0",
         "provider_name": "bedrock",
         "full_key": "bedrock/claude-opus-4-20250514-v1-thinking",
         "slug": "bedrock_claude-opus-4-20250514-v1-thinking"
@@ -4111,9 +4178,22 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 15.0,
-            "output": 75.0
+            "output": 75.0,
+            "cache": {
+                "read": 1.5,
+                "write": 18.75,
+                "write_markup": 1.0
+            }
         },
-        "alternative_keys": [],
+        "alternative_keys": [
+            {
+                "bedrock/claude-opus-4-20250514-v1-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    }
+                }
+            }
+        ],
         "default_parameters": {
             "temperature": 1.0
         },
@@ -6121,8 +6201,8 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 0.18,
-            "output": 0.59,
+            "input": 0.15,
+            "output": 0.6,
             "cache": {
                 "read_discount": 1.0,
                 "write_markup": 1.0
@@ -6260,8 +6340,8 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 1.2,
-            "output": 1.2,
+            "input": 0.9,
+            "output": 0.9,
             "cache": {
                 "read_discount": 1.0,
                 "write_markup": 1.0
@@ -6866,6 +6946,7 @@
             "input": 0.1,
             "output": 0.4,
             "cache": {
+                "read": 0.025,
                 "read_discount": 0.25,
                 "write_markup": 1.0
             },
@@ -7147,8 +7228,8 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 3.0,
-            "output": 8.0,
+            "input": 1.35,
+            "output": 5.4,
             "cache": {
                 "read_discount": 1.0,
                 "write_markup": 1.0
@@ -7908,7 +7989,11 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 0.8,
-            "output": 3.2
+            "output": 3.2,
+            "cache": {
+                "read": 0.2,
+                "write_markup": 1.0
+            }
         },
         "alternative_keys": [],
         "default_parameters": {},
@@ -7944,7 +8029,11 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 0.035,
-            "output": 0.14
+            "output": 0.14,
+            "cache": {
+                "read": 0.00875,
+                "write_markup": 1.0
+            }
         },
         "alternative_keys": [],
         "default_parameters": {},
@@ -7981,7 +8070,11 @@
         "provider_properties": {},
         "costs_per_million_token": {
             "input": 0.06,
-            "output": 0.24
+            "output": 0.24,
+            "cache": {
+                "read": 0.015,
+                "write_markup": 1.0
+            }
         },
         "alternative_keys": [],
         "default_parameters": {},
@@ -13094,8 +13187,8 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 0.18,
-            "output": 0.18,
+            "input": 0.2,
+            "output": 0.2,
             "cache": {
                 "read_discount": 1.0,
                 "write_markup": 1.0
@@ -13228,8 +13321,8 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 0.18,
-            "output": 0.18,
+            "input": 0.2,
+            "output": 0.2,
             "cache": {
                 "read_discount": 1.0,
                 "write_markup": 1.0

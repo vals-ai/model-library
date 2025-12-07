@@ -587,7 +587,7 @@ class OpenAIModel(LLM):
                 cache_read_tokens = (
                     chunk.usage.prompt_tokens_details.cached_tokens or 0
                     if chunk.usage.prompt_tokens_details
-                    else 0
+                    else getattr(chunk.usage, "cached_tokens", 0)  # for kimi
                 )
                 metadata = QueryResultMetadata(
                     in_tokens=chunk.usage.prompt_tokens - cache_read_tokens,

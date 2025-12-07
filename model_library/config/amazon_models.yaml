@@ -12,9 +12,11 @@ base-config:
     ignored_for_cost: false
   properties:
     reasoning_model: false
+
 nova-models:
   base-config:
     documentation_url: https://www.aboutamazon.com/news/aws/amazon-nova-artificial-intelligence-bedrock-aws
+
   amazon/amazon.nova-pro-v1:0:
     label: Nova Pro
     description: Highly capable multimodal model offering the best combination of accuracy, speed, and cost for a wide range of tasks.
@@ -30,7 +32,10 @@ nova-models:
     costs_per_million_token:
       input: 0.8
       output: 3.2
+      cache:
+        read: 0.2
     documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+
   amazon/amazon.nova-lite-v1:0:
     label: Nova Lite
     description:
@@ -49,7 +54,10 @@ nova-models:
     costs_per_million_token:
       input: 0.06
       output: 0.24
+      cache:
+        read: 0.015
     documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+
   amazon/amazon.nova-micro-v1:0:
     label: Nova Micro
     description:
@@ -64,7 +72,10 @@ nova-models:
     costs_per_million_token:
       input: 0.035
       output: 0.14
+      cache:
+        read: 0.00875
     documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+
 claude-models:
   base-config:
     documentation_url: https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet
@@ -72,6 +83,7 @@ claude-models:
       temperature: true
     default_parameters:
       temperature: 1
+
   bedrock/claude-3-5-sonnet-20240620-v2:
     label: Claude 3.5 Sonnet (Bedrock)
     description:
@@ -91,6 +103,7 @@ claude-models:
       input: 3.0
       output: 15.0
     provider_endpoint: us.anthropic.claude-3-5-sonnet-20241022-v2:0
+
   bedrock/claude-3-7-sonnet-20250219-v1:
     label: Claude 3.7 Sonnet (Bedrock)
     description: Claude 3.7 Sonnet, hosted on Bedrock.
@@ -111,6 +124,7 @@ claude-models:
         read: 0.3
         write: 3.75
     provider_endpoint: us.anthropic.claude-3-7-sonnet-20250219-v1:0
+
   bedrock/claude-sonnet-4-20250514-v1:
     label: Claude Sonnet 4 (Nonthinking)
     description:
@@ -122,34 +136,29 @@ claude-models:
       context_window: 200_000
       max_tokens: 64_000
       training_cutoff: 2025-03
+      reasoning_model: false
     metadata:
       available_as_evaluator: true
       available_for_everyone: true
     costs_per_million_token:
       input: 3.0
       output: 15.0
+      cache:
+        read: 0.3
+        write: 3.75
+      context:
+        threshold: 200_000
+        input: 6.00
+        output: 22.5
+        cache:
+          read: 0.6
+          write: 7.50
     provider_endpoint: us.anthropic.claude-sonnet-4-20250514-v1:0
-  bedrock/claude-sonnet-4-20250514-v1-thinking:
-    label: Claude Sonnet 4 (Thinking)
-    description:
-      Anthropic's latest-generation workhorse model, offering a balance
-      of performance and speed.
-    release_date: 2025-05-22
-    documentation_url: https://www.anthropic.com/claude/sonnet
-    properties:
-      context_window: 200_000
-      max_tokens: 64_000
-      training_cutoff: 2025-03
-    supports:
-      temperature: false
-      tools: true
-    metadata:
-      available_as_evaluator: true
-      available_for_everyone: true
-    costs_per_million_token:
-      input: 3.0
-      output: 15.0
-    provider_endpoint: us.anthropic.claude-sonnet-4-20250514-v1:0-thinking
+    alternative_keys:
+      - bedrock/claude-sonnet-4-20250514-v1-thinking:
+          properties:
+            reasoning_model: true
+
   bedrock/claude-opus-4-20250514-v1:
     label: Claude Opus 4 (Nonthinking)
     description: Anthropic's most powerful model.
@@ -158,6 +167,7 @@ claude-models:
       context_window: 200_000
       max_tokens: 32_000
       training_cutoff: 2025-03
+      reasoning_model: false
     supports:
       tools: true
     metadata:
@@ -165,24 +175,15 @@ claude-models:
     costs_per_million_token:
       input: 15.0
       output: 75.0
+      cache:
+        read: 1.5
+        write: 18.75
     provider_endpoint: us.anthropic.claude-opus-4-20250514-v1:0
-  bedrock/claude-opus-4-20250514-v1-thinking:
-    label: Claude Opus 4 (Thinking)
-    description: Anthropic's most powerful model.
-    release_date: 2025-05-22
-    properties:
-      context_window: 200_000
-      max_tokens: 32_000
-      training_cutoff: 2025-03
-    supports:
-      temperature: false
-      tools: true
-    metadata:
-      available_for_everyone: false
-    costs_per_million_token:
-      input: 15.0
-      output: 75.0
-    provider_endpoint: us.anthropic.claude-opus-4-20250514-v1:0-thinking
+    alternative_keys:
+      - bedrock/claude-opus-4-20250514-v1-thinking:
+          properties:
+            reasoning_model: true
+
   bedrock/claude-opus-4-1-20250805-v1:
     label: Claude Opus 4.1 (Nonthinking)
     description:
@@ -199,23 +200,11 @@ claude-models:
       input: 15.0
       output: 75.0
     provider_endpoint: us.anthropic.claude-opus-4-1-20250805-v1:0
-  bedrock/claude-opus-4-1-20250805-v1-thinking:
-    label: Claude Opus 4.1 (Thinking)
-    description:
-    release_date: 2025-08-05
-    properties:
-      context_window: 200_000
-      max_tokens: 32_000
-      training_cutoff: 2025-03
-    supports:
-      temperature: false
-      tools: true
-    metadata:
-      available_for_everyone: false
-    costs_per_million_token:
-      input: 15.0
-      output: 75.0
-    provider_endpoint: us.anthropic.claude-opus-4-1-20250805-v1:0-thinking
+    alternative_keys:
+      - bedrock/claude-opus-4-1-20250805-v1-thinking:
+          properties:
+            reasoning_model: true
+
   bedrock/claude-3-5-haiku-20241022-v1:
     label: Claude 3.5 Haiku (Bedrock)
     description: Claude 3.5 Haiku, hosted on Bedrock.
@@ -235,6 +224,7 @@ claude-models:
         read: 0.08
         write: 1
     provider_endpoint: us.anthropic.claude-3-5-haiku-20241022-v1:0
+
 deepseek_models:
   base-config:
     documentation_url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-deepseek.html
@@ -242,6 +232,7 @@ deepseek_models:
       temperature: true
     default_parameters:
       temperature: 1
+
   bedrock/deepseek-r1-v1:
     label: DeepSeek R1 (Bedrock)
     description: DeepSeek R1, hosted on Bedrock.
@@ -258,6 +249,7 @@ deepseek_models:
       input: 1.35
       output: 5.4
     provider_endpoint: us.deepseek.r1-v1:0
+
 llama_models:
   base-config:
     documentation_url: https://aws.amazon.com/bedrock/meta/

@@ -148,9 +148,9 @@ async def process_model(model_str: str, provider_name: str):
 
             output = await query()
 
-            if not output.metadata.in_tokens:
+            if not output.metadata.total_input_tokens:
                 raise Exception("No in tokens")
-            if not output.metadata.out_tokens:
+            if not output.metadata.total_output_tokens:
                 raise Exception("No out tokens")
 
             completed_models[provider_name] += 1
@@ -218,6 +218,7 @@ async def main():
         live.update(create_dashboard(total_models, completed_count))
 
     # show exceptions
+    override_count = 0
     if exceptions:
         console.print(
             "\n[red bold]Exceptions encountered during processing:[/red bold]"
@@ -232,13 +233,14 @@ async def main():
             if error_override or model_override:
                 reason = error_override or model_override
                 override_text = f" [green][OVERRIDDEN | {reason}][/green]"
+                override_count += 1
 
             console.print(
                 f"  [red]{model_str}[/red]{override_text}: {exception_message(exc)}"
             )
 
-            if not error_override and not model_override:
-                sys.exit(1)
+    if len(exceptions) != override_count:
+        sys.exit(1)
     sys.exit(0)
 
 

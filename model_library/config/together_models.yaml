@@ -595,8 +595,8 @@ mistralai-models:
       max_tokens: 4_096
       training_cutoff: "2023-09"
     costs_per_million_token:
-      input: 0.18
-      output: 0.18
+      input: 0.2
+      output: 0.2
     alternative_keys:
       - together/Mistral-7B-Instruct-v0.2
 

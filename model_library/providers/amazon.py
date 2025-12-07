@@ -26,6 +26,7 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.input import FileBase
 from model_library.exceptions import (
     BadInputError,
     MaxOutputTokensExceededError,
@@ -60,11 +61,13 @@ class AmazonModel(LLM):
         config: LLMConfig | None = None,
     ):
         super().__init__(model_name, provider, config=config)
-        if self.model_name.endswith("-thinking"):
-            self.model_name = self.model_name.replace("-thinking", "")
-            self.reasoning = True
-            if self.max_tokens < 1024:
-                self.max_tokens = 2048
+        self.supports_cache = "amazon" in self.model_name or "claude" in self.model_name
+        self.supports_cache = (
+            self.supports_cache and "v2" not in self.model_name
+        )  # supported but no access yet
+        self.supports_tool_cache = self.supports_cache and "claude" in self.model_name
+
+    cache_control = {"type": "default"}
 
     @override
     async def parse_input(
@@ -120,6 +123,10 @@ class AmazonModel(LLM):
                             new_input.append(item)
 
         if content_user:
+            if self.supports_cache:
+                if not isinstance(input[-1], FileBase):
+                    # last item cannot be file
+                    content_user.append({"cachePoint": self.cache_control})
             new_input.append({"role": "user", "content": content_user})
 
         return new_input
@@ -174,6 +181,8 @@ class AmazonModel(LLM):
                     }
                 }
             )
+        if parsed_tools and self.supports_tool_cache:
+            parsed_tools.append({"cachePoint": self.cache_control})
         return parsed_tools
 
     @override
@@ -203,8 +212,12 @@ class AmazonModel(LLM):
 
         if "system_prompt" in kwargs:
             body["system"] = [{"text": kwargs.pop("system_prompt")}]
+            if self.supports_cache:
+                body["system"].append({"cachePoint": self.cache_control})
 
         if self.reasoning:
+            if self.max_tokens < 1024:
+                self.max_tokens = 2048
             budget_tokens = kwargs.pop(
                 "budget_tokens", get_default_budget_tokens(self.max_tokens)
             )
@@ -244,9 +257,8 @@ class AmazonModel(LLM):
         tool_calls: dict[str, Any] = {}
 
         messages: dict[str, Any] = {"content": []}
-        input_tokens = 0
-        output_tokens = 0
         stop_reason: str = ""
+        metadata = QueryResultMetadata()
 
         for chunk in response["stream"]:
             key = list(chunk.keys())[0]
@@ -281,8 +293,16 @@ class AmazonModel(LLM):
                             tool_calls["input"] += delta["toolUse"]["input"]
 
                 case "metadata":
-                    input_tokens = value["usage"]["inputTokens"]
-                    output_tokens = value["usage"]["outputTokens"]
+                    metadata = QueryResultMetadata(
+                        in_tokens=value["usage"]["inputTokens"],
+                        out_tokens=value["usage"]["outputTokens"],
+                    )
+                    metadata.cache_read_tokens = value["usage"].get(
+                        "cacheReadInputTokens", None
+                    )
+                    metadata.cache_write_tokens = value["usage"].get(
+                        "cacheWriteInputTokens", None
+                    )
 
                 case "contentBlockStop":
                     if tool_calls:
@@ -308,7 +328,7 @@ class AmazonModel(LLM):
                 case "messageStop":
                     stop_reason = value["stopReason"]
 
-        return messages, stop_reason, input_tokens, output_tokens
+        return messages, stop_reason, metadata
 
     # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime/client/converse.html#
     @override
@@ -326,9 +346,7 @@ class AmazonModel(LLM):
             **body,
         )
 
-        messages, stop_reason, input_tokens, output_tokens = await self.stream_response(
-            response
-        )
+        messages, stop_reason, metadata = await self.stream_response(response)
 
         text = " ".join([i["text"] for i in messages["content"] if "text" in i])
         reasoning = " ".join(
@@ -361,10 +379,7 @@ class AmazonModel(LLM):
         return QueryResult(
             output_text=text,
             reasoning=reasoning,
-            metadata=QueryResultMetadata(
-                in_tokens=input_tokens,
-                out_tokens=output_tokens,
-            ),
+            metadata=metadata,
             tool_calls=tool_calls,
             history=[*input, messages],
         )
