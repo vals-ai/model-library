@@ -143,7 +143,7 @@ deepseek-models:
       output: 1.68
 
   fireworks/deepseek-v3p2:
-    label: DeepSeek V3.2
+    label: DeepSeek V3.2 (Nonthinking)
     description: ""
     release_date: 2025-09-29
     properties:
@@ -157,6 +157,7 @@ deepseek-models:
       - fireworks/deepseek-v3p2-thinking:
           properties:
             reasoning_model: true
+          label: DeepSeek V3.2 (Thinking)
 
 openai-models:
   base-config:

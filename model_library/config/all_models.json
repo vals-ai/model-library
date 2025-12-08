@@ -928,7 +928,7 @@
     },
     "fireworks/deepseek-v3p2-thinking": {
         "company": "DeepSeek",
-        "label": "DeepSeek V3.2",
+        "label": "DeepSeek V3.2 (Thinking)",
         "description": "",
         "release_date": "2025-09-29",
         "open_source": true,
@@ -975,7 +975,7 @@
     },
     "fireworks/deepseek-v3p2": {
         "company": "DeepSeek",
-        "label": "DeepSeek V3.2",
+        "label": "DeepSeek V3.2 (Nonthinking)",
         "description": "",
         "release_date": "2025-09-29",
         "open_source": true,
@@ -1016,7 +1016,8 @@
                 "fireworks/deepseek-v3p2-thinking": {
                     "properties": {
                         "reasoning_model": true
-                    }
+                    },
+                    "label": "DeepSeek V3.2 (Thinking)"
                 }
             }
         ],
