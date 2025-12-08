@@ -54,20 +54,6 @@ class MaxOutputTokensExceededError(Exception):
         super().__init__(message or MaxOutputTokensExceededError.DEFAULT_MESSAGE)
 
 
-class MaxInputTokensExceededError(Exception):
-    """
-    Raised when the input exceeds the allowed max input tokens limit
-    """
-
-    DEFAULT_MESSAGE: str = (
-        "Input exceeded the maximum allowed input tokens. "
-        "Consider reducing the input size."
-    )
-
-    def __init__(self, message: str | None = None):
-        super().__init__(message or MaxInputTokensExceededError.DEFAULT_MESSAGE)
-
-
 class MaxContextWindowExceededError(Exception):
     """
     Raised when the context window exceeds the allowed max context window limit
