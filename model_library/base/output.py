@@ -161,6 +161,7 @@ class QueryResultMetadata(BaseModel):
             ),
             duration_seconds=self.default_duration_seconds
             + other.default_duration_seconds,
+            cost=self.cost,
         )
 
     @override
