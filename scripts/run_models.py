@@ -166,6 +166,7 @@ MODEL_OVERRIDES = [
     "dumbmar",
     "bedrock",
 ]
+IGNORED_MODELS = ["fireworks/deepseek-v3p1", "fireworks/deepseek-v3p2-thinking"]
 ERROR_OVERRIDES = [
     "overloaded",
     "rate limit",
@@ -192,6 +193,8 @@ async def main():
         if "research" in key and not args.research:
             continue
         if getattr(config.provider_properties, "serverless", True) is False:
+            continue
+        if key in IGNORED_MODELS:
             continue
 
         tasks.append(process_model(key, config.provider_name))

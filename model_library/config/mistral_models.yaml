@@ -94,6 +94,42 @@ mistralai-models:
     default_parameters:
       temperature: 0.065
 
+  mistralai/devstral-2512:
+    label: Devstral 2
+    description: Enterprise grade coding model that excels at using tools to explore codebases and power software engineering agents.
+    documentation_url: https://docs.mistral.ai/models/devstral-2-25-12
+    release_date: 2025-12-09
+    open_source: true
+    properties:
+      context_window: 256_000
+      max_tokens: 256_000
+    supports:
+      images: false
+      tools: true
+    costs_per_million_token:
+      input: 0.4
+      output: 2.0
+    default_parameters:
+      temperature: 0.2
+
+  mistralai/labs-devstral-small-2512:
+    label: Devstral Small 2
+    description: Open source coding model that excels at using tools to explore codebases and power software engineering agents.
+    documentation_url: https://docs.mistral.ai/models/devstral-small-2-25-12
+    release_date: 2025-12-09
+    open_source: true
+    properties:
+      context_window: 256_000
+      max_tokens: 256_000
+    supports:
+      images: false
+      tools: true
+    costs_per_million_token:
+      input: 0.1
+      output: 0.3
+    default_parameters:
+      temperature: 0.2
+
   mistralai/mistral-medium-2505:
     label: Mistral Medium 3.1 (05/2025)
     description: Mistral Medium 2505
