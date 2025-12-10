@@ -178,6 +178,7 @@ RETRIABLE_EXCEPTION_CODES = [
     "connection_error",
     "service_unavailable",
     "rate_limit",
+    "rate limit",
     "internal_error",
     "server_error",
     "overloaded",
