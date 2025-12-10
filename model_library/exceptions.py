@@ -9,6 +9,7 @@ from anthropic import InternalServerError
 from anthropic import RateLimitError as AnthropicRateLimitError
 from backoff._typing import Details
 from httpcore import ReadError as HTTPCoreReadError
+from httpx import ConnectError as HTTPXConnectError
 from httpx import ReadError as HTTPXReadError
 from httpx import RemoteProtocolError
 from openai import APIConnectionError as OpenAIAPIConnectionError
@@ -159,6 +160,7 @@ RETRIABLE_EXCEPTIONS = [
     AI21RateLimitError,
     RemoteProtocolError,  # httpx connection closing when running models from sdk
     HTTPXReadError,
+    HTTPXConnectError,
     HTTPCoreReadError,
 ]
 

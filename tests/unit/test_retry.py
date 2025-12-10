@@ -219,6 +219,34 @@ async def test_immediate_retry_exception_limit(mock_llm: LLM):
 
 
 @pytest.mark.parametrize(
+    "exception_class",
+    [
+        pytest.param("httpx.ReadError", id="httpx_read_error"),
+        pytest.param("httpx.ConnectError", id="httpx_connect_error"),
+        pytest.param("httpcore.ReadError", id="httpcore_read_error"),
+        pytest.param("httpx.RemoteProtocolError", id="httpx_remote_protocol_error"),
+    ],
+)
+def test_httpx_network_errors_are_retriable(exception_class: str):
+    """
+    Test that httpx/httpcore network errors are retriable
+    """
+    import httpcore
+    import httpx
+
+    exception_map = {
+        "httpx.ReadError": httpx.ReadError,
+        "httpx.ConnectError": httpx.ConnectError,
+        "httpcore.ReadError": httpcore.ReadError,
+        "httpx.RemoteProtocolError": httpx.RemoteProtocolError,
+    }
+
+    exc_class = exception_map[exception_class]
+    exc = exc_class("Network error")
+    assert is_retriable_error(exc) is True
+
+
+@pytest.mark.parametrize(
     "exception_message,expected_retriable",
     [
         ("Error 429", True),  # rate limit
