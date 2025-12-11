@@ -41,7 +41,7 @@ gpt-5-models:
     description: GPT-5.2 is OpenAI's most advanced frontier model for everyday professional use and agentic tasks, with leading long-context reasoning, multi-step tool use, and vision capabilities.
     release_date: 2025-12-11
     properties:
-      context_window: 272_000
+      context_window: 400_000
     metadata:
       available_as_evaluator: true
     costs_per_million_token:
@@ -60,7 +60,7 @@ gpt-5-models:
     description: GPT-5.2 Pro is a higher-compute version of GPT-5.2 designed for stronger, more consistent reasoning on complex tasks.
     release_date: 2025-12-11
     properties:
-      context_window: 272_000
+      context_window: 400_000
     costs_per_million_token:
       input: 21
       output: 168
