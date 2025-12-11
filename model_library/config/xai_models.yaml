@@ -74,7 +74,7 @@ xai-models:
   grok/grok-4-1-fast-reasoning:
     label: Grok 4.1 Fast (Reasoning)
     description: ""
-    release_date: 2025-10-19
+    release_date: 2025-11-19
     open_source: false
     supports:
       images: true
@@ -98,7 +98,7 @@ xai-models:
   grok/grok-4-1-fast-non-reasoning:
     label: Grok 4.1 Fast Non-Reasoning
     description: ""
-    release_date: 2025-10-19
+    release_date: 2025-11-19
     open_source: false
     supports:
       images: true

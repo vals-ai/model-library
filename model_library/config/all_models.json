@@ -460,6 +460,106 @@
         "full_key": "anthropic/claude-opus-4-5-20251101",
         "slug": "anthropic_claude-opus-4-5-20251101"
     },
+    "grok/grok-4-1-fast-reasoning": {
+        "company": "xAI",
+        "label": "Grok 4.1 Fast (Reasoning)",
+        "description": "",
+        "release_date": "2025-11-19",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 2000000,
+            "max_tokens": 2000000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 0.5,
+            "cache": {
+                "read": 0.05,
+                "read_discount": 0.25,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 128000.0,
+                "input": 0.4,
+                "output": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "grok-4-1-fast-reasoning",
+        "provider_name": "grok",
+        "full_key": "grok/grok-4-1-fast-reasoning",
+        "slug": "grok_grok-4-1-fast-reasoning"
+    },
+    "grok/grok-4-1-fast-non-reasoning": {
+        "company": "xAI",
+        "label": "Grok 4.1 Fast Non-Reasoning",
+        "description": "",
+        "release_date": "2025-11-19",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 2000000,
+            "max_tokens": 2000000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "supports": {
+            "images": true,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 0.5,
+            "cache": {
+                "read": 0.05,
+                "read_discount": 0.25,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 128000.0,
+                "input": 0.4,
+                "output": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "grok-4-1-fast-non-reasoning",
+        "provider_name": "grok",
+        "full_key": "grok/grok-4-1-fast-non-reasoning",
+        "slug": "grok_grok-4-1-fast-non-reasoning"
+    },
     "google/gemini-3-pro-preview": {
         "company": "Google",
         "label": "Gemini 3 Pro (11/25)",
@@ -886,106 +986,6 @@
         "provider_name": "fireworks",
         "full_key": "fireworks/minimax-m2",
         "slug": "fireworks_minimax-m2"
-    },
-    "grok/grok-4-1-fast-reasoning": {
-        "company": "xAI",
-        "label": "Grok 4.1 Fast (Reasoning)",
-        "description": "",
-        "release_date": "2025-10-19",
-        "open_source": false,
-        "documentation_url": "",
-        "properties": {
-            "context_window": 2000000,
-            "max_tokens": 2000000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": true,
-            "files": false,
-            "temperature": true,
-            "tools": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.2,
-            "output": 0.5,
-            "cache": {
-                "read": 0.05,
-                "read_discount": 0.25,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 128000.0,
-                "input": 0.4,
-                "output": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "grok-4-1-fast-reasoning",
-        "provider_name": "grok",
-        "full_key": "grok/grok-4-1-fast-reasoning",
-        "slug": "grok_grok-4-1-fast-reasoning"
-    },
-    "grok/grok-4-1-fast-non-reasoning": {
-        "company": "xAI",
-        "label": "Grok 4.1 Fast Non-Reasoning",
-        "description": "",
-        "release_date": "2025-10-19",
-        "open_source": false,
-        "documentation_url": "",
-        "properties": {
-            "context_window": 2000000,
-            "max_tokens": 2000000,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": true,
-            "files": false,
-            "temperature": true,
-            "tools": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.2,
-            "output": 0.5,
-            "cache": {
-                "read": 0.05,
-                "read_discount": 0.25,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 128000.0,
-                "input": 0.4,
-                "output": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "grok-4-1-fast-non-reasoning",
-        "provider_name": "grok",
-        "full_key": "grok/grok-4-1-fast-non-reasoning",
-        "slug": "grok_grok-4-1-fast-non-reasoning"
     },
     "anthropic/claude-haiku-4-5-20251001-thinking": {
         "company": "Anthropic",
