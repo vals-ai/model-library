@@ -155,9 +155,11 @@ deepseek-models:
       output: 1.20
     alternative_keys:
       - fireworks/deepseek-v3p2-thinking:
+          label: DeepSeek V3.2 (Thinking)
           properties:
             reasoning_model: true
-          label: DeepSeek V3.2 (Thinking)
+          default_parameters:
+            reasoning_effort: "high"
 
 openai-models:
   base-config:

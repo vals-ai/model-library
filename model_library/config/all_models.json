@@ -1232,7 +1232,8 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0
+            "temperature": 1.0,
+            "reasoning_effort": "high"
         },
         "provider_endpoint": "deepseek-v3p2",
         "provider_name": "fireworks",
@@ -1280,10 +1281,13 @@
         "alternative_keys": [
             {
                 "fireworks/deepseek-v3p2-thinking": {
+                    "label": "DeepSeek V3.2 (Thinking)",
                     "properties": {
                         "reasoning_model": true
                     },
-                    "label": "DeepSeek V3.2 (Thinking)"
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
                 }
             }
         ],

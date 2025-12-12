@@ -514,10 +514,6 @@ class OpenAIModel(LLM):
             if self.top_p is not None:
                 body["top_p"] = self.top_p
 
-        # special-case a thinking mode
-        if self._registry_key and "deepseek-v3p2-thinking" in self._registry_key:
-            body["extra_body"] = {"thinking_mode": "thinking"}
-
         body.update(kwargs)
 
         output_text: str = ""
