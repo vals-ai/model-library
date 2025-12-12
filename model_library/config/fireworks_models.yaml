@@ -145,7 +145,7 @@ deepseek-models:
   fireworks/deepseek-v3p2:
     label: DeepSeek V3.2 (Nonthinking)
     description: ""
-    release_date: 2025-09-29
+    release_date: 2025-12-01
     properties:
       context_window: 160_000
       max_tokens: 20_480
