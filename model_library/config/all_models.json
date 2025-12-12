@@ -379,9 +379,10 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 1.2,
-            "output": 1.2,
+            "input": 0.56,
+            "output": 1.68,
             "cache": {
+                "read": 0.28,
                 "read_discount": 1.0,
                 "write_markup": 1.0
             },
@@ -427,9 +428,10 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 1.2,
-            "output": 1.2,
+            "input": 0.56,
+            "output": 1.68,
             "cache": {
+                "read": 0.28,
                 "read_discount": 1.0,
                 "write_markup": 1.0
             },

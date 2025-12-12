@@ -151,8 +151,10 @@ deepseek-models:
       max_tokens: 20_480
       reasoning_model: false
     costs_per_million_token:
-      input: 1.20
-      output: 1.20
+      input: 0.56
+      output: 1.68
+      cache:
+        read: 0.28
     alternative_keys:
       - fireworks/deepseek-v3p2-thinking:
           label: DeepSeek V3.2 (Thinking)
