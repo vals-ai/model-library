@@ -1,9 +1,11 @@
 from functools import cache
 from pathlib import Path
+from typing import TypedDict
 
 import tiktoken
 
 from model_library.base import LLM, LLMConfig, ProviderConfig
+from model_library.base.output import QueryResultCost, QueryResultMetadata
 from model_library.register_models import (
     CostProperties,
     ModelConfig,
@@ -127,6 +129,64 @@ def get_model_cost(model_str: str) -> CostProperties | None:
     if not model_config:
         raise Exception(f"Model {model_str} not found in registry")
     return model_config.costs_per_million_token
+
+
+class TokenDict(TypedDict, total=False):
+    """Token counts for cost calculation."""
+
+    in_tokens: int
+    out_tokens: int
+    reasoning_tokens: int | None
+    cache_read_tokens: int | None
+    cache_write_tokens: int | None
+
+
+async def recompute_cost(
+    model_str: str,
+    tokens: TokenDict,
+) -> QueryResultCost:
+    """
+    Recompute the cost for a model based on token information.
+
+    Uses the model provider's existing _calculate_cost method to ensure
+    provider-specific cost calculations are applied.
+
+    Args:
+        model_str: The model identifier (e.g., "openai/gpt-4o")
+        tokens: Dictionary containing token counts with keys:
+            - in_tokens (required): Number of input tokens
+            - out_tokens (required): Number of output tokens
+            - reasoning_tokens (optional): Number of reasoning tokens
+            - cache_read_tokens (optional): Number of cache read tokens
+            - cache_write_tokens (optional): Number of cache write tokens
+
+    Returns:
+        QueryResultCost with computed costs
+
+    Raises:
+        ValueError: If required token parameters are missing
+        Exception: If model not found in registry or costs not configured
+    """
+    if "in_tokens" not in tokens:
+        raise ValueError("Token dict must contain 'in_tokens'")
+    if "out_tokens" not in tokens:
+        raise ValueError("Token dict must contain 'out_tokens'")
+
+    model = get_registry_model(model_str)
+
+    metadata = QueryResultMetadata(
+        in_tokens=tokens["in_tokens"],
+        out_tokens=tokens["out_tokens"],
+        reasoning_tokens=tokens.get("reasoning_tokens"),
+        cache_read_tokens=tokens.get("cache_read_tokens"),
+        cache_write_tokens=tokens.get("cache_write_tokens"),
+    )
+
+    cost = await model._calculate_cost(metadata)  # type: ignore[arg-type]
+    if cost is None:
+        raise Exception(f"No cost information available for model {model_str}")
+
+    return cost
 
 
 @cache

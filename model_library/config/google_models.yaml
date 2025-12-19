@@ -54,6 +54,21 @@ gemini-3-models:
       temperature: 1
       reasoning_effort: "high"
 
+  google/gemini-3-flash-preview:
+    label: Gemini 3 Flash (12/25)
+    description: Google's newest budget workhorse model
+    release_date: 2025-12-17
+    properties:
+      context_window: 1048576
+      max_tokens: 65536
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.50
+      output: 3.00
+    default_parameters:
+      temperature: 1
+      reasoning_effort: "high"
+
   google/gemini-3-pro-preview:
     label: Gemini 3 Pro (11/25)
     description: Gemini 3 Pro, Google's most powerful model.

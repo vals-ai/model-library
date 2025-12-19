@@ -9,9 +9,7 @@ from pydantic import BaseModel, Field, computed_field, field_validator
 from typing_extensions import override
 
 from model_library.base.input import InputItem, ToolCall
-from model_library.base.utils import (
-    sum_optional,
-)
+from model_library.base.utils import add_optional
 from model_library.utils import truncate_str
 
 
@@ -42,10 +40,14 @@ class QueryResultCost(BaseModel):
     reasoning: float | None = None
     cache_read: float | None = None
     cache_write: float | None = None
+    total_override: float | None = None
 
     @computed_field
     @property
     def total(self) -> float:
+        if self.total_override is not None:
+            return self.total_override
+
         return sum(
             filter(
                 None,
@@ -84,6 +86,16 @@ class QueryResultCost(BaseModel):
                     self.reasoning,
                 ],
             )
+        )
+
+    def __add__(self, other: "QueryResultCost") -> "QueryResultCost":
+        return QueryResultCost(
+            input=self.input + other.input,
+            output=self.output + other.output,
+            reasoning=add_optional(self.reasoning, other.reasoning),
+            cache_read=add_optional(self.cache_read, other.cache_read),
+            cache_write=add_optional(self.cache_write, other.cache_write),
+            total_override=add_optional(self.total_override, other.total_override),
         )
 
     @override
@@ -150,18 +162,20 @@ class QueryResultMetadata(BaseModel):
         return QueryResultMetadata(
             in_tokens=self.in_tokens + other.in_tokens,
             out_tokens=self.out_tokens + other.out_tokens,
-            reasoning_tokens=sum_optional(
-                self.reasoning_tokens, other.reasoning_tokens
+            reasoning_tokens=cast(
+                int | None, add_optional(self.reasoning_tokens, other.reasoning_tokens)
             ),
-            cache_read_tokens=sum_optional(
-                self.cache_read_tokens, other.cache_read_tokens
+            cache_read_tokens=cast(
+                int | None,
+                add_optional(self.cache_read_tokens, other.cache_read_tokens),
             ),
-            cache_write_tokens=sum_optional(
-                self.cache_write_tokens, other.cache_write_tokens
+            cache_write_tokens=cast(
+                int | None,
+                add_optional(self.cache_write_tokens, other.cache_write_tokens),
             ),
             duration_seconds=self.default_duration_seconds
             + other.default_duration_seconds,
-            cost=self.cost,
+            cost=cast(QueryResultCost | None, add_optional(self.cost, other.cost)),
         )
 
     @override

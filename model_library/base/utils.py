@@ -1,4 +1,4 @@
-from typing import Sequence, cast
+from typing import Sequence, TypeVar, cast
 
 from model_library.base.input import (
     FileBase,
@@ -8,17 +8,39 @@ from model_library.base.input import (
     ToolResult,
 )
 from model_library.utils import truncate_str
+from pydantic import BaseModel
+
+T = TypeVar("T", bound=BaseModel)
 
 
-def sum_optional(a: int | None, b: int | None) -> int | None:
-    """Sum two optional integers, returning None if both are None.
+def add_optional(
+    a: int | float | T | None, b: int | float | T | None
+) -> int | float | T | None:
+    """Add two optional objects, returning None if both are None.
 
     Preserves None to indicate "unknown/not provided" when both inputs are None,
-    otherwise treats None as 0 for summation.
+    otherwise returns the non-None value or their sum.
     """
     if a is None and b is None:
         return None
-    return (a or 0) + (b or 0)
+
+    if a is None or b is None:
+        return a or b
+
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return a + b
+
+    # NOTE: Ensure that the subtypes are the same so we can use the __add__ method just from one
+    if type(a) is type(b):
+        add_method = getattr(a, "__add__", None)
+        if add_method is not None:
+            return add_method(b)
+    else:
+        raise ValueError(
+            f"Cannot add {type(a)} and {type(b)} because they are not the same subclass"
+        )
+
+    return None
 
 
 def get_pretty_input_types(input: Sequence["InputItem"], verbose: bool = False) -> str:

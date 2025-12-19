@@ -1,4 +1,54 @@
 {
+    "google/gemini-3-flash-preview": {
+        "company": "Google",
+        "label": "Gemini 3 Flash (12/25)",
+        "description": "Google's newest budget workhorse model",
+        "release_date": "2025-12-17",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.5,
+            "output": 3.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-3-flash-preview",
+        "provider_name": "google",
+        "full_key": "google/gemini-3-flash-preview",
+        "slug": "google_gemini-3-flash-preview"
+    },
     "openai/gpt-5.2-pro-2025-12-11": {
         "company": "OpenAI",
         "label": "GPT 5.2 Pro",
@@ -15428,7 +15478,7 @@
             "tools": false
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": true,
             "available_as_evaluator": false,
             "ignored_for_cost": false

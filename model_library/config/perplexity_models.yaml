@@ -46,6 +46,8 @@ perplexity-models:
     label: Sonar Reasoning
     description: Reasoning-focused search model that exposes intermediate thinking for step-by-step answers.
     documentation_url: https://docs.perplexity.ai/models/models/sonar-reasoning
+    metadata:
+      deprecated: true
     properties:
       context_window: 128000
       reasoning_model: true
