@@ -66,7 +66,7 @@ class LLMConfig(BaseModel):
     top_p: float | None = None
     top_k: int | None = None
     reasoning: bool = False
-    reasoning_effort: str | None = None
+    reasoning_effort: str | bool | None = None
     supports_images: bool = False
     supports_files: bool = False
     supports_videos: bool = False
@@ -110,7 +110,7 @@ class LLM(ABC):
         self.top_k: int | None = config.top_k
 
         self.reasoning: bool = config.reasoning
-        self.reasoning_effort: str | None = config.reasoning_effort
+        self.reasoning_effort: str | bool | None = config.reasoning_effort
 
         self.supports_files: bool = config.supports_files
         self.supports_videos: bool = config.supports_videos

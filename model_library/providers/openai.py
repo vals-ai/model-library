@@ -701,8 +701,8 @@ class OpenAIModel(LLM):
 
         if self.reasoning:
             body["reasoning"] = {"summary": "auto"}
-            if self.reasoning_effort:
-                body["reasoning"]["effort"] = self.reasoning_effort
+            if self.reasoning_effort is not None:
+                body["reasoning"]["effort"] = self.reasoning_effort  # type: ignore[reportArgumentType]
 
         if self.supports_temperature:
             if self.temperature is not None:

@@ -169,7 +169,7 @@ class DefaultParameters(BaseModel):
     temperature: float | None = None
     top_p: float | None = None
     top_k: int | None = None
-    reasoning_effort: str | None = None
+    reasoning_effort: str | bool | None = None
 
 
 class RawModelConfig(BaseModel):

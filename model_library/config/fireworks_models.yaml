@@ -161,7 +161,7 @@ deepseek-models:
           properties:
             reasoning_model: true
           default_parameters:
-            reasoning_effort: "high"
+            reasoning_effort: True
 
 openai-models:
   base-config:

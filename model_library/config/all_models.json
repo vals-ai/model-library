@@ -444,7 +444,7 @@
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 1.0,
-            "reasoning_effort": "high"
+            "reasoning_effort": true
         },
         "provider_endpoint": "deepseek-v3p2",
         "provider_name": "fireworks",
@@ -498,7 +498,7 @@
                         "reasoning_model": true
                     },
                     "default_parameters": {
-                        "reasoning_effort": "high"
+                        "reasoning_effort": true
                     }
                 }
             }
