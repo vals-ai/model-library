@@ -198,11 +198,14 @@ class LLM(ABC):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition] = [],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         if not self.delegate:
             raise Exception("Delegate not set")
-        return await self.delegate._query_impl(input, tools=tools, **kwargs)  # pyright: ignore[reportPrivateUsage]
+        return await self.delegate._query_impl(  # pyright: ignore[reportPrivateUsage]
+            input, tools=tools, query_logger=query_logger, **kwargs
+        )
 
     async def query(
         self,
@@ -213,6 +216,7 @@ class LLM(ABC):
         # for backwards compatibility
         files: list[FileInput] = [],
         images: list[FileInput] = [],
+        query_logger: logging.Logger | None = None,
         **kwargs: object,
     ) -> QueryResult:
         """
@@ -256,15 +260,18 @@ class LLM(ABC):
         input = [*history, *input]
 
         # unique logger for the query
-        query_id = uuid.uuid4().hex[:14]
-        query_logger = self.logger.getChild(f"query={query_id}")
+        if not query_logger:
+            query_id = uuid.uuid4().hex[:14]
+            query_logger = self.logger.getChild(f"query={query_id}")
 
         query_logger.info(
             "Query started:\n" + item_info + tool_info + f"--- kwargs: {short_kwargs}\n"
         )
 
         async def query_func() -> QueryResult:
-            return await self._query_impl(input, tools=tools, **kwargs)
+            return await self._query_impl(
+                input, tools=tools, query_logger=query_logger, **kwargs
+            )
 
         async def timed_query() -> tuple[QueryResult, float]:
             return await LLM.timer_wrapper(query_func)
@@ -361,7 +368,8 @@ class LLM(ABC):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
-        **kwargs: object,  # TODO: pass in query logger
+        query_logger: logging.Logger,
+        **kwargs: object,
     ) -> QueryResult:
         """
         Query the model with input

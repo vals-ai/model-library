@@ -1,4 +1,5 @@
 from types import TracebackType
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -152,7 +153,9 @@ async def test_anthropic_query_maps_cache_usage():
     m = AnthropicModel("claude-haiku-4-5-20251001", config=LLMConfig())
     m.get_client = lambda: _DummyClient()
 
-    res = await m._query_impl([TextInput(text="hi")], tools=[])
+    res = await m._query_impl(
+        [TextInput(text="hi")], tools=[], query_logger=MagicMock()
+    )
     assert res.metadata.in_tokens == 10
     assert res.metadata.out_tokens == 2
     assert res.metadata.cache_read_tokens == 456

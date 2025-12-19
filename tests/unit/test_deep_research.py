@@ -1,4 +1,4 @@
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
@@ -110,7 +110,9 @@ async def test_query_impl_parses_deep_research_response():
 
     web_search_tool = Mock()
     web_search_tool.body = {"type": "web_search"}
-    result = await model._query_impl([], tools=[web_search_tool], stream=False)  # pyright: ignore[reportPrivateUsage]
+    result = await model._query_impl(
+        [], tools=[web_search_tool], stream=False, query_logger=MagicMock()
+    )  # pyright: ignore[reportPrivateUsage]
 
     assert result.output_text == "Report [1]"
     assert result.reasoning == "Reasoning"

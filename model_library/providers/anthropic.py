@@ -1,4 +1,5 @@
 import io
+import logging
 from typing import Any, Literal, Sequence, cast
 
 from anthropic import AsyncAnthropic
@@ -555,10 +556,13 @@ class AnthropicModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         if self.delegate:
-            return await self.delegate_query(input, tools=tools, **kwargs)
+            return await self.delegate_query(
+                input, tools=tools, query_logger=query_logger, **kwargs
+            )
 
         body = await self.create_body(input, tools=tools, **kwargs)
 

@@ -1,5 +1,6 @@
 import base64
 import io
+import logging
 from typing import Any, Literal, Sequence, cast
 
 from google.genai import Client
@@ -328,6 +329,7 @@ class GoogleModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         body: dict[str, Any] = await self.create_body(input, tools=tools, **kwargs)

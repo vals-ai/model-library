@@ -60,7 +60,9 @@ async def test_perplexity_delegate_query():
         query_result = QueryResult(output_text="ok")
         model.delegate._query_impl = AsyncMock(return_value=query_result)  # type: ignore[method-assign]
 
-        result = await model._query_impl([TextInput(text="hello")], tools=[])
+        result = await model._query_impl(
+            [TextInput(text="hello")], tools=[], query_logger=MagicMock()
+        )
 
         delegate_impl = model.delegate._query_impl  # type: ignore[attr-defined]
         delegate_impl.assert_awaited_once()

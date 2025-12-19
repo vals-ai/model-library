@@ -1,4 +1,5 @@
 import io
+import logging
 from typing import Any, Literal, Sequence
 
 from typing_extensions import override
@@ -48,11 +49,14 @@ class DelegateOnly(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         assert self.delegate
 
-        return await self.delegate_query(input, tools=tools, **kwargs)
+        return await self.delegate_query(
+            input, tools=tools, query_logger=query_logger, **kwargs
+        )
 
     @override
     async def parse_input(

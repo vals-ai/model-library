@@ -1,4 +1,5 @@
 import io
+import logging
 from typing import Any, Literal, Sequence
 
 from ai21 import AsyncAI21Client
@@ -137,6 +138,7 @@ class AI21LabsModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         messages: list[ChatMessage] = []

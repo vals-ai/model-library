@@ -32,6 +32,7 @@ async def test_fireworks_delegate_query_passes_kwargs():
         result = await model._query_impl(
             [TextInput(text="hello")],
             tools=[],
+            query_logger=MagicMock(),
             extra="value",
         )
 

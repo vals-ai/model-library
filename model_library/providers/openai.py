@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 from typing import Any, Literal, Sequence, cast
 
 from openai import APIConnectionError, AsyncOpenAI
@@ -722,6 +723,7 @@ class OpenAIModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         if self.use_completions:

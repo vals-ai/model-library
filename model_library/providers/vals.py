@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import random
 import re
 import time
@@ -271,6 +272,7 @@ class DummyAIModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         body = await self.create_body(input, tools=tools, **kwargs)

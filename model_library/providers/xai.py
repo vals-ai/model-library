@@ -1,5 +1,6 @@
 import asyncio
 import io
+import logging
 from typing import Any, Literal, Sequence, cast
 
 import grpc
@@ -225,13 +226,16 @@ class XAIModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         if self.reasoning_effort:
             kwargs["reasoning_effort"] = self.reasoning_effort
 
         if self.delegate:
-            return await self.delegate_query(input, tools=tools, **kwargs)
+            return await self.delegate_query(
+                input, tools=tools, query_logger=query_logger, **kwargs
+            )
 
         messages: Sequence[Message] = []
         if "system_prompt" in kwargs:

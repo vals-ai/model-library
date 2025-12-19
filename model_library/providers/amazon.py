@@ -3,6 +3,7 @@ import asyncio
 import base64
 import io
 import json
+import logging
 from typing import Any, Literal, Sequence, cast
 
 import boto3
@@ -337,6 +338,7 @@ class AmazonModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         body = await self.build_body(input, tools=tools, **kwargs)

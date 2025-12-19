@@ -1,4 +1,5 @@
 import io
+import logging
 import time
 from collections.abc import Sequence
 from typing import Any, Literal
@@ -171,6 +172,7 @@ class MistralModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
         # mistral supports max 8 images, merge extra images into the 8th image
