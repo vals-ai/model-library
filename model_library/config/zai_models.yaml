@@ -18,6 +18,20 @@ base-config:
       write_markup: 1
 
 zai-models:
+  zai/glm-4.7:
+    label: GLM 4.7
+    description: "Latest model from ZAI"
+    release_date: 2025-12-22
+    properties:
+      context_window: 200_000
+      max_tokens: 128_000
+    costs_per_million_token:
+      input: 0.6
+      output: 2.2
+      cache:
+        read: 0.11
+    default_parameters:
+      temperature: 1
   zai/glm-4.5:
     label: GLM 4.5
     description: "z.AI old model"

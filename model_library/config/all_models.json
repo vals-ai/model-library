@@ -1,4 +1,49 @@
 {
+    "zai/glm-4.7": {
+        "company": "zAI",
+        "label": "GLM 4.7",
+        "description": "Latest model from ZAI",
+        "release_date": "2025-12-22",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 200000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.6,
+            "output": 2.2,
+            "cache": {
+                "read": 0.11,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 1.0
+        },
+        "provider_endpoint": "glm-4.7",
+        "provider_name": "zai",
+        "full_key": "zai/glm-4.7",
+        "slug": "zai_glm-4.7"
+    },
     "google/gemini-3-flash-preview": {
         "company": "Google",
         "label": "Gemini 3 Flash (12/25)",
