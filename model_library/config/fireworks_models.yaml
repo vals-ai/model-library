@@ -150,6 +150,8 @@ deepseek-models:
       context_window: 160_000
       max_tokens: 20_480
       reasoning_model: false
+    default_parameters:
+      reasoning_effort: "none"
     costs_per_million_token:
       input: 0.56
       output: 1.68
@@ -161,7 +163,7 @@ deepseek-models:
           properties:
             reasoning_model: true
           default_parameters:
-            reasoning_effort: True
+            reasoning_effort: "high"
 
 openai-models:
   base-config:

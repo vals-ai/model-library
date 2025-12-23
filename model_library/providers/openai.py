@@ -506,8 +506,11 @@ class OpenAIModel(LLM):
         if self.reasoning:
             del body["max_tokens"]
             body["max_completion_tokens"] = self.max_tokens
-            if self.reasoning_effort:
-                body["reasoning_effort"] = self.reasoning_effort
+
+        # some model endpoints (like `fireworks/deepseek-v3p2`)
+        # require explicitly setting reasoning effort to disable thinking
+        if self.reasoning_effort is not None:
+            body["reasoning_effort"] = self.reasoning_effort
 
         if self.supports_temperature:
             if self.temperature is not None:
