@@ -250,6 +250,8 @@ class AnthropicModel(LLM):
 
     @override
     def get_client(self) -> AsyncAnthropic:
+        if self._delegate_client:
+            return self._delegate_client
         if not AnthropicModel._client:
             headers: dict[str, str] = {}
             AnthropicModel._client = AsyncAnthropic(
@@ -263,16 +265,20 @@ class AnthropicModel(LLM):
     def __init__(
         self,
         model_name: str,
-        provider: Literal["anthropic"] = "anthropic",
+        provider: str = "anthropic",
         *,
         config: LLMConfig | None = None,
+        custom_client: AsyncAnthropic | None = None,
     ):
         super().__init__(model_name, provider, config=config)
 
+        # allow custom client to act as delegate (native)
+        self._delegate_client: AsyncAnthropic | None = custom_client
+
         # https://docs.anthropic.com/en/api/openai-sdk
-        self.delegate: OpenAIModel | None = (
+        self.delegate = (
             None
-            if self.native
+            if self.native or custom_client
             else OpenAIModel(
                 model_name=self.model_name,
                 provider=provider,
@@ -286,7 +292,10 @@ class AnthropicModel(LLM):
         )
 
         # Initialize batch support if enabled
-        self.supports_batch: bool = self.supports_batch and self.native
+        # Disable batch when using custom_client (similar to OpenAI)
+        self.supports_batch: bool = (
+            self.supports_batch and self.native and not custom_client
+        )
         self.batch: LLMBatchMixin | None = (
             AnthropicBatchMixin(self) if self.supports_batch else None
         )
@@ -566,13 +575,26 @@ class AnthropicModel(LLM):
 
         body = await self.create_body(input, tools=tools, **kwargs)
 
-        betas = ["files-api-2025-04-14", "interleaved-thinking-2025-05-14"]
-        if "sonnet-4-5" in self.model_name:
-            betas.append("context-1m-2025-08-07")
+        client = self.get_client()
 
-        async with self.get_client().beta.messages.stream(
-            **body,
-            betas=betas,
+        # only send betas for the official Anthropic endpoint
+        is_anthropic_endpoint = self._delegate_client is None
+        if not is_anthropic_endpoint:
+            client_base_url = getattr(client, "_base_url", None) or getattr(
+                client, "base_url", None
+            )
+            if client_base_url:
+                is_anthropic_endpoint = "api.anthropic.com" in str(client_base_url)
+
+        stream_kwargs = {**body}
+        if is_anthropic_endpoint:
+            betas = ["files-api-2025-04-14", "interleaved-thinking-2025-05-14"]
+            if "sonnet-4-5" in self.model_name:
+                betas.append("context-1m-2025-08-07")
+            stream_kwargs["betas"] = betas
+
+        async with client.beta.messages.stream(
+            **stream_kwargs,
         ) as stream:  # pyright: ignore[reportAny]
             message = await stream.get_final_message()
         self.logger.info(f"Anthropic Response finished: {message.id}")

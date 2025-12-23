@@ -1,4 +1,49 @@
 {
+    "minimax/MiniMax-M2.1": {
+        "company": "MiniMax",
+        "label": "MiniMax-M2.1",
+        "description": null,
+        "release_date": "2025-12-23",
+        "open_source": true,
+        "documentation_url": "https://platform.minimax.io/docs",
+        "properties": {
+            "context_window": 204800,
+            "max_tokens": 131000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.03,
+                "write": 0.375,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "MiniMax-M2.1",
+        "provider_name": "minimax",
+        "full_key": "minimax/MiniMax-M2.1",
+        "slug": "minimax_MiniMax-M2.1"
+    },
     "zai/glm-4.7": {
         "company": "zAI",
         "label": "GLM 4.7",

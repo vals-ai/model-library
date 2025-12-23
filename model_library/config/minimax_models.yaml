@@ -16,6 +16,24 @@ base-config:
 
 minimax-m2-models:
 
+  minimax/MiniMax-M2.1:
+    label: MiniMax-M2.1
+    release_date: 2025-12-23
+    properties:
+      context_window: 204_800
+      max_tokens: 131_000
+      reasoning_model: true
+      training_cutoff: null
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.03
+        write: 0.375
+
   minimax/MiniMax-M2:
     label: MiniMax-M2
     description: MiniMax-M2 is a cost-efficient open-source model optimized for agentic applications and coding in particular.

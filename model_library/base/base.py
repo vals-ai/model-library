@@ -6,7 +6,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable
 from pprint import pformat
 from typing import (
-    TYPE_CHECKING,
     Any,
     Callable,
     Literal,
@@ -42,9 +41,6 @@ from model_library.exceptions import (
     retry_llm_call,
 )
 from model_library.utils import truncate_str
-
-if TYPE_CHECKING:
-    from model_library.providers.openai import OpenAIModel
 
 PydanticT = TypeVar("PydanticT", bound=BaseModel)
 
@@ -120,7 +116,7 @@ class LLM(ABC):
         self.supports_tools: bool = config.supports_tools
 
         self.native: bool = config.native
-        self.delegate: "OpenAIModel | None" = None
+        self.delegate: "LLM | None" = None
         self.batch: LLMBatchMixin | None = None
 
         if config.provider_config:

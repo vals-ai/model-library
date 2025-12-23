@@ -16,8 +16,10 @@ help:
 	@echo "  make examples <model> Run all examples with specified model"
 	@echo "  make browse_models    Interactively browse models and their configurations"
 
+PYTHON_VERSION ?= 3.11
+
 install:
-	uv venv
+	uv venv --python $(PYTHON_VERSION)
 	uv sync --dev
 	@echo "🎉 Done! Run 'source .venv/bin/activate' to activate the environment locally."
 

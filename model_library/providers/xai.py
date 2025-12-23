@@ -79,7 +79,7 @@ class XAIModel(LLM):
         super().__init__(model_name, provider, config=config)
 
         # https://docs.x.ai/docs/guides/migration
-        self.delegate: OpenAIModel | None = (
+        self.delegate = (
             None
             if self.native
             else OpenAIModel(
