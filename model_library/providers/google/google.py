@@ -55,6 +55,11 @@ from model_library.exceptions import (
 from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.register_models import register_provider
 from model_library.utils import normalize_tool_result
+import uuid
+
+
+def generate_tool_call_id(tool_name: str) -> str:
+    return str(tool_name + "_" + str(uuid.uuid4()))
 
 
 class GoogleConfig(ProviderConfig):
@@ -359,9 +364,10 @@ class GoogleModel(LLM):
 
                         call_args = part.function_call.args or {}
                         tool_calls.append(
-                            # weirdly, id is not required
+                            # Weirdly, id is not required. If not provided, we generate one.
                             ToolCall(
-                                id=part.function_call.id or "",
+                                id=part.function_call.id
+                                or generate_tool_call_id(part.function_call.name),
                                 name=part.function_call.name,
                                 args=call_args,
                             )
