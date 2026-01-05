@@ -8,10 +8,10 @@ request bodies without making any network calls.
 import pytest
 
 from model_library.base import TextInput, ToolBody, ToolDefinition
-from model_library.providers.openai import OpenAIModel
 from model_library.providers.amazon import AmazonModel
 from model_library.providers.anthropic import AnthropicModel
 from model_library.providers.google import GoogleModel
+from model_library.providers.openai import OpenAIModel
 
 
 @pytest.mark.parametrize(
@@ -32,7 +32,7 @@ from model_library.providers.google import GoogleModel
         ),
     ],
 )
-async def test_create_body_includes_tools(
+async def test_build_body_includes_tools(
     provider, Model, model_name, expects_body_keys, mock_model_settings
 ):
     model = Model(model_name)
@@ -49,12 +49,8 @@ async def test_create_body_includes_tools(
         )
     ]
 
-    if provider == "openai":
-        body = await model.build_body([TextInput(text="hi")], tools=tools)
-    elif provider == "amazon":
-        body = await model.build_body([TextInput(text="hi")], tools=tools)
-    else:  # google
-        body = await model.create_body([TextInput(text="hi")], tools=tools)
+    body = await model.build_body([TextInput(text="hi")], tools=tools)
+
     if provider == "google":
         # For Google, tools live inside config
         assert set(["model", "config", "contents"]).issubset(set(body.keys()))
@@ -128,7 +124,7 @@ async def test_google_tool_result_roundtrip_no_storage_import(
         tool_call=ToolCall(id="abc123", name="get_weather", args={"location": "SF"}),
         result={"temperature": "21C"},
     )
-    body = await m.create_body([tr, TextInput(text="Thanks!")], tools=[])
+    body = await m.build_body([tr, TextInput(text="Thanks!")], tools=[])
     contents = body["contents"]
     roles = [getattr(c, "role", None) for c in contents]
     assert "function" in roles and "user" in roles

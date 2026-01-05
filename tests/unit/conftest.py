@@ -19,6 +19,7 @@ def mock_llm():
         (LLM,),
         {
             "get_client": None,
+            "build_body": AsyncMock(return_value={}),
             "_query_impl": AsyncMock(return_value=QueryResult()),
             "parse_input": AsyncMock(return_value=None),
             "parse_image": AsyncMock(return_value=None),

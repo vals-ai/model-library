@@ -8,7 +8,7 @@ from model_library.providers.anthropic import AnthropicModel
 
 
 @pytest.mark.asyncio
-async def test_anthropic_create_body_adds_cache_control_on_system_only():
+async def test_anthropic_build_body_adds_cache_control_on_system_only():
     m = AnthropicModel("claude-haiku-4-5-20251001", config=LLMConfig())
 
     tools = [
@@ -23,7 +23,7 @@ async def test_anthropic_create_body_adds_cache_control_on_system_only():
         )
     ]
 
-    body = await m.create_body(
+    body = await m.build_body(
         [TextInput(text="hi")],
         tools=tools,
         system_prompt="sys",
@@ -37,7 +37,7 @@ async def test_anthropic_create_body_adds_cache_control_on_system_only():
 
 
 @pytest.mark.asyncio
-async def test_anthropic_create_body_caches_system_by_default():
+async def test_anthropic_build_body_caches_system_by_default():
     m = AnthropicModel("claude-haiku-4-5-20251001", config=LLMConfig())
 
     tools = [
@@ -52,7 +52,7 @@ async def test_anthropic_create_body_caches_system_by_default():
         )
     ]
 
-    body = await m.create_body(
+    body = await m.build_body(
         [TextInput(text="hi")],
         tools=tools,
         system_prompt="sys",
@@ -90,7 +90,7 @@ async def test_anthropic_cache_control_on_tools_when_no_system():
         ),
     ]
 
-    body = await m.create_body(
+    body = await m.build_body(
         [TextInput(text="hi")],
         tools=tools,
     )

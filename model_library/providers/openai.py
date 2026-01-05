@@ -469,19 +469,13 @@ class OpenAIModel(LLM):
             file_id=response.id,
         )
 
-    async def _query_completions(
+    async def _build_body_completions(
         self,
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
         **kwargs: object,
-    ) -> QueryResult:
-        """
-        Completions endpoint
-        Generally not used for openai models
-        Used by some providers using openai as a delegate
-        """
-
+    ) -> dict[str, Any]:
         parsed_input: list[dict[str, Any] | ChatCompletionMessage] = []
         if "system_prompt" in kwargs:
             parsed_input.append(
@@ -519,6 +513,23 @@ class OpenAIModel(LLM):
                 body["top_p"] = self.top_p
 
         body.update(kwargs)
+
+        return body
+
+    async def _query_completions(
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition],
+        **kwargs: object,
+    ) -> QueryResult:
+        """
+        Completions endpoint
+        Generally not used for openai models
+        Used by providers using openai as a delegate
+        """
+
+        body = await self.build_body(input, tools=tools, **kwargs)
 
         output_text: str = ""
         reasoning_text: str = ""
@@ -667,13 +678,17 @@ class OpenAIModel(LLM):
         if not valid:
             raise Exception("Deep research models require web search tools")
 
+    @override
     async def build_body(
         self,
         input: Sequence[InputItem],
         *,
-        tools: Sequence[ToolDefinition],
+        tools: list[ToolDefinition],
         **kwargs: object,
     ) -> dict[str, Any]:
+        if self.use_completions:
+            return await self._build_body_completions(input, tools=tools, **kwargs)
+
         if self.deep_research:
             await self._check_deep_research_args(tools, **kwargs)
 
@@ -717,7 +732,6 @@ class OpenAIModel(LLM):
         _ = kwargs.pop("stream", None)
 
         body.update(kwargs)
-
         return body
 
     @override

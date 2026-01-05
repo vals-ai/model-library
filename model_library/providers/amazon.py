@@ -196,6 +196,7 @@ class AmazonModel(LLM):
     ) -> FileWithId:
         raise NotImplementedError()
 
+    @override
     async def build_body(
         self,
         input: Sequence[InputItem],

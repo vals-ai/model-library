@@ -62,9 +62,9 @@ class AnthropicBatchMixin(LLMBatchMixin):
 
         Format: {"custom_id": str, "params": {...message params...}}
         """
-        # Build the message body using the parent model's create_body method
+        # Build the message body using the parent model's build_body method
         tools = cast(list[ToolDefinition], kwargs.pop("tools", []))
-        body = await self._root.create_body(input, tools=tools, **kwargs)
+        body = await self._root.build_body(input, tools=tools, **kwargs)
 
         return {
             "custom_id": custom_id,
@@ -513,7 +513,8 @@ class AnthropicModel(LLM):
 
     cache_control = {"type": "ephemeral"}  # 5 min cache
 
-    async def create_body(
+    @override
+    async def build_body(
         self,
         input: Sequence[InputItem],
         *,
@@ -573,7 +574,7 @@ class AnthropicModel(LLM):
                 input, tools=tools, query_logger=query_logger, **kwargs
             )
 
-        body = await self.create_body(input, tools=tools, **kwargs)
+        body = await self.build_body(input, tools=tools, **kwargs)
 
         client = self.get_client()
 

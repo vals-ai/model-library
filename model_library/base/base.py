@@ -380,6 +380,20 @@ class LLM(ABC):
         ...
 
     @abstractmethod
+    async def build_body(
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition],
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """
+        Builds the body of the request to the model provider
+        Calls parse_input
+        """
+        ...
+
+    @abstractmethod
     async def parse_input(
         self,
         input: Sequence[InputItem],

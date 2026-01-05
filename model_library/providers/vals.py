@@ -51,7 +51,7 @@ class DummyAIBatchMixin(LLMBatchMixin):
             "custom_id": custom_id,
             "method": "",
             "url": "",
-            "body": await self._root.create_body(input, tools=[], **kwargs),
+            "body": await self._root.build_body(input, tools=[], **kwargs),
         }
 
     @override
@@ -227,7 +227,8 @@ class DummyAIModel(LLM):
     ) -> FileWithId:
         raise NotImplementedError()
 
-    async def create_body(
+    @override
+    async def build_body(
         self,
         input: Sequence[InputItem],
         *,
@@ -275,7 +276,7 @@ class DummyAIModel(LLM):
         query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
-        body = await self.create_body(input, tools=tools, **kwargs)
+        body = await self.build_body(input, tools=tools, **kwargs)
 
         fail_rate = FAIL_RATE
 

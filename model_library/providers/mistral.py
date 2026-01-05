@@ -1,6 +1,5 @@
 import io
 import logging
-import time
 from collections.abc import Sequence
 from typing import Any, Literal
 
@@ -167,14 +166,13 @@ class MistralModel(LLM):
         raise NotImplementedError()
 
     @override
-    async def _query_impl(
+    async def build_body(
         self,
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
-        query_logger: logging.Logger,
         **kwargs: object,
-    ) -> QueryResult:
+    ) -> dict[str, Any]:
         # mistral supports max 8 images, merge extra images into the 8th image
         input = trim_images(input, max_images=8)
 
@@ -205,8 +203,18 @@ class MistralModel(LLM):
                 body["top_p"] = self.top_p
 
         body.update(kwargs)
+        return body
 
-        start = time.time()
+    @override
+    async def _query_impl(
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition],
+        query_logger: logging.Logger,
+        **kwargs: object,
+    ) -> QueryResult:
+        body = await self.build_body(input, tools=tools, **kwargs)
 
         response: EventStreamAsync[
             CompletionEvent
@@ -246,8 +254,6 @@ class MistralModel(LLM):
                 if hasattr(data, "usage") and data.usage is not None:
                     in_tokens += data.usage.prompt_tokens or 0
                     out_tokens += data.usage.completion_tokens or 0
-
-            self.logger.info(f"Finished in: {time.time() - start}")
 
         except Exception as e:
             self.logger.error(f"Error: {e}", exc_info=True)

@@ -8,6 +8,7 @@ from google.genai import errors as genai_errors
 from google.genai.types import (
     Content,
     File,
+    FinishReason,
     FunctionDeclaration,
     GenerateContentConfig,
     GenerateContentResponse,
@@ -21,7 +22,6 @@ from google.genai.types import (
     Tool,
     ToolListUnion,
     UploadFileConfig,
-    FinishReason,
 )
 from typing_extensions import override
 
@@ -284,7 +284,8 @@ class GoogleModel(LLM):
             mime=mime,
         )
 
-    async def create_body(
+    @override
+    async def build_body(
         self,
         input: Sequence[InputItem],
         *,
@@ -337,7 +338,7 @@ class GoogleModel(LLM):
         query_logger: logging.Logger,
         **kwargs: object,
     ) -> QueryResult:
-        body: dict[str, Any] = await self.create_body(input, tools=tools, **kwargs)
+        body: dict[str, Any] = await self.build_body(input, tools=tools, **kwargs)
 
         text: str = ""
         reasoning: str = ""
@@ -446,7 +447,7 @@ class GoogleModel(LLM):
         **kwargs: object,
     ) -> PydanticT:
         # Create the request body with JSON schema
-        body: dict[str, Any] = await self.create_body(input, tools=[], **kwargs)
+        body: dict[str, Any] = await self.build_body(input, tools=[], **kwargs)
 
         # Get the JSON schema from the Pydantic model
         json_schema = pydantic_model.model_json_schema()

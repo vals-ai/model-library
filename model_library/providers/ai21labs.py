@@ -133,14 +133,13 @@ class AI21LabsModel(LLM):
         raise NotImplementedError()
 
     @override
-    async def _query_impl(
+    async def build_body(
         self,
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
-        query_logger: logging.Logger,
         **kwargs: object,
-    ) -> QueryResult:
+    ) -> dict[str, Any]:
         messages: list[ChatMessage] = []
         if "system_prompt" in kwargs:
             messages.append(
@@ -162,6 +161,18 @@ class AI21LabsModel(LLM):
                 body["top_p"] = self.top_p
 
         body.update(kwargs)
+        return body
+
+    @override
+    async def _query_impl(
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition],
+        query_logger: logging.Logger,
+        **kwargs: object,
+    ) -> QueryResult:
+        body = await self.build_body(input, tools=tools, **kwargs)
 
         response: ChatCompletionResponse = (
             await self.get_client().chat.completions.create(**body, stream=False)  # pyright: ignore[reportAny, reportUnknownMemberType]

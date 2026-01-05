@@ -221,22 +221,9 @@ class XAIModel(LLM):
         return latest_response
 
     @override
-    async def _query_impl(
-        self,
-        input: Sequence[InputItem],
-        *,
-        tools: list[ToolDefinition],
-        query_logger: logging.Logger,
-        **kwargs: object,
-    ) -> QueryResult:
-        if self.reasoning_effort:
-            kwargs["reasoning_effort"] = self.reasoning_effort
-
-        if self.delegate:
-            return await self.delegate_query(
-                input, tools=tools, query_logger=query_logger, **kwargs
-            )
-
+    async def build_body(
+        self, input: Sequence[InputItem], *, tools: list[ToolDefinition], **kwargs: Any
+    ) -> dict[str, Any]:
         messages: Sequence[Message] = []
         if "system_prompt" in kwargs:
             messages.append(system(str(kwargs.pop("system_prompt"))))
@@ -254,7 +241,27 @@ class XAIModel(LLM):
             if self.top_p is not None:
                 body["top_p"] = self.top_p
 
+        if self.reasoning_effort:
+            body["reasoning_effort"] = self.reasoning_effort
+
         body.update(kwargs)
+        return body
+
+    @override
+    async def _query_impl(
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition],
+        query_logger: logging.Logger,
+        **kwargs: object,
+    ) -> QueryResult:
+        if self.delegate:
+            return await self.delegate_query(
+                input, tools=tools, query_logger=query_logger, **kwargs
+            )
+
+        body = await self.build_body(input, tools=tools, **kwargs)
 
         try:
             chat: Chat = self.get_client().chat.create(**body)  # pyright: ignore[reportAny]

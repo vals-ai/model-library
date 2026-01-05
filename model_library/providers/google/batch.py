@@ -2,8 +2,6 @@ import io
 import json
 from typing import TYPE_CHECKING, Any, Final, Sequence, cast
 
-from typing_extensions import override
-
 from google.genai.types import (
     BatchJob,
     Content,
@@ -11,6 +9,8 @@ from google.genai.types import (
     JobState,
     UploadFileConfig,
 )
+from typing_extensions import override
+
 from model_library.base import BatchResult, InputItem, LLMBatchMixin
 
 if TYPE_CHECKING:
@@ -144,7 +144,7 @@ class GoogleBatchMixin(LLMBatchMixin):
         **kwargs: object,
     ) -> dict[str, Any]:
         self._root.logger.debug(f"Creating batch request for custom_id: {custom_id}")
-        body = await self._root.create_body(input, tools=[], **kwargs)
+        body = await self._root.build_body(input, tools=[], **kwargs)
 
         contents_any = body["contents"]
         serialized_contents: list[dict[str, Any]] = [

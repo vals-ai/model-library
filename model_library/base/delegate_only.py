@@ -59,6 +59,16 @@ class DelegateOnly(LLM):
         )
 
     @override
+    async def build_body(
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition],
+        **kwargs: object,
+    ) -> dict[str, Any]:
+        raise DelegateOnlyException()
+
+    @override
     async def parse_input(
         self,
         input: Sequence[InputItem],
