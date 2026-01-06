@@ -2,6 +2,7 @@ import asyncio
 from typing import Any, cast
 
 from model_library.base import LLM, ToolDefinition
+from model_library.base.output import QueryResult
 from model_library.registry_utils import get_registry_model
 
 from ..setup import console_log, setup
@@ -41,31 +42,7 @@ def print_search_details(tool_call: Any) -> None:
                         console_log(f"    - {source}")
 
 
-def print_citations(response: Any) -> None:
-    """Extract and print citations from response history."""
-    if not response.history:
-        return
-
-    for item in response.history:
-        if not (hasattr(item, "content") and isinstance(item.content, list)):
-            continue
-
-        content_list = cast(list[Any], item.content)
-        for content_item in content_list:
-            if not (hasattr(content_item, "annotations") and content_item.annotations):
-                continue
-
-            console_log("\nCitations:")
-            annotations = cast(list[Any], content_item.annotations)
-            for annotation in annotations:
-                if hasattr(annotation, "url") and annotation.url:
-                    title = getattr(annotation, "title", "Untitled")
-                    url = annotation.url
-                    location = getattr(annotation, "location", "Unknown")
-                    console_log(f"- {title}: {url} (Location: {location})")
-
-
-def print_web_search_results(response: Any) -> None:
+def print_web_search_results(response: QueryResult) -> None:
     """Print comprehensive web search results."""
     console_log(f"Response: {response.output_text}")
 
@@ -74,7 +51,7 @@ def print_web_search_results(response: Any) -> None:
         for tool_call in response.tool_calls:
             print_search_details(tool_call)
 
-    print_citations(response)
+    print(response.extras.citations)
 
 
 async def web_search_domain_filtered(model: LLM) -> None:

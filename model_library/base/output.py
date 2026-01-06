@@ -24,6 +24,11 @@ class Citation(BaseModel):
     index: int | None = None
     container_id: str | None = None
 
+    @override
+    def __repr__(self):
+        attrs = vars(self).copy()
+        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2)}\n)"
+
 
 class QueryResultExtras(BaseModel):
     citations: list[Citation] = Field(default_factory=list)

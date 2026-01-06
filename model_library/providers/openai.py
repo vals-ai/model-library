@@ -799,13 +799,12 @@ class OpenAIModel(LLM):
         citations: list[Citation] = []
         reasoning = None
         for output in response.output:
-            if self.deep_research:
-                if output.type == "message":
-                    for content in output.content:
-                        if not isinstance(content, ResponseOutputText):
-                            continue
-                        for citation in content.annotations:
-                            citations.append(Citation(**citation.model_dump()))
+            if output.type == "message":
+                for content in output.content:
+                    if not isinstance(content, ResponseOutputText):
+                        continue
+                    for citation in content.annotations:
+                        citations.append(Citation(**citation.model_dump()))
 
             if output.type == "reasoning":
                 reasoning = " ".join([i.text for i in output.summary])
