@@ -472,6 +472,15 @@ class LLM(ABC):
         Combines parsed input and tools, then tokenizes the result.
         """
 
+        # special case if using a delegate
+        if self.delegate:
+            return await self.delegate.count_tokens(
+                input,
+                history=history,
+                tools=tools,
+                **kwargs,
+            )
+
         input = [*history, *input]
 
         system_prompt = kwargs.pop(
