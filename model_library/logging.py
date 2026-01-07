@@ -6,7 +6,11 @@ from rich.logging import RichHandler
 _llm_logger = logging.getLogger("llm")
 
 
-def set_logging(enable: bool = True, handler: logging.Handler | None = None):
+def set_logging(
+    enable: bool = True,
+    level: int = logging.INFO,
+    handler: logging.Handler | None = None,
+):
     """
     Sets up logging for the model library
 
@@ -15,7 +19,7 @@ def set_logging(enable: bool = True, handler: logging.Handler | None = None):
         handler (logging.Handler, optional): A custom logging handler. Defaults to RichHandler.
     """
     if enable:
-        _llm_logger.setLevel(logging.INFO)
+        _llm_logger.setLevel(level)
     else:
         _llm_logger.setLevel(logging.CRITICAL)
 

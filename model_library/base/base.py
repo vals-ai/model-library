@@ -13,8 +13,10 @@ from typing import (
     TypeVar,
 )
 
+import tiktoken
 from pydantic import model_serializer
 from pydantic.main import BaseModel
+from tiktoken.core import Encoding
 from typing_extensions import override
 
 from model_library.base.batch import (
@@ -35,6 +37,7 @@ from model_library.base.output import (
 )
 from model_library.base.utils import (
     get_pretty_input_types,
+    serialize_for_tokenizing,
 )
 from model_library.exceptions import (
     ImmediateRetryException,
@@ -434,6 +437,60 @@ class LLM(ABC):
     ) -> FileWithId:
         """Upload a file to the model provider"""
         ...
+
+    async def get_encoding(self) -> Encoding:
+        """Get the appropriate tokenizer"""
+
+        model = self.model_name.lower()
+
+        if "gpt-4o" in model or "o1" in model or "o3" in model:
+            return tiktoken.get_encoding("o200k_base")
+        elif "gpt-4" in model or "gpt-3.5" in model:
+            try:
+                return tiktoken.encoding_for_model(self.model_name)
+            except KeyError:
+                return tiktoken.get_encoding("cl100k_base")
+        elif "claude" in model:
+            return tiktoken.get_encoding("cl100k_base")
+        elif "gemini" in model:
+            return tiktoken.get_encoding("o200k_base")
+        elif "llama" in model or "mistral" in model:
+            return tiktoken.get_encoding("cl100k_base")
+        else:
+            return tiktoken.get_encoding("cl100k_base")
+
+    async def count_tokens(
+        self,
+        input: Sequence[InputItem],
+        *,
+        history: Sequence[InputItem] = [],
+        tools: list[ToolDefinition] = [],
+        **kwargs: object,
+    ) -> int:
+        """
+        Count the number of tokens for a query.
+        Combines parsed input and tools, then tokenizes the result.
+        """
+
+        input = [*history, *input]
+
+        system_prompt = kwargs.pop(
+            "system_prompt", ""
+        )  # TODO: refactor along with system prompt arg change
+
+        parsed_input = await self.parse_input(input, **kwargs)
+        parsed_tools = await self.parse_tools(tools)
+
+        serialized_input = serialize_for_tokenizing(parsed_input)
+        serialized_tools = serialize_for_tokenizing(parsed_tools)
+
+        encoding = await self.get_encoding()
+        combined = f"{system_prompt}\n{serialized_input}\n{serialized_tools}"
+
+        self.logger.debug(f"Combined Token Count Input: {combined}")
+        self.logger.debug(f"Token Count Encoding: {encoding}")
+
+        return len(encoding.encode(combined, disallowed_special=()))
 
     async def query_json(
         self,

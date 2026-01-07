@@ -162,10 +162,7 @@ async def process_model(model_str: str, provider_name: str):
         running_models[provider_name].pop(model_str, None)
 
 
-MODEL_OVERRIDES = [
-    "dumbmar",
-    "bedrock",
-]
+MODEL_OVERRIDES = ["dumbmar", "bedrock", "ai21labs"]
 IGNORED_MODELS = ["fireworks/deepseek-v3p1", "fireworks/deepseek-v3p2-thinking"]
 ERROR_OVERRIDES = [
     "overloaded",

@@ -1,4 +1,7 @@
-from typing import Sequence, TypeVar, cast
+import json
+from typing import Any, Sequence, TypeVar, cast
+
+from pydantic import BaseModel
 
 from model_library.base.input import (
     FileBase,
@@ -8,9 +11,21 @@ from model_library.base.input import (
     ToolResult,
 )
 from model_library.utils import truncate_str
-from pydantic import BaseModel
 
 T = TypeVar("T", bound=BaseModel)
+
+
+def serialize_for_tokenizing(content: Any) -> str:
+    """
+    Serialize parsed content into a string for tokenization
+    """
+    parts: list[str] = []
+    if content:
+        if isinstance(content, str):
+            parts.append(content)
+        else:
+            parts.append(json.dumps(content, default=str))
+    return "\n".join(parts)
 
 
 def add_optional(
