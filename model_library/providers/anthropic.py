@@ -635,6 +635,32 @@ class AnthropicModel(LLM):
         )
 
     @override
+    async def count_tokens(
+        self,
+        input: Sequence[InputItem],
+        *,
+        history: Sequence[InputItem] = [],
+        tools: list[ToolDefinition] = [],
+        **kwargs: object,
+    ) -> int:
+        """
+        Count the number of tokens using Anthropic's native token counting API.
+        https://docs.anthropic.com/en/docs/build-with-claude/token-counting
+        """
+        input = [*history, *input]
+
+        body = await self.build_body(input, tools=tools, **kwargs)
+
+        # Remove fields not supported by count_tokens endpoint
+        body.pop("max_tokens", None)
+        body.pop("temperature", None)
+
+        client = self.get_client()
+        response = await client.messages.count_tokens(**body)
+
+        return response.input_tokens
+
+    @override
     async def _calculate_cost(
         self,
         metadata: QueryResultMetadata,

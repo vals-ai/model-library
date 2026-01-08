@@ -2,11 +2,15 @@ from typing import Literal
 
 from model_library import model_library_settings
 from model_library.base import DelegateOnly, LLMConfig
+from model_library.base.input import InputItem, ToolDefinition
 from model_library.providers.anthropic import AnthropicModel
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
 
 from anthropic import AsyncAnthropic
+
+from typing import Sequence
+from typing_extensions import override
 
 
 @register_provider("minimax")
@@ -30,4 +34,19 @@ class MinimaxModel(DelegateOnly):
                 http_client=default_httpx_client(),
                 max_retries=1,
             ),
+        )
+
+    # minimax client shares anthropic's syntax
+    @override
+    async def count_tokens(
+        self,
+        input: Sequence[InputItem],
+        *,
+        history: Sequence[InputItem] = [],
+        tools: list[ToolDefinition] = [],
+        **kwargs: object,
+    ) -> int:
+        assert self.delegate
+        return await self.delegate.count_tokens(
+            input, history=history, tools=tools, **kwargs
         )

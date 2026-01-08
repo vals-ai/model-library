@@ -4,6 +4,7 @@ import logging
 from model_library import set_logging
 from model_library.base import (
     LLM,
+    QueryResult,
     TextInput,
     ToolBody,
     ToolDefinition,
@@ -47,13 +48,25 @@ async def count_tokens(model: LLM):
         ),
     ]
 
-    tokens = await model.count_tokens(
-        [TextInput(text="What is the weather in San Francisco right now?")],
+    system_prompt = "You must make exactly 0 or 1 tool calls per answer. You must not make more than 1 tool call per answer."
+    user_prompt = "What is the weather in San Francisco right now?"
+
+    predicted_tokens = await model.count_tokens(
+        [TextInput(text=user_prompt)],
         tools=tools,
-        system_prompt="You must make exactly 0 or 1 tool calls per answer. You must not make more than 1 tool call per answer.",
+        system_prompt=system_prompt,
     )
 
-    console_log(f"Tokens: {tokens}")
+    response: QueryResult = await model.query(
+        [TextInput(text=user_prompt)],
+        tools=tools,
+        system_prompt=system_prompt,
+    )
+
+    actual_tokens = response.metadata.total_input_tokens
+
+    console_log(f"Predicted Token Count: {predicted_tokens}")
+    console_log(f"Actual Token Count: {actual_tokens}\n")
 
 
 async def main():
@@ -72,7 +85,7 @@ async def main():
     model = get_registry_model(args.model)
     model.logger.info(model)
 
-    set_logging(enable=True, level=logging.DEBUG)
+    set_logging(enable=True, level=logging.INFO)
 
     await count_tokens(model)
 

@@ -7,6 +7,7 @@ from google.genai import Client
 from google.genai import errors as genai_errors
 from google.genai.types import (
     Content,
+    CountTokensConfig,
     File,
     FinishReason,
     FunctionDeclaration,
@@ -410,6 +411,49 @@ class GoogleModel(LLM):
                 cache_read_tokens=cache_read_tokens,
             )
         return result
+
+    @override
+    async def count_tokens(
+        self,
+        input: Sequence[InputItem],
+        *,
+        history: Sequence[InputItem] = [],
+        tools: list[ToolDefinition] = [],
+        **kwargs: object,
+    ) -> int:
+        """
+        Count the number of tokens using Google's native token counting API.
+        https://ai.google.dev/gemini-api/docs/tokens
+
+        Only Vertex AI supports system_instruction and tools in count_tokens.
+        For Gemini API, fall back to the base implementation.
+        TODO: implement token counting for non-Vertex models.
+        """
+        if not self.provider_config.use_vertex:
+            return await super().count_tokens(
+                input, history=history, tools=tools, **kwargs
+            )
+
+        input = [*history, *input]
+
+        system_prompt = kwargs.pop("system_prompt", None)
+        contents = await self.parse_input(input, **kwargs)
+        parsed_tools = await self.parse_tools(tools) if tools else None
+        config = CountTokensConfig(
+            system_instruction=str(system_prompt) if system_prompt else None,
+            tools=parsed_tools,
+        )
+
+        response = await self.client.aio.models.count_tokens(
+            model=self.model_name,
+            contents=cast(Any, contents),
+            config=config,
+        )
+
+        if response.total_tokens is None:
+            raise ValueError("count_tokens returned None")
+
+        return response.total_tokens
 
     @override
     async def _calculate_cost(

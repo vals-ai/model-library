@@ -443,7 +443,7 @@ class LLM(ABC):
 
         model = self.model_name.lower()
 
-        if "gpt-4o" in model or "o1" in model or "o3" in model:
+        if any(x in model for x in ["gpt-4o", "o1", "o3", "gpt-4.1", "gpt-5"]):
             return tiktoken.get_encoding("o200k_base")
         elif "gpt-4" in model or "gpt-3.5" in model:
             try:
@@ -472,28 +472,26 @@ class LLM(ABC):
         Combines parsed input and tools, then tokenizes the result.
         """
 
-        # special case if using a delegate
-        if self.delegate:
-            return await self.delegate.count_tokens(
-                input,
-                history=history,
-                tools=tools,
-                **kwargs,
-            )
-
         input = [*history, *input]
 
         system_prompt = kwargs.pop(
             "system_prompt", ""
         )  # TODO: refactor along with system prompt arg change
 
-        parsed_input = await self.parse_input(input, **kwargs)
-        parsed_tools = await self.parse_tools(tools)
+        # special case if using a delegate
+        # don't inherit method override by default
+        if self.delegate:
+            parsed_input = await self.delegate.parse_input(input, **kwargs)
+            parsed_tools = await self.delegate.parse_tools(tools)
+            encoding = await self.delegate.get_encoding()
+        else:
+            parsed_input = await self.parse_input(input, **kwargs)
+            parsed_tools = await self.parse_tools(tools)
+            encoding = await self.get_encoding()
 
         serialized_input = serialize_for_tokenizing(parsed_input)
         serialized_tools = serialize_for_tokenizing(parsed_tools)
 
-        encoding = await self.get_encoding()
         combined = f"{system_prompt}\n{serialized_input}\n{serialized_tools}"
 
         self.logger.debug(f"Combined Token Count Input: {combined}")
