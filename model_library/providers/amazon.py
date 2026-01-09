@@ -13,24 +13,26 @@ from typing_extensions import override
 
 from model_library.base import (
     LLM,
+    FileBase,
     FileInput,
     FileWithBase64,
     FileWithId,
-    FileWithUrl,
     InputItem,
     LLMConfig,
     QueryResult,
     QueryResultMetadata,
+    RawInput,
+    RawResponse,
     TextInput,
     ToolBody,
     ToolCall,
     ToolDefinition,
     ToolResult,
 )
-from model_library.base.input import FileBase
 from model_library.exceptions import (
     BadInputError,
     MaxOutputTokensExceededError,
+    NoMatchingToolCallError,
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.register_models import register_provider
@@ -70,6 +72,20 @@ class AmazonModel(LLM):
 
     cache_control = {"type": "default"}
 
+    async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
+        raw_responses = [x for x in input if isinstance(x, RawResponse)]
+        tool_call_ids: list[str] = []
+
+        calls = [
+            y["toolUse"]
+            for x in raw_responses
+            if "content" in x.response
+            for y in x.response["content"]
+            if "toolUse" in y
+        ]
+        tool_call_ids.extend([x["toolUseId"] for x in calls])
+        return tool_call_ids
+
     @override
     async def parse_input(
         self,
@@ -77,58 +93,63 @@ class AmazonModel(LLM):
         **kwargs: Any,
     ) -> list[dict[str, Any]]:
         new_input: list[dict[str, Any] | Any] = []
+
         content_user: list[dict[str, Any]] = []
 
-        for item in input:
-            match item:
-                case TextInput():
-                    content_user.append({"text": item.text})
-                case FileWithBase64() | FileWithUrl() | FileWithId():
-                    match item.type:
-                        case "image":
-                            content_user.append(await self.parse_image(item))
-                        case "file":
-                            content_user.append(await self.parse_file(item))
-                case _:
-                    if content_user:
-                        new_input.append({"role": "user", "content": content_user})
-                        content_user = []
-                    match item:
-                        case ToolResult():
-                            if not (
-                                isinstance(x, dict)
-                                and "toolUse" in x
-                                and x["toolUse"].get("toolUseId")
-                                == item.tool_call.call_id
-                                for x in new_input
-                            ):
-                                raise Exception(
-                                    "Tool call result provided with no matching tool call"
-                                )
-                            new_input.append(
-                                {
-                                    "role": "user",
-                                    "content": [
-                                        {
-                                            "toolResult": {
-                                                "toolUseId": item.tool_call.id,
-                                                "content": [
-                                                    {"json": {"result": item.result}}
-                                                ],
-                                            }
-                                        }
-                                    ],
-                                }
-                            )
-                        case dict():  # RawInputItem and RawResponse
-                            new_input.append(item)
+        def flush_content_user():
+            if content_user:
+                # NOTE: must make new object as we clear()
+                new_input.append({"role": "user", "content": content_user.copy()})
+                content_user.clear()
 
-        if content_user:
-            if self.supports_cache:
-                if not isinstance(input[-1], FileBase):
-                    # last item cannot be file
-                    content_user.append({"cachePoint": self.cache_control})
-            new_input.append({"role": "user", "content": content_user})
+        tool_call_ids = await self.get_tool_call_ids(input)
+
+        for item in input:
+            if isinstance(item, TextInput):
+                content_user.append({"text": item.text})
+                continue
+
+            if isinstance(item, FileBase):
+                match item.type:
+                    case "image":
+                        parsed = await self.parse_image(item)
+                    case "file":
+                        parsed = await self.parse_file(item)
+                content_user.append(parsed)
+                continue
+
+            # non content user item
+            flush_content_user()
+
+            match item:
+                case ToolResult():
+                    if item.tool_call.id not in tool_call_ids:
+                        raise NoMatchingToolCallError()
+
+                    new_input.append(
+                        {
+                            "role": "user",
+                            "content": [
+                                {
+                                    "toolResult": {
+                                        "toolUseId": item.tool_call.id,
+                                        "content": [{"json": {"result": item.result}}],
+                                    }
+                                }
+                            ],
+                        }
+                    )
+                case RawResponse():
+                    new_input.append(item.response)
+                case RawInput():
+                    new_input.append(item.input)
+
+        if content_user and self.supports_cache:
+            if not isinstance(input[-1], FileBase):
+                # last item cannot be file
+                content_user.append({"cachePoint": self.cache_control})
+
+        flush_content_user()
 
         return new_input
 
@@ -384,5 +405,5 @@ class AmazonModel(LLM):
             reasoning=reasoning,
             metadata=metadata,
             tool_calls=tool_calls,
-            history=[*input, messages],
+            history=[*input, RawResponse(response=messages)],
         )

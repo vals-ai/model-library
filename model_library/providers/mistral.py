@@ -12,14 +12,16 @@ from typing_extensions import override
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
+    FileBase,
     FileInput,
     FileWithBase64,
     FileWithId,
-    FileWithUrl,
     InputItem,
     LLMConfig,
     QueryResult,
     QueryResultMetadata,
+    RawInput,
+    RawResponse,
     TextInput,
     ToolBody,
     ToolCall,
@@ -68,27 +70,30 @@ class MistralModel(LLM):
         content_user: list[dict[str, Any]] = []
 
         def flush_content_user():
-            nonlocal content_user
-
             if content_user:
-                new_input.append({"role": "user", "content": content_user})
-                content_user = []
+                # NOTE: must make new object as we clear()
+                new_input.append({"role": "user", "content": content_user.copy()})
+                content_user.clear()
 
         for item in input:
+            if isinstance(item, TextInput):
+                content_user.append({"type": "text", "text": item.text})
+                continue
+
+            if isinstance(item, FileBase):
+                match item.type:
+                    case "image":
+                        parsed = await self.parse_image(item)
+                    case "file":
+                        parsed = await self.parse_file(item)
+                content_user.append(parsed)
+                continue
+
+            # non content user item
+            flush_content_user()
+
             match item:
-                case TextInput():
-                    content_user.append({"type": "text", "text": item.text})
-                case FileWithBase64() | FileWithUrl() | FileWithId():
-                    match item.type:
-                        case "image":
-                            content_user.append(await self.parse_image(item))
-                        case "file":
-                            content_user.append(await self.parse_file(item))
-                case AssistantMessage():
-                    flush_content_user()
-                    new_input.append(item)
                 case ToolResult():
-                    flush_content_user()
                     new_input.append(
                         {
                             "role": "tool",
@@ -97,9 +102,12 @@ class MistralModel(LLM):
                             "tool_call_id": item.tool_call.id,
                         }
                     )
-                case _:
-                    raise BadInputError("Unsupported input type")
+                case RawResponse():
+                    new_input.append(item.response)
+                case RawInput():
+                    new_input.append(item.input)
 
+        # in case content user item is the last item
         flush_content_user()
 
         return new_input
@@ -308,7 +316,7 @@ class MistralModel(LLM):
         return QueryResult(
             output_text=text,
             reasoning=reasoning or None,
-            history=[*input, message],
+            history=[*input, RawResponse(response=message)],
             tool_calls=tool_calls,
             metadata=QueryResultMetadata(
                 in_tokens=in_tokens,

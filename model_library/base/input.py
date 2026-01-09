@@ -74,8 +74,6 @@ class ToolCall(BaseModel):
 --- INPUT ---
 """
 
-RawResponse = Any
-
 
 class ToolInput(BaseModel):
     tools: list[ToolDefinition] = []
@@ -90,11 +88,16 @@ class TextInput(BaseModel):
     text: str
 
 
-RawInputItem = dict[
-    str, Any
-]  # to pass in, for example, a mock convertsation with {"role": "user", "content": "Hello"}
+class RawResponse(BaseModel):
+    # used to store a received response
+    response: Any
+
+
+class RawInput(BaseModel):
+    # used to pass in anything provider specific (e.g. a mock conversation)
+    input: Any
 
 
 InputItem = (
-    TextInput | FileInput | ToolResult | RawInputItem | RawResponse
-)  # input item can either be a prompt, a file (image or file), a tool call result, raw input, or a previous response
+    TextInput | FileInput | ToolResult | RawInput | RawResponse
+)  # input item can either be a prompt, a file (image or file), a tool call result, a previous response, or raw input

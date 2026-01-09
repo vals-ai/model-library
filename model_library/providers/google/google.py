@@ -1,6 +1,7 @@
 import base64
 import io
 import logging
+import uuid
 from typing import Any, Literal, Sequence, cast
 
 from google.genai import Client
@@ -29,6 +30,7 @@ from typing_extensions import override
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
+    FileBase,
     FileInput,
     FileWithBase64,
     FileWithId,
@@ -41,6 +43,8 @@ from model_library.base import (
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
+    RawInput,
+    RawResponse,
     TextInput,
     ToolBody,
     ToolCall,
@@ -55,8 +59,6 @@ from model_library.exceptions import (
 )
 from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.register_models import register_provider
-from model_library.utils import normalize_tool_result
-import uuid
 
 
 def generate_tool_call_id(tool_name: str) -> str:
@@ -147,63 +149,52 @@ class GoogleModel(LLM):
         input: Sequence[InputItem],
         **kwargs: Any,
     ) -> list[Content]:
-        parsed_input: list[Content] = []
-        parts: list[Part] = []
+        new_input: list[Content] = []
 
-        def flush_parts():
-            nonlocal parts
+        content_user: list[Part] = []
 
-            if parts:
-                parsed_input.append(Content(parts=parts, role="user"))
-                parts = []
+        def flush_content_user():
+            if content_user:
+                new_input.append(Content(parts=content_user, role="user"))
+                content_user.clear()
 
         for item in input:
+            if isinstance(item, TextInput):
+                content_user.append(Part.from_text(text=item.text))
+                continue
+
+            if isinstance(item, FileBase):
+                parsed = await self.parse_file(item)
+                content_user.append(parsed)
+                continue
+
+            # non content user item
+            flush_content_user()
+
             match item:
-                case TextInput():
-                    if item.text.strip():
-                        parts.append(Part.from_text(text=item.text))
-
-                case FileWithBase64() | FileWithUrl() | FileWithId():
-                    part = await self.parse_file(item)
-                    parts.append(part)
-
                 case ToolResult():
-                    flush_parts()
-                    result_str = normalize_tool_result(item.result)
-                    parsed_input.append(
+                    # id check
+                    new_input.append(
                         Content(
                             role="function",
                             parts=[
                                 Part.from_function_response(
                                     name=item.tool_call.name,
-                                    response={"result": result_str},
+                                    response={"result": item.result},
                                 )
                             ],
                         )
                     )
 
-                case GenerateContentResponse():
-                    flush_parts()
-                    candidates = item.candidates
-                    if candidates and candidates[0]:
-                        content0 = candidates[0].content
-                        if content0 is not None:
-                            parsed_input.append(content0)
-                    else:
-                        self.logger.debug(
-                            "GenerateContentResponse missing candidates; skipping"
-                        )
+                case RawResponse():
+                    new_input.extend(item.response)
+                case RawInput():
+                    new_input.append(item.input)
 
-                case Content():
-                    flush_parts()
-                    parsed_input.append(item)
+        # in case content user item is the last item
+        flush_content_user()
 
-                case _:
-                    raise BadInputError(f"Unsupported input type: {type(item)}")
-
-        flush_parts()
-
-        return parsed_input
+        return new_input
 
     @override
     async def parse_file(self, file: FileInput) -> Part:
@@ -397,7 +388,7 @@ class GoogleModel(LLM):
         result = QueryResult(
             output_text=text,
             reasoning=reasoning,
-            history=[*input, *contents],
+            history=[*input, RawResponse(response=contents)],
             tool_calls=tool_calls,
         )
 

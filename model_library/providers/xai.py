@@ -16,17 +16,18 @@ from xai_sdk.sync.chat import Chat as SyncChat
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
+    FileBase,
     FileInput,
     FileWithBase64,
     FileWithId,
-    FileWithUrl,
     InputItem,
     LLMConfig,
     ProviderConfig,
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
-    RawInputItem,
+    RawInput,
+    RawResponse,
     TextInput,
     ToolBody,
     ToolCall,
@@ -37,6 +38,7 @@ from model_library.exceptions import (
     BadInputError,
     MaxOutputTokensExceededError,
     ModelNoOutputError,
+    NoMatchingToolCallError,
     RateLimitException,
 )
 from model_library.providers.openai import OpenAIModel
@@ -98,6 +100,19 @@ class XAIModel(LLM):
             )
         )
 
+    async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
+        raw_responses = [x for x in input if isinstance(x, RawResponse)]
+        tool_call_ids: list[str] = []
+
+        calls = [
+            y
+            for x in raw_responses
+            if isinstance(x.response, Response) and x.response.tool_calls
+            for y in x.response.tool_calls
+        ]
+        tool_call_ids.extend([x.id for x in calls if x.id])
+        return tool_call_ids
+
     @override
     async def parse_input(
         self,
@@ -105,47 +120,46 @@ class XAIModel(LLM):
         **kwargs: Any,
     ) -> None:
         chat: Chat = kwargs["chat"]
-        content_user: list[Any] = []
-        for item in input:
-            match item:
-                case TextInput():
-                    content_user.append(item.text)
-                case FileWithBase64() | FileWithUrl() | FileWithId():
-                    match item.type:
-                        case "image":
-                            content_user.append(await self.parse_image(item))
-                        case "file":
-                            content_user.append(await self.parse_file(item))
-                case _:
-                    if content_user:
-                        chat.append(user(*content_user))
-                        content_user = []
-                    match item:
-                        case ToolResult():
-                            if not (
-                                isinstance(x, Response)
-                                and x.finish_reason == "REASON_TOOL_CALLS"
-                                and x.tool_calls
-                                and any(
-                                    tool
-                                    for tool in x.tool_calls
-                                    if tool.id == item.tool_call.id
-                                )
-                                for x in chat.messages
-                            ):
-                                raise Exception(
-                                    "Tool call result provided with no matching tool call"
-                                )
-                            chat.append(tool_result(item.result))
-                        case dict():  # RawInputItem
-                            item = cast(RawInputItem, item)
-                            chat.append(item)  # pyright: ignore[reportArgumentType]
-                        case _:  # RawResponse
-                            item = cast(Response, item)
-                            chat.append(item)
 
-        if content_user:
-            chat.append(user(*content_user))
+        content_user: list[Any] = []
+
+        def flush_content_user():
+            if content_user:
+                chat.append(user(*content_user))
+                content_user.clear()
+
+        tool_call_ids = await self.get_tool_call_ids(input)
+
+        for item in input:
+            if isinstance(item, TextInput):
+                content_user.append(item.text)
+                continue
+
+            if isinstance(item, FileBase):
+                match item.type:
+                    case "image":
+                        parsed = await self.parse_image(item)
+                    case "file":
+                        parsed = await self.parse_file(item)
+                content_user.append(parsed)
+                continue
+
+            # non content user item
+            flush_content_user()
+
+            match item:
+                case ToolResult():
+                    if item.tool_call.id not in tool_call_ids:
+                        raise NoMatchingToolCallError()
+
+                    chat.append(tool_result(item.result))
+                case RawResponse():
+                    chat.append(item.response)
+                case RawInput():
+                    chat.append(item.input)
+
+        # in case content user item is the last item
+        flush_content_user()
 
     @override
     async def parse_image(
@@ -314,7 +328,7 @@ class XAIModel(LLM):
                 cache_read_tokens=latest_response.usage.cached_prompt_text_tokens,
             ),
             tool_calls=tool_calls,
-            history=[*input, latest_response],
+            history=[*input, RawResponse(response=latest_response)],
         )
 
     @override

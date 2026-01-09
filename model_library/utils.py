@@ -1,6 +1,5 @@
 import logging
 from collections.abc import Mapping, Sequence
-from typing import Any
 
 import httpx
 from openai import AsyncOpenAI
@@ -90,37 +89,3 @@ def get_context_window_for_model(model_name: str, default: int = 128_000) -> int
             f"using default context length of {default}"
         )
         return default
-
-
-def normalize_tool_result(result: Any) -> str:
-    """Normalize tool result to non-empty string for API compatibility.
-
-    Empty results (None, empty dict/list, whitespace-only strings) are
-    converted to a single space to satisfy API requirements.
-
-    Args:
-        result: Tool result value (any type)
-
-    Returns:
-        Non-empty string representation of the result
-    """
-    if result is None or (isinstance(result, (dict, list)) and not result):
-        return " "
-    result_str = str(result)  # pyright: ignore[reportUnknownArgumentType]
-    return result_str.strip() or " "
-
-
-def filter_empty_text_blocks(content: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Filter out empty text blocks from content list.
-
-    Args:
-        content: List of content blocks (dicts with 'type' and potentially 'text' keys)
-
-    Returns:
-        Filtered list with empty text blocks removed
-    """
-    return [
-        block
-        for block in content
-        if block.get("type") != "text" or block.get("text", "").strip()
-    ]

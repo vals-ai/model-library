@@ -3,15 +3,15 @@ import logging
 from typing import Any, Literal, Sequence, cast
 
 from anthropic import AsyncAnthropic
-from anthropic.types import TextBlock, ToolUseBlock
 from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
-from anthropic.types.message import Message
+from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
 from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
     BatchResult,
+    FileBase,
     FileInput,
     FileWithBase64,
     FileWithId,
@@ -22,7 +22,8 @@ from model_library.base import (
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
-    RawInputItem,
+    RawInput,
+    RawResponse,
     TextInput,
     ToolBody,
     ToolCall,
@@ -31,6 +32,7 @@ from model_library.base import (
 )
 from model_library.exceptions import (
     MaxOutputTokensExceededError,
+    NoMatchingToolCallError,
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.providers.openai import OpenAIModel
@@ -38,8 +40,6 @@ from model_library.register_models import register_provider
 from model_library.utils import (
     create_openai_client_with_defaults,
     default_httpx_client,
-    filter_empty_text_blocks,
-    normalize_tool_result,
 )
 
 
@@ -300,6 +300,20 @@ class AnthropicModel(LLM):
             AnthropicBatchMixin(self) if self.supports_batch else None
         )
 
+    async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
+        raw_responses = [x for x in input if isinstance(x, RawResponse)]
+        tool_call_ids: list[str] = []
+
+        calls = [
+            y
+            for x in raw_responses
+            if isinstance(x.response, ParsedBetaMessage)
+            for y in x.response.content  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+            if isinstance(y, BetaToolUseBlock)
+        ]
+        tool_call_ids.extend([x.id for x in calls])
+        return tool_call_ids
+
     @override
     async def parse_input(
         self,
@@ -307,77 +321,61 @@ class AnthropicModel(LLM):
         **kwargs: Any,
     ) -> list[dict[str, Any] | Any]:
         new_input: list[dict[str, Any] | Any] = []
+
         content_user: list[dict[str, Any]] = []
 
-        # First pass: collect all tool calls from Message objects for validation
-        tool_calls_in_input: set[str] = set()
-        for item in input:
-            if hasattr(item, "content") and hasattr(item, "role"):
-                content_list = getattr(item, "content", [])
-                for content in content_list:
-                    # Check for both ToolUseBlock and BetaToolUseBlock
-                    if isinstance(content, (ToolUseBlock, BetaToolUseBlock)):
-                        tool_calls_in_input.add(content.id)
+        def flush_content_user():
+            if content_user:
+                # NOTE: must make new object as we clear()
+                new_input.append({"role": "user", "content": content_user.copy()})
+                content_user.clear()
+
+        tool_call_ids = await self.get_tool_call_ids(input)
 
         for item in input:
+            if isinstance(item, TextInput):
+                content_user.append({"type": "text", "text": item.text})
+                continue
+
+            if isinstance(item, FileBase):
+                match item.type:
+                    case "image":
+                        parsed = await self.parse_image(item)
+                    case "file":
+                        parsed = await self.parse_file(item)
+                content_user.append(parsed)
+                continue
+
+            # non content user item
+            flush_content_user()
+
             match item:
-                case TextInput():
-                    if item.text.strip():
-                        content_user.append({"type": "text", "text": item.text})
-                case FileWithBase64() | FileWithUrl() | FileWithId():
-                    match item.type:
-                        case "image":
-                            content_user.append(await self.parse_image(item))
-                        case "file":
-                            content_user.append(await self.parse_file(item))
-                case _:
-                    if content_user:
-                        filtered = filter_empty_text_blocks(content_user)
-                        if filtered:
-                            new_input.append({"role": "user", "content": filtered})
-                        content_user = []
-                    match item:
-                        case ToolResult():
-                            if item.tool_call.id not in tool_calls_in_input:
-                                raise Exception(
-                                    "Tool call result provided with no matching tool call"
-                                )
-                            result_str = normalize_tool_result(item.result)
-                            new_input.append(
+                case ToolResult():
+                    if item.tool_call.id not in tool_call_ids:
+                        raise NoMatchingToolCallError()
+
+                    new_input.append(
+                        {
+                            "role": "user",
+                            "content": [
                                 {
-                                    "role": "user",
-                                    "content": [
-                                        {
-                                            "type": "tool_result",
-                                            "tool_use_id": item.tool_call.id,
-                                            "content": [
-                                                {"type": "text", "text": result_str}
-                                            ],
-                                        }
-                                    ],
+                                    "type": "tool_result",
+                                    "tool_use_id": item.tool_call.id,
+                                    "content": [{"type": "text", "text": item.result}],
                                 }
-                            )
-                        case dict():  # RawInputItem
-                            item = cast(RawInputItem, item)
-                            new_input.append(item)
-                        case _:  # RawResponse
-                            item = cast(Message, item)
-                            filtered_content = [
-                                block
-                                for block in item.content
-                                if not isinstance(block, TextBlock)
-                                or block.text.strip()
-                            ]
-                            if filtered_content:
-                                new_input.append(
-                                    {"role": "assistant", "content": filtered_content}
-                                )
+                            ],
+                        }
+                    )
+                case RawResponse():
+                    content = cast(ParsedBetaMessage, item.response).content
+                    new_input.append({"role": "assistant", "content": content})
+                case RawInput():
+                    new_input.append(item.input)
 
-        if content_user:
-            filtered = filter_empty_text_blocks(content_user)
-            if filtered:
-                new_input.append({"role": "user", "content": filtered})
+        # in case content user item is the last item
+        flush_content_user()
 
+        # cache control
         if new_input:
             last_msg = new_input[-1]
             if not isinstance(last_msg, dict):
@@ -495,7 +493,7 @@ class AnthropicModel(LLM):
         bytes: io.BytesIO,
         type: Literal["image", "file"] = "file",
     ) -> FileWithId:
-        file_mime = f"image/{mime}" if type == "image" else mime  # TODO:
+        file_mime = f"image/{mime}" if type == "image" else mime
         response = await self.get_client().beta.files.upload(
             file=(
                 name,
@@ -631,7 +629,7 @@ class AnthropicModel(LLM):
                 cache_write_tokens=message.usage.cache_creation_input_tokens,
             ),
             tool_calls=tool_calls,
-            history=[*input, message],
+            history=[*input, RawResponse(response=message)],
         )
 
     @override

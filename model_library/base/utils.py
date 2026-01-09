@@ -1,12 +1,13 @@
 import json
-from typing import Any, Sequence, TypeVar, cast
+from typing import Any, Sequence, TypeVar
 
 from pydantic import BaseModel
 
 from model_library.base.input import (
     FileBase,
     InputItem,
-    RawInputItem,
+    RawInput,
+    RawResponse,
     TextInput,
     ToolResult,
 )
@@ -69,11 +70,9 @@ def get_pretty_input_types(input: Sequence["InputItem"], verbose: bool = False) 
                 return repr(item)
             case ToolResult():
                 return repr(item)
-            case dict():
-                item = cast(RawInputItem, item)
+            case RawInput():
                 return repr(item)
-            case _:
-                # RawResponse
+            case RawResponse():
                 return repr(item)
 
     processed_items = [f"  {process_item(item)}" for item in input]

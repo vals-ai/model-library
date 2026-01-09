@@ -22,6 +22,7 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.input import RawResponse
 from model_library.exceptions import (
     BadInputError,
     MaxOutputTokensExceededError,
@@ -65,8 +66,6 @@ class AI21LabsModel(LLM):
             match item:
                 case TextInput():
                     new_input.append(ChatMessage(role="user", content=item.text))
-                case AssistantMessage():
-                    new_input.append(item)
                 case ToolResult():
                     new_input.append(
                         ToolMessage(
@@ -74,7 +73,9 @@ class AI21LabsModel(LLM):
                             content=item.result,
                             tool_call_id=item.tool_call.id,
                         )
-                    )
+                    )  # TODO: tool calling metadata and test
+                case RawResponse():
+                    new_input.append(item.response)
                 case _:
                     raise BadInputError("Unsupported input type")
         return new_input
@@ -197,7 +198,7 @@ class AI21LabsModel(LLM):
 
         output = QueryResult(
             output_text=choice.message.content,
-            history=[*input, choice.message],
+            history=[*input, RawResponse(response=choice.message)],
             metadata=QueryResultMetadata(
                 in_tokens=response.usage.prompt_tokens,
                 out_tokens=response.usage.completion_tokens,

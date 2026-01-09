@@ -146,6 +146,17 @@ class BadInputError(Exception):
         super().__init__(message or BadInputError.DEFAULT_MESSAGE)
 
 
+class NoMatchingToolCallError(Exception):
+    """
+    Raised when a tool call result is provided with no matching tool call
+    """
+
+    DEFAULT_MESSAGE: str = "Tool call result provided with no matching tool call"
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or NoMatchingToolCallError.DEFAULT_MESSAGE)
+
+
 # Add more retriable exceptions as needed
 # Providers that don't have an explicit rate limit error are handled manually
 # by wrapping errored Http/gRPC requests with a BackoffRetryException

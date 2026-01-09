@@ -16,6 +16,7 @@ from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.create_embedding_response import CreateEmbeddingResponse
 from openai.types.moderation_create_response import ModerationCreateResponse
 from openai.types.responses import (
+    ResponseFunctionToolCall,
     ResponseOutputItem,
     ResponseOutputText,
     ResponseStreamEvent,
@@ -29,6 +30,7 @@ from model_library.base import (
     LLM,
     BatchResult,
     Citation,
+    FileBase,
     FileInput,
     FileWithBase64,
     FileWithId,
@@ -42,7 +44,8 @@ from model_library.base import (
     QueryResultCost,
     QueryResultExtras,
     QueryResultMetadata,
-    RawInputItem,
+    RawInput,
+    RawResponse,
     TextInput,
     ToolBody,
     ToolCall,
@@ -53,6 +56,7 @@ from model_library.exceptions import (
     ImmediateRetryException,
     MaxOutputTokensExceededError,
     ModelNoOutputError,
+    NoMatchingToolCallError,
 )
 from model_library.model_utils import get_reasoning_in_tag
 from model_library.register_models import register_provider
@@ -258,7 +262,9 @@ class OpenAIModel(LLM):
         use_completions: bool = False,
     ):
         super().__init__(model_name, provider, config=config)
-        self.use_completions: bool = use_completions
+        self.use_completions: bool = (
+            use_completions  # TODO: do completions in a separate file
+        )
         self.deep_research = self.provider_config.deep_research
 
         # allow custom client to act as delegate (native)
@@ -270,6 +276,29 @@ class OpenAIModel(LLM):
             OpenAIBatchMixin(self) if self.supports_batch else None
         )
 
+    async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
+        raw_responses = [x for x in input if isinstance(x, RawResponse)]
+        tool_call_ids: list[str] = []
+
+        if self.use_completions:
+            calls = [
+                y
+                for x in raw_responses
+                if isinstance(x.response, ChatCompletionMessage)
+                and x.response.tool_calls
+                for y in x.response.tool_calls
+            ]
+            tool_call_ids.extend([x.id for x in calls if x.id])
+        else:
+            calls = [
+                y
+                for x in raw_responses
+                for y in x.response
+                if isinstance(y, ResponseFunctionToolCall)
+            ]
+            tool_call_ids.extend([x.id for x in calls if x.id])
+        return tool_call_ids
+
     @override
     async def parse_input(
         self,
@@ -277,63 +306,70 @@ class OpenAIModel(LLM):
         **kwargs: Any,
     ) -> list[dict[str, Any] | Any]:
         new_input: list[dict[str, Any] | Any] = []
-        content_user: list[dict[str, Any]] = []
-        for item in input:
-            match item:
-                case TextInput():
-                    if self.use_completions:
-                        content_user.append({"type": "text", "text": item.text})
-                    else:
-                        content_user.append({"type": "input_text", "text": item.text})
-                case FileWithBase64() | FileWithUrl() | FileWithId():
-                    match item.type:
-                        case "image":
-                            content_user.append(await self.parse_image(item))
-                        case "file":
-                            content_user.append(await self.parse_file(item))
-                case _:
-                    if content_user:
-                        new_input.append({"role": "user", "content": content_user})
-                        content_user = []
-                    match item:
-                        case ToolResult():
-                            if not (
-                                not isinstance(x, dict)
-                                and x.type == "function_call"
-                                and x.call_id == item.tool_call.call_id
-                                for x in new_input
-                            ):
-                                raise Exception(
-                                    "Tool call result provided with no matching tool call"
-                                )
-                            if self.use_completions:
-                                new_input.append(
-                                    {
-                                        "role": "tool",
-                                        "tool_call_id": item.tool_call.id,
-                                        "content": item.result,
-                                    }
-                                )
-                            else:
-                                new_input.append(
-                                    {
-                                        "type": "function_call_output",
-                                        "call_id": item.tool_call.call_id,
-                                        "output": item.result,
-                                    }
-                                )
-                        case dict():  # RawInputItem
-                            item = cast(RawInputItem, item)
-                            new_input.append(item)
-                        case _:  # RawResponse
-                            if self.use_completions:
-                                item = cast(ChatCompletionMessageToolCall, item)
-                            else:
-                                item = cast(ResponseOutputItem, item)
-                            new_input.append(item)
 
-        if content_user:
-            new_input.append({"role": "user", "content": content_user})
+        content_user: list[dict[str, Any]] = []
+
+        def flush_content_user():
+            if content_user:
+                # NOTE: must make new object as we clear()
+                new_input.append({"role": "user", "content": content_user.copy()})
+                content_user.clear()
+
+        tool_call_ids = await self.get_tool_call_ids(input)
+
+        for item in input:
+            if isinstance(item, TextInput):
+                if self.use_completions:
+                    text_key = "text"
+                else:
+                    text_key = "input_text"
+                content_user.append({"type": text_key, "text": item.text})
+                continue
+
+            if isinstance(item, FileBase):
+                match item.type:
+                    case "image":
+                        parsed = await self.parse_image(item)
+                    case "file":
+                        parsed = await self.parse_file(item)
+                content_user.append(parsed)
+                continue
+
+            # non content user item
+            flush_content_user()
+
+            match item:
+                case ToolResult():
+                    if item.tool_call.id not in tool_call_ids:
+                        raise NoMatchingToolCallError()
+
+                    if self.use_completions:
+                        new_input.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": item.tool_call.id,
+                                "content": item.result,
+                            }
+                        )
+                    else:
+                        new_input.append(
+                            {
+                                "type": "function_call_output",
+                                "call_id": item.tool_call.call_id,
+                                "output": item.result,
+                            }
+                        )
+                case RawResponse():
+                    if self.use_completions:
+                        pass
+                        new_input.append(item.response)
+                    else:
+                        new_input.extend(item.response)
+                case RawInput():
+                    new_input.append(item.input)
+
+        # in case content user item is the last item
+        flush_content_user()
 
         return new_input
 
@@ -643,7 +679,7 @@ class OpenAIModel(LLM):
             output_text=output_text,
             reasoning=reasoning_text,
             tool_calls=tool_calls,
-            history=[*input, final_message],
+            history=[*input, RawResponse(response=final_message)],
             metadata=metadata,
         )
 
@@ -827,7 +863,7 @@ class OpenAIModel(LLM):
             output_text=response.output_text,
             reasoning=reasoning,
             tool_calls=tool_calls,
-            history=[*input, *response.output],
+            history=[*input, RawResponse(response=response.output)],
             extras=QueryResultExtras(citations=citations),
         )
         if response.usage:
