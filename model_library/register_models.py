@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Callable, Type, TypeVar, cast, get_type_hints
 
 import yaml
-from pydantic import create_model, model_validator
+from pydantic import ConfigDict, create_model, model_validator
 from pydantic.fields import Field
 from pydantic.main import BaseModel
 
@@ -173,6 +173,8 @@ class DefaultParameters(BaseModel):
 
 
 class RawModelConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     company: str
     label: str
     description: str | None = None
@@ -275,7 +277,7 @@ def _register_models() -> ModelRegistry:
 
                     # create model config object
                     raw_model_obj: RawModelConfig = RawModelConfig.model_validate(
-                        current_model_config, strict=True, extra="forbid"
+                        current_model_config
                     )
 
                     provider_endpoint = (
