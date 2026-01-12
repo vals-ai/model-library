@@ -75,6 +75,7 @@ CONTEXT_WINDOW_PATTERN = re.compile(
     r"maximum context length is \d+ tokens|"
     r"context length is \d+ tokens|"
     r"exceed.* context (limit|window|length)|"
+    r"context window exceeds|"
     r"exceeds maximum length|"
     r"too long.*tokens.*maximum|"
     r"too large for model with \d+ maximum context length|"
