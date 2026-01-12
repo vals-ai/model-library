@@ -459,6 +459,36 @@ class LLM(ABC):
         else:
             return tiktoken.get_encoding("cl100k_base")
 
+    async def stringify_input(
+        self,
+        input: Sequence[InputItem],
+        *,
+        history: Sequence[InputItem] = [],
+        tools: list[ToolDefinition] = [],
+        **kwargs: object,
+    ) -> str:
+        input = [*history, *input]
+
+        system_prompt = kwargs.pop(
+            "system_prompt", ""
+        )  # TODO: refactor along with system prompt arg change
+
+        # special case if using a delegate
+        # don't inherit method override by default
+        if self.delegate:
+            parsed_input = await self.delegate.parse_input(input, **kwargs)
+            parsed_tools = await self.delegate.parse_tools(tools)
+        else:
+            parsed_input = await self.parse_input(input, **kwargs)
+            parsed_tools = await self.parse_tools(tools)
+
+        serialized_input = serialize_for_tokenizing(parsed_input)
+        serialized_tools = serialize_for_tokenizing(parsed_tools)
+
+        combined = f"{system_prompt}\n{serialized_input}\n{serialized_tools}"
+
+        return combined
+
     async def count_tokens(
         self,
         input: Sequence[InputItem],
@@ -472,32 +502,22 @@ class LLM(ABC):
         Combines parsed input and tools, then tokenizes the result.
         """
 
-        input = [*history, *input]
+        if not input and not history:
+            return 0
 
-        system_prompt = kwargs.pop(
-            "system_prompt", ""
-        )  # TODO: refactor along with system prompt arg change
-
-        # special case if using a delegate
-        # don't inherit method override by default
         if self.delegate:
-            parsed_input = await self.delegate.parse_input(input, **kwargs)
-            parsed_tools = await self.delegate.parse_tools(tools)
             encoding = await self.delegate.get_encoding()
         else:
-            parsed_input = await self.parse_input(input, **kwargs)
-            parsed_tools = await self.parse_tools(tools)
             encoding = await self.get_encoding()
-
-        serialized_input = serialize_for_tokenizing(parsed_input)
-        serialized_tools = serialize_for_tokenizing(parsed_tools)
-
-        combined = f"{system_prompt}\n{serialized_input}\n{serialized_tools}"
-
-        self.logger.debug(f"Combined Token Count Input: {combined}")
         self.logger.debug(f"Token Count Encoding: {encoding}")
 
-        return len(encoding.encode(combined, disallowed_special=()))
+        string_input = await self.stringify_input(
+            input, history=history, tools=tools, **kwargs
+        )
+
+        count = len(encoding.encode(string_input, disallowed_special=()))
+        self.logger.debug(f"Combined Token Count Input: {count}")
+        return count
 
     async def query_json(
         self,

@@ -646,6 +646,8 @@ class AnthropicModel(LLM):
         https://docs.anthropic.com/en/docs/build-with-claude/token-counting
         """
         input = [*history, *input]
+        if not input:
+            return 0
 
         body = await self.build_body(input, tools=tools, **kwargs)
 

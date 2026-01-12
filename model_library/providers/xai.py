@@ -1,17 +1,15 @@
-import asyncio
 import io
 import logging
-from typing import Any, Literal, Sequence, cast
+from typing import Any, Literal, Sequence
 
 import grpc
 from typing_extensions import override
-from xai_sdk import AsyncClient, Client
-from xai_sdk.aio.chat import Chat as AsyncChat
+from xai_sdk import AsyncClient
+from xai_sdk.aio.chat import Chat
 from xai_sdk.chat import Content, Response, system, tool_result, user
 from xai_sdk.chat import image as xai_image
 from xai_sdk.chat import tool as xai_tool
 from xai_sdk.proto.v6.chat_pb2 import Message, Tool
-from xai_sdk.sync.chat import Chat as SyncChat
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -22,7 +20,6 @@ from model_library.base import (
     FileWithId,
     InputItem,
     LLMConfig,
-    ProviderConfig,
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
@@ -45,30 +42,18 @@ from model_library.providers.openai import OpenAIModel
 from model_library.register_models import register_provider
 from model_library.utils import create_openai_client_with_defaults
 
-Chat = AsyncChat | SyncChat
-
-
-class XAIConfig(ProviderConfig):
-    sync_client: bool = False
-
 
 @register_provider("grok")
 class XAIModel(LLM):
-    provider_config = XAIConfig()
-
-    _client: AsyncClient | Client | None = None
+    _client: AsyncClient | None = None
 
     @override
-    def get_client(self) -> AsyncClient | Client:
-        if self._client:
-            return self._client
-
-        ClientClass = Client if self.provider_config.sync_client else AsyncClient
-        self._client = ClientClass(
-            api_key=model_library_settings.XAI_API_KEY,
-        )
-
-        return self._client
+    def get_client(self) -> AsyncClient:
+        if not XAIModel._client:
+            XAIModel._client = AsyncClient(
+                api_key=model_library_settings.XAI_API_KEY,
+            )
+        return XAIModel._client
 
     @override
     def __init__(
@@ -118,14 +103,14 @@ class XAIModel(LLM):
         self,
         input: Sequence[InputItem],
         **kwargs: Any,
-    ) -> None:
-        chat: Chat = kwargs["chat"]
+    ) -> list[Message]:
+        new_input: list[Message] = []
 
         content_user: list[Any] = []
 
         def flush_content_user():
             if content_user:
-                chat.append(user(*content_user))
+                new_input.append(user(*content_user))
                 content_user.clear()
 
         tool_call_ids = await self.get_tool_call_ids(input)
@@ -152,14 +137,16 @@ class XAIModel(LLM):
                     if item.tool_call.id not in tool_call_ids:
                         raise NoMatchingToolCallError()
 
-                    chat.append(tool_result(item.result))
+                    new_input.append(tool_result(item.result))
                 case RawResponse():
-                    chat.append(item.response)
+                    new_input.append(item.response)
                 case RawInput():
-                    chat.append(item.input)
+                    new_input.append(item.input)
 
         # in case content user item is the last item
         flush_content_user()
+
+        return new_input
 
     @override
     async def parse_image(
@@ -214,26 +201,6 @@ class XAIModel(LLM):
     ) -> FileWithId:
         raise NotImplementedError()
 
-    def fetch_response_sync(
-        self,
-        chat: SyncChat,
-    ) -> Response | None:
-        latest_response = None
-        for response, _ in chat.stream():
-            latest_response = response
-
-        return latest_response
-
-    async def fetch_response_async(
-        self,
-        chat: AsyncChat,
-    ) -> Response | None:
-        latest_response = None
-        async for response, _ in chat.stream():
-            latest_response = response
-
-        return latest_response
-
     @override
     async def build_body(
         self, input: Sequence[InputItem], *, tools: list[ToolDefinition], **kwargs: Any
@@ -259,6 +226,15 @@ class XAIModel(LLM):
             body["reasoning_effort"] = self.reasoning_effort
 
         body.update(kwargs)
+
+        # use Chat object to parse raw Response and other objects into the correct formats
+        # see xai's chat.py `class BaseChat` -> `def append`
+        chat: Chat = self.get_client().chat.create("dummy")
+        parsed_input = await self.parse_input(input)
+        for message in parsed_input:
+            chat.append(message)
+        body["messages"].extend(chat.messages)
+
         return body
 
     @override
@@ -278,17 +254,11 @@ class XAIModel(LLM):
         body = await self.build_body(input, tools=tools, **kwargs)
 
         try:
-            chat: Chat = self.get_client().chat.create(**body)  # pyright: ignore[reportAny]
-            await self.parse_input(input, chat=chat)
+            chat: Chat = self.get_client().chat.create(**body)
 
-            # Allows users to dynamically swap to a sync client if getting grpc errors
-            # Run in a separate thread so we are playing fair with other async processes
-            if self.provider_config.sync_client:
-                latest_response = await asyncio.to_thread(
-                    self.fetch_response_sync, cast(SyncChat, chat)
-                )
-            else:
-                latest_response = await self.fetch_response_async(cast(AsyncChat, chat))
+            latest_response: Response | None = None
+            async for response, _ in chat.stream():
+                latest_response = response
 
             if not latest_response:
                 raise ModelNoOutputError("Model failed to produce a response")
@@ -330,6 +300,23 @@ class XAIModel(LLM):
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=latest_response)],
         )
+
+    @override
+    async def count_tokens(
+        self,
+        input: Sequence[InputItem],
+        *,
+        history: Sequence[InputItem] = [],
+        tools: list[ToolDefinition] = [],
+        **kwargs: object,
+    ) -> int:
+        string_input = await self.stringify_input(input, history=history, tools=tools)
+        self.logger.debug(string_input)
+
+        tokens = await self.get_client().tokenize.tokenize_text(
+            string_input, self.model_name
+        )
+        return len(tokens)
 
     @override
     async def _calculate_cost(

@@ -426,6 +426,8 @@ class GoogleModel(LLM):
             )
 
         input = [*history, *input]
+        if not input:
+            return 0
 
         system_prompt = kwargs.pop("system_prompt", None)
         contents = await self.parse_input(input, **kwargs)
