@@ -361,7 +361,6 @@ class OpenAIModel(LLM):
                         )
                 case RawResponse():
                     if self.use_completions:
-                        pass
                         new_input.append(item.response)
                     else:
                         new_input.extend(item.response)
