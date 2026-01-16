@@ -82,6 +82,7 @@ CONTEXT_WINDOW_PATTERN = re.compile(
     r"longer than the model's context length|"
     r"too many tokens.*size limit exceeded|"
     r"prompt is too long|"
+    r"maximum prompt length|"
     r"input length should be|"
     r"sent message larger than max|"
     r"input tokens exceeded|"

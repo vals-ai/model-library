@@ -2,7 +2,6 @@ import io
 import logging
 from typing import Any, Literal, Sequence
 
-import grpc
 from typing_extensions import override
 from xai_sdk import AsyncClient
 from xai_sdk.aio.chat import Chat
@@ -36,7 +35,6 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
-    RateLimitException,
 )
 from model_library.providers.openai import OpenAIModel
 from model_library.register_models import register_provider
@@ -253,38 +251,35 @@ class XAIModel(LLM):
 
         body = await self.build_body(input, tools=tools, **kwargs)
 
-        try:
-            chat: Chat = self.get_client().chat.create(**body)
+        chat: Chat = self.get_client().chat.create(**body)
 
-            latest_response: Response | None = None
-            async for response, _ in chat.stream():
-                latest_response = response
+        latest_response: Response | None = None
+        async for response, _ in chat.stream():
+            latest_response = response
 
-            if not latest_response:
-                raise ModelNoOutputError("Model failed to produce a response")
+        if not latest_response:
+            raise ModelNoOutputError("Model failed to produce a response")
 
-            tool_calls: list[ToolCall] = []
-            if (
-                latest_response.finish_reason == "REASON_TOOL_CALLS"
-                and latest_response.tool_calls
-            ):
-                for tool_call in latest_response.tool_calls:
-                    tool_calls.append(
-                        ToolCall(
-                            id=tool_call.id,
-                            name=tool_call.function.name,
-                            args=tool_call.function.arguments,
-                        )
+        tool_calls: list[ToolCall] = []
+        if (
+            latest_response.finish_reason == "REASON_TOOL_CALLS"
+            and latest_response.tool_calls
+        ):
+            for tool_call in latest_response.tool_calls:
+                tool_calls.append(
+                    ToolCall(
+                        id=tool_call.id,
+                        name=tool_call.function.name,
+                        args=tool_call.function.arguments,
                     )
+                )
 
-            if (
-                latest_response.finish_reason == "REASON_MAX_LEN"
-                and not latest_response.content
-                and not latest_response.reasoning_content
-            ):
-                raise MaxOutputTokensExceededError()
-        except grpc.RpcError as e:
-            raise RateLimitException(e.details())
+        if (
+            latest_response.finish_reason == "REASON_MAX_LEN"
+            and not latest_response.content
+            and not latest_response.reasoning_content
+        ):
+            raise MaxOutputTokensExceededError()
 
         return QueryResult(
             output_text=latest_response.content,
