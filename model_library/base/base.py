@@ -14,7 +14,7 @@ from typing import (
 )
 
 import tiktoken
-from pydantic import model_serializer
+from pydantic import SecretStr, model_serializer
 from pydantic.main import BaseModel
 from tiktoken.core import Encoding
 from typing_extensions import override
@@ -75,6 +75,7 @@ class LLMConfig(BaseModel):
     native: bool = True
     provider_config: ProviderConfig | None = None
     registry_key: str | None = None
+    custom_api_key: SecretStr | None = None
 
 
 RetrierType = Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]
@@ -102,6 +103,7 @@ class LLM(ABC):
 
         config = config or LLMConfig()
         self._registry_key = config.registry_key
+        self._custom_api_key = config.custom_api_key
 
         self.max_tokens: int = config.max_tokens
         self.temperature: float | None = config.temperature

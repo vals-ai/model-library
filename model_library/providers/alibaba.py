@@ -9,9 +9,7 @@ from model_library.base import (
     QueryResultCost,
     QueryResultMetadata,
 )
-from model_library.providers.openai import OpenAIModel
 from model_library.register_models import register_provider
-from model_library.utils import create_openai_client_with_defaults
 
 
 @register_provider("alibaba")
@@ -26,15 +24,12 @@ class AlibabaModel(DelegateOnly):
         super().__init__(model_name, provider, config=config)
 
         # https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen
-        self.delegate = OpenAIModel(
-            model_name=self.model_name,
-            provider=self.provider,
+        self.init_delegate(
             config=config,
-            custom_client=create_openai_client_with_defaults(
-                api_key=model_library_settings.DASHSCOPE_API_KEY,
-                base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            ),
+            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+            api_key=model_library_settings.DASHSCOPE_API_KEY,
             use_completions=True,
+            delegate_provider="openai",
         )
 
     @override

@@ -8,15 +8,15 @@ from typing import Any
 
 import pytest
 
+from model_library.base import LLMConfig, TextInput
+from model_library.providers.anthropic import AnthropicModel
+from model_library.providers.google import GoogleModel
+from model_library.providers.openai import OpenAIModel
 from tests.conftest import (
     requires_anthropic_api,
     requires_google_api,
     requires_openai_api,
 )
-from model_library.base import LLMConfig, TextInput
-from model_library.providers.anthropic import AnthropicModel
-from model_library.providers.openai import OpenAIModel
-from model_library.providers.google import GoogleModel
 
 
 @pytest.mark.integration

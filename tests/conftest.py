@@ -253,22 +253,6 @@ def create_test_input() -> object:
     return _create
 
 
-@pytest.fixture
-def event_loop():
-    """Create an event loop for async tests."""
-    import asyncio
-
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-
-    yield loop
-
-    if not loop.is_closed():
-        loop.close()
-
-
 @pytest.fixture(autouse=True)
 def cleanup_env():
     """Clean up environment after each test."""

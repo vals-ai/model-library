@@ -1,6 +1,6 @@
 import importlib
 import pkgutil
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
@@ -18,7 +18,8 @@ def mock_llm():
         "MockLLM",
         (LLM,),
         {
-            "get_client": None,
+            "_get_default_api_key": Mock(return_value="mock_api_key"),
+            "get_client": Mock(return_value=MagicMock()),
             "build_body": AsyncMock(return_value={}),
             "_query_impl": AsyncMock(return_value=QueryResult()),
             "parse_input": AsyncMock(return_value=None),
@@ -37,8 +38,8 @@ def mock_model_library_settings_in_providers():
     """Patch model_library_settings in all provider modules."""
 
     class FakeSettings:
-        def __getattr__(self, name: str) -> MagicMock:
-            return MagicMock(name=f"mock_ENV_{name}")
+        def __getattr__(self, name: str) -> str:
+            return "mock_ENV_{name}"
 
     fake = FakeSettings()
 
