@@ -2,7 +2,7 @@ import io
 import logging
 from typing import Any, Literal, Sequence, cast
 
-from anthropic import AsyncAnthropic
+from anthropic import APIConnectionError, AsyncAnthropic
 from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
 from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
 from pydantic import SecretStr
@@ -33,6 +33,7 @@ from model_library.base import (
 )
 from model_library.base.base import DelegateConfig
 from model_library.exceptions import (
+    ImmediateRetryException,
     MaxOutputTokensExceededError,
     NoMatchingToolCallError,
 )
@@ -596,11 +597,14 @@ class AnthropicModel(LLM):
                 betas.append("context-1m-2025-08-07")
             stream_kwargs["betas"] = betas
 
-        async with client.beta.messages.stream(
-            **stream_kwargs,
-        ) as stream:  # pyright: ignore[reportAny]
-            message = await stream.get_final_message()
-        self.logger.info(f"Anthropic Response finished: {message.id}")
+        try:
+            async with client.beta.messages.stream(
+                **stream_kwargs,
+            ) as stream:  # pyright: ignore[reportAny]
+                message = await stream.get_final_message()
+            self.logger.info(f"Anthropic Response finished: {message.id}")
+        except APIConnectionError:
+            raise ImmediateRetryException("Failed to connect to Anthropic")
 
         text = ""
         reasoning = ""
