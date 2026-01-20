@@ -1,7 +1,10 @@
 from typing import Literal
 
+from pydantic import SecretStr
+
 from model_library import model_library_settings
 from model_library.base import (
+    DelegateConfig,
     DelegateOnly,
     LLMConfig,
 )
@@ -22,8 +25,10 @@ class PerplexityModel(DelegateOnly):
         # https://docs.perplexity.ai/guides/chat-completions-guide
         self.init_delegate(
             config=config,
-            base_url="https://api.perplexity.ai",
-            api_key=model_library_settings.PERPLEXITY_API_KEY,
+            delegate_config=DelegateConfig(
+                base_url="https://api.perplexity.ai",
+                api_key=SecretStr(model_library_settings.PERPLEXITY_API_KEY),
+            ),
             use_completions=True,
             delegate_provider="openai",
         )

@@ -1,9 +1,11 @@
 from typing import Literal
 
+from pydantic import SecretStr
 from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
+    DelegateConfig,
     DelegateOnly,
     LLMConfig,
     QueryResultCost,
@@ -26,8 +28,10 @@ class AlibabaModel(DelegateOnly):
         # https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen
         self.init_delegate(
             config=config,
-            base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-            api_key=model_library_settings.DASHSCOPE_API_KEY,
+            delegate_config=DelegateConfig(
+                base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+                api_key=SecretStr(model_library_settings.DASHSCOPE_API_KEY),
+            ),
             use_completions=True,
             delegate_provider="openai",
         )

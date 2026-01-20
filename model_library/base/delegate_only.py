@@ -13,10 +13,7 @@ from model_library.base import (
     QueryResult,
     ToolDefinition,
 )
-from model_library.utils import (
-    create_anthropic_client_with_defaults,
-    create_openai_client_with_defaults,
-)
+from model_library.base.base import DelegateConfig
 
 
 class DelegateOnlyException(Exception):
@@ -32,15 +29,18 @@ class DelegateOnlyException(Exception):
 
 
 class DelegateOnly(LLM):
-    @override
-    def get_client(self) -> None:
+    def _get_default_api_key(self) -> str:
         raise DelegateOnlyException()
+
+    @override
+    def get_client(self, api_key: str | None = None) -> None:
+        assert self.delegate
+        return self.delegate.get_client()
 
     def init_delegate(
         self,
         config: LLMConfig | None,
-        base_url: str,
-        api_key: str,
+        delegate_config: DelegateConfig,
         delegate_provider: Literal["openai", "anthropic"],
         use_completions: bool = True,
     ) -> None:
@@ -53,21 +53,15 @@ class DelegateOnly(LLM):
                     model_name=self.model_name,
                     provider=self.provider,
                     config=config,
-                    custom_client=create_openai_client_with_defaults(
-                        base_url=base_url,
-                        api_key=api_key,
-                    ),
                     use_completions=use_completions,
+                    delegate_config=delegate_config,
                 )
             case "anthropic":
                 self.delegate = AnthropicModel(
                     model_name=self.model_name,
                     provider=self.provider,
                     config=config,
-                    custom_client=create_anthropic_client_with_defaults(
-                        base_url=base_url,
-                        api_key=api_key,
-                    ),
+                    delegate_config=delegate_config,
                 )
 
     def __init__(
@@ -80,6 +74,7 @@ class DelegateOnly(LLM):
         config = config or LLMConfig()
         config.native = False
         super().__init__(model_name, provider, config=config)
+        config.native = True
 
     @override
     async def _query_impl(

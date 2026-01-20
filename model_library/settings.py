@@ -22,7 +22,7 @@ class ModelLibrarySettings:
         except AttributeError:
             return default
 
-    def __getattr__(self, name: str) -> str | Any:
+    def __getattr__(self, name: str) -> str:
         # load key from override
         if name in self._key_overrides:
             return self._key_overrides[name]

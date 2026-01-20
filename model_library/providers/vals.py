@@ -151,13 +151,17 @@ class DummyAIBatchMixin(LLMBatchMixin):
 class DummyAIModel(LLM):
     _client: Redis | None = None
 
-    @override
-    def get_client(self) -> Redis:
-        if not DummyAIModel._client:
-            DummyAIModel._client = redis.from_url(  # pyright: ignore[reportUnknownMemberType]
+    def _get_default_api_key(self) -> str:
+        return model_library_settings.REDIS_URL
+
+    def get_client(self, api_key: str | None = None) -> Redis:
+        if not self.has_client():
+            assert api_key
+            client = redis.from_url(  # pyright: ignore[reportUnknownMemberType]
                 model_library_settings.REDIS_URL, decode_responses=True
             )
-        return DummyAIModel._client
+            self.assign_client(client)
+        return super().get_client()
 
     def __init__(
         self,

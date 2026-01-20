@@ -1,9 +1,11 @@
 from typing import Literal, Sequence
 
+from pydantic import SecretStr
 from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import DelegateOnly, LLMConfig
+from model_library.base.base import DelegateConfig
 from model_library.base.input import InputItem, ToolDefinition
 from model_library.register_models import register_provider
 
@@ -21,8 +23,10 @@ class MinimaxModel(DelegateOnly):
 
         self.init_delegate(
             config=config,
-            base_url="https://api.minimax.io/anthropic",
-            api_key=model_library_settings.MINIMAX_API_KEY,
+            delegate_config=DelegateConfig(
+                base_url="https://api.minimax.io/anthropic",
+                api_key=SecretStr(model_library_settings.MINIMAX_API_KEY),
+            ),
             delegate_provider="anthropic",
         )
 

@@ -3,7 +3,13 @@ import logging
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from mistralai import AssistantMessage, ContentChunk, Mistral, TextChunk, ThinkChunk
+from mistralai import (
+    AssistantMessage,
+    ContentChunk,
+    Mistral,
+    TextChunk,
+    ThinkChunk,
+)
 from mistralai.models.completionevent import CompletionEvent
 from mistralai.models.toolcall import ToolCall as MistralToolCall
 from mistralai.utils.eventstreaming import EventStreamAsync
@@ -40,16 +46,20 @@ from model_library.utils import default_httpx_client
 
 @register_provider("mistralai")
 class MistralModel(LLM):
-    _client: Mistral | None = None
+    @override
+    def _get_default_api_key(self) -> str:
+        return model_library_settings.MISTRAL_API_KEY
 
     @override
-    def get_client(self) -> Mistral:
-        if not MistralModel._client:
-            MistralModel._client = Mistral(
-                api_key=model_library_settings.MISTRAL_API_KEY,
+    def get_client(self, api_key: str | None = None) -> Mistral:
+        if not self.has_client():
+            assert api_key
+            client = Mistral(
+                api_key=api_key,
                 async_client=default_httpx_client(),
             )
-        return MistralModel._client
+            self.assign_client(client)
+        return super().get_client()
 
     def __init__(
         self,

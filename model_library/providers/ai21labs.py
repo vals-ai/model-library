@@ -34,17 +34,21 @@ from model_library.utils import default_httpx_client
 
 @register_provider("ai21labs")
 class AI21LabsModel(LLM):
-    _client: AsyncAI21Client | None = None
+    @override
+    def _get_default_api_key(self) -> str:
+        return model_library_settings.AI21LABS_API_KEY
 
     @override
-    def get_client(self) -> AsyncAI21Client:
-        if not AI21LabsModel._client:
-            AI21LabsModel._client = AsyncAI21Client(
-                api_key=model_library_settings.AI21LABS_API_KEY,
+    def get_client(self, api_key: str | None = None) -> AsyncAI21Client:
+        if not self.has_client():
+            assert api_key
+            client = AsyncAI21Client(
+                api_key=api_key,
                 http_client=default_httpx_client(),
-                num_retries=1,
+                num_retries=3,
             )
-        return AI21LabsModel._client
+            self.assign_client(client)
+        return super().get_client()
 
     def __init__(
         self,

@@ -1,5 +1,7 @@
+import hashlib
 import io
 import logging
+import threading
 import time
 import uuid
 from abc import ABC, abstractmethod
@@ -78,9 +80,20 @@ class LLMConfig(BaseModel):
     custom_api_key: SecretStr | None = None
 
 
+class DelegateConfig(BaseModel):
+    base_url: str
+    api_key: SecretStr
+
+
 RetrierType = Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]
 
 R = TypeVar("R")  # return type
+
+
+# shared across all subclasses and instances
+# hash(provider + api_key) -> client
+client_registry_lock = threading.Lock()
+client_registry: dict[tuple[str, str], Any] = {}
 
 
 class LLM(ABC):
@@ -88,6 +101,34 @@ class LLM(ABC):
     Base class for all LLMs
     LLM call errors should be raised as exceptions
     """
+
+    @abstractmethod
+    def get_client(self, api_key: str | None = None) -> Any:
+        """
+        Returns the cached instance of the appropriate SDK client.
+        Sublasses should implement this method and:
+        - if api_key is provided, initialize their client and call assing_client(client).
+        - else return super().get_client()
+        """
+        global client_registry
+        return client_registry[self._client_registry_key]
+
+    def assign_client(self, client: object) -> None:
+        """Thread-safe assignment to the client registry"""
+        global client_registry
+
+        if self._client_registry_key not in client_registry:
+            with client_registry_lock:
+                if self._client_registry_key not in client_registry:
+                    client_registry[self._client_registry_key] = client
+
+    def has_client(self) -> bool:
+        return self._client_registry_key in client_registry
+
+    @abstractmethod
+    def _get_default_api_key(self) -> str:
+        """Return the api key from model_library.settings"""
+        ...
 
     def __init__(
         self,
@@ -103,7 +144,6 @@ class LLM(ABC):
 
         config = config or LLMConfig()
         self._registry_key = config.registry_key
-        self._custom_api_key = config.custom_api_key
 
         self.max_tokens: int = config.max_tokens
         self.temperature: float | None = config.temperature
@@ -135,18 +175,24 @@ class LLM(ABC):
         )
         self.custom_retrier: Callable[..., RetrierType] | None = retry_llm_call
 
+        if not self.native:
+            return
+
+        if config.custom_api_key:
+            raw_key = config.custom_api_key.get_secret_value()
+        else:
+            raw_key = self._get_default_api_key()
+
+        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        self._client_registry_key = (self.provider, key_hash)
+        self.get_client(api_key=raw_key)
+
     @override
     def __repr__(self):
         attrs = vars(self).copy()
         attrs.pop("logger", None)
         attrs.pop("custom_retrier", None)
-        attrs.pop("_key", None)
         return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
-
-    @abstractmethod
-    def get_client(self) -> object:
-        """Return the instance of the appropriate SDK client."""
-        ...
 
     @staticmethod
     async def timer_wrapper(func: Callable[[], Awaitable[R]]) -> tuple[R, float]:

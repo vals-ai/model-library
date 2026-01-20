@@ -2,6 +2,7 @@ import io
 import logging
 from typing import Any, Literal, Sequence
 
+from pydantic import SecretStr
 from typing_extensions import override
 from xai_sdk import AsyncClient
 from xai_sdk.aio.chat import Chat
@@ -13,6 +14,7 @@ from xai_sdk.proto.v6.chat_pb2 import Message, Tool
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
+    DelegateConfig,
     FileBase,
     FileInput,
     FileWithBase64,
@@ -38,20 +40,23 @@ from model_library.exceptions import (
 )
 from model_library.providers.openai import OpenAIModel
 from model_library.register_models import register_provider
-from model_library.utils import create_openai_client_with_defaults
 
 
 @register_provider("grok")
 class XAIModel(LLM):
-    _client: AsyncClient | None = None
+    @override
+    def _get_default_api_key(self) -> str:
+        return model_library_settings.XAI_API_KEY
 
     @override
-    def get_client(self) -> AsyncClient:
-        if not XAIModel._client:
-            XAIModel._client = AsyncClient(
-                api_key=model_library_settings.XAI_API_KEY,
+    def get_client(self, api_key: str | None = None) -> AsyncClient:
+        if not self.has_client():
+            assert api_key
+            client = AsyncClient(
+                api_key=api_key,
             )
-        return XAIModel._client
+            self.assign_client(client)
+        return super().get_client()
 
     @override
     def __init__(
@@ -71,13 +76,13 @@ class XAIModel(LLM):
                 model_name=self.model_name,
                 provider=provider,
                 config=config,
-                custom_client=create_openai_client_with_defaults(
-                    api_key=model_library_settings.XAI_API_KEY,
+                delegate_config=DelegateConfig(
                     base_url=(
                         "https://us-west-1.api.x.ai/v1"
                         if "grok-3-mini-reasoning" in self.model_name
                         else "https://api.x.ai/v1"
                     ),
+                    api_key=SecretStr(model_library_settings.XAI_API_KEY),
                 ),
                 use_completions=True,
             )

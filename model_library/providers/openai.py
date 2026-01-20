@@ -30,6 +30,7 @@ from model_library.base import (
     LLM,
     BatchResult,
     Citation,
+    DelegateConfig,
     FileBase,
     FileInput,
     FileWithBase64,
@@ -240,17 +241,24 @@ class OpenAIConfig(ProviderConfig):
 class OpenAIModel(LLM):
     provider_config = OpenAIConfig()
 
-    _client: AsyncOpenAI | None = None
+    @override
+    def _get_default_api_key(self) -> str:
+        if self.delegate_config:
+            return self.delegate_config.api_key.get_secret_value()
+        return model_library_settings.OPENAI_API_KEY
 
     @override
-    def get_client(self) -> AsyncOpenAI:
-        if self._delegate_client:
-            return self._delegate_client
-        if not OpenAIModel._client:
-            OpenAIModel._client = create_openai_client_with_defaults(
-                api_key=model_library_settings.OPENAI_API_KEY
+    def get_client(self, api_key: str | None = None) -> AsyncOpenAI:
+        if not self.has_client():
+            assert api_key
+            client = create_openai_client_with_defaults(
+                base_url=self.delegate_config.base_url
+                if self.delegate_config
+                else None,
+                api_key=api_key,
             )
-        return OpenAIModel._client
+            self.assign_client(client)
+        return super().get_client()
 
     def __init__(
         self,
@@ -258,20 +266,20 @@ class OpenAIModel(LLM):
         provider: str = "openai",
         *,
         config: LLMConfig | None = None,
-        custom_client: AsyncOpenAI | None = None,
         use_completions: bool = False,
+        delegate_config: DelegateConfig | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
         self.use_completions: bool = (
             use_completions  # TODO: do completions in a separate file
         )
+        self.delegate_config = delegate_config
+
+        super().__init__(model_name, provider, config=config)
+
         self.deep_research = self.provider_config.deep_research
 
-        # allow custom client to act as delegate (native)
-        self._delegate_client: AsyncOpenAI | None = custom_client
-
         # batch client
-        self.supports_batch: bool = self.supports_batch and not custom_client
+        self.supports_batch: bool = self.supports_batch and not self.delegate_config
         self.batch: LLMBatchMixin | None = (
             OpenAIBatchMixin(self) if self.supports_batch else None
         )

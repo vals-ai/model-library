@@ -33,7 +33,7 @@ from model_library.providers.openai import OpenAIModel
     ],
 )
 async def test_build_body_includes_tools(
-    provider, Model, model_name, expects_body_keys, mock_model_settings
+    provider, Model, model_name, expects_body_keys
 ):
     model = Model(model_name)
 
@@ -60,7 +60,7 @@ async def test_build_body_includes_tools(
         assert expects_body_keys.issubset(set(body.keys()))
 
 
-async def test_parse_tools_shapes_for_all(mock_model_settings):
+async def test_parse_tools_shapes_for_all():
     tools = [
         ToolDefinition(
             name="get_echo",

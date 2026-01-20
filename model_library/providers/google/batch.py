@@ -196,7 +196,7 @@ class GoogleBatchMixin(LLMBatchMixin):
             custom_id = labels.get("qa_pair_id", f"request-{i}")
             jsonl_lines.append(json.dumps({"key": custom_id, "request": request_data}))
 
-        batch_request_file = self._root.client.files.upload(
+        batch_request_file = self._root.get_client().files.upload(
             file=io.StringIO("\n".join(jsonl_lines)),
             config=UploadFileConfig(mime_type="application/jsonl"),
         )
@@ -205,7 +205,7 @@ class GoogleBatchMixin(LLMBatchMixin):
             raise Exception("Failed to upload batch jsonl")
 
         try:
-            job: BatchJob = await self._root.client.aio.batches.create(
+            job: BatchJob = await self._root.get_client().aio.batches.create(
                 model=self._root.model_name,
                 src=batch_request_file.name,
                 config={"display_name": batch_name},
@@ -224,14 +224,14 @@ class GoogleBatchMixin(LLMBatchMixin):
     async def get_batch_results(self, batch_id: str) -> list[BatchResult]:
         self._root.logger.info(f"Retrieving batch results for {batch_id}")
 
-        job = await self._root.client.aio.batches.get(name=batch_id)
+        job = await self._root.get_client().aio.batches.get(name=batch_id)
 
         results: list[BatchResult] = []
 
         if job.state == JobState.JOB_STATE_SUCCEEDED:
             if job.dest and job.dest.file_name:
                 results_file_name = job.dest.file_name
-                file_content = await self._root.client.aio.files.download(
+                file_content = await self._root.get_client().aio.files.download(
                     file=results_file_name
                 )
                 decoded = file_content.decode("utf-8")
@@ -250,7 +250,7 @@ class GoogleBatchMixin(LLMBatchMixin):
     @override
     async def cancel_batch_request(self, batch_id: str):
         self._root.logger.info(f"Cancelling batch {batch_id}")
-        await self._root.client.aio.batches.cancel(name=batch_id)
+        await self._root.get_client().aio.batches.cancel(name=batch_id)
 
     @override
     async def get_batch_progress(self, batch_id: str) -> int:
@@ -262,7 +262,7 @@ class GoogleBatchMixin(LLMBatchMixin):
 
         try:
             self._root.logger.debug(f"Checking batch status for {batch_id}")
-            job: BatchJob = await self._root.client.aio.batches.get(name=batch_id)
+            job: BatchJob = await self._root.get_client().aio.batches.get(name=batch_id)
             state = job.state
 
             if not state:

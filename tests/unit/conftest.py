@@ -39,7 +39,7 @@ def mock_model_library_settings_in_providers():
 
     class FakeSettings:
         def __getattr__(self, name: str) -> str:
-            return "mock_ENV_{name}"
+            return f"mock_ENV_{name}"
 
     fake = FakeSettings()
 
@@ -52,3 +52,11 @@ def mock_model_library_settings_in_providers():
             setattr(mod, "model_library_settings", fake)
 
     yield
+
+
+@pytest.fixture(autouse=True)
+def mock_boto3_client(monkeypatch):
+    """Mock boto3.client for all tests."""
+    mock_client = MagicMock()
+    monkeypatch.setattr("boto3.client", MagicMock(return_value=mock_client))
+    return mock_client

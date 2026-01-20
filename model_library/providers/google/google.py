@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import logging
 import uuid
 from typing import Any, Literal, Sequence, cast
@@ -25,6 +26,7 @@ from google.genai.types import (
     ToolListUnion,
     UploadFileConfig,
 )
+from google.oauth2 import service_account
 from typing_extensions import override
 
 from model_library import model_library_settings
@@ -95,31 +97,50 @@ class GoogleModel(LLM):
         ),
     ]
 
-    @override
-    def get_client(self) -> Client:
-        if self.provider_config.use_vertex:
-            # Preview Gemini releases from September 2025 are only served from the global
-            # Vertex region. The public docs for these SKUs list `global` as the sole
-            # availability region (see September 25, 2025 release notes), so we override
-            # the default `us-central1` when we detect them.
-            # https://cloud.google.com/vertex-ai/generative-ai/docs/models/gemini/2-5-flash
-            MODEL_REGION_OVERRIDES: dict[str, str] = {
-                "gemini-2.5-flash-preview-09-2025": "global",
-                "gemini-2.5-flash-lite-preview-09-2025": "global",
+    def _get_default_api_key(self) -> str:
+        if not self.provider_config.use_vertex:
+            return model_library_settings.GOOGLE_API_KEY
+
+        return json.dumps(
+            {
+                "GCP_REGION": model_library_settings.GCP_REGION,
+                "GCP_PROJECT_ID": model_library_settings.GCP_PROJECT_ID,
+                "GCP_CREDS": model_library_settings.GCP_CREDS,
             }
-            region = model_library_settings.GCP_REGION
-            if self.model_name in MODEL_REGION_OVERRIDES:
-                region = MODEL_REGION_OVERRIDES[self.model_name]
+        )
 
-            return Client(
-                vertexai=True,
-                project=model_library_settings.GCP_PROJECT_ID,
-                location=region,
-                # Credentials object is not typed, so we have to ignore the error
-                credentials=model_library_settings.GCP_CREDS,
-            )
+    @override
+    def get_client(self, api_key: str | None = None) -> Client:
+        if not self.has_client():
+            assert api_key
+            if self.provider_config.use_vertex:
+                # Gemini preview releases are only server from the global Vertex region after September 2025.
+                MODEL_REGION_OVERRIDES: dict[str, str] = {
+                    "gemini-2.5-flash-preview-09-2025": "global",
+                    "gemini-2.5-flash-lite-preview-09-2025": "global",
+                    "gemini-3-flash-preview": "global",
+                    "gemini-3-pro-preview": "global",
+                }
 
-        return Client(api_key=model_library_settings.GOOGLE_API_KEY)
+                creds = json.loads(api_key)
+
+                region = creds["GCP_REGION"]
+                if self.model_name in MODEL_REGION_OVERRIDES:
+                    region = MODEL_REGION_OVERRIDES[self.model_name]
+
+                client = Client(
+                    vertexai=True,
+                    project=creds["GCP_PROJECT_ID"],
+                    location=region,
+                    credentials=service_account.Credentials.from_service_account_info(  # type: ignore
+                        json.loads(creds["GCP_CREDS"]),
+                        scopes=["https://www.googleapis.com/auth/cloud-platform"],
+                    ),
+                )
+            else:
+                client = Client(api_key=api_key)
+            self.assign_client(client)
+        return super().get_client()
 
     def __init__(
         self,
@@ -140,8 +161,6 @@ class GoogleModel(LLM):
         self.batch: LLMBatchMixin | None = (
             GoogleBatchMixin(self) if self.supports_batch else None
         )
-
-        self.client = self.get_client()
 
     @override
     async def parse_input(
@@ -260,7 +279,7 @@ class GoogleModel(LLM):
             )
 
         mime = f"image/{mime}" if type == "image" else mime  # TODO:
-        response: File = self.client.files.upload(
+        response: File = self.get_client().files.upload(
             file=bytes, config=UploadFileConfig(mime_type=mime)
         )
         if not response.name:
@@ -338,7 +357,7 @@ class GoogleModel(LLM):
 
         metadata: GenerateContentResponseUsageMetadata | None = None
 
-        stream = await self.client.aio.models.generate_content_stream(**body)
+        stream = await self.get_client().aio.models.generate_content_stream(**body)
         contents: list[Content | None] = []
         finish_reason: FinishReason | None = None
 
@@ -437,7 +456,7 @@ class GoogleModel(LLM):
             tools=parsed_tools,
         )
 
-        response = await self.client.aio.models.count_tokens(
+        response = await self.get_client().aio.models.count_tokens(
             model=self.model_name,
             contents=cast(Any, contents),
             config=config,
@@ -503,7 +522,7 @@ class GoogleModel(LLM):
         # Make the request with retry wrapper
         async def _query():
             try:
-                return await self.client.aio.models.generate_content(**body)
+                return await self.get_client().aio.models.generate_content(**body)
             except (genai_errors.ServerError, genai_errors.UnknownApiResponseError):
                 raise ImmediateRetryException("Failed to connect to Google API")
 

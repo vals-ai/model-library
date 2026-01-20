@@ -64,7 +64,7 @@ def create_openai_client_with_defaults(
 
 
 def create_anthropic_client_with_defaults(
-    api_key: str, base_url: str | None = None
+    api_key: str, base_url: str | None = None, default_headers: dict[str, str] = {}
 ) -> AsyncAnthropic:
     return AsyncAnthropic(
         base_url=base_url,

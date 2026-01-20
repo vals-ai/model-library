@@ -1,9 +1,11 @@
 from typing import Literal
 
+from pydantic import SecretStr
 from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
+    DelegateConfig,
     LLMConfig,
     ProviderConfig,
     QueryResultCost,
@@ -38,8 +40,10 @@ class FireworksModel(DelegateOnly):
         # https://docs.fireworks.ai/tools-sdks/openai-compatibility
         self.init_delegate(
             config=config,
-            base_url="https://api.fireworks.ai/inference/v1",
-            api_key=model_library_settings.FIREWORKS_API_KEY,
+            delegate_config=DelegateConfig(
+                base_url="https://api.fireworks.ai/inference/v1",
+                api_key=SecretStr(model_library_settings.FIREWORKS_API_KEY),
+            ),
             use_completions=True,
             delegate_provider="openai",
         )

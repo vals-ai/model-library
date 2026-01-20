@@ -5,8 +5,11 @@ https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html
 
 from typing import Literal
 
+from pydantic import SecretStr
+
 from model_library import model_library_settings
 from model_library.base import (
+    DelegateConfig,
     DelegateOnly,
     LLMConfig,
 )
@@ -27,8 +30,10 @@ class DeepSeekModel(DelegateOnly):
         # https://api-docs.deepseek.com/
         self.init_delegate(
             config=config,
-            base_url="https://api.deepseek.com/v1",
-            api_key=model_library_settings.DEEPSEEK_API_KEY,
+            delegate_config=DelegateConfig(
+                base_url="https://api.deepseek.com/v1",
+                api_key=SecretStr(model_library_settings.DEEPSEEK_API_KEY),
+            ),
             use_completions=True,
             delegate_provider="openai",
         )
