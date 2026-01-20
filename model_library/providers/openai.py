@@ -235,6 +235,7 @@ class OpenAIBatchMixin(LLMBatchMixin):
 
 class OpenAIConfig(ProviderConfig):
     deep_research: bool = False
+    verbosity: Literal["low", "medium", "high"] | None = None
 
 
 @register_provider("openai")
@@ -277,6 +278,7 @@ class OpenAIModel(LLM):
         super().__init__(model_name, provider, config=config)
 
         self.deep_research = self.provider_config.deep_research
+        self.verbosity = self.provider_config.verbosity
 
         # batch client
         self.supports_batch: bool = self.supports_batch and not self.delegate_config
@@ -765,6 +767,9 @@ class OpenAIModel(LLM):
             body["reasoning"] = {"summary": "auto"}
             if self.reasoning_effort is not None:
                 body["reasoning"]["effort"] = self.reasoning_effort  # type: ignore[reportArgumentType]
+
+        if self.verbosity is not None:
+            body["text"] = {"format": {"type": "text"}, "verbosity": self.verbosity}
 
         if self.supports_temperature:
             if self.temperature is not None:
