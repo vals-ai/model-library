@@ -18,6 +18,23 @@ base-config:
       write_markup: 1
 
 zai-models:
+  zai/glm-4.7-flashx:
+    label: GLM 4.7 Flash
+    description: "z.AI lightweight fast model"
+    release_date: 2026-01-19
+    properties:
+      context_window: 200_000
+      max_tokens: 128_000
+    costs_per_million_token:
+      input: 0.07
+      output: 0.4
+      cache:
+        read: 0.01
+    default_parameters:
+      # from https://huggingface.co/zai-org/GLM-4.7-Flash
+      temperature: 1
+      top_p: 0.95
+  
   zai/glm-4.7:
     label: GLM 4.7
     description: "Latest model from ZAI"
