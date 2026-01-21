@@ -7,7 +7,7 @@ from typing import Literal
 
 import pytest
 
-from model_library.base.base import LLM
+from model_library.base import LLM
 from model_library.providers.fireworks import FireworksModel
 from model_library.providers.google import GoogleModel
 from model_library.register_models import (
@@ -20,7 +20,7 @@ from model_library.registry_utils import get_registry_model
 
 
 @pytest.mark.parametrize("concurrency_type", ["threads", "async"])
-def test_concurrent_access(concurrency_type: Literal["threads", "async"]) -> None:
+async def test_concurrent_access(concurrency_type: Literal["threads", "async"]) -> None:
     """
     Test that get_model_registry() is safe under concurrency
     Only one registry object is to be created
@@ -56,7 +56,7 @@ def test_concurrent_access(concurrency_type: Literal["threads", "async"]) -> Non
 
     match concurrency_type:
         case "async":
-            results = asyncio.run(_test_async())
+            results = await _test_async()
         case "threads":
             results = _test_threads()
 
@@ -75,14 +75,14 @@ def test_concurrent_access(concurrency_type: Literal["threads", "async"]) -> Non
     assert registry_size > 0, f"Registry is empty in {concurrency_type} mode"
 
 
-def test_registry_is_singleton():
+async def test_registry_is_singleton():
     """Test that repeated calls return the same dict object"""
     registry1 = get_provider_registry()
     registry2 = get_provider_registry()
     assert registry1 is registry2
 
 
-def test_register_provider_decorator():
+async def test_register_provider_decorator():
     """Decorator registers a provider correctly."""
 
     @register_provider("test")
@@ -94,14 +94,14 @@ def test_register_provider_decorator():
     assert registry["test"] is DummyProvider
 
 
-def test_registry_contains_expected_providers():
+async def test_registry_contains_expected_providers():
     registry = get_provider_registry()
     expected = ["openai", "zai", "fireworks", "azure"]
     for name in expected:
         assert name in registry
 
 
-def test_manual_and_registry_instantiation():
+async def test_manual_and_registry_instantiation():
     """
     Test manual and registry instantiation of a provider.
     """

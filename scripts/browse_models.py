@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.pretty import Pretty
 
 from model_library.registry_utils import (
-    get_model_names_by_provider,
+    get_model_names,
     get_provider_names,
     get_registry_config,
 )
@@ -29,7 +29,7 @@ def display_model_details(model_name: str) -> None:
 
 
 def browse_models(provider: str) -> None:
-    models: List[str] = get_model_names_by_provider(provider)
+    models: List[str] = get_model_names(provider)
     if not models:
         console.print(f"[yellow]No models found for {provider}[/yellow]")
         input("\nPress Enter to return.")

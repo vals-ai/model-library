@@ -1,8 +1,7 @@
 import asyncio
 from typing import Any, cast
 
-from model_library.base import LLM, ToolDefinition
-from model_library.base.output import QueryResult
+from model_library.base import LLM, QueryResult, ToolDefinition
 from model_library.registry_utils import get_registry_model
 
 from ..setup import console_log, setup

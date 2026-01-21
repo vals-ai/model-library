@@ -24,16 +24,19 @@ from google.genai.types import (
 )
 
 
-def extract_text_from_json_response(response: dict[str, Any]) -> str:
+def extract_text_from_json_response(response: dict[str, Any]) -> tuple[str, str]:
     """Extract concatenated non-thought text from a JSON response structure."""
     # TODO: fix the typing we always ignore
     text = ""
+    reasoning = ""
     for candidate in response.get("candidates", []) or []:  # type: ignore
         content = (candidate or {}).get("content") or {}  # type: ignore
         for part in content.get("parts", []) or []:  # type: ignore
-            if not part.get("thought", False):  # type: ignore
+            if part.get("thought", False):  # type: ignore
+                reasoning += part.get("text", "")  # type: ignore
+            else:
                 text += part.get("text", "")  # type: ignore
-    return text  # type: ignore
+    return text, reasoning  # type: ignore
 
 
 def parse_predictions_jsonl(jsonl: str) -> list[BatchResult]:
@@ -48,9 +51,10 @@ def parse_predictions_jsonl(jsonl: str) -> list[BatchResult]:
         custom_id = data.get("key", "unknown")
         if "response" in data:
             response = data["response"]
-            text = extract_text_from_json_response(response)
+            text, reasoning = extract_text_from_json_response(response)
             output = QueryResult()
             output.output_text = text
+            output.reasoning = reasoning
             if "usageMetadata" in response:
                 output.metadata.in_tokens = response["usageMetadata"].get(
                     "promptTokenCount", 0

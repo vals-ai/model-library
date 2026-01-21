@@ -16,13 +16,13 @@ from model_library.base import (
     LLMConfig,
     QueryResult,
     QueryResultMetadata,
+    RawResponse,
     TextInput,
     ToolBody,
     ToolCall,
     ToolDefinition,
     ToolResult,
 )
-from model_library.base.input import RawResponse
 from model_library.exceptions import (
     BadInputError,
     MaxOutputTokensExceededError,

@@ -29,6 +29,7 @@ dependencies = [
   "boto3>=1.38.27,<2.0",
   "google-genai[aiohttp]>=1.51.0",
   "google-cloud-storage>=1.26.0",
+  "pytest-xdist>=3.8.0",
 ]
 
 [dependency-groups]
@@ -87,3 +88,4 @@ markers = [
 # Async test configuration
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"

@@ -1,33 +1,19 @@
 from types import TracebackType
 from unittest.mock import MagicMock
 
-import pytest
+from model_library.base import TextInput
+from model_library.registry_utils import get_registry_model
+from tests.conftest import parametrize_models_for_provider
+from tests.test_helpers import get_example_tool_input
 
-from model_library.base import LLMConfig, TextInput, ToolBody, ToolDefinition
-from model_library.providers.anthropic import AnthropicModel
 
+@parametrize_models_for_provider("anthropic")
+async def test_anthropic_build_body_adds_cache_control_on_system_only(model_key: str):
+    model = get_registry_model(model_key)
 
-@pytest.mark.asyncio
-async def test_anthropic_build_body_adds_cache_control_on_system_only():
-    m = AnthropicModel("claude-haiku-4-5-20251001", config=LLMConfig())
+    input, system_prompt, tools = get_example_tool_input()
 
-    tools = [
-        ToolDefinition(
-            name="get_time",
-            body=ToolBody(
-                name="get_time",
-                description="Get time",
-                properties={"tz": {"type": "string"}},
-                required=["tz"],
-            ),
-        )
-    ]
-
-    body = await m.build_body(
-        [TextInput(text="hi")],
-        tools=tools,
-        system_prompt="sys",
-    )
+    body = await model.build_body(input, tools=tools, system_prompt=system_prompt)
 
     # system should be a list with cache_control block
     assert isinstance(body["system"], list)
@@ -36,27 +22,14 @@ async def test_anthropic_build_body_adds_cache_control_on_system_only():
     assert not any("cache_control" in t for t in body["tools"])
 
 
-@pytest.mark.asyncio
-async def test_anthropic_build_body_caches_system_by_default():
-    m = AnthropicModel("claude-haiku-4-5-20251001", config=LLMConfig())
+@parametrize_models_for_provider("anthropic")
+async def test_anthropic_build_body_caches_system_by_default(model_key: str):
+    model = get_registry_model(model_key)
 
-    tools = [
-        ToolDefinition(
-            name="get_time",
-            body=ToolBody(
-                name="get_time",
-                description="Get time",
-                properties={"tz": {"type": "string"}},
-                required=["tz"],
-            ),
-        )
-    ]
+    input, system_prompt, tools = get_example_tool_input()
 
-    body = await m.build_body(
-        [TextInput(text="hi")],
-        tools=tools,
-        system_prompt="sys",
-    )
+    body = await model.build_body(input, tools=tools, system_prompt=system_prompt)
+
     # Default: cache system with ephemeral type, no ttl provided
     assert isinstance(body["system"], list)
     cc = body["system"][0].get("cache_control", {})
@@ -65,42 +38,19 @@ async def test_anthropic_build_body_caches_system_by_default():
     assert not any("cache_control" in t for t in body["tools"])
 
 
-@pytest.mark.asyncio
-async def test_anthropic_cache_control_on_tools_when_no_system():
-    m = AnthropicModel("claude-haiku-4-5-20251001", config=LLMConfig())
+@parametrize_models_for_provider("anthropic")
+async def test_anthropic_cache_control_on_tools_when_no_system(model_key: str):
+    model = get_registry_model(model_key)
 
-    tools = [
-        ToolDefinition(
-            name="search_documents",
-            body=ToolBody(
-                name="search_documents",
-                description="Search",
-                properties={"q": {"type": "string"}},
-                required=["q"],
-            ),
-        ),
-        ToolDefinition(
-            name="get_document",
-            body=ToolBody(
-                name="get_document",
-                description="Fetch doc",
-                properties={"id": {"type": "string"}},
-                required=["id"],
-            ),
-        ),
-    ]
+    input, system_prompt, tools = get_example_tool_input()
 
-    body = await m.build_body(
-        [TextInput(text="hi")],
-        tools=tools,
-    )
+    body = await model.build_body(input, tools=tools)
 
     # No system -> last tool should carry cache_control
     assert body.get("system") is None
     assert body["tools"][-1].get("cache_control", {}).get("type") == "ephemeral"
 
 
-@pytest.mark.asyncio
 async def test_anthropic_query_maps_cache_usage():
     """End-to-end stub of _query_impl to verify cache fields are propagated."""
 
@@ -150,10 +100,10 @@ async def test_anthropic_query_maps_cache_usage():
         def __init__(self):
             self.beta = _DummyBeta()
 
-    m = AnthropicModel("claude-haiku-4-5-20251001", config=LLMConfig())
-    m.get_client = lambda: _DummyClient()
+    model = get_registry_model("anthropic/claude-haiku-4-5-20251001")
+    model.get_client = lambda: _DummyClient()
 
-    res = await m._query_impl(
+    res = await model._query_impl(
         [TextInput(text="hi")], tools=[], query_logger=MagicMock()
     )
     assert res.metadata.in_tokens == 10

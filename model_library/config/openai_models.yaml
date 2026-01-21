@@ -854,24 +854,3 @@ gpt-3.5-models:
       input: 1.5
       output: 2.0
     documentation_url: https://platform.openai.com/docs/models/gpt-3.5-turbo-instruct
-
-databricks-models:
-  base-config:
-    company: Databricks
-
-  databricks/databricks-dbrx-instruct:
-    label: DBRX Instruct
-    description: Databricks Instruct model.
-    release_date: 2024-03-27
-    properties:
-      context_window: 32_768
-      max_tokens: 4_096
-      training_cutoff: "2023-12"
-    metadata:
-      available_for_everyone: false
-      deprecated: true
-    costs_per_million_token:
-      input: 2.25
-      output: 6.75
-    alternative_keys:
-      - databricks/dbrx-instruct

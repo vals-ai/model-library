@@ -4,9 +4,13 @@ from pydantic import SecretStr
 from typing_extensions import override
 
 from model_library import model_library_settings
-from model_library.base import DelegateOnly, LLMConfig
-from model_library.base.base import DelegateConfig
-from model_library.base.input import InputItem, ToolDefinition
+from model_library.base import (
+    DelegateConfig,
+    DelegateOnly,
+    InputItem,
+    LLMConfig,
+    ToolDefinition,
+)
 from model_library.register_models import register_provider
 
 

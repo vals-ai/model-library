@@ -112,9 +112,7 @@ async def test_parse_tools_shapes_for_all():
         (GoogleModel, "gemini-2.5-flash-lite"),
     ],
 )
-async def test_google_tool_result_roundtrip_no_storage_import(
-    model_class, model_name, mock_model_settings
-):
+async def test_google_tool_result_roundtrip_no_storage_import(model_class, model_name):
     # Ensure that creating a GoogleModel and building a body with a ToolResult
     # does not require the storage client (batch-only) and shapes content as expected.
     from model_library.base import ToolCall, ToolResult
@@ -130,7 +128,7 @@ async def test_google_tool_result_roundtrip_no_storage_import(
     assert "function" in roles and "user" in roles
 
 
-async def test_anthropic_rejects_invalid_tool_result(mock_model_settings):
+async def test_anthropic_rejects_invalid_tool_result():
     """Verify that providing a ToolResult without a matching tool call raises an exception."""
     from model_library.base import ToolCall, ToolResult
 

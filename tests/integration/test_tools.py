@@ -2,10 +2,6 @@
 Integration tests for provider tool-calling.
 """
 
-import os
-
-import pytest
-
 from model_library.base import (
     TextInput,
     ToolBody,
@@ -15,13 +11,6 @@ from model_library.base import (
 from model_library.registry_utils import get_registry_model
 
 
-def has(var: str) -> bool:
-    return bool(os.getenv(var))
-
-
-@pytest.mark.integration
-@pytest.mark.asyncio
-@pytest.mark.skipif(not has("GOOGLE_API_KEY"), reason="No Google key")
 async def test_google_tools_roundtrip_optional():
     model = get_registry_model("google/gemini-2.5-flash")
     tools = [
@@ -47,9 +36,6 @@ async def test_google_tools_roundtrip_optional():
         assert len(out1.output_text_str) > 0
 
 
-@pytest.mark.integration
-@pytest.mark.asyncio
-@pytest.mark.skipif(not has("OPENAI_API_KEY"), reason="No OpenAI key")
 async def test_openai_tools_optional():
     model = get_registry_model("openai/gpt-4o-mini")
     tools = [
@@ -70,9 +56,6 @@ async def test_openai_tools_optional():
     assert out is not None
 
 
-@pytest.mark.integration
-@pytest.mark.asyncio
-@pytest.mark.skipif(not has("FIREWORKS_API_KEY"), reason="No Fireworks key")
 async def test_fireworks_streaming_tools_roundtrip():
     """Test that streaming completions correctly handle tool calls."""
     model = get_registry_model("fireworks/glm-4p6")
@@ -110,7 +93,7 @@ async def test_fireworks_streaming_tools_roundtrip():
     assert len(result1.history) == 2, (
         "Expected history to contain input and assistant message"
     )
-    assert result1.history[-1].role == "assistant", (
+    assert result1.history[-1].response.role == "assistant", (
         "Last message should be from assistant"
     )
 

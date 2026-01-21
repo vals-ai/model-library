@@ -1,11 +1,8 @@
-import pytest
-
-from model_library.base.output import QueryResultCost, QueryResultMetadata
+from model_library.base import QueryResultCost, QueryResultMetadata
 
 
-@pytest.mark.unit
 class TestQueryResultCostAddition:
-    def test_add_full_costs(self):
+    async def test_add_full_costs(self):
         cost1 = QueryResultCost(
             input=0.01,
             output=0.02,
@@ -29,7 +26,7 @@ class TestQueryResultCostAddition:
         assert result.cache_read == 0.003
         assert result.cache_write == 0.005
 
-    def test_add_costs_with_none_fields(self):
+    async def test_add_costs_with_none_fields(self):
         cost1 = QueryResultCost(input=0.01, output=0.02, reasoning=0.005)
         cost2 = QueryResultCost(input=0.02, output=0.03, cache_read=0.002)
 
@@ -41,7 +38,7 @@ class TestQueryResultCostAddition:
         assert result.cache_read == 0.002
         assert result.cache_write is None
 
-    def test_add_costs_both_none_fields(self):
+    async def test_add_costs_both_none_fields(self):
         cost1 = QueryResultCost(input=0.01, output=0.02)
         cost2 = QueryResultCost(input=0.02, output=0.03)
 
@@ -53,7 +50,21 @@ class TestQueryResultCostAddition:
         assert result.cache_read is None
         assert result.cache_write is None
 
-    def test_cost_total_computed(self):
+    async def test_add_costs_one_none(self):
+        cost1 = QueryResultCost(
+            input=0.01, output=0.02, reasoning=0.005, cache_write=0.001
+        )
+        cost2 = QueryResultCost(input=0.01, output=0.02, cache_read=0.001)
+
+        result = cost1 + cost2
+
+        assert result.input == 0.02
+        assert result.output == 0.04
+        assert result.reasoning == 0.005
+        assert result.cache_read == 0.001
+        assert result.cache_write == 0.001
+
+    async def test_cost_total_computed(self):
         cost1 = QueryResultCost(input=0.01, output=0.02, reasoning=0.005)
         cost2 = QueryResultCost(input=0.02, output=0.03, cache_read=0.001)
 
@@ -63,9 +74,8 @@ class TestQueryResultCostAddition:
         assert abs(result.total - expected_total) < 1e-10
 
 
-@pytest.mark.unit
 class TestQueryResultMetadataAddition:
-    def test_add_full_metadata(self):
+    async def test_add_full_metadata(self):
         meta1 = QueryResultMetadata(
             in_tokens=100,
             out_tokens=50,
@@ -97,7 +107,7 @@ class TestQueryResultMetadataAddition:
         assert result.cost.input == 0.03
         assert result.cost.output == 0.05
 
-    def test_add_metadata_missing_optional_tokens(self):
+    async def test_add_metadata_missing_optional_tokens(self):
         meta1 = QueryResultMetadata(
             in_tokens=100,
             out_tokens=50,
@@ -119,7 +129,7 @@ class TestQueryResultMetadataAddition:
         assert result.cache_read_tokens == 15
         assert result.cache_write_tokens is None
 
-    def test_add_metadata_both_missing_optional_tokens(self):
+    async def test_add_metadata_both_missing_optional_tokens(self):
         meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50)
         meta2 = QueryResultMetadata(in_tokens=200, out_tokens=100)
 
@@ -131,7 +141,7 @@ class TestQueryResultMetadataAddition:
         assert result.cache_read_tokens is None
         assert result.cache_write_tokens is None
 
-    def test_add_metadata_one_has_cost(self):
+    async def test_add_metadata_one_has_cost(self):
         meta1 = QueryResultMetadata(
             in_tokens=100,
             out_tokens=50,
@@ -145,7 +155,7 @@ class TestQueryResultMetadataAddition:
         assert result.cost.input == 0.01
         assert result.cost.output == 0.02
 
-    def test_add_metadata_other_has_cost(self):
+    async def test_add_metadata_other_has_cost(self):
         meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50, cost=None)
         meta2 = QueryResultMetadata(
             in_tokens=200,
@@ -159,7 +169,7 @@ class TestQueryResultMetadataAddition:
         assert result.cost.input == 0.02
         assert result.cost.output == 0.03
 
-    def test_add_metadata_neither_has_cost(self):
+    async def test_add_metadata_neither_has_cost(self):
         meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50)
         meta2 = QueryResultMetadata(in_tokens=200, out_tokens=100)
 
@@ -167,7 +177,7 @@ class TestQueryResultMetadataAddition:
 
         assert result.cost is None
 
-    def test_add_metadata_default_duration(self):
+    async def test_add_metadata_default_duration(self):
         meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50, duration_seconds=None)
         meta2 = QueryResultMetadata(in_tokens=200, out_tokens=100, duration_seconds=2.0)
 
@@ -175,7 +185,7 @@ class TestQueryResultMetadataAddition:
 
         assert result.duration_seconds == 2.0
 
-    def test_add_metadata_both_none_duration(self):
+    async def test_add_metadata_both_none_duration(self):
         meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50, duration_seconds=None)
         meta2 = QueryResultMetadata(
             in_tokens=200, out_tokens=100, duration_seconds=None
@@ -185,7 +195,7 @@ class TestQueryResultMetadataAddition:
 
         assert result.duration_seconds == 0.0
 
-    def test_computed_total_tokens(self):
+    async def test_computed_total_tokens(self):
         meta1 = QueryResultMetadata(
             in_tokens=100,
             out_tokens=50,

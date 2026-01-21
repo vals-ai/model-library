@@ -5,6 +5,8 @@ Unit tests for retry logic.
 from typing import Type
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import httpcore
+import httpx
 import pytest
 
 from model_library.base import LLM, QueryResult
@@ -30,7 +32,7 @@ def mock_asyncio_sleep():
         yield mock_sleep
 
 
-def test_jitter():
+async def test_jitter():
     """
     Test that jitter function returns values within expected range
     """
@@ -119,6 +121,11 @@ async def test_retry_success_after_failures():
         (ToolCallingNotSupportedError, False),
         (BadInputError, False),
         (ValueError, False),
+        # httpx/httpcore
+        (httpx.ReadError, True),
+        (httpx.ConnectError, True),
+        (httpcore.ReadError, True),
+        (httpx.RemoteProtocolError, True),
     ],
 )
 async def test_core_errors(
@@ -131,7 +138,7 @@ async def test_core_errors(
     """
 
     query_impl_mock = AsyncMock(
-        side_effect=[exception(), QueryResult(output_text="success")]
+        side_effect=[exception("Mock"), QueryResult(output_text="success")]
     )
     mock_llm._query_impl = query_impl_mock  # pyright: ignore[reportPrivateUsage]
 
@@ -219,34 +226,6 @@ async def test_immediate_retry_exception_limit(mock_llm: LLM):
 
 
 @pytest.mark.parametrize(
-    "exception_class",
-    [
-        pytest.param("httpx.ReadError", id="httpx_read_error"),
-        pytest.param("httpx.ConnectError", id="httpx_connect_error"),
-        pytest.param("httpcore.ReadError", id="httpcore_read_error"),
-        pytest.param("httpx.RemoteProtocolError", id="httpx_remote_protocol_error"),
-    ],
-)
-def test_httpx_network_errors_are_retriable(exception_class: str):
-    """
-    Test that httpx/httpcore network errors are retriable
-    """
-    import httpcore
-    import httpx
-
-    exception_map = {
-        "httpx.ReadError": httpx.ReadError,
-        "httpx.ConnectError": httpx.ConnectError,
-        "httpcore.ReadError": httpcore.ReadError,
-        "httpx.RemoteProtocolError": httpx.RemoteProtocolError,
-    }
-
-    exc_class = exception_map[exception_class]
-    exc = exc_class("Network error")
-    assert is_retriable_error(exc) is True
-
-
-@pytest.mark.parametrize(
     "exception_message,expected_retriable",
     [
         ("Error 429", True),  # rate limit
@@ -268,7 +247,7 @@ def test_httpx_network_errors_are_retriable(exception_class: str):
         ("overloaded", True),  # overloaded error from anthropic
     ],
 )
-def test_retry_by_exception_message(
+async def test_retry_by_exception_message(
     exception_message: str,
     expected_retriable: bool,
 ):

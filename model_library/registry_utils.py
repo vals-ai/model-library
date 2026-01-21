@@ -4,8 +4,13 @@ from typing import TypedDict
 
 import tiktoken
 
-from model_library.base import LLM, LLMConfig, ProviderConfig
-from model_library.base.output import QueryResultCost, QueryResultMetadata
+from model_library.base import (
+    LLM,
+    LLMConfig,
+    ProviderConfig,
+    QueryResultCost,
+    QueryResultMetadata,
+)
 from model_library.register_models import (
     CostProperties,
     ModelConfig,
@@ -196,19 +201,38 @@ def get_provider_names() -> list[str]:
 
 
 @cache
-def get_model_names() -> list[str]:
-    """Return all model names in the registry"""
-    return sorted([model_name for model_name in get_model_registry().keys()])
+def get_model_names(
+    provider: str | None = None,
+    include_deprecated: bool = False,
+    include_alt_keys: bool = True,
+) -> list[str]:
+    """
+    Return model names in the registry
+    - provider: Filter by provider name
+    - include_deprecated: Include deprecated models
+    - include_alt_keys: Include alternative keys from the same provider
+    """
+    registry = get_model_registry()
+    alternative_keys_set: set[str] = set()
 
+    if not include_alt_keys:
+        for model in registry.values():
+            for alt_item in model.alternative_keys:
+                alt_key = (
+                    alt_item if isinstance(alt_item, str) else list(alt_item.keys())[0]
+                )
+                if alt_key.split("/")[0] == model.provider_name:
+                    alternative_keys_set.add(alt_key)
 
-@cache
-def get_model_names_by_provider(provider_name: str) -> list[str]:
-    """Return all models in the registry from a provider"""
-    return [
-        model.full_key
-        for model in get_model_registry().values()
-        if model.provider_name.lower() == provider_name.lower()
-    ]
+    return sorted(
+        [
+            model.full_key
+            for model in get_model_registry().values()
+            if (not provider or model.provider_name.lower() == provider.lower())
+            and (not model.metadata.deprecated or include_deprecated)
+            and model.full_key not in alternative_keys_set
+        ]
+    )
 
 
 @cache

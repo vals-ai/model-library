@@ -9,7 +9,6 @@ from io import BytesIO
 import pytest
 from pydantic import BaseModel
 
-from tests.conftest import requires_openai_api
 from model_library.base import FileWithBase64, FileWithId, TextInput
 from model_library.providers.openai import OpenAIModel
 from model_library.registry_utils import get_registry_model
@@ -86,12 +85,9 @@ class Outer(BaseModel):
     inner: Inner
 
 
-@pytest.mark.integration
-@requires_openai_api
 class TestStructuredOutputOpenAI:
     """Test OpenAI structured output with files."""
 
-    @pytest.mark.asyncio
     async def test_structured_output_with_image(self):
         """Test query_json with an image file."""
         model = get_registry_model("openai/gpt-5-mini-2025-08-07")
@@ -121,7 +117,6 @@ class TestStructuredOutputOpenAI:
         assert isinstance(color, Color)
         assert color.color.lower() == "red"
 
-    @pytest.mark.asyncio
     async def test_structured_output_with_document(self):
         """Test query_json with a document file (requires file upload)."""
         model = get_registry_model("openai/gpt-5-mini-2025-08-07")
@@ -151,7 +146,6 @@ class TestStructuredOutputOpenAI:
         assert isinstance(secret, Secret)
         assert secret.secret.lower() == "pineapple"
 
-    @pytest.mark.asyncio
     async def test_nested_structured_output(self):
         """Test query_json with nested Pydantic models."""
         model = get_registry_model("openai/gpt-5-mini-2025-08-07")

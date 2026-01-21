@@ -6,12 +6,12 @@ from typing_extensions import override
 from model_library import model_library_settings
 from model_library.base import (
     DelegateConfig,
+    DelegateOnly,
     LLMConfig,
     ProviderConfig,
     QueryResultCost,
     QueryResultMetadata,
 )
-from model_library.base.delegate_only import DelegateOnly
 from model_library.register_models import register_provider
 
 

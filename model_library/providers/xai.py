@@ -310,6 +310,9 @@ class XAIModel(LLM):
         tools: list[ToolDefinition] = [],
         **kwargs: object,
     ) -> int:
+        if not input and not history:
+            return 0
+
         string_input = await self.stringify_input(input, history=history, tools=tools)
         self.logger.debug(string_input)
 

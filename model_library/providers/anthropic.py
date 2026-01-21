@@ -12,6 +12,7 @@ from model_library import model_library_settings
 from model_library.base import (
     LLM,
     BatchResult,
+    DelegateConfig,
     FileBase,
     FileInput,
     FileWithBase64,
@@ -31,7 +32,6 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
-from model_library.base.base import DelegateConfig
 from model_library.exceptions import (
     ImmediateRetryException,
     MaxOutputTokensExceededError,

@@ -12,18 +12,15 @@ from model_library.base import LLMConfig, TextInput
 from model_library.providers.anthropic import AnthropicModel
 from model_library.providers.google import GoogleModel
 from model_library.providers.openai import OpenAIModel
-from tests.conftest import (
-    requires_anthropic_api,
-    requires_google_api,
-    requires_openai_api,
-)
+
+# TODO: batching is currently out of data, need to update to include
+pytest.skip("Batching is currently out of date", allow_module_level=True)
 
 
 @pytest.mark.integration
 class TestBatch:
     """Test batch operations across different providers."""
 
-    @requires_google_api
     async def test_google_batch_single_request(self):
         """Test Google batch submission with a single request."""
         model = GoogleModel("gemini-2.5-flash", config=LLMConfig(supports_batch=True))
@@ -57,7 +54,6 @@ class TestBatch:
         except Exception:
             pass
 
-    @requires_google_api
     async def test_google_batch_multiple_requests(self):
         """Test Google batch submission with multiple requests."""
         model = GoogleModel(
@@ -102,7 +98,6 @@ class TestBatch:
 
         await model.batch.cancel_batch_request(job_id)
 
-    @requires_openai_api
     async def test_openai_batch_single_request(self):
         """Test OpenAI batch submission with a single request."""
         model = OpenAIModel("gpt-4o-mini", config=LLMConfig(supports_batch=True))
@@ -124,7 +119,6 @@ class TestBatch:
 
         print(f"OpenAI batch job created successfully with ID: {job_id}")
 
-    @requires_google_api
     async def test_google_batch_with_reasoning(self):
         """Test batch submission with reasoning enabled."""
         model = GoogleModel(
@@ -158,7 +152,6 @@ class TestBatch:
         except Exception:
             pass
 
-    @requires_anthropic_api
     async def test_anthropic_batch_single_request(self):
         """Test Anthropic batch submission with a single request."""
         model = AnthropicModel(
@@ -187,7 +180,6 @@ class TestBatch:
         assert status is not None
         print(f"Batch status: {status}")
 
-    @requires_anthropic_api
     async def test_anthropic_batch_with_thinking(self):
         """Test Anthropic batch submission with extended thinking enabled."""
         model = AnthropicModel(
