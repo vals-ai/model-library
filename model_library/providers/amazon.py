@@ -270,7 +270,7 @@ class AmazonModel(LLM):
             if self.supports_cache:
                 body["system"].append({"cachePoint": self.cache_control})
 
-        if self.reasoning:
+        if self.reasoning and self.max_tokens:
             if self.max_tokens < 1024:
                 self.max_tokens = 2048
             budget_tokens = kwargs.pop(
@@ -283,9 +283,10 @@ class AmazonModel(LLM):
                 }
             }
 
-        inference: dict[str, Any] = {
-            "maxTokens": self.max_tokens,
-        }
+        inference: dict[str, Any] = {}
+
+        if self.max_tokens:
+            inference["maxTokens"] = self.max_tokens
 
         # Only set temperature for models where supports_temperature is True.
         # For example, "thinking" models don't support temperature: https://docs.claude.com/en/docs/build-with-claude/extended-thinking#feature-compatibility

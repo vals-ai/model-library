@@ -208,11 +208,13 @@ class MistralModel(LLM):
 
         body: dict[str, Any] = {
             "model": self.model_name,
-            "max_tokens": self.max_tokens,
             "messages": messages,
             "prompt_mode": "reasoning" if self.reasoning else None,
             "tools": tools,
         }
+
+        if self.max_tokens:
+            body["max_tokens"] = self.max_tokens
 
         if self.supports_temperature:
             if self.temperature is not None:

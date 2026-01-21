@@ -525,7 +525,6 @@ class AnthropicModel(LLM):
         **kwargs: object,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
-            "max_tokens": self.max_tokens,
             "model": self.model_name,
             "messages": await self.parse_input(input),
         }
@@ -538,6 +537,11 @@ class AnthropicModel(LLM):
                     "cache_control": self.cache_control,
                 }
             ]
+
+        if not self.max_tokens:
+            raise Exception("Anthropic models require a max_tokens parameter")
+
+        body["max_tokens"] = self.max_tokens
 
         if self.reasoning:
             budget_tokens = kwargs.pop(

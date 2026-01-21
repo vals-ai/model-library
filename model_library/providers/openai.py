@@ -531,18 +531,20 @@ class OpenAIModel(LLM):
 
         body: dict[str, Any] = {
             "model": self.model_name,
-            "max_tokens": self.max_tokens,
             "messages": parsed_input,
             # enable usage data in streaming responses
             "stream_options": {"include_usage": True},
         }
+
+        if self.max_tokens:
+            body["max_tokens"] = self.max_tokens
 
         if self.supports_tools:
             parsed_tools = await self.parse_tools(tools)
             if parsed_tools:
                 body["tools"] = parsed_tools
 
-        if self.reasoning:
+        if self.reasoning and self.max_tokens:
             del body["max_tokens"]
             body["max_completion_tokens"] = self.max_tokens
 
@@ -696,7 +698,7 @@ class OpenAIModel(LLM):
         self, tools: Sequence[ToolDefinition], **kwargs: object
     ) -> None:
         min_tokens = 30_000
-        if self.max_tokens < min_tokens:
+        if not self.max_tokens or self.max_tokens < min_tokens:
             self.logger.warning(
                 f"Recommended to set max_tokens >= {min_tokens} for deep research models"
             )
@@ -754,9 +756,11 @@ class OpenAIModel(LLM):
 
         body: dict[str, Any] = {
             "model": self.model_name,
-            "max_output_tokens": self.max_tokens,
             "input": parsed_input,
         }
+
+        if self.max_tokens:
+            body["max_output_tokens"] = self.max_tokens
 
         if parsed_tools:
             body["tools"] = parsed_tools

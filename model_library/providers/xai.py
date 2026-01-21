@@ -213,11 +213,13 @@ class XAIModel(LLM):
             messages.append(system(str(kwargs.pop("system_prompt"))))
 
         body: dict[str, Any] = {
-            "max_tokens": self.max_tokens,
             "model": self.model_name,
             "tools": await self.parse_tools(tools),
             "messages": messages,
         }
+
+        if self.max_tokens:
+            body["max_tokens"] = self.max_tokens
 
         if self.supports_temperature:
             if self.temperature is not None:

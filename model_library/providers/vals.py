@@ -242,11 +242,13 @@ class DummyAIModel(LLM):
         messages = await self.parse_input(input)
         body: dict[str, Any] = {
             "model": self.model_name,
-            "max_tokens": self.max_tokens,
             "seed": 0,
             "messages": messages,
             "tools": await self.parse_tools(tools),
         }
+
+        if self.max_tokens:
+            body["max_tokens"] = self.max_tokens
 
         if self.supports_temperature:
             if self.temperature is not None:

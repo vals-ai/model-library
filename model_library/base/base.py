@@ -58,11 +58,8 @@ class ProviderConfig(BaseModel):
         return self.__dict__
 
 
-DEFAULT_MAX_TOKENS = 2048
-
-
 class LLMConfig(BaseModel):
-    max_tokens: int = DEFAULT_MAX_TOKENS
+    max_tokens: int | None = None
     temperature: float | None = None
     top_p: float | None = None
     top_k: int | None = None
@@ -145,7 +142,7 @@ class LLM(ABC):
         config = config or LLMConfig()
         self._registry_key = config.registry_key
 
-        self.max_tokens: int = config.max_tokens
+        self.max_tokens: int | None = config.max_tokens
         self.temperature: float | None = config.temperature
         self.top_p: float | None = config.top_p
         self.top_k: int | None = config.top_k
