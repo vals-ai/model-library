@@ -3398,9 +3398,14 @@
         },
         "alternative_keys": [
             {
-                "costs_per_million_token": {
-                    "input": 0.55,
-                    "output": 2.19
+                "fireworks/glm-4p5": {
+                    "metadata": {
+                        "deprecated": true
+                    },
+                    "costs_per_million_token": {
+                        "input": 0.55,
+                        "output": 2.19
+                    }
                 }
             }
         ],
@@ -3478,15 +3483,15 @@
             "tools": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": true,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 0.6,
-            "output": 2.2,
+            "input": 0.55,
+            "output": 2.19,
             "cache": {
                 "read": 0.11,
                 "read_discount": 1.0,

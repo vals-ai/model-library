@@ -163,7 +163,7 @@ async def process_model(model_str: str, provider_name: str):
 
 
 MODEL_OVERRIDES = ["dumbmar", "bedrock", "ai21labs"]
-IGNORED_MODELS = ["fireworks/deepseek-v3p1", "fireworks/deepseek-v3p2-thinking"]
+IGNORED_MODELS = ["inception/mercury"]  # known to be broken
 ERROR_OVERRIDES = [
     "overloaded",
     "rate limit",

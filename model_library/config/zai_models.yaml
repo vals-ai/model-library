@@ -63,9 +63,11 @@ zai-models:
         read: 0.11
     alternative_keys:
       - fireworks/glm-4p5:
-        costs_per_million_token:
-          input: 0.55
-          output: 2.19
+          metadata:
+            deprecated: true
+          costs_per_million_token:
+            input: 0.55
+            output: 2.19
 
   zai/glm-4.5-air:
     label: GLM 4.5 Air
