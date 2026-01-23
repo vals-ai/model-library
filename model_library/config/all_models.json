@@ -24,7 +24,9 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "clear_thinking": false
+        },
         "costs_per_million_token": {
             "input": 0.07,
             "output": 0.4,

@@ -34,6 +34,8 @@ zai-models:
       # from https://huggingface.co/zai-org/GLM-4.7-Flash
       temperature: 1
       top_p: 0.95
+    provider_properties:
+      clear_thinking: false
   
   zai/glm-4.7:
     label: GLM 4.7
