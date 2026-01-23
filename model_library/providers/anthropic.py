@@ -1,5 +1,7 @@
+import datetime
 import io
 import logging
+import time
 from typing import Any, Literal, Sequence, cast
 
 from anthropic import APIConnectionError, AsyncAnthropic
@@ -24,6 +26,7 @@ from model_library.base import (
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
+    RateLimit,
     RawInput,
     RawResponse,
     TextInput,
@@ -645,6 +648,38 @@ class AnthropicModel(LLM):
         )
 
     @override
+    async def get_rate_limit(self) -> RateLimit:
+        response = await self.get_client().messages.with_raw_response.create(
+            max_tokens=1,
+            messages=[
+                {
+                    "role": "user",
+                    "content": "Ping",
+                }
+            ],
+            model=self.model_name,
+        )
+        headers = response.headers
+
+        server_time_str = headers.get("date")
+        if server_time_str:
+            server_time = datetime.datetime.strptime(
+                server_time_str, "%a, %d %b %Y %H:%M:%S GMT"
+            ).replace(tzinfo=datetime.timezone.utc)
+            timestamp = server_time.timestamp()
+        else:
+            timestamp = time.time()
+
+        return RateLimit(
+            unix_timestamp=timestamp,
+            raw=headers,
+            request_limit=int(headers["anthropic-ratelimit-requests-limit"]),
+            request_remaining=int(headers["anthropic-ratelimit-requests-remaining"]),
+            token_limit=int(response.headers["anthropic-ratelimit-tokens-limit"]),
+            token_remaining=int(headers["anthropic-ratelimit-tokens-remaining"]),
+        )
+
+    @override
     async def count_tokens(
         self,
         input: Sequence[InputItem],
@@ -657,20 +692,26 @@ class AnthropicModel(LLM):
         Count the number of tokens using Anthropic's native token counting API.
         https://docs.anthropic.com/en/docs/build-with-claude/token-counting
         """
-        input = [*history, *input]
-        if not input:
-            return 0
+        try:
+            input = [*history, *input]
+            if not input:
+                return 0
 
-        body = await self.build_body(input, tools=tools, **kwargs)
+            body = await self.build_body(input, tools=tools, **kwargs)
 
-        # Remove fields not supported by count_tokens endpoint
-        body.pop("max_tokens", None)
-        body.pop("temperature", None)
+            # Remove fields not supported by count_tokens endpoint
+            body.pop("max_tokens", None)
+            body.pop("temperature", None)
 
-        client = self.get_client()
-        response = await client.messages.count_tokens(**body)
+            client = self.get_client()
+            response = await client.messages.count_tokens(**body)
 
-        return response.input_tokens
+            return response.input_tokens
+        except Exception as e:
+            self.logger.error(f"Error counting tokens: {e}")
+            return await super().count_tokens(
+                input, history=history, tools=tools, **kwargs
+            )
 
     @override
     async def _calculate_cost(

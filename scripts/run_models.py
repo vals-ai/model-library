@@ -1,6 +1,5 @@
 import asyncio
 import concurrent.futures
-import logging
 import sys
 import time
 from collections import defaultdict
@@ -13,9 +12,11 @@ from rich.tree import Tree
 
 from examples.setup import setup
 from model_library.base import LLMConfig
-from model_library.exceptions import exception_message, retry_llm_call
+from model_library.exceptions import exception_message
 from model_library.register_models import get_model_registry
 from model_library.registry_utils import get_registry_model
+from model_library.retriers.backoff import ExponentialBackoffRetrier
+from model_library.retriers.base import retry_decorator
 
 CONCURRENCY_PER_PROVIDER = 10
 MAX_RETRIES = 5
@@ -117,17 +118,16 @@ async def process_model(model_str: str, provider_name: str):
 
     # custom retry logico
     # capture retry attempts
-    def custom_retrier(logger: logging.Logger):
-        return retry_llm_call(
-            logger,
-            max_tries=MAX_RETRIES,
-            max_time=timeout,
-            backoff_callback=lambda tries, exception, elapsed, wait: (
-                running_models[provider_name].update({model_str: (start_time, tries)})
-            ),
-        )
+    retrier = ExponentialBackoffRetrier(
+        logger=model.logger,
+        max_tries=MAX_RETRIES,
+        max_time=timeout,
+        retry_callback=lambda tries, exception, elapsed, wait: (
+            running_models[provider_name].update({model_str: (start_time, tries)})
+        ),
+    )
 
-    model.custom_retrier = custom_retrier
+    model.custom_retrier = retry_decorator(retrier)
 
     try:
         async with semaphores[provider_name]:

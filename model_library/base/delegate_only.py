@@ -63,6 +63,9 @@ class DelegateOnly(LLM):
                     config=config,
                     delegate_config=delegate_config,
                 )
+        self._client_registry_key_model_specific = (
+            self.delegate._client_registry_key_model_specific
+        )
 
     def __init__(
         self,
@@ -143,6 +146,11 @@ class DelegateOnly(LLM):
         type: Literal["image", "file"] = "file",
     ) -> FileWithId:
         raise DelegateOnlyException()
+
+    @override
+    async def get_rate_limit(self) -> Any:
+        assert self.delegate
+        return await self.delegate.get_rate_limit()
 
     @override
     async def count_tokens(

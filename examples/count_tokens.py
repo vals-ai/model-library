@@ -51,22 +51,25 @@ async def count_tokens(model: LLM):
     system_prompt = "You must make exactly 0 or 1 tool calls per answer. You must not make more than 1 tool call per answer."
     user_prompt = "What is the weather in San Francisco right now?"
 
+    input = [TextInput(text=user_prompt)]
+
     predicted_tokens = await model.count_tokens(
-        [TextInput(text=user_prompt)],
+        input,
         tools=tools,
         system_prompt=system_prompt,
     )
 
     response: QueryResult = await model.query(
-        [TextInput(text=user_prompt)],
+        input,
         tools=tools,
         system_prompt=system_prompt,
     )
+    metadata = response.metadata
 
-    actual_tokens = response.metadata.total_input_tokens
+    actual_tokens = metadata.total_input_tokens
 
     console_log(f"Predicted Token Count: {predicted_tokens}")
-    console_log(f"Actual Token Count: {actual_tokens}\n")
+    console_log(f"Actual Token Count: {actual_tokens}")
 
 
 async def main():

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import datetime
 import io
 import json
 import logging
+import time
 from typing import Any, Literal, Sequence, cast
 
 from openai import APIConnectionError, AsyncOpenAI
@@ -45,6 +47,7 @@ from model_library.base import (
     QueryResultCost,
     QueryResultExtras,
     QueryResultMetadata,
+    RateLimit,
     RawInput,
     RawResponse,
     TextInput,
@@ -61,6 +64,7 @@ from model_library.exceptions import (
 )
 from model_library.model_utils import get_reasoning_in_tag
 from model_library.register_models import register_provider
+from model_library.retriers.base import BaseRetrier
 from model_library.utils import create_openai_client_with_defaults
 
 
@@ -900,6 +904,61 @@ class OpenAIModel(LLM):
         return result
 
     @override
+    async def get_rate_limit(self) -> RateLimit | None:
+        headers = {}
+
+        try:
+            # NOTE: with_streaming_response doesn't seem to always work
+            if self.use_completions:
+                response = (
+                    await self.get_client().chat.completions.with_raw_response.create(
+                        max_completion_tokens=16,
+                        model=self.model_name,
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": "Ping",
+                            }
+                        ],
+                        stream=True,
+                    )
+                )
+            else:
+                response = await self.get_client().responses.with_raw_response.create(
+                    max_output_tokens=16,
+                    input="Ping",
+                    model=self.model_name,
+                )
+            headers = response.headers
+
+            server_time_str = headers.get("date")
+            if server_time_str:
+                server_time = datetime.datetime.strptime(
+                    server_time_str, "%a, %d %b %Y %H:%M:%S GMT"
+                ).replace(tzinfo=datetime.timezone.utc)
+                timestamp = server_time.timestamp()
+            else:
+                timestamp = time.time()
+
+            # NOTE: for openai, max_tokens is used to reject requests if the amount of tokens left is less than the max_tokens
+
+            # we calculate estimated_tokens as (character_count / 4) + max_tokens. Note that OpenAI's rate limiter doesn't tokenize the request using the model's specific tokenizer but relies on a character count-based heuristic.
+
+            return RateLimit(
+                raw=headers,
+                unix_timestamp=timestamp,
+                request_limit=headers.get("x-ratelimit-limit-requests", None)
+                or headers.get("x-ratelimit-limit", None),
+                request_remaining=headers.get("x-ratelimit-remaining-requests", None)
+                or headers.get("x-ratelimit-remaining"),
+                token_limit=int(headers["x-ratelimit-limit-tokens"]),
+                token_remaining=int(headers["x-ratelimit-remaining-tokens"]),
+            )
+        except Exception as e:
+            self.logger.warning(f"Failed to get rate limit: {e}")
+            return None
+
+    @override
     async def query_json(
         self,
         input: Sequence[InputItem],
@@ -922,7 +981,9 @@ class OpenAIModel(LLM):
             except APIConnectionError:
                 raise ImmediateRetryException("Failed to connect to OpenAI")
 
-        response = await LLM.immediate_retry_wrapper(func=_query, logger=self.logger)
+        response = await BaseRetrier.immediate_retry_wrapper(
+            func=_query, logger=self.logger
+        )
 
         parsed: PydanticT | None = response.output_parsed
         if parsed is None:
@@ -953,7 +1014,7 @@ class OpenAIModel(LLM):
 
             return response.data[0].embedding
 
-        return await LLM.immediate_retry_wrapper(
+        return await BaseRetrier.immediate_retry_wrapper(
             func=_get_embedding, logger=self.logger
         )
 
@@ -968,7 +1029,7 @@ class OpenAIModel(LLM):
             except Exception as e:
                 raise Exception("Failed to query OpenAI's Moderation endpoint") from e
 
-        return await LLM.immediate_retry_wrapper(
+        return await BaseRetrier.immediate_retry_wrapper(
             func=_moderate_content, logger=self.logger
         )
 

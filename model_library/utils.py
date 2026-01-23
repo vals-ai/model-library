@@ -69,6 +69,7 @@ def create_anthropic_client_with_defaults(
     return AsyncAnthropic(
         base_url=base_url,
         api_key=api_key,
+        default_headers=default_headers,
         http_client=default_httpx_client(),
         max_retries=3,
     )

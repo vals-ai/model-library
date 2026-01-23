@@ -21,14 +21,15 @@ from model_library.exceptions import (
     RetryException,
     ToolCallingNotSupportedError,
     is_retriable_error,
-    jitter,
-    retry_llm_call,
 )
+from model_library.retriers.backoff import ExponentialBackoffRetrier
+from model_library.retriers.base import BaseRetrier, retry_decorator
+from model_library.retriers.utils import jitter
 
 
 @pytest.fixture(autouse=True)
 def mock_asyncio_sleep():
-    with patch("asyncio.sleep") as mock_sleep:
+    with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         yield mock_sleep
 
 
@@ -56,9 +57,15 @@ async def test_retry_with_backoff_callback():
             raise Exception(tries, exception, elapsed, wait)
 
     callback_mock = Mock(side_effect=callback)
+
+    retrier = ExponentialBackoffRetrier(
+        MagicMock(), max_tries=2, retry_callback=callback_mock
+    )
+    decorator = retry_decorator(retrier)
+
     mock_func = Mock(side_effect=RetryException())
 
-    @retry_llm_call(MagicMock(), max_tries=2, backoff_callback=callback_mock)
+    @decorator
     async def func():
         mock_func()
 
@@ -75,7 +82,10 @@ async def test_max_retries_giveup():
     """
     mock_func = Mock(side_effect=RetryException())
 
-    @retry_llm_call(MagicMock(), max_tries=3)
+    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=3)
+    decorator = retry_decorator(retrier)
+
+    @decorator
     async def func():
         mock_func()
 
@@ -96,7 +106,10 @@ async def test_retry_success_after_failures():
         "success",
     ]
 
-    @retry_llm_call(MagicMock(), max_tries=5)
+    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=5)
+    decorator = retry_decorator(retrier)
+
+    @decorator
     async def failing_func():
         result = mock_func()
         if isinstance(result, Exception):
@@ -168,10 +181,15 @@ async def test_immediate_retry_exception_success(mock_llm: LLM):
     # track calls
     with (
         patch.object(
-            LLM, "immediate_retry_wrapper", wraps=LLM.immediate_retry_wrapper
+            BaseRetrier,
+            "immediate_retry_wrapper",
+            wraps=BaseRetrier.immediate_retry_wrapper,
         ) as mock_immediate_retry,
         patch.object(
-            LLM, "backoff_retry_wrapper", wraps=LLM.backoff_retry_wrapper
+            ExponentialBackoffRetrier,
+            "execute",
+            autospec=True,
+            wraps=ExponentialBackoffRetrier.execute,
         ) as mock_backoff_retry,
     ):
         result = await mock_llm.query("Mock Input")
@@ -211,10 +229,15 @@ async def test_immediate_retry_exception_limit(mock_llm: LLM):
     # track calls
     with (
         patch.object(
-            LLM, "immediate_retry_wrapper", wraps=LLM.immediate_retry_wrapper
+            BaseRetrier,
+            "immediate_retry_wrapper",
+            wraps=BaseRetrier.immediate_retry_wrapper,
         ) as mock_immediate_retry,
         patch.object(
-            LLM, "backoff_retry_wrapper", wraps=LLM.backoff_retry_wrapper
+            ExponentialBackoffRetrier,
+            "execute",
+            autospec=True,
+            wraps=ExponentialBackoffRetrier.execute,
         ) as mock_backoff_retry,
     ):
         with pytest.raises(Exception):

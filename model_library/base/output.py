@@ -118,6 +118,48 @@ class QueryResultCost(BaseModel):
         )
 
 
+class RateLimit(BaseModel):
+    """Rate limit information"""
+
+    request_limit: int | None = None
+    request_remaining: int | None = None
+
+    token_limit: int | None = None
+    token_limit_input: int | None = None
+    token_limit_output: int | None = None
+
+    token_remaining: int | None = None
+    token_remaining_input: int | None = None
+    token_remaining_output: int | None = None
+
+    unix_timestamp: float
+    raw: Any
+
+    @computed_field
+    @property
+    def token_limit_total(self) -> int:
+        if self.token_limit:
+            return self.token_limit
+        else:
+            return (self.token_limit_input or 0) + (self.token_limit_output or 0)
+
+    @computed_field
+    @property
+    def token_remaining_total(self) -> int:
+        if self.token_remaining:
+            return self.token_remaining
+        else:
+            return (self.token_remaining_input or 0) + (
+                self.token_remaining_output or 0
+            )
+
+    @override
+    def __repr__(self):
+        attrs = vars(self).copy()
+        attrs.pop("raw", None)
+        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
+
+
 class QueryResultMetadata(BaseModel):
     """
     Metadata for a query: token usage and timing.
@@ -131,6 +173,7 @@ class QueryResultMetadata(BaseModel):
     reasoning_tokens: int | None = None
     cache_read_tokens: int | None = None
     cache_write_tokens: int | None = None
+    extra: dict[str, Any] = {}
 
     @property
     def default_duration_seconds(self) -> float:

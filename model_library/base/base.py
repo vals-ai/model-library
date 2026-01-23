@@ -6,6 +6,7 @@ import time
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable
+from math import ceil
 from pprint import pformat
 from typing import (
     Any,
@@ -36,15 +37,15 @@ from model_library.base.output import (
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
+    RateLimit,
 )
 from model_library.base.utils import (
     get_pretty_input_types,
     serialize_for_tokenizing,
 )
-from model_library.exceptions import (
-    ImmediateRetryException,
-    retry_llm_call,
-)
+from model_library.retriers.backoff import ExponentialBackoffRetrier
+from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
+from model_library.retriers.token import TokenRetrier
 from model_library.utils import truncate_str
 
 PydanticT = TypeVar("PydanticT", bound=BaseModel)
@@ -56,6 +57,16 @@ class ProviderConfig(BaseModel):
     @model_serializer(mode="plain")
     def serialize_actual(self):
         return self.__dict__
+
+
+class TokenRetryParams(BaseModel):
+    input_modifier: float
+    output_modifier: float
+
+    use_dynamic_estimate: bool = True
+
+    limit: int
+    limit_refresh_seconds: Literal[60] = 60
 
 
 class LLMConfig(BaseModel):
@@ -80,11 +91,6 @@ class LLMConfig(BaseModel):
 class DelegateConfig(BaseModel):
     base_url: str
     api_key: SecretStr
-
-
-RetrierType = Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]
-
-R = TypeVar("R")  # return type
 
 
 # shared across all subclasses and instances
@@ -170,8 +176,10 @@ class LLM(ABC):
         self.logger: logging.Logger = logging.getLogger(
             f"llm.{provider}.{model_name}<instance={self.instance_id}>"
         )
-        self.custom_retrier: Callable[..., RetrierType] | None = retry_llm_call
+        self.custom_retrier: RetrierType | None = None
 
+        self.token_retry_params = None
+        # set _client_registry_key after initializing delegate
         if not self.native:
             return
 
@@ -182,6 +190,10 @@ class LLM(ABC):
 
         key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
         self._client_registry_key = (self.provider, key_hash)
+        self._client_registry_key_model_specific = (
+            f"{self.provider}.{self.model_name}",
+            key_hash,
+        )
         self.get_client(api_key=raw_key)
 
     @override
@@ -199,43 +211,6 @@ class LLM(ABC):
         start = time.perf_counter()
         result = await func()
         return result, round(time.perf_counter() - start, 4)
-
-    @staticmethod
-    async def immediate_retry_wrapper(
-        func: Callable[[], Awaitable[R]],
-        logger: logging.Logger,
-    ) -> R:
-        """
-        Retry the query immediately
-        """
-        MAX_IMMEDIATE_RETRIES = 10
-        retries = 0
-        while True:
-            try:
-                return await func()
-            except ImmediateRetryException as e:
-                if retries >= MAX_IMMEDIATE_RETRIES:
-                    logger.error(f"Query reached max immediate retries {retries}: {e}")
-                    raise Exception(
-                        f"Query reached max immediate retries {retries}: {e}"
-                    ) from e
-                retries += 1
-
-                logger.warning(
-                    f"Query retried immediately {retries}/{MAX_IMMEDIATE_RETRIES}: {e}"
-                )
-
-    @staticmethod
-    async def backoff_retry_wrapper(
-        func: Callable[..., Awaitable[R]],
-        backoff_retrier: RetrierType | None,
-    ) -> R:
-        """
-        Retry the query with backoff
-        """
-        if not backoff_retrier:
-            return await func()
-        return await backoff_retrier(func)()
 
     async def delegate_query(
         self,
@@ -321,15 +296,38 @@ class LLM(ABC):
             return await LLM.timer_wrapper(query_func)
 
         async def immediate_retry() -> tuple[QueryResult, float]:
-            return await LLM.immediate_retry_wrapper(timed_query, query_logger)
+            return await BaseRetrier.immediate_retry_wrapper(timed_query, query_logger)
 
-        async def backoff_retry() -> tuple[QueryResult, float]:
-            backoff_retrier = (
-                self.custom_retrier(query_logger) if self.custom_retrier else None
-            )
-            return await LLM.backoff_retry_wrapper(immediate_retry, backoff_retrier)
+        async def default_retry() -> tuple[QueryResult, float]:
+            if self.token_retry_params:
+                (
+                    estimate_input_tokens,
+                    estimate_output_tokens,
+                ) = await self.estimate_query_tokens(
+                    input,
+                    tools=tools,
+                    **kwargs,
+                )
+                retrier = TokenRetrier(
+                    logger=query_logger,
+                    client_registry_key=self._client_registry_key_model_specific,
+                    estimate_input_tokens=estimate_input_tokens,
+                    estimate_output_tokens=estimate_output_tokens,
+                    dynamic_estimate_instance_id=self.instance_id
+                    if self.token_retry_params.use_dynamic_estimate
+                    else None,
+                )
+            else:
+                retrier = ExponentialBackoffRetrier(logger=query_logger)
+            return await retry_decorator(retrier)(immediate_retry)()
 
-        output, duration = await backoff_retry()
+        run_with_retry = (
+            default_retry
+            if not self.custom_retrier
+            else self.custom_retrier(immediate_retry)
+        )
+
+        output, duration = await run_with_retry()
         output.metadata.duration_seconds = duration
         output.metadata.cost = await self._calculate_cost(output.metadata)
 
@@ -337,6 +335,16 @@ class LLM(ABC):
         query_logger.debug(output.model_dump(exclude={"history", "raw"}))
 
         return output
+
+    async def init_token_retry(self, token_retry_params: TokenRetryParams) -> None:
+        self.token_retry_params = token_retry_params
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=self._client_registry_key_model_specific,
+            limit=self.token_retry_params.limit,
+            limit_refresh_seconds=self.token_retry_params.limit_refresh_seconds,
+            get_rate_limit_func=self.get_rate_limit,
+            logger=self.logger,
+        )
 
     async def _calculate_cost(
         self,
@@ -482,6 +490,30 @@ class LLM(ABC):
     ) -> FileWithId:
         """Upload a file to the model provider"""
         ...
+
+    async def get_rate_limit(self) -> RateLimit | None:
+        """Get the rate limit for the model provider"""
+        return None
+
+    async def estimate_query_tokens(
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition] = [],
+        **kwargs: object,
+    ) -> tuple[int, int]:
+        """Pessimistically estimate the number of tokens required for a query"""
+        assert self.token_retry_params
+
+        # TODO: when passing in images and files, we really need to take that into account when calculating the output tokens!!
+
+        input_tokens = (
+            await self.count_tokens(input, history=[], tools=tools, **kwargs)
+            * self.token_retry_params.input_modifier
+        )
+
+        output_tokens = input_tokens * self.token_retry_params.output_modifier
+        return ceil(input_tokens), ceil(output_tokens)
 
     async def get_encoding(self) -> Encoding:
         """Get the appropriate tokenizer"""

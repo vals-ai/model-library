@@ -1,4 +1,6 @@
 import json
+import re
+from datetime import datetime, timedelta
 from typing import Any, Sequence, TypeVar
 
 from pydantic import BaseModel
@@ -77,3 +79,36 @@ def get_pretty_input_types(input: Sequence["InputItem"], verbose: bool = False) 
 
     processed_items = [f"  {process_item(item)}" for item in input]
     return "\n" + "\n".join(processed_items) if processed_items else ""
+
+
+TIME_PATTERN = re.compile(r"^(\d+(?:\.\d+)?)([a-zA-Z]+)$")
+UNIT_TO_SECONDS = {
+    "ms": 0.001,
+    "s": 1,
+    "m": 60,
+    "h": 3600,
+}
+
+
+def to_timestamp(input_str: str, server_now: datetime) -> int:
+    """Converts a header string into a server-relative Unix timestamp in ms."""
+    input_str = input_str.strip()
+
+    # ISO Timestamp (e.g. 2026-01-09T21:58:01Z)
+    if "T" in input_str and "-" in input_str:
+        try:
+            dt = datetime.fromisoformat(input_str.replace("Z", "+00:00"))
+            return int(dt.timestamp() * 1000)
+        except ValueError:
+            pass
+
+    # Duration (e.g. 10s, 6ms)
+    match = TIME_PATTERN.match(input_str)
+    if match:
+        value, unit = match.groups()
+        offset_seconds = float(value) * UNIT_TO_SECONDS.get(unit.lower(), 0)
+        # Add duration to the SERVER'S provided date
+        dt = server_now + timedelta(seconds=offset_seconds)
+        return int(dt.timestamp() * 1000)
+
+    raise ValueError(f"Unsupported time format: {input_str}")

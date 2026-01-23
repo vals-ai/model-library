@@ -1,13 +1,9 @@
-import logging
-import random
 import re
-from typing import Any, Callable
+from typing import Any
 
-import backoff
 from ai21 import TooManyRequestsError as AI21RateLimitError
 from anthropic import InternalServerError
 from anthropic import RateLimitError as AnthropicRateLimitError
-from backoff._typing import Details
 from httpcore import ReadError as HTTPCoreReadError
 from httpx import ConnectError as HTTPXConnectError
 from httpx import ReadError as HTTPXReadError
@@ -223,76 +219,4 @@ def exception_message(exception: Exception | Any) -> str:
         f"{type(exception).__name__}: {str(exception)}"
         if str(exception)
         else type(exception).__name__
-    )
-
-
-RETRY_MAX_TRIES: int = 20
-RETRY_INITIAL: float = 10.0
-RETRY_EXPO: float = 1.4
-RETRY_MAX_BACKOFF_WAIT: float = 240.0  # 4 minutes (more with jitter)
-
-
-def jitter(wait: float) -> float:
-    """
-    Increase or decrease the wait time by up to 20%.
-    """
-    jitter_fraction = 0.2
-    min_wait = wait * (1 - jitter_fraction)
-    max_wait = wait * (1 + jitter_fraction)
-    return random.uniform(min_wait, max_wait)
-
-
-def retry_llm_call(
-    logger: logging.Logger,
-    max_tries: int = RETRY_MAX_TRIES,
-    max_time: float | None = None,
-    backoff_callback: (
-        Callable[[int, Exception | None, float, float], None] | None
-    ) = None,
-):
-    def on_backoff(details: Details):
-        exception = details.get("exception")
-        tries = details.get("tries", 0)
-        elapsed = details.get("elapsed", 0.0)
-        wait = details.get("wait", 0.0)
-
-        logger.warning(
-            f"[Retrying] Exception: {exception_message(exception)} | Attempt: {tries} | "
-            + f"Elapsed: {elapsed:.1f}s | Next wait: {wait:.1f}s"
-        )
-
-        if backoff_callback:
-            backoff_callback(tries, exception, elapsed, wait)
-
-    def giveup(e: Exception) -> bool:
-        return not is_retriable_error(e)
-
-    def on_giveup(details: Details) -> None:
-        exception: Exception | None = details.get("exception", None)
-        if not exception:
-            return
-
-        logger.error(
-            f"Giving up after retries. Final exception: {exception_message(exception)}"
-        )
-
-        if is_context_window_error(exception):
-            message = exception.args[0] if exception.args else str(exception)
-            raise MaxContextWindowExceededError(message)
-
-        raise exception
-
-    return backoff.on_exception(
-        wait_gen=lambda: backoff.expo(
-            base=RETRY_EXPO,
-            factor=RETRY_INITIAL,
-            max_value=RETRY_MAX_BACKOFF_WAIT,
-        ),
-        exception=Exception,
-        max_tries=max_tries,
-        max_time=max_time,
-        giveup=giveup,
-        on_backoff=on_backoff,
-        on_giveup=on_giveup,
-        jitter=jitter,
     )

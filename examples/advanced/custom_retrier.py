@@ -4,15 +4,15 @@ from typing import Any, Awaitable, Callable
 
 from model_library.base import (
     LLM,
-    RetrierType,
     TextInput,
 )
 from model_library.exceptions import (
     BackoffRetryException,
     RetryException,
-    retry_llm_call,
 )
 from model_library.registry_utils import get_registry_model
+from model_library.retriers.backoff import ExponentialBackoffRetrier
+from model_library.retriers.base import retry_decorator
 
 from ..setup import console_log, setup
 
@@ -36,34 +36,28 @@ def is_context_length_error(error_str: str) -> bool:
     )
 
 
-def custom_retrier(logger: logging.Logger) -> RetrierType:
+def decorator(
+    func: Callable[..., Awaitable[Any]],
+) -> Callable[..., Awaitable[Any]]:
     """
-    Custom retrier that raised BackoffRetryException for context length errors
-    Custom retries takes in a logger. It replaces the backoff retrier. Immediate retries still function.
+    Decorator must return wrapper function
     """
 
-    def decorator(
-        func: Callable[..., Awaitable[Any]],
-    ) -> Callable[..., Awaitable[Any]]:
-        """
-        Decorator must return wrapper function
-        """
+    logger = logging.getLogger("llm.decorator")
 
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            try:
-                return await func(*args, **kwargs)
-            except Exception as e:
-                # detect context length errors and retry with backoff
-                if is_context_length_error(str(e).lower()):
-                    logger.warning(f"Context length error detected: {e}")
-                    # for simplicty, we don't actually retry
-                    raise BackoffRetryException(f"Context length error: {e}")
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return await func(*args, **kwargs)
+        except Exception as e:
+            # detect context length errors and retry with backoff
+            if is_context_length_error(str(e).lower()):
+                logger.warning(f"Context length error detected: {e}")
+                # for simplicty, we don't actually retry
+                raise BackoffRetryException(f"Context length error: {e}")
 
-                raise
+            raise
 
-        return wrapper
-
-    return decorator
+    return wrapper
 
 
 async def custom_retrier_context(model: LLM):
@@ -73,7 +67,7 @@ async def custom_retrier_context(model: LLM):
 
     console_log("\n--- Custom Retrier ---\n")
 
-    model.custom_retrier = custom_retrier
+    model.custom_retrier = decorator
     try:
         await model.query(
             [
@@ -102,15 +96,14 @@ async def custom_retrier_callback(model: LLM):
         if tries > 1:
             raise Exception("Reached retry 2")
 
-    def custom_retrier(logger: logging.Logger):
-        return retry_llm_call(
-            logger,
-            max_tries=3,
-            max_time=500,
-            backoff_callback=callback,
-        )
+    retrier = ExponentialBackoffRetrier(
+        logger=model.logger,
+        max_tries=3,
+        max_time=500,
+        retry_callback=callback,
+    )
 
-    model.custom_retrier = custom_retrier
+    model.custom_retrier = retry_decorator(retrier)
 
     def simulate_retry(*args: object, **kwargs: object):
         raise RetryException("Simulated failure")
