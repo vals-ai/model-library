@@ -79,6 +79,10 @@ class DelegateOnly(LLM):
         super().__init__(model_name, provider, config=config)
         config.native = True
 
+    def _get_extra_body(self) -> dict[str, Any]:
+        """Build extra body parameters for delegate-specific features."""
+        return {}
+
     @override
     async def _query_impl(
         self,
@@ -90,7 +94,11 @@ class DelegateOnly(LLM):
     ) -> QueryResult:
         assert self.delegate
         return await self.delegate_query(
-            input, tools=tools, query_logger=query_logger, **kwargs
+            input,
+            tools=tools,
+            query_logger=query_logger,
+            extra_body=self._get_extra_body(),
+            **kwargs,
         )
 
     @override

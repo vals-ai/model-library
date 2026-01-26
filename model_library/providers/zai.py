@@ -1,5 +1,4 @@
-import logging
-from typing import Any, Literal, Sequence
+from typing import Any, Literal
 
 from pydantic import SecretStr
 from typing_extensions import override
@@ -8,11 +7,8 @@ from model_library import model_library_settings
 from model_library.base import (
     DelegateConfig,
     DelegateOnly,
-    InputItem,
     LLMConfig,
     ProviderConfig,
-    QueryResult,
-    ToolDefinition,
 )
 from model_library.register_models import register_provider
 
@@ -57,7 +53,8 @@ class ZAIModel(DelegateOnly):
             delegate_provider="openai",
         )
 
-    def get_extra_body(self) -> dict[str, Any]:
+    @override
+    def _get_extra_body(self) -> dict[str, Any]:
         """Build extra body parameters for GLM-specific features."""
         return {
             "thinking": {
@@ -65,20 +62,3 @@ class ZAIModel(DelegateOnly):
                 "clear_thinking": self.clear_thinking,
             }
         }
-
-    @override
-    async def _query_impl(
-        self,
-        input: Sequence[InputItem],
-        *,
-        tools: list[ToolDefinition],
-        query_logger: logging.Logger,
-        **kwargs: object,
-    ) -> QueryResult:
-        return await self.delegate_query(
-            input,
-            tools=tools,
-            query_logger=query_logger,
-            extra_body=self.get_extra_body(),
-            **kwargs,
-        )

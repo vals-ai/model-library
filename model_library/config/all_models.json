@@ -1,4 +1,38 @@
 {
+    "alibaba/qwen3-max-2026-01-23": {
+        "company": "Alibaba",
+        "label": "Qwen 3 Max Thinking",
+        "description": "Qwen 3 Max with enhanced reasoning capabilities",
+        "release_date": "2026-01-23",
+        "open_source": false,
+        "properties": {
+            "context_window": 256000,
+            "max_tokens": 32000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7
+        },
+        "provider_endpoint": "qwen3-max-2026-01-23",
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3-max-2026-01-23",
+        "slug": "alibaba_qwen3-max-2026-01-23"
+    },
     "zai/glm-4.7-flashx": {
         "company": "zAI",
         "label": "GLM 4.7 Flash",
@@ -2034,7 +2068,7 @@
             "temperature": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
@@ -2077,10 +2111,7 @@
             "ignored_for_cost": false
         },
         "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.2,
-            "output": 6.0
-        },
+        "costs_per_million_token": {},
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 0.7
@@ -2114,19 +2145,7 @@
             "ignored_for_cost": false
         },
         "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.2,
-            "output": 6.0,
-            "cache": {
-                "read_discount": 0.8,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 32000.0,
-                "input": 2.4,
-                "output": 12.0
-            }
-        },
+        "costs_per_million_token": {},
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 0.7
@@ -2478,8 +2497,8 @@
         "properties": {
             "context_window": 262144,
             "max_tokens": 65536,
-            "training_cutoff": "",
-            "reasoning_model": false
+            "training_cutoff": null,
+            "reasoning_model": true
         },
         "supports": {
             "images": false,
@@ -2493,10 +2512,7 @@
             "ignored_for_cost": false
         },
         "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.2,
-            "output": 6.0
-        },
+        "costs_per_million_token": {},
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 0.7

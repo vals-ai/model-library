@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import SecretStr
 from typing_extensions import override
@@ -35,6 +35,16 @@ class AlibabaModel(DelegateOnly):
             use_completions=True,
             delegate_provider="openai",
         )
+
+    @override
+    def _get_extra_body(self) -> dict[str, Any]:
+        """Build extra body parameters for Qwen-specific features."""
+        extra: dict[str, Any] = {}
+        # Enable thinking mode for Qwen3 reasoning models
+        # https://www.alibabacloud.com/help/en/model-studio/use-qwen-by-calling-api
+        if self.reasoning:
+            extra["enable_thinking"] = True
+        return extra
 
     @override
     async def _calculate_cost(
