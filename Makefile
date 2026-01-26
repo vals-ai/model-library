@@ -29,12 +29,13 @@ venv_check:
 		exit 1; \
 	fi
 
+DIR ?= tests/
 test: venv_check
 	@echo "Running unit tests..."
-	@uv run pytest tests/ -m unit -v -n 4 --dist loadscope --model=$(MODEL)
+	@uv run pytest $(DIR) -m unit -v -n 4 --dist loadscope --model=$(MODEL)
 test-integration: venv_check
 	@echo "Running integration tests (requires API keys)..."
-	@uv run pytest tests/ -m integration -v -n 4 --dist loadscope --model=$(MODEL)
+	@uv run pytest $(DIR) -m integration -v -n 4 --dist loadscope --model=$(MODEL)
 
 format: venv_check
 	@uv run ruff format .

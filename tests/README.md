@@ -6,16 +6,8 @@ Test suite for the model_library.
 
 ```
 tests/
-├── unit/                           # Tests with mocked dependencies
-│   ├── test_completion.py         # Test request construction, response parsing
-│   └── providers/
-│       └── test_google_provider.py # Provider-specific logic tests
-│
-├── integration/                    # Tests with real API calls
-│   ├── test_completion.py         # Real completion API tests
-│   ├── test_streaming.py          # Real streaming API tests
-│   └── test_reasoning.py          # Reasoning/thinking mode tests
-│
+├── unit/                          # Tests with mocked dependencies
+├── integration/                   # Tests with real API calls
 ├── conftest.py                    # Shared fixtures and configuration
 ```
 
@@ -40,48 +32,44 @@ tests/
 ## Running Tests
 
 ```bash
-# Setup
+# Run unit tests
+make test
 
-# Run all tests
-pytest tests/
-
-# Run only unit tests (no API keys needed)
-pytest tests/unit/ -m unit
-
-# Run only integration tests (requires API keys)
-pytest tests/integration/ -m integration
+# Run integration tests
+make test-integration
 
 # Run specific test file
-pytest tests/unit/test_completion.py
-
-# Run with verbose output
-pytest tests/ -v
+make test DIR=tests/unit/test_tools.py
 
 # Run specific test class or method
-pytest tests/unit/test_completion.py::TestCompletionUnit::test_temperature_parameter
+make test DIR=tests/unit/test_completion.py::TestCompletionUnit::test_temperature_parameter
+
+# Run specific model
+make test-integration MODEL=openai/gpt-5-nano-2025-08-07
+
+# Run long problem test
+make test-integration DIR=tests/integration/test_long_problem.py MODEL=openai/gpt-5-nano-2025-08-07
+
 ```
+
+## Decorators
+
+- `@parametrize_all_models` - Pass in all model keys, excluding deprecated, including alternative keys
+- `@parametrize_models_for_provider` - Pass in all model keys for a specific provider, excluding deprecated, including alternative keys
+
+When passing in --MODEL, these decorators will skip tests that don't match the model key.
 
 ## Test Markers
 
-- `@pytest.mark.unit` - Unit tests with mocked dependencies
-- `@pytest.mark.integration` - Integration tests requiring API access
-- `@pytest.mark.slow` - Tests that may take longer to run
-- `@requires_google_api` - Skip if Google/Gemini API key not available
+- `@pytest.mark.unit` - Unit tests
+- `@pytest.mark.integration` - Integration tests
 
 ## Environment Setup
 
-The test suite loads environment variables from root `.env`
+Integration tests load environment variables from root `.env`
 
-Required environment variables:
+## Misc
 
-- `GEMINI_API_KEY` or `GOOGLE_API_KEY` - For Google Gemini tests
-- `OPENAI_API_KEY` - For OpenAI compatibility mode tests (optional)
+By default, tests run asynchronously, and multithreaded with 4 workers.
+Parameter to the same function run on the same worker.
 
-## Fixtures
-
-Key fixtures from `conftest.py`:
-
-- `mock_google_client` - Mocked Google client for unit tests
-- `mock_google_response` - Factory for creating mock responses
-- `create_test_input` - Helper to create TextInput/FileInput objects
-- `assert_thinking_config` - Helper to validate thinking configuration

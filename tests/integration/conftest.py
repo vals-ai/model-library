@@ -1,9 +1,8 @@
 import pytest
 
 
-@pytest.fixture(autouse=True)
-def reset_client_registry():
-    from model_library.base._base import client_registry
-
-    yield
-    client_registry.clear()
+@pytest.fixture()
+def require_model_flag(request: pytest.FixtureRequest):
+    """Skip this test unless --model flag is provided"""
+    if not request.config.getoption("--model", None):
+        pytest.skip("Hard question tests require --model flag")
