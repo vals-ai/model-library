@@ -2,8 +2,6 @@ from functools import cache
 from pathlib import Path
 from typing import TypedDict
 
-import tiktoken
-
 from model_library.base import (
     LLM,
     LLMConfig,
@@ -233,56 +231,3 @@ def get_model_names(
             and model.full_key not in alternative_keys_set
         ]
     )
-
-
-@cache
-def _get_tiktoken_encoder():
-    """Get cached tiktoken encoder for consistent tokenization."""
-    return tiktoken.encoding_for_model("gpt-4o")
-
-
-def auto_trim_document(
-    model_name: str,
-    document: str,
-) -> str:
-    """
-    Automatically trim document to fit within model's context window,
-    leaving a buffer for instructions and output.
-
-    Args:
-        model_name: The name of the model in the registry
-        document: The document text to trim
-
-    Returns:
-        Trimmed document, or original document if trimming isn't needed
-    """
-
-    max_tokens = get_max_document_tokens(model_name)
-
-    encoding = _get_tiktoken_encoder()
-    tokens = encoding.encode(document)
-
-    if len(tokens) > max_tokens:
-        tokens = tokens[:max_tokens]
-        document = encoding.decode(tokens)
-
-    return document
-
-
-def get_max_document_tokens(model_name: str, output_buffer: int = 10000) -> int:
-    """
-    Get the maximum document tokens for a model by looking up its context window
-    from the registry and subtracting a configurable buffer for instructions and output.
-
-    Args:
-        model_name: The name of the model in the registry
-        output_buffer: Number of tokens to reserve for output (default 10000)
-
-    Returns:
-        Maximum tokens to use for documents
-    """
-    # Import here to avoid circular imports
-    from model_library.utils import get_context_window_for_model
-
-    context_window = get_context_window_for_model(model_name)
-    return context_window - output_buffer
