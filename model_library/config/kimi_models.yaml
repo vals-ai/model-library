@@ -15,7 +15,7 @@ kimi-k2.5-models:
 
   kimi/kimi-k2.5:
     label: Kimi K2.5
-    release_date: 2025-01-26
+    release_date: 2026-01-26
     supports:
       images: true
       temperature: false
