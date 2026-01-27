@@ -1,5 +1,6 @@
 import logging
 from collections.abc import Mapping, Sequence
+
 import httpx
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
@@ -74,9 +75,7 @@ def create_anthropic_client_with_defaults(
     )
 
 
-def get_context_window_for_model(
-    model_name: str, default: int | None = None
-) -> int | None:
+def get_context_window_for_model(model_name: str, default: int = 128_000) -> int:
     """
     Get the context window for a model by looking up its configuration from the registry.
 
