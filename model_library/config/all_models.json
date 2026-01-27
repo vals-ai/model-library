@@ -1154,7 +1154,7 @@
             "context_window": 256000,
             "max_tokens": 32000,
             "training_cutoff": null,
-            "reasoning_model": true
+            "reasoning_model": false
         },
         "supports": {
             "images": false,
@@ -1187,7 +1187,7 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0
+            "temperature": 0.6
         },
         "provider_endpoint": "kimi-k2-thinking",
         "provider_name": "kimi",
@@ -1241,7 +1241,7 @@
             "context_window": 256000,
             "max_tokens": 32000,
             "training_cutoff": null,
-            "reasoning_model": true
+            "reasoning_model": false
         },
         "supports": {
             "images": false,
@@ -1265,7 +1265,7 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0
+            "temperature": 0.6
         },
         "provider_endpoint": "kimi-k2-thinking",
         "provider_name": "fireworks",
@@ -7637,6 +7637,105 @@
         "provider_name": "azure",
         "full_key": "azure/o3-mini-2025-01-31",
         "slug": "azure_o3-mini-2025-01-31"
+    },
+    "kimi/kimi-k2.5-thinking": {
+        "company": "Kimi",
+        "label": "Kimi K2.5",
+        "description": null,
+        "release_date": "2025-01-26",
+        "open_source": true,
+        "documentation_url": "https://platform.moonshot.ai/docs",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": false,
+            "temperature": false,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.6,
+            "output": 3.0,
+            "cache": {
+                "read": 0.1,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "kimi-k2.5",
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k2.5-thinking",
+        "slug": "kimi_kimi-k2.5-thinking"
+    },
+    "kimi/kimi-k2.5": {
+        "company": "Kimi",
+        "label": "Kimi K2.5",
+        "description": null,
+        "release_date": "2025-01-26",
+        "open_source": true,
+        "documentation_url": "https://platform.moonshot.ai/docs",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "supports": {
+            "images": true,
+            "files": false,
+            "temperature": false,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.6,
+            "output": 3.0,
+            "cache": {
+                "read": 0.1,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [
+            {
+                "kimi/kimi-k2.5-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    },
+                    "default_parameters": {
+                        "temperature": 1.0
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "temperature": 0.6,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "kimi-k2.5",
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k2.5",
+        "slug": "kimi_kimi-k2.5"
     },
     "google/gemini-2.0-flash-thinking-exp-01-21": {
         "company": "Google",

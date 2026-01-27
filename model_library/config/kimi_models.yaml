@@ -11,16 +11,43 @@ base-config:
     available_for_everyone: true
     ignored_for_cost: false
 
+kimi-k2.5-models:
+
+  kimi/kimi-k2.5:
+    label: Kimi K2.5
+    release_date: 2025-01-26
+    supports:
+      images: true
+      temperature: false
+    properties:
+      reasoning_model: false
+      context_window: 262_144
+      max_tokens: 128_000
+    default_parameters:
+      temperature: 0.6
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.6
+      output: 3.0
+      cache:
+        read: 0.1
+    alternative_keys:
+      - kimi/kimi-k2.5-thinking:
+          properties:
+            reasoning_model: true
+          default_parameters:
+            temperature: 1.0
+
 kimi-k2-models:
   kimi/kimi-k2-thinking:
     label: Kimi K2 Thinking
     release_date: 2025-11-06
     properties:
-      reasoning_model: true
+      reasoning_model: false
       context_window: 256_000
       max_tokens: 32_000
     default_parameters:
-      temperature: 1.0
+      temperature: 0.6
     costs_per_million_token:
       input: 0.6
       output: 2.5

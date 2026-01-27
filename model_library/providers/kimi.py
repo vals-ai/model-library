@@ -1,4 +1,6 @@
-from typing import Literal
+from typing import Any, Literal
+
+from typing_extensions import override
 
 from pydantic import SecretStr
 
@@ -32,3 +34,11 @@ class KimiModel(DelegateOnly):
             use_completions=True,
             delegate_provider="openai",
         )
+
+    @override
+    def _get_extra_body(self) -> dict[str, Any]:
+        """
+        Build extra body parameters for Kimi-specific features.
+        see https://platform.moonshot.ai/docs/guide/kimi-k2-5-quickstart#parameters-differences-in-request-body
+        """
+        return {"thinking": {"type": "enabled" if self.reasoning else "disabled"}}
