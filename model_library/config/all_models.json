@@ -1144,7 +1144,7 @@
         "slug": "openai_gpt-5.1-2025-11-13"
     },
     "kimi/kimi-k2-thinking": {
-        "company": "Kimi",
+        "company": "Moonshot AI",
         "label": "Kimi K2 Thinking",
         "description": null,
         "release_date": "2025-11-06",
@@ -1231,7 +1231,7 @@
         "slug": "inception_mercury"
     },
     "fireworks/kimi-k2-thinking": {
-        "company": "Kimi",
+        "company": "Moonshot AI",
         "label": "Kimi K2 Thinking",
         "description": null,
         "release_date": "2025-11-06",
@@ -7639,7 +7639,7 @@
         "slug": "azure_o3-mini-2025-01-31"
     },
     "kimi/kimi-k2.5-thinking": {
-        "company": "Kimi",
+        "company": "Moonshot AI",
         "label": "Kimi K2.5",
         "description": null,
         "release_date": "2025-01-26",
@@ -7683,7 +7683,7 @@
         "slug": "kimi_kimi-k2.5-thinking"
     },
     "kimi/kimi-k2.5": {
-        "company": "Kimi",
+        "company": "Moonshot AI",
         "label": "Kimi K2.5",
         "description": null,
         "release_date": "2025-01-26",
