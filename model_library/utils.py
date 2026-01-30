@@ -1,6 +1,5 @@
 import logging
 from collections.abc import Mapping, Sequence
-
 import httpx
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
@@ -75,16 +74,15 @@ def create_anthropic_client_with_defaults(
     )
 
 
-def get_context_window_for_model(model_name: str, default: int = 128_000) -> int:
+def get_context_window_for_model(model_name: str) -> int | None:
     """
     Get the context window for a model by looking up its configuration from the registry.
 
     Args:
         model_name: The name of the model in the registry (e.g., "openai/gpt-4o-mini-2024-07-18" or "azure/gpt-4o-mini-2024-07-18")
-        default: Default context window to return if model not found or missing context_window
 
     Returns:
-        Context window size in tokens
+        Context window size in tokens (or `None` if not found)
     """
     # import here to avoid circular imports
     from model_library.register_models import get_model_registry
@@ -98,7 +96,6 @@ def get_context_window_for_model(model_name: str, default: int = 128_000) -> int
         return model_config.properties.context_window
     else:
         logger.warning(
-            f"Model {model_name} not found in registry or missing context_window, "
-            f"using default context length of {default}"
+            f"Model {model_name} not found in registry or missing context_window"
         )
-        return default
+        return None

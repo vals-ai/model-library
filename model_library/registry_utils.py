@@ -1,8 +1,7 @@
+import tiktoken
 from functools import cache
 from pathlib import Path
 from typing import TypedDict
-
-import tiktoken
 
 from model_library.base import (
     LLM,
@@ -235,6 +234,14 @@ def get_model_names(
     )
 
 
+"""
+everything below this comment is included for legacy support of caselaw/corpfin custom models.
+@orestes please remove this as part of the migration to a standard CorpFin harness.
+"""
+
+DEFAULT_CONTEXT_WINDOW = 128_000
+
+
 @cache
 def _get_tiktoken_encoder():
     """Get cached tiktoken encoder for consistent tokenization."""
@@ -257,7 +264,7 @@ def auto_trim_document(
         Trimmed document, or original document if trimming isn't needed
     """
 
-    max_tokens = get_max_document_tokens(model_name)
+    max_tokens = get_max_document_tokens(model_name) or DEFAULT_CONTEXT_WINDOW
 
     encoding = _get_tiktoken_encoder()
     tokens = encoding.encode(document)
@@ -284,5 +291,5 @@ def get_max_document_tokens(model_name: str, output_buffer: int = 10000) -> int:
     # Import here to avoid circular imports
     from model_library.utils import get_context_window_for_model
 
-    context_window = get_context_window_for_model(model_name)
+    context_window = get_context_window_for_model(model_name) or DEFAULT_CONTEXT_WINDOW
     return context_window - output_buffer
