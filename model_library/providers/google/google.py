@@ -361,7 +361,10 @@ class GoogleModel(LLM):
         contents: list[Content | None] = []
         finish_reason: FinishReason | None = None
 
+        chunks: list[GenerateContentResponse] = []
+
         async for chunk in stream:
+            chunks.append(chunk)
             candidates = chunk.candidates
             if not candidates:
                 continue
@@ -406,6 +409,7 @@ class GoogleModel(LLM):
             self.logger.error(f"Unexpected finish reason: {finish_reason}")
 
         if not text and not reasoning and not tool_calls:
+            self.logger.error(f"Chunks: {chunks}")
             raise ModelNoOutputError("Model returned empty response")
 
         result = QueryResult(
