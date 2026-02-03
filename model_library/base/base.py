@@ -76,6 +76,7 @@ class LLMConfig(BaseModel):
     top_k: int | None = None
     reasoning: bool = False
     reasoning_effort: str | bool | None = None
+    compute_effort: str | None = None
     supports_images: bool = False
     supports_files: bool = False
     supports_videos: bool = False
@@ -155,6 +156,7 @@ class LLM(ABC):
 
         self.reasoning: bool = config.reasoning
         self.reasoning_effort: str | bool | None = config.reasoning_effort
+        self.compute_effort: str | None = config.compute_effort
 
         self.supports_files: bool = config.supports_files
         self.supports_videos: bool = config.supports_videos

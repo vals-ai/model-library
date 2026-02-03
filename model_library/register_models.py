@@ -170,6 +170,7 @@ class DefaultParameters(BaseModel):
     top_p: float | None = None
     top_k: int | None = None
     reasoning_effort: str | bool | None = None
+    compute_effort: str | bool | None = None
 
 
 class RawModelConfig(BaseModel):

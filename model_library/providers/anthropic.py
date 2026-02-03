@@ -23,6 +23,7 @@ from model_library.base import (
     InputItem,
     LLMBatchMixin,
     LLMConfig,
+    ProviderConfig,
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
@@ -46,6 +47,11 @@ from model_library.register_models import register_provider
 from model_library.utils import (
     create_anthropic_client_with_defaults,
 )
+
+
+class AnthropicConfig(ProviderConfig):
+    supports_compute_effort: bool = False
+    supports_auto_thinking: bool = False
 
 
 class AnthropicBatchMixin(LLMBatchMixin):
@@ -251,6 +257,8 @@ class AnthropicBatchMixin(LLMBatchMixin):
 
 @register_provider("anthropic")
 class AnthropicModel(LLM):
+    provider_config = AnthropicConfig()
+
     def _get_default_api_key(self) -> str:
         if self.delegate_config:
             return self.delegate_config.api_key.get_secret_value()
@@ -547,13 +555,22 @@ class AnthropicModel(LLM):
         body["max_tokens"] = self.max_tokens
 
         if self.reasoning:
-            budget_tokens = kwargs.pop(
-                "budget_tokens", get_default_budget_tokens(self.max_tokens)
-            )
-            body["thinking"] = {
-                "type": "enabled",
-                "budget_tokens": budget_tokens,
-            }
+            if self.provider_config.supports_auto_thinking:
+                body["thinking"] = {"type": "auto"}
+            else:
+                budget_tokens = kwargs.pop(
+                    "budget_tokens", get_default_budget_tokens(self.max_tokens)
+                )
+                body["thinking"] = {
+                    "type": "enabled",
+                    "budget_tokens": budget_tokens,
+                }
+
+        # effort controls compute allocation for text, tool calls, and thinking. Opus-4.5+
+        # use instead of reasoning_effort with auto_thinking
+        if self.provider_config.supports_compute_effort and self.compute_effort:
+            # default is "high"
+            body["output_config"] = {"effort": self.compute_effort}
 
         # Thinking models don't support temperature: https://docs.claude.com/en/docs/build-with-claude/extended-thinking#feature-compatibility
         if self.supports_temperature and not self.reasoning:
@@ -599,7 +616,17 @@ class AnthropicModel(LLM):
 
         stream_kwargs = {**body}
         if is_anthropic_endpoint:
-            betas = ["files-api-2025-04-14", "interleaved-thinking-2025-05-14"]
+            betas = ["files-api-2025-04-14"]
+            if self.provider_config.supports_auto_thinking:
+                betas.extend(
+                    [
+                        "auto-thinking-2026-01-12",
+                        "effort-2025-11-24",
+                        "max-effort-2026-01-24",
+                    ]
+                )
+            else:
+                betas.extend(["interleaved-thinking-2025-05-14"])
             if "sonnet-4-5" in self.model_name:
                 betas.append("context-1m-2025-08-07")
             stream_kwargs["betas"] = betas

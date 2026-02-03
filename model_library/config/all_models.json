@@ -996,7 +996,9 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "supports_compute_effort": true
+        },
         "costs_per_million_token": {
             "input": 5.0,
             "output": 25.0,
