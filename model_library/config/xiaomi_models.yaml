@@ -1,0 +1,43 @@
+base-config:
+  company: Xiaomi
+  open_source: true
+  documentation_url: https://platform.xiaomimimo.com/#/docs/
+  supports:
+    images: false
+    files: false
+    tools: true
+  metadata:
+    available_as_evaluator: false
+    available_for_everyone: true
+    ignored_for_cost: false
+  properties:
+    training_cutoff: December 2024
+
+xiaomi-models:
+  base-config:
+    properties:
+      context_window: 256000
+    supports:
+      temperature: true
+      top_p: true
+    default_parameters:
+      temperature: 0.3
+      top_p: 0.95
+
+  xiaomi/mimo-v2-flash:
+    label: MiMo V2 Flash
+    description:
+      MiMo V2 Flash is Xiaomi's Mixture-of-Experts (MoE) language model with
+      309B total parameters and 15B active parameters. Designed for high-speed
+      reasoning and agentic workflows, it utilizes a novel hybrid attention
+      architecture and Multi-Token Prediction (MTP) to achieve state-of-the-art
+      performance while significantly reducing inference costs.
+    release_date: 2025-12-17
+    properties:
+      context_window: 256000
+      max_tokens: 64000
+    costs_per_million_token:
+      input: 0.10
+      output: 0.30
+      cache:
+        read: 0.01

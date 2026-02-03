@@ -316,6 +316,49 @@
         "full_key": "vercel/zai/glm-4.7",
         "slug": "vercel_zai_glm-4.7"
     },
+    "xiaomi/mimo-v2-flash": {
+        "company": "Xiaomi",
+        "label": "MiMo V2 Flash",
+        "description": "MiMo V2 Flash is Xiaomi's Mixture-of-Experts (MoE) language model with 309B total parameters and 15B active parameters. Designed for high-speed reasoning and agentic workflows, it utilizes a novel hybrid attention architecture and Multi-Token Prediction (MTP) to achieve state-of-the-art performance while significantly reducing inference costs.",
+        "release_date": "2025-12-17",
+        "open_source": true,
+        "documentation_url": "https://platform.xiaomimimo.com/#/docs/",
+        "properties": {
+            "context_window": 256000,
+            "max_tokens": 64000,
+            "training_cutoff": "December 2024"
+        },
+        "supports": {
+            "images": false,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.3,
+            "cache": {
+                "read": 0.01,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.3,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "mimo-v2-flash",
+        "provider_name": "xiaomi",
+        "full_key": "xiaomi/mimo-v2-flash",
+        "slug": "xiaomi_mimo-v2-flash"
+    },
     "google/gemini-3-flash-preview": {
         "company": "Google",
         "label": "Gemini 3 Flash (12/25)",
