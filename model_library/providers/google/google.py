@@ -368,9 +368,11 @@ class GoogleModel(LLM):
 
             content = candidates[0].content
 
+            meaningful_content = False
             if content and content.parts:
                 for part in content.parts:
                     if part.function_call:
+                        meaningful_content = True
                         if not part.function_call.name:
                             raise Exception(f"Invalid function call: {part}")
 
@@ -387,13 +389,15 @@ class GoogleModel(LLM):
                     if not part.text:
                         continue
                     if part.thought:
+                        meaningful_content = True
                         reasoning += part.text
                     else:
+                        meaningful_content = True
                         text += part.text
 
             if chunk.usage_metadata:
                 metadata = chunk.usage_metadata
-            if content:
+            if content and meaningful_content:
                 contents.append(content)
             if candidates[0].finish_reason:
                 finish_reason = candidates[0].finish_reason
