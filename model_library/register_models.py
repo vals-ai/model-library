@@ -339,6 +339,10 @@ def _register_models() -> ModelRegistry:
                         copy.slug = key.replace("/", "_")
                         copy.full_key = key
                         copy.alternative_keys = []
+                        copy.provider_properties = ProviderProperties.model_validate(
+                            provider_properties
+                        )
+
                         registry[key] = copy
 
     return registry
