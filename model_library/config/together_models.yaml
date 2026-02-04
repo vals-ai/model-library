@@ -45,6 +45,8 @@ kimi-models:
     costs_per_million_token:
       input: 1.00
       output: 3.00
+    metadata:
+      deprecated: true
 
 # Meta Llama Models
 llama-4-models:
