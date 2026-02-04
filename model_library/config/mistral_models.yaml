@@ -38,6 +38,8 @@ magistral-models:
     costs_per_million_token:
       input: 2
       output: 5
+    metadata:
+      deprecated: true
 
   mistralai/magistral-medium-2509:
     label: Magistral Medium 1.2 (09/2025)

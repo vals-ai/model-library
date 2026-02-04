@@ -122,7 +122,10 @@
             "ignored_for_cost": false
         },
         "provider_properties": {},
-        "costs_per_million_token": {},
+        "costs_per_million_token": {
+            "input": 1.2,
+            "output": 6.0
+        },
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 0.7
@@ -2304,7 +2307,10 @@
             "ignored_for_cost": false
         },
         "provider_properties": {},
-        "costs_per_million_token": {},
+        "costs_per_million_token": {
+            "input": 1.2,
+            "output": 6.0
+        },
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 0.7
@@ -2338,7 +2344,10 @@
             "ignored_for_cost": false
         },
         "provider_properties": {},
-        "costs_per_million_token": {},
+        "costs_per_million_token": {
+            "input": 1.2,
+            "output": 6.0
+        },
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 0.7
@@ -2705,7 +2714,10 @@
             "ignored_for_cost": false
         },
         "provider_properties": {},
-        "costs_per_million_token": {},
+        "costs_per_million_token": {
+            "input": 1.2,
+            "output": 6.0
+        },
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 0.7
@@ -4644,7 +4656,7 @@
             "tools": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": true,
             "available_as_evaluator": false,
             "ignored_for_cost": false

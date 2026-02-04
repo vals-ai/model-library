@@ -37,6 +37,11 @@ qwen-3-max-models:
     supports:
       tools: true
       images: false
+    # only applies for <32K input tokens
+    # TODO: add thresholds
+    costs_per_million_token:
+      input: 1.2
+      output: 6.0
 
   alibaba/qwen3-max-2026-01-23:
     label: Qwen 3 Max Thinking
