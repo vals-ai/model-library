@@ -58,6 +58,7 @@ from model_library.exceptions import (
     ImmediateRetryException,
     InvalidStructuredOutputError,
     ModelNoOutputError,
+    RetryException,
 )
 from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.register_models import register_provider
@@ -195,7 +196,7 @@ class GoogleModel(LLM):
                     # id check
                     new_input.append(
                         Content(
-                            role="function",
+                            role="user",
                             parts=[
                                 Part.from_function_response(
                                     name=item.tool_call.name,
@@ -406,10 +407,20 @@ class GoogleModel(LLM):
                 finish_reason = candidates[0].finish_reason
 
         if finish_reason != FinishReason.STOP:
-            self.logger.error(f"Unexpected finish reason: {finish_reason}")
+            self.logger.error(
+                f"Unexpected finish reason: {finish_reason}, chunks: {chunks}"
+            )
+
+        if finish_reason == FinishReason.MALFORMED_FUNCTION_CALL:
+            # gemini handles malformed function calls server side
+            # we don't want to return the content that was supposed to have a tool call, without that tool call
+            # and since we don't get any info on the params, we throw an error
+
+            self.logger.error("The function call was malformed")
+            raise RetryException("The function call was malformed")
 
         if not text and not reasoning and not tool_calls:
-            self.logger.error(f"Chunks: {chunks}")
+            self.logger.error(f"Empty response. Chunks: {chunks}")
             raise ModelNoOutputError("Model returned empty response")
 
         result = QueryResult(

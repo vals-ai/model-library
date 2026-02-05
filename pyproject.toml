@@ -27,7 +27,7 @@ dependencies = [
   "xai-sdk>=1.0.0,<2.0",
   "ai21>=4.3.0,<5.0",
   "boto3>=1.38.27,<2.0",
-  "google-genai[aiohttp]>=1.51.0",
+  "google-genai[aiohttp]>=1.62.0",
   "google-cloud-storage>=1.26.0",
   "pytest-xdist>=3.8.0",
 ]

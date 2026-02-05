@@ -125,7 +125,7 @@ async def test_google_tool_result_roundtrip_no_storage_import(model_class, model
     body = await m.build_body([tr, TextInput(text="Thanks!")], tools=[])
     contents = body["contents"]
     roles = [getattr(c, "role", None) for c in contents]
-    assert "function" in roles and "user" in roles
+    assert "user" in roles
 
 
 async def test_anthropic_rejects_invalid_tool_result():
