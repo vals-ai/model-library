@@ -569,7 +569,6 @@ class AnthropicModel(LLM):
         # effort controls compute allocation for text, tool calls, and thinking. Opus-4.5+
         # use instead of reasoning_effort with auto_thinking
         if self.provider_config.supports_compute_effort and self.compute_effort:
-            # default is "high"
             body["output_config"] = {"effort": self.compute_effort}
 
         # Thinking models don't support temperature: https://docs.claude.com/en/docs/build-with-claude/extended-thinking#feature-compatibility
