@@ -611,6 +611,12 @@ class OpenAIModel(LLM):
                         if tool_call_chunk.id and (
                             not raw_tool_calls
                             or raw_tool_calls[-1].id != tool_call_chunk.id
+                            or (
+                                raw_tool_calls[-1].id == tool_call_chunk.id
+                                and self.provider == "deepseek"
+                                and func
+                                and func.name
+                            )  # TODO: remove hotfix once deepseek fixes their stuff
                         ):
                             raw_tool_calls.append(
                                 ChatCompletionMessageToolCall(
@@ -625,7 +631,7 @@ class OpenAIModel(LLM):
                                 )
                             )
                         # accumulate delta
-                        elif func:
+                        elif func and raw_tool_calls:
                             if func.name:
                                 raw_tool_calls[-1].function.name = func.name
                             if func.arguments:

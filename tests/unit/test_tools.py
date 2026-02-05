@@ -142,3 +142,95 @@ async def test_anthropic_rejects_invalid_tool_result():
         Exception, match="Tool call result provided with no matching tool call"
     ):
         await model.parse_input([TextInput(text="Hello"), orphaned_result])
+
+
+class TestStreamingToolCallAccumulation:
+    """
+    Tests for streaming tool call chunk accumulation in OpenAI _query_completions.
+    """
+
+    @staticmethod
+    def _make_chunk(
+        tool_call_id: str | None, func_name: str | None, func_args: str | None
+    ):
+        """Create a mock streaming chunk with tool call data."""
+        from openai.types.chat.chat_completion_chunk import (
+            ChatCompletionChunk,
+            Choice,
+            ChoiceDelta,
+            ChoiceDeltaToolCall,
+            ChoiceDeltaToolCallFunction,
+        )
+
+        tool_calls = None
+        if tool_call_id is not None or func_name is not None or func_args is not None:
+            tool_calls = [
+                ChoiceDeltaToolCall(
+                    index=0,
+                    id=tool_call_id,
+                    function=ChoiceDeltaToolCallFunction(
+                        name=func_name, arguments=func_args
+                    ),
+                    type="function" if tool_call_id else None,
+                )
+            ]
+
+        return ChatCompletionChunk(
+            id="chunk",
+            created=0,
+            model="test",
+            object="chat.completion.chunk",
+            choices=[
+                Choice(
+                    index=0,
+                    delta=ChoiceDelta(tool_calls=tool_calls),
+                    finish_reason=None,
+                )
+            ],
+        )
+
+    @staticmethod
+    async def _run_query(model: OpenAIModel, chunks: list):
+        """Run _query_completions with mocked stream."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        async def mock_stream():
+            for c in chunks:
+                yield c
+
+        mock_client = MagicMock()
+        mock_client.chat.completions.create = AsyncMock(return_value=mock_stream())
+
+        with patch.object(model, "get_client", return_value=mock_client):
+            with patch.object(
+                model, "build_body", new_callable=AsyncMock, return_value={}
+            ):
+                return await model._query_completions([], tools=[])
+
+    async def test_openai_multiple_tool_calls_different_ids(self):
+        """OpenAI: different IDs should create separate tool calls."""
+        model = OpenAIModel("gpt-4o-mini")
+        chunks = [
+            self._make_chunk("call_1", "get_weather", '{"location": "SF"}'),
+            self._make_chunk("call_2", "get_time", '{"tz": "PST"}'),
+        ]
+
+        result = await self._run_query(model, chunks)
+
+        assert len(result.tool_calls) == 2
+        assert result.tool_calls[0].name == "get_weather"
+        assert result.tool_calls[1].name == "get_time"
+
+    async def test_openai_same_id_accumulates(self):
+        """OpenAI: same ID should accumulate (NOT create new call)."""
+        model = OpenAIModel("gpt-4o-mini")
+        chunks = [
+            self._make_chunk("call_1", "get_weather", '{"location":'),
+            self._make_chunk("call_1", None, ' "SF"}'),  # same ID, no name = accumulate
+        ]
+
+        result = await self._run_query(model, chunks)
+
+        assert len(result.tool_calls) == 1  # should be 1, not 2
+        assert result.tool_calls[0].name == "get_weather"
+        assert result.tool_calls[0].args == '{"location": "SF"}'
