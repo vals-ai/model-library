@@ -28,7 +28,7 @@ claude-4-models:
     supports:
       batch: true
 
-  anthropic/claude-opus-4-6-20260205:
+  anthropic/claude-opus-4-6:
     label: Claude Opus 4.6 (Nonthinking)
     release_date: 2026-02-05
     properties:
@@ -46,7 +46,7 @@ claude-4-models:
       supports_auto_thinking: true
       supports_compute_effort: true
     alternative_keys:
-      - anthropic/claude-opus-4-6-20260205-thinking:
+      - anthropic/claude-opus-4-6-thinking:
           properties:
             reasoning_model: true
 

@@ -1,5 +1,5 @@
 {
-    "anthropic/claude-opus-4-6-20260205-thinking": {
+    "anthropic/claude-opus-4-6-thinking": {
         "company": "Anthropic",
         "label": "Claude Opus 4.6 (Thinking)",
         "description": null,
@@ -45,14 +45,15 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0
+            "temperature": 1.0,
+            "compute_effort": "max"
         },
-        "provider_endpoint": "claude-opus-4-6-20260205",
+        "provider_endpoint": "claude-opus-4-6",
         "provider_name": "anthropic",
-        "full_key": "anthropic/claude-opus-4-6-20260205-thinking",
-        "slug": "anthropic_claude-opus-4-6-20260205-thinking"
+        "full_key": "anthropic/claude-opus-4-6-thinking",
+        "slug": "anthropic_claude-opus-4-6-thinking"
     },
-    "anthropic/claude-opus-4-6-20260205": {
+    "anthropic/claude-opus-4-6": {
         "company": "Anthropic",
         "label": "Claude Opus 4.6 (Nonthinking)",
         "description": null,
@@ -98,7 +99,7 @@
         },
         "alternative_keys": [
             {
-                "anthropic/claude-opus-4-6-20260205-thinking": {
+                "anthropic/claude-opus-4-6-thinking": {
                     "properties": {
                         "reasoning_model": true
                     }
@@ -106,12 +107,13 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0
+            "temperature": 1.0,
+            "compute_effort": "max"
         },
-        "provider_endpoint": "claude-opus-4-6-20260205",
+        "provider_endpoint": "claude-opus-4-6",
         "provider_name": "anthropic",
-        "full_key": "anthropic/claude-opus-4-6-20260205",
-        "slug": "anthropic_claude-opus-4-6-20260205"
+        "full_key": "anthropic/claude-opus-4-6",
+        "slug": "anthropic_claude-opus-4-6"
     },
     "kimi/kimi-k2.5-thinking": {
         "company": "Moonshot AI",
@@ -1082,7 +1084,8 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0
+            "temperature": 1.0,
+            "compute_effort": "high"
         },
         "provider_endpoint": "claude-opus-4-5-20251101",
         "provider_name": "anthropic",
@@ -1142,7 +1145,8 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0
+            "temperature": 1.0,
+            "compute_effort": "high"
         },
         "provider_endpoint": "claude-opus-4-5-20251101",
         "provider_name": "anthropic",
