@@ -4342,7 +4342,7 @@
             "temperature": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
@@ -7504,7 +7504,7 @@
             "tools": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false

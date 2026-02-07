@@ -1,12 +1,14 @@
 import hashlib
 import io
 import logging
+import pickle
 import threading
 import time
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable
 from math import ceil
+from pathlib import Path
 from pprint import pformat
 from typing import (
     Any,
@@ -17,11 +19,11 @@ from typing import (
 )
 
 import tiktoken
-from pydantic import SecretStr, model_serializer
-from pydantic.main import BaseModel
+from pydantic import BaseModel, SecretStr, model_serializer
 from tiktoken.core import Encoding
 from typing_extensions import override
 
+import model_library.base.serialize as init_serialize_opts
 from model_library.base.batch import (
     LLMBatchMixin,
 )
@@ -47,6 +49,8 @@ from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
 from model_library.retriers.token import TokenRetrier
 from model_library.utils import truncate_str
+
+_ = init_serialize_opts
 
 PydanticT = TypeVar("PydanticT", bound=BaseModel)
 
@@ -624,3 +628,25 @@ class LLM(ABC):
             f"query_json is not implemented for {self.__class__.__name__}. "
             f"Only OpenAI and Google providers currently support this method."
         )
+
+    @staticmethod
+    def serialize_input(input: Sequence[InputItem]) -> bytes:
+        return pickle.dumps(input)
+
+    @staticmethod
+    def deserialize_input(data: bytes | Path):
+        """
+        Deserialize input from bytes or a file path.
+
+        WARNING: Uses pickle which can execute arbitrary code. Only deserialize
+        data from trusted sources.
+
+        Save if you serialize_input() -> nothing happens to that data -> deserialize_input()
+        Unsafe if you serialize_input() -> send over a network for example -> send back
+
+        If deserializing from untrusted sources, add HMAC verification.
+        """
+        if isinstance(data, Path):
+            with open(data, "rb") as f:
+                data = f.read()
+        return pickle.loads(data)

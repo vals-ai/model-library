@@ -36,6 +36,8 @@ ai21labs-models:
     label: Jamba 1.7 Mini
     description: The most powerful and efficient long context model
     release_date: 2025-07-03
+    metadata:
+      deprecated: true
     properties:
       context_window: 256_000
       training_cutoff: "2024-08"

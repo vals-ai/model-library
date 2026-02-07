@@ -244,6 +244,7 @@ deepseek_models:
     supports:
       images: false
     metadata:
+      deprecated: true
       available_for_everyone: false
     costs_per_million_token:
       input: 1.35
