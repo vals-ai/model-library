@@ -19,7 +19,6 @@ xiaomi-models:
       context_window: 256000
     supports:
       temperature: true
-      top_p: true
     default_parameters:
       temperature: 0.3
       top_p: 0.95

@@ -28,6 +28,8 @@ You can set metadata configs that are not passed into the LLMConfig class here, 
 
 
 class Supports(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     images: bool | None = None
     videos: bool | None = None
     files: bool | None = None
@@ -37,6 +39,8 @@ class Supports(BaseModel):
 
 
 class Metadata(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     deprecated: bool = False
     available_for_everyone: bool = True
     available_as_evaluator: bool = False
@@ -44,6 +48,8 @@ class Metadata(BaseModel):
 
 
 class Properties(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     context_window: int | None = None
     max_tokens: int | None = None
     training_cutoff: str | None = None
@@ -51,6 +57,8 @@ class Properties(BaseModel):
 
 
 class CacheCost(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     read: float | None = None
     write: float | None = None
     read_discount: float | None = None
@@ -79,6 +87,8 @@ class CacheCost(BaseModel):
 
 
 class ContextCost(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     threshold: float
     input: float
     output: float
@@ -96,6 +106,8 @@ class ContextCost(BaseModel):
 
 
 class BatchCost(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     input: float | None = None
     output: float | None = None
     input_discount: float | None = None
@@ -127,6 +139,8 @@ class BatchCost(BaseModel):
 
 
 class CostProperties(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     input: float | None = None
     output: float | None = None
     cache: CacheCost | None = None
@@ -166,6 +180,8 @@ def get_dynamic_provider_properties_model() -> type[BaseProviderProperties]:
 
 
 class DefaultParameters(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     temperature: float | None = None
     top_p: float | None = None
     top_k: int | None = None
