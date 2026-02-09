@@ -49,13 +49,12 @@ kimi-models:
       deprecated: true
 
 # Meta Llama Models
-llama-4-models:
+llama-models:
   base-config:
     company: Meta
     open_source: true
-    supports:
-      tools: true
-      images: true
+    metadata:
+      deprecated: true
 
   together/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8:
     label: Llama 4 Maverick
@@ -69,7 +68,9 @@ llama-4-models:
     costs_per_million_token:
       input: 0.27
       output: 0.85
-
+    supports:
+      tools: true
+      images: true
 
   together/meta-llama/Llama-4-Scout-17B-16E-Instruct:
     label: Llama 4 Scout
@@ -83,12 +84,9 @@ llama-4-models:
     costs_per_million_token:
       input: 0.18
       output: 0.59
-
-old-llama-models:
-  base-config:
-    company: Meta
-    metadata:
-      deprecated: true
+    supports:
+      tools: true
+      images: true
 
   together/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo:
     label: Llama 3.1 Instruct Turbo (8B)

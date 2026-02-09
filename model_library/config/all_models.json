@@ -6909,7 +6909,7 @@
             "tools": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": true,
             "available_as_evaluator": false,
             "ignored_for_cost": false
@@ -6953,7 +6953,7 @@
             "tools": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": true,
             "available_as_evaluator": false,
             "ignored_for_cost": false
