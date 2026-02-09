@@ -19,6 +19,7 @@ kimi-k2.5-models:
     supports:
       images: true
       temperature: false
+      files: true
     properties:
       reasoning_model: false
       context_window: 262_144

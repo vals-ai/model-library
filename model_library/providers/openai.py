@@ -508,7 +508,9 @@ class OpenAIModel(LLM):
     ) -> FileWithId:
         response = await self.get_client().files.create(
             file=(name, bytes, mime),
-            purpose="assistants",
+            purpose="file-extract"  # type: ignore[reportArgumentType]
+            if self.provider == "kimi" and type == "file"
+            else "assistants",
         )
 
         return FileWithId(
