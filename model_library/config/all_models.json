@@ -130,7 +130,7 @@
         },
         "supports": {
             "images": true,
-            "files": true,
+            "files": false,
             "temperature": false,
             "tools": true
         },
@@ -174,7 +174,7 @@
         },
         "supports": {
             "images": true,
-            "files": true,
+            "files": false,
             "temperature": false,
             "tools": true
         },
