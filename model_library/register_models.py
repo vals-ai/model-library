@@ -64,9 +64,7 @@ class CacheCost(BaseModel):
     read_discount: float | None = None
     write_markup: float = 1
 
-    def get_costs(
-        self, core_input_cost: float, core_output_cost: float
-    ) -> tuple[float, float]:
+    def get_costs(self, core_input_cost: float) -> tuple[float, float]:
         if self.read:
             read = self.read
         else:
@@ -76,7 +74,7 @@ class CacheCost(BaseModel):
         if self.write:
             write = self.write
         else:
-            write = core_output_cost * self.write_markup
+            write = core_input_cost * self.write_markup
         return read, write
 
     @model_validator(mode="after")

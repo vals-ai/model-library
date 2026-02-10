@@ -5677,7 +5677,7 @@
             "input": 1.1,
             "output": 4.4,
             "cache": {
-                "read": 0.0275,
+                "read": 0.275,
                 "write_markup": 1.0
             },
             "batch": {
@@ -5777,7 +5777,7 @@
             "input": 1.1,
             "output": 4.4,
             "cache": {
-                "read": 0.0275,
+                "read": 0.275,
                 "write_markup": 1.0
             },
             "batch": {
@@ -8964,8 +8964,12 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 5.0,
-            "output": 15.0,
+            "input": 2.5,
+            "output": 10.0,
+            "cache": {
+                "read": 1.25,
+                "write_markup": 1.0
+            },
             "batch": {
                 "input_discount": 0.5,
                 "output_discount": 0.5
@@ -9011,8 +9015,12 @@
         },
         "provider_properties": {},
         "costs_per_million_token": {
-            "input": 5.0,
-            "output": 15.0,
+            "input": 2.5,
+            "output": 10.0,
+            "cache": {
+                "read": 1.25,
+                "write_markup": 1.0
+            },
             "batch": {
                 "input_discount": 0.5,
                 "output_discount": 0.5

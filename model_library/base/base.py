@@ -383,9 +383,7 @@ class LLM(ABC):
         if metadata.cache_read_tokens or metadata.cache_write_tokens:
             if not costs.cache:
                 raise Exception("Cache costs not set")
-            cache_read_cost, cache_write_cost = costs.cache.get_costs(
-                input_cost, output_cost
-            )
+            cache_read_cost, cache_write_cost = costs.cache.get_costs(input_cost)
 
         # costs for long context
         total_in = metadata.total_input_tokens
@@ -397,7 +395,7 @@ class LLM(ABC):
             )
             if costs.context.cache:
                 cache_read_cost, cache_write_cost = costs.context.cache.get_costs(
-                    input_cost, output_cost
+                    input_cost
                 )
 
         # costs for batching

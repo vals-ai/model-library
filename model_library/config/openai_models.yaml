@@ -213,7 +213,7 @@ o4-models:
       input: 1.1
       output: 4.4
       cache:
-        read: 0.0275
+        read: 0.275
     alternative_keys:
       - azure/o4-mini-2025-04-16
 
@@ -607,8 +607,10 @@ gpt-4o-models:
       available_as_evaluator: true
       available_for_everyone: false
     costs_per_million_token:
-      input: 5.0
-      output: 15.0
+      input: 2.5
+      output: 10.0
+      cache:
+        read: 1.25
     documentation_url: https://platform.openai.com/docs/models/gpt-4o
     alternative_keys:
       - azure/gpt-4o-2024-11-20
