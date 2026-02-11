@@ -29,7 +29,7 @@ glm-5-models:
         read: 0.2
     properties:
       reasoning_model: false
-      context_window: 200_000
+      context_window: 137_215
       max_tokens: 131_072
     default_parameters:
       temperature: 1

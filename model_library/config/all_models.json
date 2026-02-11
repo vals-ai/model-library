@@ -7,7 +7,7 @@
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
         "properties": {
-            "context_window": 200000,
+            "context_window": 137215,
             "max_tokens": 131072,
             "training_cutoff": null,
             "reasoning_model": true
@@ -52,7 +52,7 @@
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
         "properties": {
-            "context_window": 200000,
+            "context_window": 137215,
             "max_tokens": 131072,
             "training_cutoff": null,
             "reasoning_model": false
