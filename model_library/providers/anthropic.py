@@ -556,7 +556,7 @@ class AnthropicModel(LLM):
 
         if self.reasoning:
             if self.provider_config.supports_auto_thinking:
-                body["thinking"] = {"type": "auto"}
+                body["thinking"] = {"type": "adaptive"}
             else:
                 budget_tokens = kwargs.pop(
                     "budget_tokens", get_default_budget_tokens(self.max_tokens)

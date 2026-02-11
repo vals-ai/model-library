@@ -22,7 +22,6 @@ base-config:
   documentation_url: https://docs.claude.com/en/docs/about-claude/models/overview
   default_parameters:
     temperature: 1
-
 claude-4-models:
   base-config:
     supports:
