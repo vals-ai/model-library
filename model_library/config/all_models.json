@@ -1,4 +1,105 @@
 {
+    "zai/glm-5-thinking": {
+        "company": "zAI",
+        "label": "GLM 5",
+        "description": "z.AI flagship model",
+        "release_date": "2026-02-11",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 200000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 3.2,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "glm-5",
+        "provider_name": "zai",
+        "full_key": "zai/glm-5-thinking",
+        "slug": "zai_glm-5-thinking"
+    },
+    "zai/glm-5": {
+        "company": "zAI",
+        "label": "GLM 5",
+        "description": "z.AI flagship model",
+        "release_date": "2026-02-11",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 200000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "supports": {
+            "images": false,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 3.2,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [
+            {
+                "zai/glm-5-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    },
+                    "provider_properties": {
+                        "clear_thinking": false
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "glm-5",
+        "provider_name": "zai",
+        "full_key": "zai/glm-5",
+        "slug": "zai_glm-5"
+    },
     "anthropic/claude-opus-4-6-thinking": {
         "company": "Anthropic",
         "label": "Claude Opus 4.6 (Thinking)",

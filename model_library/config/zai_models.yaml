@@ -17,7 +17,32 @@ base-config:
       read_discount: 1
       write_markup: 1
 
-zai-models:
+glm-5-models:
+  zai/glm-5:
+    label: GLM 5
+    description: "z.AI flagship model"
+    release_date: 2026-02-11
+    costs_per_million_token: # guessing!!!
+      input: 1
+      output: 3.2
+      cache:
+        read: 0.2
+    properties:
+      reasoning_model: false
+      context_window: 200_000
+      max_tokens: 131_072
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+    alternative_keys:
+      - zai/glm-5-thinking:
+          properties:
+            reasoning_model: true
+          provider_properties:
+            clear_thinking: false
+
+
+glm-4-models:
   zai/glm-4.7-flashx:
     label: GLM 4.7 Flash
     description: "z.AI lightweight fast model"
