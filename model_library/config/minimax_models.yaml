@@ -16,6 +16,29 @@ base-config:
 
 minimax-m2-models:
 
+  minimax/MiniMax-M2.5:
+    label: MiniMax-M2.5
+    release_date: 2026-02-12
+    properties:
+      reasoning_model: true
+      training_cutoff: null
+      context_window: 196_608 # from BadRequestError
+      max_tokens: 196_608 
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.03
+        write: 0.375
+    alternative_keys:
+      - minimax/MiniMax-M2.5-Lightning: # faster!
+          costs_per_million_token:
+            output: 2.40
+
+
   minimax/MiniMax-M2.1:
     label: MiniMax-M2.1
     release_date: 2025-12-23
