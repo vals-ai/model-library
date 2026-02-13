@@ -7,6 +7,7 @@ Example model use cases for the model_library.
 ```
 examples/
 ├── basics.py                    # Basic queries, system prompts, images, and files
+├── test_model.py                # Simple model test with configurable token count
 ├── images.py                    # Image handling (base64, file ID, URL)
 ├── files.py                     # File handling (base64, file ID, URL)
 ├── tool_calls.py                # Tool calling and multi-turn conversations
