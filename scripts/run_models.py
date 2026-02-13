@@ -148,7 +148,7 @@ async def process_model(model_str: str, provider_name: str):
                     else model.query("What is the capital of France?")
                 )
 
-            output = await query()
+            output = await asyncio.wait_for(query(), timeout=timeout)
 
             if not output.metadata.total_input_tokens:
                 raise Exception("No in tokens")

@@ -670,6 +670,9 @@ meta-llama-vision:
       context_window: 131_072
       max_tokens: 4_096
       training_cutoff: "2023-12"
+    costs_per_million_token:
+      input: 0
+      output: 0
     supports:
       images: true
     metadata:
@@ -778,6 +781,10 @@ google-models:
 falcon-models:
   base-config:
     company: Technology Innovation Institute
+    properties:
+      max_tokens: 0
+      reasoning_model: false
+      context_window: 0
     metadata:
       deprecated: true
 
@@ -828,6 +835,10 @@ alpaca-models:
     company: Stanford
     description: Alpaca 7B Instruct model.
     release_date: 2023-03-13
+    properties:
+      max_tokens: 0
+      reasoning_model: false
+      context_window: 0
     costs_per_million_token:
       input: 0.20
       output: 0.20
@@ -844,6 +855,10 @@ deepseek-models:
     supports:
       images: false
       temperature: true
+    properties:
+      max_tokens: 0
+      reasoning_model: false
+      context_window: 0
     default_parameters:
       temperature: 1
 
@@ -853,7 +868,7 @@ deepseek-models:
     release_date: 2024-12-26
     properties:
       context_window: 131_072
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     metadata:
       deprecated: true
@@ -868,7 +883,7 @@ deepseek-models:
     release_date: 2025-01-20
     properties:
       context_window: 163_840
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
       reasoning_model: true
     metadata:

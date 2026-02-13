@@ -11,6 +11,7 @@ base-config:
     available_for_everyone: true
     ignored_for_cost: false
   properties:
+    reasoning_model: false
     training_cutoff: null
 
 command-models:

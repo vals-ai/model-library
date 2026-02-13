@@ -45,7 +45,7 @@ nova-models:
     release_date: 2024-12-03
     properties:
       context_window: 300_000
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     supports:
       images: true
@@ -67,7 +67,7 @@ nova-models:
     release_date: 2024-12-03
     properties:
       context_window: 128_000
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     costs_per_million_token:
       input: 0.035
@@ -92,7 +92,7 @@ claude-models:
     release_date: 2024-10-22
     properties:
       context_window: 100_000
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     supports:
       images: false
@@ -110,7 +110,7 @@ claude-models:
     release_date: 2025-02-19
     properties:
       context_window: 200_000
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     supports:
       images: true
@@ -211,7 +211,7 @@ claude-models:
     release_date: 2024-10-22
     properties:
       context_window: 200_000
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     supports:
       images: false
@@ -239,7 +239,7 @@ deepseek_models:
     release_date: 2025-03-03
     properties:
       context_window: 128_000
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     supports:
       images: false
@@ -262,7 +262,7 @@ llama_models:
     release_date: 2024-12-18
     properties:
       context_window: 128_000
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     supports:
       images: false

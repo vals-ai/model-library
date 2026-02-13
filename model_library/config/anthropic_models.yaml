@@ -385,9 +385,8 @@ claude-2-models:
     description: Claude 1.3 was one of Anthropic's earliest conversational models.
     documentation_url: ""
     properties:
-      context_window: null
-      max_tokens: null
-      training_cutoff: null
+      context_window: 0
+      max_tokens: 0
     costs_per_million_token:
       input: 0
       output: 0

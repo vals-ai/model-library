@@ -244,6 +244,8 @@ minimax-models:
     label: MiniMax-M2
     description: MiniMax-M2 is a cost-efficient open-source model optimized for agentic applications and coding in particular.
     release_date: 2025-10-26
+    metadata:
+      deprecated: true
     properties:
       context_window: 204_800
       max_tokens: 131_000

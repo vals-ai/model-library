@@ -12,6 +12,7 @@ base-config:
     ignored_for_cost: false
   properties:
     training_cutoff: December 2024
+    reasoning_model: false
 
 xiaomi-models:
   base-config:

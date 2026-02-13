@@ -131,6 +131,8 @@ glm-4-models:
         read: 0.11
     alternative_keys:
       - fireworks/glm-4p6:
-        costs_per_million_token:
-          input: 0.55
-          output: 2.19
+          metadata:
+            deprecated: true
+          costs_per_million_token:
+            input: 0.55
+            output: 2.19

@@ -1,4 +1,3 @@
-import tiktoken
 from functools import cache
 from pathlib import Path
 from typing import TypedDict
@@ -36,10 +35,8 @@ def create_config(
     defaults = registry_config.default_parameters
 
     if properties:
-        if properties.max_tokens is not None:
-            config["max_tokens"] = properties.max_tokens
-        if properties.reasoning_model is not None:
-            config["reasoning"] = properties.reasoning_model
+        config["max_tokens"] = properties.max_tokens
+        config["reasoning"] = properties.reasoning_model
 
     if supports:
         if supports.images is not None:
@@ -133,6 +130,20 @@ def get_model_cost(model_str: str) -> CostProperties | None:
     if not model_config:
         raise Exception(f"Model {model_str} not found in registry")
     return model_config.costs_per_million_token
+
+
+@cache
+def get_model_input_context_window(model_name: str) -> int:
+    """Return the input context window for the model"""
+    model = get_model_registry()[model_name]
+
+    context_window = model.properties.context_window
+    match model.provider_name:
+        case "openai":
+            context_window -= model.properties.max_tokens
+        case _:
+            pass
+    return context_window
 
 
 class TokenDict(TypedDict, total=False):
@@ -232,64 +243,3 @@ def get_model_names(
             and model.full_key not in alternative_keys_set
         ]
     )
-
-
-"""
-everything below this comment is included for legacy support of caselaw/corpfin custom models.
-@orestes please remove this as part of the migration to a standard CorpFin harness.
-"""
-
-DEFAULT_CONTEXT_WINDOW = 128_000
-
-
-@cache
-def _get_tiktoken_encoder():
-    """Get cached tiktoken encoder for consistent tokenization."""
-    return tiktoken.encoding_for_model("gpt-4o")
-
-
-def auto_trim_document(
-    model_name: str,
-    document: str,
-) -> str:
-    """
-    Automatically trim document to fit within model's context window,
-    leaving a buffer for instructions and output.
-
-    Args:
-        model_name: The name of the model in the registry
-        document: The document text to trim
-
-    Returns:
-        Trimmed document, or original document if trimming isn't needed
-    """
-
-    max_tokens = get_max_document_tokens(model_name) or DEFAULT_CONTEXT_WINDOW
-
-    encoding = _get_tiktoken_encoder()
-    tokens = encoding.encode(document)
-
-    if len(tokens) > max_tokens:
-        tokens = tokens[:max_tokens]
-        document = encoding.decode(tokens)
-
-    return document
-
-
-def get_max_document_tokens(model_name: str, output_buffer: int = 10000) -> int:
-    """
-    Get the maximum document tokens for a model by looking up its context window
-    from the registry and subtracting a configurable buffer for instructions and output.
-
-    Args:
-        model_name: The name of the model in the registry
-        output_buffer: Number of tokens to reserve for output (default 10000)
-
-    Returns:
-        Maximum tokens to use for documents
-    """
-    # Import here to avoid circular imports
-    from model_library.utils import get_context_window_for_model
-
-    context_window = get_context_window_for_model(model_name) or DEFAULT_CONTEXT_WINDOW
-    return context_window - output_buffer

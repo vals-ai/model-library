@@ -180,6 +180,7 @@ xai-models:
       max_tokens: null
       training_cutoff: null
       reasoning_model: true
+      max_tokens: 0
     metadata:
       deprecated: true
     costs_per_million_token:
@@ -217,6 +218,7 @@ xai-models:
       context_window: 131_072
       max_tokens: null
       training_cutoff: null
+      max_tokens: 0
     costs_per_million_token:
       input: 3.00
       output: 15.00
@@ -238,7 +240,7 @@ xai-models:
     release_date: 2024-12-12
     properties:
       context_window: 8_192
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     supports:
       images: true
@@ -255,7 +257,7 @@ xai-models:
     release_date: 2024-12-11
     properties:
       context_window: 131_072
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     metadata:
       deprecated: true
@@ -269,7 +271,7 @@ xai-models:
     release_date: 2024-12-12
     properties:
       context_window: 8_192
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     supports:
       images: true
@@ -285,7 +287,7 @@ xai-models:
     release_date: 2024-12-11
     properties:
       context_window: 131_072
-      max_tokens: null
+      max_tokens: 0
       training_cutoff: null
     metadata:
       deprecated: true

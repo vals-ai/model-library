@@ -371,9 +371,6 @@ class LLM(ABC):
 
         MILLION = 1_000_000
 
-        # base input and output
-        if costs.input is None or costs.output is None:
-            raise Exception("Base costs not set")
         input_cost = costs.input
         output_cost = costs.output
 

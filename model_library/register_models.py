@@ -50,10 +50,10 @@ class Metadata(BaseModel):
 class Properties(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    context_window: int | None = None
-    max_tokens: int | None = None
+    context_window: int
+    max_tokens: int
     training_cutoff: str | None = None
-    reasoning_model: bool | None = None
+    reasoning_model: bool
 
 
 class CacheCost(BaseModel):
@@ -61,14 +61,13 @@ class CacheCost(BaseModel):
 
     read: float | None = None
     write: float | None = None
-    read_discount: float | None = None
+    read_discount: float = 1
     write_markup: float = 1
 
     def get_costs(self, core_input_cost: float) -> tuple[float, float]:
         if self.read:
             read = self.read
         else:
-            assert self.read_discount
             read = core_input_cost * self.read_discount
 
         if self.write:
@@ -139,8 +138,8 @@ class BatchCost(BaseModel):
 class CostProperties(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    input: float | None = None
-    output: float | None = None
+    input: float
+    output: float
     cache: CacheCost | None = None
     batch: BatchCost | None = None
     context: ContextCost | None = None
@@ -196,13 +195,13 @@ class RawModelConfig(BaseModel):
     release_date: date | None = None
     open_source: bool
     documentation_url: str | None = None
-    properties: Properties = Field(default_factory=Properties)
+    properties: Properties
     supports: Supports
     metadata: Metadata = Field(default_factory=Metadata)
     provider_properties: BaseProviderProperties = Field(
         default_factory=BaseProviderProperties
     )
-    costs_per_million_token: CostProperties = Field(default_factory=CostProperties)
+    costs_per_million_token: CostProperties
     alternative_keys: list[str | dict[str, Any]] = Field(default_factory=list)
     default_parameters: DefaultParameters = Field(default_factory=DefaultParameters)
     provider_endpoint: str | None = None
@@ -279,6 +278,8 @@ def _register_models() -> ModelRegistry:
                 for model_name, model_config in model_data.items():
                     if model_name == "base-config":
                         continue
+
+                    print(model_name)
 
                     # merge the per-model overrides
                     current_model_config = deepcopy(block_config)
