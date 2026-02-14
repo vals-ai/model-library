@@ -2223,7 +2223,9 @@
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "supports_1M_context": true
+        },
         "costs_per_million_token": {
             "input": 3.0,
             "output": 15.0,
@@ -2284,7 +2286,9 @@
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "supports_1M_context": true
+        },
         "costs_per_million_token": {
             "input": 3.0,
             "output": 15.0,
@@ -5327,7 +5331,9 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "supports_1M_context": true
+        },
         "costs_per_million_token": {
             "input": 3.0,
             "output": 15.0,
@@ -5388,7 +5394,9 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "supports_1M_context": true
+        },
         "costs_per_million_token": {
             "input": 3.0,
             "output": 15.0,

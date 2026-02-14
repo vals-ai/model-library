@@ -137,6 +137,8 @@ claude-4-models:
         cache:
           read: 0.6
           write: 7.50
+    provider_properties:
+      supports_1M_context: true
     alternative_keys:
       - anthropic/claude-sonnet-4-5-20250929-thinking:
           properties:
@@ -164,6 +166,8 @@ claude-4-models:
         cache:
           read: 0.6
           write: 7.50
+    provider_properties:
+      supports_1M_context: true
 
     alternative_keys:
       - anthropic/claude-sonnet-4-20250514-thinking:

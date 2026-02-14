@@ -52,6 +52,7 @@ from model_library.utils import (
 class AnthropicConfig(ProviderConfig):
     supports_compute_effort: bool = False
     supports_auto_thinking: bool = False
+    supports_1M_context: bool = False
 
 
 class AnthropicBatchMixin(LLMBatchMixin):
@@ -626,7 +627,7 @@ class AnthropicModel(LLM):
                 )
             else:
                 betas.extend(["interleaved-thinking-2025-05-14"])
-            if "sonnet-4-5" in self.model_name:
+            if self.provider_config.supports_1M_context:
                 betas.append("context-1m-2025-08-07")
             stream_kwargs["betas"] = betas
 
