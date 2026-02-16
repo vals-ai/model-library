@@ -23,7 +23,7 @@ logger = get_logger("register_models")
 Model Registry structure
 Do not set model defaults here, they should be set in the LLMConfig class
 You can set metadata configs that are not passed into the LLMConfig class here, ex:
-    available_for_everyone, deprecated, available_as_evaluator, etc.
+    available_for_everyone, deprecated, internal_only, available_as_evaluator, etc.
 """
 
 
@@ -43,6 +43,7 @@ class Metadata(BaseModel):
 
     deprecated: bool = False
     available_for_everyone: bool = True
+    internal_only: bool = False
     available_as_evaluator: bool = False
     ignored_for_cost: bool = False
 

@@ -81,6 +81,7 @@ claude-4-models:
       training_cutoff: "2025-03"
     metadata:
       available_for_everyone: false
+      internal_only: true
     costs_per_million_token:
       input: 15.0
       output: 75.0

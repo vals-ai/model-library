@@ -75,6 +75,8 @@ qwen-3-max-models:
     label: Qwen 3 Max
     description: Largest and most recent Qwen Model
     release_date: 2025-09-23
+    metadata:
+      available_for_everyone: true
     properties:
       context_window: 262_144
       max_tokens: 65_536
@@ -107,6 +109,8 @@ qwen-3.5-plus-models:
     description: Hosted Qwen3.5-397B-A17B — native multimodal model for agentic AI
     documentation_url: https://www.alibabacloud.com/help/en/model-studio/getting-started/models
     release_date: 2026-02-16
+    metadata:
+      available_for_everyone: true
     properties:
       context_window: 991_000
       max_tokens: 65_536

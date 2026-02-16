@@ -20,7 +20,8 @@
         },
         "metadata": {
             "deprecated": false,
-            "available_for_everyone": false,
+            "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -76,7 +77,8 @@
         },
         "metadata": {
             "deprecated": false,
-            "available_for_everyone": false,
+            "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -144,6 +146,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -190,6 +193,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -244,6 +248,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -289,6 +294,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -346,6 +352,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -400,6 +407,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -461,6 +469,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -506,6 +515,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -560,6 +570,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -599,6 +610,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -646,6 +658,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -692,6 +705,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -739,6 +753,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -784,6 +799,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -831,6 +847,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -880,6 +897,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -926,6 +944,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -970,6 +989,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1019,6 +1039,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -1070,6 +1091,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -1118,6 +1140,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1157,6 +1180,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1197,6 +1221,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1245,6 +1270,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1284,6 +1310,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1333,6 +1360,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1395,6 +1423,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1448,6 +1477,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1508,6 +1538,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1558,6 +1589,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1610,6 +1642,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1670,6 +1703,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1719,6 +1753,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1768,6 +1803,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -1815,6 +1851,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1867,6 +1904,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1903,6 +1941,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1947,6 +1986,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -1993,6 +2033,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2043,6 +2084,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2093,6 +2135,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2150,6 +2193,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2207,6 +2251,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2253,6 +2298,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2298,6 +2344,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2343,6 +2390,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -2406,6 +2454,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -2478,6 +2527,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2528,6 +2578,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2586,6 +2637,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2636,6 +2688,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2693,6 +2746,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2738,6 +2792,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2775,6 +2830,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2811,7 +2867,8 @@
         },
         "metadata": {
             "deprecated": false,
-            "available_for_everyone": false,
+            "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2851,6 +2908,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2901,6 +2959,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -2954,6 +3013,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3004,6 +3064,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3056,6 +3117,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3106,6 +3168,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3145,6 +3208,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3182,6 +3246,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3220,6 +3285,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3265,6 +3331,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3310,6 +3377,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3358,6 +3426,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3403,6 +3472,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3451,6 +3521,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3502,6 +3573,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3553,6 +3625,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -3604,6 +3677,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3653,6 +3727,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3702,6 +3777,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -3749,6 +3825,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3793,6 +3870,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3838,6 +3916,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3877,6 +3956,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3925,6 +4005,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": true,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -3975,6 +4056,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": true,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4032,6 +4114,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4084,6 +4167,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4141,6 +4225,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4186,6 +4271,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4233,6 +4319,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4283,6 +4370,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4341,6 +4429,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -4401,6 +4490,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -4451,6 +4541,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -4507,6 +4598,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4554,6 +4646,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4604,6 +4697,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4657,6 +4751,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4706,6 +4801,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4744,6 +4840,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4784,6 +4881,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4835,6 +4933,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4886,6 +4985,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4937,6 +5037,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4989,6 +5090,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5039,6 +5141,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5096,6 +5199,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5143,6 +5247,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5184,6 +5289,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5232,6 +5338,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -5288,6 +5395,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -5352,6 +5460,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5397,6 +5506,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5451,6 +5561,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5514,6 +5625,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5588,6 +5700,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5638,6 +5751,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5697,6 +5811,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5747,6 +5862,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5803,6 +5919,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5844,6 +5961,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5892,6 +6010,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5941,6 +6060,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -5991,6 +6111,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6048,6 +6169,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6099,6 +6221,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6150,6 +6273,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6199,6 +6323,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6248,6 +6373,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6300,6 +6426,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6352,6 +6479,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6404,6 +6532,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6454,6 +6583,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6504,6 +6634,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6553,6 +6684,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6599,6 +6731,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6644,6 +6777,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6690,6 +6824,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6736,6 +6871,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6781,6 +6917,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6827,6 +6964,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6872,6 +7010,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6917,6 +7056,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -6962,6 +7102,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7041,6 +7182,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7086,6 +7228,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7131,6 +7274,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7176,6 +7320,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7221,6 +7366,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7266,6 +7412,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7316,6 +7463,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7360,6 +7508,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7407,6 +7556,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7454,6 +7604,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7498,6 +7649,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7545,6 +7697,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7593,6 +7746,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7640,6 +7794,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7679,6 +7834,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7720,6 +7876,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7760,6 +7917,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7800,6 +7958,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7840,6 +7999,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7878,6 +8038,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7917,6 +8078,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -7957,6 +8119,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8005,6 +8168,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8054,6 +8218,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8111,6 +8276,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -8158,6 +8324,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8205,6 +8372,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8252,6 +8420,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8303,6 +8472,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8352,6 +8522,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8402,6 +8573,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8447,6 +8619,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8494,6 +8667,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8541,6 +8715,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8588,6 +8763,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8635,6 +8811,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -8673,6 +8850,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8725,6 +8903,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8774,6 +8953,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8822,6 +9002,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8861,6 +9042,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8905,6 +9087,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8949,6 +9132,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -8996,6 +9180,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9040,6 +9225,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9084,6 +9270,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9130,6 +9317,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9174,6 +9362,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9220,6 +9409,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9266,6 +9456,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9308,6 +9499,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9351,6 +9543,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9394,6 +9587,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -9446,6 +9640,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -9495,6 +9690,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9534,6 +9730,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9574,6 +9771,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9618,6 +9816,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -9657,6 +9856,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -9702,6 +9902,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -9749,6 +9950,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -9796,6 +9998,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -9846,6 +10049,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -9895,6 +10099,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -9947,6 +10152,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -9998,6 +10204,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10045,6 +10252,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10092,6 +10300,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10142,6 +10351,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10187,6 +10397,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10227,6 +10438,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10278,6 +10490,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10327,6 +10540,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10379,6 +10593,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10428,6 +10643,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10477,6 +10693,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10525,6 +10742,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10564,6 +10782,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10602,6 +10821,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10642,6 +10862,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10682,6 +10903,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10720,6 +10942,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10760,6 +10983,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -10810,6 +11034,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -10858,6 +11083,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10904,6 +11130,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -10950,6 +11177,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -10996,6 +11224,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11040,6 +11269,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -11084,6 +11314,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11130,6 +11361,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -11182,6 +11414,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -11232,6 +11465,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -11281,6 +11515,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11328,6 +11563,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11379,6 +11615,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11426,6 +11663,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11472,6 +11710,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11520,6 +11759,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11559,6 +11799,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11598,6 +11839,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11637,6 +11879,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11676,6 +11919,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11723,6 +11967,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11769,6 +12014,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11813,6 +12059,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11859,6 +12106,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11905,6 +12153,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11949,6 +12198,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -11995,6 +12245,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12039,6 +12290,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12083,6 +12335,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12129,6 +12382,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12175,6 +12429,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12221,6 +12476,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12267,6 +12523,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12313,6 +12570,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12359,6 +12617,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12405,6 +12664,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12449,6 +12709,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12493,6 +12754,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12537,6 +12799,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12581,6 +12844,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12625,6 +12889,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12669,6 +12934,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12713,6 +12979,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12757,6 +13024,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12801,6 +13069,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12845,6 +13114,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12890,6 +13160,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12937,6 +13208,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -12986,6 +13258,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13034,6 +13307,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13080,6 +13354,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13127,6 +13402,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -13174,6 +13450,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13218,6 +13495,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13257,6 +13535,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13296,6 +13575,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13345,6 +13625,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13392,6 +13673,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13441,6 +13723,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13493,6 +13776,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13542,6 +13826,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13593,6 +13878,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13641,6 +13927,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13687,6 +13974,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13733,6 +14021,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13779,6 +14068,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13823,6 +14113,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13867,6 +14158,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -13911,6 +14203,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -13958,6 +14251,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -14002,6 +14296,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -14049,6 +14344,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14096,6 +14392,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14143,6 +14440,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14194,6 +14492,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14240,6 +14539,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14285,6 +14585,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14328,6 +14629,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14374,6 +14676,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14420,6 +14723,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14466,6 +14770,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14510,6 +14815,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14554,6 +14860,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14598,6 +14905,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14644,6 +14952,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14690,6 +14999,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14734,6 +15044,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14778,6 +15089,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14824,6 +15136,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14870,6 +15183,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14916,6 +15230,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -14962,6 +15277,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15008,6 +15324,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15052,6 +15369,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15096,6 +15414,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15142,6 +15461,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15186,6 +15506,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15230,6 +15551,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15274,6 +15596,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15318,6 +15641,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15362,6 +15686,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15406,6 +15731,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15450,6 +15776,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15494,6 +15821,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15538,6 +15866,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15584,6 +15913,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15630,6 +15960,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15674,6 +16005,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15720,6 +16052,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15763,6 +16096,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15809,6 +16143,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15855,6 +16190,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15899,6 +16235,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15945,6 +16282,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -15988,6 +16326,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16034,6 +16373,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16080,6 +16420,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16125,6 +16466,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16172,6 +16514,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16217,6 +16560,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16262,6 +16606,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16303,6 +16648,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16342,6 +16688,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
@@ -16384,6 +16731,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16421,6 +16769,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16458,6 +16807,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16495,6 +16845,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16532,6 +16883,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16569,6 +16921,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16612,6 +16965,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16660,6 +17014,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16706,6 +17061,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16754,6 +17110,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16800,6 +17157,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -16846,6 +17204,7 @@
         "metadata": {
             "deprecated": true,
             "available_for_everyone": false,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
