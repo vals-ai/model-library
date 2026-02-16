@@ -80,3 +80,40 @@ qwen-3-max-models:
       max_tokens: 65_536
       training_cutoff: ""
       reasoning_model: false
+
+qwen-3.5-plus-models:
+  base-config:
+    supports:
+      images: true
+      videos: true
+      tools: true
+    costs_per_million_token:
+      input: 0.4
+      output: 2.4
+      cache:
+        read: 0.04
+        write: 0.5
+      context:
+        threshold: 256_000
+        input: 1.2
+        output: 7.2
+        cache:
+          read: 0.12
+          write: 1.5
+
+  alibaba/qwen3.5-plus:
+    label: Qwen 3.5 Plus
+    open_source: true
+    description: Hosted Qwen3.5-397B-A17B — native multimodal model for agentic AI
+    documentation_url: https://www.alibabacloud.com/help/en/model-studio/getting-started/models
+    release_date: 2026-02-16
+    properties:
+      context_window: 991_000
+      max_tokens: 65_536
+      reasoning_model: false
+    alternative_keys:
+      - alibaba/qwen3.5-plus-thinking:
+          properties:
+            reasoning_model: true
+          default_parameters:
+            temperature: 0.6 # from https://huggingface.co/Qwen/Qwen3.5-397B-A17B

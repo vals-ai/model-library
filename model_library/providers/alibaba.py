@@ -53,14 +53,11 @@ class AlibabaModel(DelegateOnly):
         batch: bool = False,
         bill_reasoning: bool = True,
     ) -> QueryResultCost | None:
-        """
-        Calculate cost for Qwen models using tiered pricing.
-        Pricing is based on total input tokens:
-        - 0-32k: $1.2/M input, $6/M output
-        - 32k-128k: $2.4/M input, $12/M output
-        - 128k+: $3/M input, $15/M output
-        Cached tokens are billed at 20% of regular cost.
-        """
+        # qwen3-max and qwen3-vl-plus use hardcoded tiered pricing
+        if "qwen3-max" not in self.model_name and "qwen3-vl" not in self.model_name:
+            return await super()._calculate_cost(metadata, batch, bill_reasoning)
+
+        # Hardcoded tiered pricing for qwen3-max models
         MILLION = 1_000_000
         CACHE_DISCOUNT = 0.20
         # Calculate total input tokens (including cached tokens)

@@ -1,4 +1,127 @@
 {
+    "alibaba/qwen3.5-plus-thinking": {
+        "company": "Alibaba",
+        "label": "Qwen 3.5 Plus",
+        "description": "Hosted Qwen3.5-397B-A17B \u2014 native multimodal model for agentic AI",
+        "release_date": "2026-02-16",
+        "open_source": true,
+        "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/getting-started/models",
+        "properties": {
+            "context_window": 991000,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.4,
+            "output": 2.4,
+            "cache": {
+                "read": 0.04,
+                "write": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 256000.0,
+                "input": 1.2,
+                "output": 7.2,
+                "cache": {
+                    "read": 0.12,
+                    "write": 1.5,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.6
+        },
+        "provider_endpoint": "qwen3.5-plus",
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3.5-plus-thinking",
+        "slug": "alibaba_qwen3.5-plus-thinking"
+    },
+    "alibaba/qwen3.5-plus": {
+        "company": "Alibaba",
+        "label": "Qwen 3.5 Plus",
+        "description": "Hosted Qwen3.5-397B-A17B \u2014 native multimodal model for agentic AI",
+        "release_date": "2026-02-16",
+        "open_source": true,
+        "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/getting-started/models",
+        "properties": {
+            "context_window": 991000,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.4,
+            "output": 2.4,
+            "cache": {
+                "read": 0.04,
+                "write": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 256000.0,
+                "input": 1.2,
+                "output": 7.2,
+                "cache": {
+                    "read": 0.12,
+                    "write": 1.5,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [
+            {
+                "alibaba/qwen3.5-plus-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    },
+                    "default_parameters": {
+                        "temperature": 0.6
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "temperature": 0.7
+        },
+        "provider_endpoint": "qwen3.5-plus",
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3.5-plus",
+        "slug": "alibaba_qwen3.5-plus"
+    },
     "minimax/MiniMax-M2.5-Lightning": {
         "company": "MiniMax",
         "label": "MiniMax-M2.5",
@@ -5767,7 +5890,7 @@
             "tools": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": true,
             "available_as_evaluator": false,
             "ignored_for_cost": false
