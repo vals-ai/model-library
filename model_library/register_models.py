@@ -280,8 +280,6 @@ def _register_models() -> ModelRegistry:
                     if model_name == "base-config":
                         continue
 
-                    print(model_name)
-
                     # merge the per-model overrides
                     current_model_config = deepcopy(block_config)
                     current_model_config = deep_update(

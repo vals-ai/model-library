@@ -106,7 +106,7 @@ qwen-3.5-plus-models:
   alibaba/qwen3.5-plus:
     label: Qwen 3.5 Plus
     open_source: true
-    description: Hosted Qwen3.5-397B-A17B — native multimodal model for agentic AI
+    description: Qwen3.5-397B-A17B — natively multimodal, open-weight model suited for agentic tasks
     documentation_url: https://www.alibabacloud.com/help/en/model-studio/getting-started/models
     release_date: 2026-02-16
     metadata:

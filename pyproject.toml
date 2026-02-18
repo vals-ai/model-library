@@ -45,6 +45,7 @@ dev = [
   # env
   "boto3",
   "dotenv",
+  "fakeredis[lua]>=2.34.0",
 ]
 
 [build-system]
@@ -63,7 +64,11 @@ local_scheme = "node-and-date"
 tag_regex = "^v(?P<version>.*)$"
 
 [tool.ruff]
-exclude = ["model_library/config"]
+exclude = [
+  "model_library/config",
+  ".*",
+  "tests/**"
+]
 
 [tool.basedpyright]
 exclude = [

@@ -1,8 +1,63 @@
 {
+    "anthropic/claude-sonnet-4-6": {
+        "company": "Anthropic",
+        "label": "Claude Sonnet 4.6",
+        "description": "The latest model in Anthropic's Claude Sonnet series",
+        "release_date": "2026-02-17",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 200000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "write": 3.75,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-sonnet-4-6",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-4-6",
+        "slug": "anthropic_claude-sonnet-4-6"
+    },
     "alibaba/qwen3.5-plus-thinking": {
         "company": "Alibaba",
         "label": "Qwen 3.5 Plus",
-        "description": "Hosted Qwen3.5-397B-A17B \u2014 native multimodal model for agentic AI",
+        "description": "Qwen3.5-397B-A17B \u2014 natively multimodal, open-weight model suited for agentic tasks",
         "release_date": "2026-02-16",
         "open_source": true,
         "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/getting-started/models",
@@ -59,7 +114,7 @@
     "alibaba/qwen3.5-plus": {
         "company": "Alibaba",
         "label": "Qwen 3.5 Plus",
-        "description": "Hosted Qwen3.5-397B-A17B \u2014 native multimodal model for agentic AI",
+        "description": "Qwen3.5-397B-A17B \u2014 natively multimodal, open-weight model suited for agentic tasks",
         "release_date": "2026-02-16",
         "open_source": true,
         "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/getting-started/models",
@@ -2525,7 +2580,7 @@
             "tools": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": true,
             "internal_only": false,
             "available_as_evaluator": false,
@@ -2576,7 +2631,7 @@
             "tools": true
         },
         "metadata": {
-            "deprecated": false,
+            "deprecated": true,
             "available_for_everyone": true,
             "internal_only": false,
             "available_as_evaluator": false,
@@ -4005,7 +4060,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
-            "internal_only": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
@@ -4056,7 +4111,7 @@
         "metadata": {
             "deprecated": false,
             "available_for_everyone": false,
-            "internal_only": true,
+            "internal_only": false,
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },

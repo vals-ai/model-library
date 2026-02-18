@@ -56,7 +56,7 @@ class TestAnthropicConfig:
 
         body = await model.build_body([], tools=[])
 
-        assert "thinking" not in body
+        assert body["thinking"] == {"type": "disabled"}
 
     async def test_supports_compute_effort_adds_output_config(self):
         model = AnthropicModel(

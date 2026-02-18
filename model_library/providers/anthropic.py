@@ -555,17 +555,19 @@ class AnthropicModel(LLM):
 
         body["max_tokens"] = self.max_tokens
 
-        if self.reasoning:
-            if self.provider_config.supports_auto_thinking:
+        if self.provider_config.supports_auto_thinking:
+            if self.reasoning:
                 body["thinking"] = {"type": "adaptive"}
             else:
-                budget_tokens = kwargs.pop(
-                    "budget_tokens", get_default_budget_tokens(self.max_tokens)
-                )
-                body["thinking"] = {
-                    "type": "enabled",
-                    "budget_tokens": budget_tokens,
-                }
+                body["thinking"] = {"type": "disabled"}
+        elif self.reasoning:
+            budget_tokens = kwargs.pop(
+                "budget_tokens", get_default_budget_tokens(self.max_tokens)
+            )
+            body["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": budget_tokens,
+            }
 
         # effort controls compute allocation for text, tool calls, and thinking. Opus-4.5+
         # use instead of reasoning_effort with auto_thinking
@@ -617,15 +619,7 @@ class AnthropicModel(LLM):
         stream_kwargs = {**body}
         if is_anthropic_endpoint:
             betas = ["files-api-2025-04-14"]
-            if self.provider_config.supports_auto_thinking:
-                betas.extend(
-                    [
-                        "auto-thinking-2026-01-12",
-                        "effort-2025-11-24",
-                        "max-effort-2026-01-24",
-                    ]
-                )
-            else:
+            if not self.provider_config.supports_auto_thinking:
                 betas.extend(["interleaved-thinking-2025-05-14"])
             if self.provider_config.supports_1M_context:
                 betas.append("context-1m-2025-08-07")

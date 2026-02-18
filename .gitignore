@@ -2,3 +2,4 @@ model_library.egg-info
 **/__pycache__
 CLAUDE.md
 .env
+/build/lib/model_library

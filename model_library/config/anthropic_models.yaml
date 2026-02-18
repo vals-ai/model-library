@@ -22,10 +22,35 @@ base-config:
   documentation_url: https://docs.claude.com/en/docs/about-claude/models/overview
   default_parameters:
     temperature: 1
+
+
 claude-4-models:
   base-config:
     supports:
       batch: true
+
+    
+  anthropic/claude-sonnet-4-6:
+    label: Claude Sonnet 4.6
+    release_date: 2026-02-17
+    description: The latest model in Anthropic's Claude Sonnet series
+    properties:
+      context_window: 200_000
+      max_tokens: 128_000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 3
+      output: 15
+      cache:
+        read: 0.3
+        write: 3.75
+    provider_properties:
+      supports_auto_thinking: true
+      supports_compute_effort: true
+    default_parameters:
+      temperature: 1
+      compute_effort: "max"
+
 
   anthropic/claude-opus-4-6:
     label: Claude Opus 4.6 (Nonthinking)
@@ -81,7 +106,6 @@ claude-4-models:
       training_cutoff: "2025-03"
     metadata:
       available_for_everyone: false
-      internal_only: true
     costs_per_million_token:
       input: 15.0
       output: 75.0

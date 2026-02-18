@@ -164,6 +164,8 @@ gemini-2.5-models:
       Gemini 2.5 Flash is the best price-performance model suitable for
       large scale processing with support for multiple modalities.
     release_date: 2025-09-25
+    metadata:
+      deprecated: true
     properties:
       context_window: 1_048_576
       max_tokens: 65_535

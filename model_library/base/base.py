@@ -285,8 +285,8 @@ class LLM(ABC):
         input = [*history, *input]
 
         # unique logger for the query
+        query_id = uuid.uuid4().hex[:14]
         if not query_logger:
-            query_id = uuid.uuid4().hex[:14]
             query_logger = self.logger.getChild(f"query={query_id}")
 
         query_logger.info(
@@ -317,6 +317,7 @@ class LLM(ABC):
                 retrier = TokenRetrier(
                     logger=query_logger,
                     client_registry_key=self._client_registry_key_model_specific,
+                    request_id=query_id,
                     estimate_input_tokens=estimate_input_tokens,
                     estimate_output_tokens=estimate_output_tokens,
                     dynamic_estimate_instance_id=self.instance_id
