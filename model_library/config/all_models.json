@@ -1,4 +1,66 @@
 {
+    "google/gemini-3.1-pro-preview": {
+        "company": "Google",
+        "label": "Gemini 3.1 Pro Preview (02/26)",
+        "description": "Gemini 3.1 Pro Preview provides better thinking, improved token efficiency, and a more grounded, factually consistent experience. Optimized for software engineering and agentic workflows.",
+        "release_date": "2026-02-19",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": "2025-01",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 12.0,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 18.0,
+                "cache": {
+                    "read": 0.4,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-3.1-pro-preview",
+        "provider_name": "google",
+        "full_key": "google/gemini-3.1-pro-preview",
+        "slug": "google_gemini-3.1-pro-preview"
+    },
     "anthropic/claude-sonnet-4-6": {
         "company": "Anthropic",
         "label": "Claude Sonnet 4.6",

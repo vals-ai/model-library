@@ -54,6 +54,33 @@ gemini-3-models:
       temperature: 1
       reasoning_effort: "high"
 
+  google/gemini-3.1-pro-preview:
+    label: Gemini 3.1 Pro Preview (02/26)
+    description:
+      Gemini 3.1 Pro Preview provides better thinking, improved token
+      efficiency, and a more grounded, factually consistent experience. Optimized
+      for software engineering and agentic workflows.
+    release_date: 2026-02-19
+    properties:
+      context_window: 1048576
+      max_tokens: 65536
+      training_cutoff: "2025-01"
+      reasoning_model: true
+    costs_per_million_token:
+      input: 2.0
+      output: 12.0
+      cache:
+        read: 0.20
+      context:
+        threshold: 200_000
+        input: 4.0
+        output: 18.0
+        cache:
+          read: 0.40
+    default_parameters:
+      temperature: 1
+      reasoning_effort: "high"
+
   google/gemini-3-flash-preview:
     label: Gemini 3 Flash (12/25)
     description: Google's newest budget workhorse model
