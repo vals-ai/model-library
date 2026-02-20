@@ -115,6 +115,7 @@ claude-models:
     supports:
       images: true
     metadata:
+      deprecated: true
       available_as_evaluator: true
       available_for_everyone: false
     costs_per_million_token:

@@ -220,6 +220,10 @@ claude-4-models:
             reasoning_model: true
 
 claude-3-7-models:
+  base-config:
+    metadata:
+      deprecated: true
+
   anthropic/claude-3-7-sonnet-20250219:
     label: Claude 3.7 Sonnet (Nonthinking)
     release_date: 2025-02-24
