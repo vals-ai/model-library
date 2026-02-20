@@ -2,6 +2,7 @@
 --- OUTPUT ---
 """
 
+from enum import Enum
 from pprint import pformat
 from typing import Any, Mapping, Sequence, cast
 
@@ -11,6 +12,42 @@ from typing_extensions import override
 from model_library.base.input import InputItem, ToolCall
 from model_library.base.utils import add_optional
 from model_library.utils import truncate_str
+
+
+class FinishReason(str, Enum):
+    """Standardized finish reasons across all providers."""
+
+    STOP = "stop"
+    """Model naturally finished generating."""
+
+    STOP_SEQUENCE = "stop_sequence"
+    """Model stopped due to a custom stop sequence."""
+
+    MAX_TOKENS = "max_tokens"
+    """Model stopped because it reached the maximum token limit."""
+
+    TOOL_CALLS = "tool_calls"
+    """Model stopped to make one or more tool calls."""
+
+    CONTENT_FILTER = "content_filter"
+    """Model output was blocked by a content filter or safety policy."""
+
+    GUARDRAIL = "guardrail"
+    """Model output was blocked by a guardrail."""
+
+    MALFORMED_TOOL_CALL = "malformed_tool_call"
+    """Model attempted a tool call but it was malformed or unexpected."""
+
+    ERROR = "error"
+    """An error occurred during generation."""
+
+    UNKNOWN = "unknown"
+    """The finish reason is unknown or not recognized."""
+
+
+class FinishReasonInfo(BaseModel):
+    reason: FinishReason
+    raw: str | None
 
 
 class Citation(BaseModel):
@@ -240,6 +277,9 @@ class QueryResult(BaseModel):
 
     output_text: str | None = None
     reasoning: str | None = None
+    finish_reason: FinishReasonInfo = Field(
+        default_factory=lambda: FinishReasonInfo(reason=FinishReason.UNKNOWN, raw=None)
+    )
     metadata: QueryResultMetadata = Field(default_factory=QueryResultMetadata)
     tool_calls: list[ToolCall] = Field(default_factory=list)
     history: list[InputItem] = Field(default_factory=list)

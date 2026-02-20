@@ -20,6 +20,8 @@ from model_library.base import (
     FileWithBase64,
     FileWithId,
     FileWithUrl,
+    FinishReason,
+    FinishReasonInfo,
     InputItem,
     LLMBatchMixin,
     LLMConfig,
@@ -47,6 +49,28 @@ from model_library.register_models import register_provider
 from model_library.utils import (
     create_anthropic_client_with_defaults,
 )
+
+
+def map_anthropic_finish_reason(
+    stop_reason: str | None,
+) -> FinishReasonInfo:
+    match stop_reason:
+        case "end_turn":
+            reason = FinishReason.STOP
+        case "max_tokens" | "model_context_window_exceeded":
+            reason = FinishReason.MAX_TOKENS
+        case "stop_sequence":
+            reason = FinishReason.STOP_SEQUENCE
+        case "tool_use":
+            reason = FinishReason.TOOL_CALLS
+        case "pause_turn":
+            reason = FinishReason.STOP
+        case "refusal":
+            reason = FinishReason.CONTENT_FILTER
+        case _:
+            reason = FinishReason.UNKNOWN
+
+    return FinishReasonInfo(reason=reason, raw=stop_reason)
 
 
 class AnthropicConfig(ProviderConfig):
@@ -657,6 +681,7 @@ class AnthropicModel(LLM):
         return QueryResult(
             output_text=text,
             reasoning=reasoning,
+            finish_reason=map_anthropic_finish_reason(message.stop_reason),
             metadata=QueryResultMetadata(
                 # see _calculate_cost
                 in_tokens=message.usage.input_tokens,

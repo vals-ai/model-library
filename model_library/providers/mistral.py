@@ -22,6 +22,8 @@ from model_library.base import (
     FileInput,
     FileWithBase64,
     FileWithId,
+    FinishReason,
+    FinishReasonInfo,
     InputItem,
     LLMConfig,
     QueryResult,
@@ -42,6 +44,24 @@ from model_library.exceptions import (
 from model_library.file_utils import trim_images
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
+
+
+def map_mistral_finish_reason(
+    finish_reason: str | None,
+) -> FinishReasonInfo:
+    match finish_reason:
+        case "stop":
+            reason = FinishReason.STOP
+        case "length" | "model_length":
+            reason = FinishReason.MAX_TOKENS
+        case "tool_calls":
+            reason = FinishReason.TOOL_CALLS
+        case "error":
+            reason = FinishReason.ERROR
+        case _:
+            reason = FinishReason.UNKNOWN
+
+    return FinishReasonInfo(reason=reason, raw=finish_reason)
 
 
 @register_provider("mistralai")
@@ -328,6 +348,7 @@ class MistralModel(LLM):
         return QueryResult(
             output_text=text,
             reasoning=reasoning or None,
+            finish_reason=map_mistral_finish_reason(finish_reason),
             history=[*input, RawResponse(response=message)],
             tool_calls=tool_calls,
             metadata=QueryResultMetadata(

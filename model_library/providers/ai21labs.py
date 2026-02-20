@@ -12,6 +12,8 @@ from model_library.base import (
     LLM,
     FileInput,
     FileWithId,
+    FinishReason,
+    FinishReasonInfo,
     InputItem,
     LLMConfig,
     QueryResult,
@@ -30,6 +32,23 @@ from model_library.exceptions import (
 )
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
+
+
+def map_ai21_finish_reason(
+    finish_reason: str | None,
+    has_tool_calls: bool = False,
+) -> FinishReasonInfo:
+    match finish_reason:
+        case "stop":
+            reason = FinishReason.TOOL_CALLS if has_tool_calls else FinishReason.STOP
+        case "length":
+            reason = FinishReason.MAX_TOKENS
+        case "content_filter":
+            reason = FinishReason.CONTENT_FILTER
+        case _:
+            reason = FinishReason.UNKNOWN
+
+    return FinishReasonInfo(reason=reason, raw=finish_reason)
 
 
 @register_provider("ai21labs")
@@ -202,6 +221,9 @@ class AI21LabsModel(LLM):
 
         output = QueryResult(
             output_text=choice.message.content,
+            finish_reason=map_ai21_finish_reason(
+                choice.finish_reason, bool(tool_calls)
+            ),
             history=[*input, RawResponse(response=choice.message)],
             metadata=QueryResultMetadata(
                 in_tokens=response.usage.prompt_tokens,

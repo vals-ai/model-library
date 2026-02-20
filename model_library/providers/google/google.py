@@ -37,6 +37,8 @@ from model_library.base import (
     FileWithBase64,
     FileWithId,
     FileWithUrl,
+    FinishReason as StandardFinishReason,
+    FinishReasonInfo,
     InputItem,
     LLMBatchMixin,
     LLMConfig,
@@ -62,6 +64,41 @@ from model_library.exceptions import (
 )
 from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.register_models import register_provider
+
+
+def map_google_finish_reason(
+    finish_reason: FinishReason | None,
+    has_tool_calls: bool = False,
+) -> FinishReasonInfo:
+    match finish_reason:
+        case FinishReason.STOP:
+            reason = (
+                StandardFinishReason.TOOL_CALLS
+                if has_tool_calls
+                else StandardFinishReason.STOP
+            )
+        case FinishReason.MAX_TOKENS:
+            reason = StandardFinishReason.MAX_TOKENS
+        case (
+            FinishReason.SAFETY
+            | FinishReason.RECITATION
+            | FinishReason.BLOCKLIST
+            | FinishReason.PROHIBITED_CONTENT
+            | FinishReason.SPII
+            | FinishReason.LANGUAGE
+            | FinishReason.IMAGE_SAFETY
+            | FinishReason.IMAGE_PROHIBITED_CONTENT
+            | FinishReason.IMAGE_RECITATION
+        ):
+            reason = StandardFinishReason.CONTENT_FILTER
+        case FinishReason.MALFORMED_FUNCTION_CALL | FinishReason.UNEXPECTED_TOOL_CALL:
+            reason = StandardFinishReason.MALFORMED_TOOL_CALL
+        case _:
+            reason = StandardFinishReason.UNKNOWN
+
+    return FinishReasonInfo(
+        reason=reason, raw=finish_reason.name if finish_reason else None
+    )
 
 
 def generate_tool_call_id(tool_name: str) -> str:
@@ -426,6 +463,7 @@ class GoogleModel(LLM):
         result = QueryResult(
             output_text=text,
             reasoning=reasoning,
+            finish_reason=map_google_finish_reason(finish_reason, bool(tool_calls)),
             history=[*input, RawResponse(response=contents)],
             tool_calls=tool_calls,
         )

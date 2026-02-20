@@ -18,6 +18,8 @@ from model_library.base import (
     FileInput,
     FileWithBase64,
     FileWithId,
+    FinishReason,
+    FinishReasonInfo,
     InputItem,
     LLMConfig,
     QueryResult,
@@ -37,6 +39,28 @@ from model_library.exceptions import (
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.register_models import register_provider
+
+
+def map_amazon_finish_reason(
+    stop_reason: str | None,
+) -> FinishReasonInfo:
+    match stop_reason:
+        case "end_turn":
+            reason = FinishReason.STOP
+        case "max_tokens":
+            reason = FinishReason.MAX_TOKENS
+        case "stop_sequence":
+            reason = FinishReason.STOP_SEQUENCE
+        case "tool_use":
+            reason = FinishReason.TOOL_CALLS
+        case "content_filtered":
+            reason = FinishReason.CONTENT_FILTER
+        case "guardrail_intervened":
+            reason = FinishReason.GUARDRAIL
+        case _:
+            reason = FinishReason.UNKNOWN
+
+    return FinishReasonInfo(reason=reason, raw=stop_reason)
 
 
 @register_provider("amazon")
@@ -436,6 +460,7 @@ class AmazonModel(LLM):
         return QueryResult(
             output_text=text,
             reasoning=reasoning,
+            finish_reason=map_amazon_finish_reason(stop_reason),
             metadata=metadata,
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=messages)],

@@ -20,6 +20,8 @@ from model_library.base import (
     FileWithBase64,
     FileWithId,
     FileWithUrl,
+    FinishReason,
+    FinishReasonInfo,
     InputItem,
     LLMBatchMixin,
     LLMConfig,
@@ -311,6 +313,7 @@ class DummyAIModel(LLM):
         return QueryResult(
             output_text=response["text"],
             reasoning=response["reasoning"],
+            finish_reason=FinishReasonInfo(reason=FinishReason.STOP, raw="stop"),
             metadata=QueryResultMetadata(
                 in_tokens=response["usage"]["in_tokens"],
                 out_tokens=response["usage"]["out_tokens"],

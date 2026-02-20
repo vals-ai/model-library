@@ -38,6 +38,8 @@ from model_library.base import (
     FileWithBase64,
     FileWithId,
     FileWithUrl,
+    FinishReason,
+    FinishReasonInfo,
     InputItem,
     LLMBatchMixin,
     LLMConfig,
@@ -66,6 +68,52 @@ from model_library.model_utils import get_reasoning_in_tag
 from model_library.register_models import register_provider
 from model_library.retriers.base import BaseRetrier
 from model_library.utils import create_openai_client_with_defaults
+
+
+def map_openai_completions_finish_reason(
+    finish_reason: str | None,
+) -> FinishReasonInfo:
+    match finish_reason:
+        case "stop":
+            reason = FinishReason.STOP
+        case "length":
+            reason = FinishReason.MAX_TOKENS
+        case "tool_calls" | "function_call":
+            reason = FinishReason.TOOL_CALLS
+        case "content_filter":
+            reason = FinishReason.CONTENT_FILTER
+        case _:
+            reason = FinishReason.UNKNOWN
+
+    return FinishReasonInfo(reason=reason, raw=finish_reason)
+
+
+def map_openai_responses_finish_reason(
+    status: str | None,
+    incomplete_reason: str | None,
+    has_tool_calls: bool,
+) -> FinishReasonInfo:
+    match status:
+        case "completed":
+            reason = FinishReason.TOOL_CALLS if has_tool_calls else FinishReason.STOP
+        case "incomplete":
+            match incomplete_reason:
+                case "max_output_tokens":
+                    reason = FinishReason.MAX_TOKENS
+                case "content_filter":
+                    reason = FinishReason.CONTENT_FILTER
+                case _:
+                    reason = FinishReason.UNKNOWN
+        case "failed":
+            reason = FinishReason.ERROR
+        case _:
+            reason = FinishReason.UNKNOWN
+
+    raw = status
+    if status == "incomplete" and incomplete_reason:
+        raw = f"incomplete:{incomplete_reason}"
+
+    return FinishReasonInfo(reason=reason, raw=raw)
 
 
 class OpenAIBatchMixin(LLMBatchMixin):
@@ -586,6 +634,7 @@ class OpenAIModel(LLM):
 
         output_text: str = ""
         reasoning_text: str = ""
+        completions_finish_reason: str | None = None
         metadata: QueryResultMetadata = QueryResultMetadata()
         raw_tool_calls: list[ChatCompletionMessageToolCall] = []
 
@@ -647,6 +696,9 @@ class OpenAIModel(LLM):
                 ):
                     raise MaxOutputTokensExceededError()
 
+                if choice.finish_reason:
+                    completions_finish_reason = choice.finish_reason
+
             if chunk.usage:
                 # NOTE: see _calculate_cost
                 reasoning_tokens = (
@@ -701,6 +753,9 @@ class OpenAIModel(LLM):
         return QueryResult(
             output_text=output_text,
             reasoning=reasoning_text,
+            finish_reason=map_openai_completions_finish_reason(
+                completions_finish_reason
+            ),
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=final_message)],
             metadata=metadata,
@@ -887,9 +942,18 @@ class OpenAIModel(LLM):
                 )
             )
 
+        incomplete_reason = (
+            response.incomplete_details.reason
+            if response.status == "incomplete" and response.incomplete_details
+            else None
+        )
+
         result = QueryResult(
             output_text=response.output_text,
             reasoning=reasoning,
+            finish_reason=map_openai_responses_finish_reason(
+                response.status, incomplete_reason, bool(tool_calls)
+            ),
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=response.output)],
             extras=QueryResultExtras(citations=citations),

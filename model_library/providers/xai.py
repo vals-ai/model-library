@@ -19,6 +19,8 @@ from model_library.base import (
     FileInput,
     FileWithBase64,
     FileWithId,
+    FinishReason,
+    FinishReasonInfo,
     InputItem,
     LLMConfig,
     QueryResult,
@@ -40,6 +42,24 @@ from model_library.exceptions import (
 )
 from model_library.providers.openai import OpenAIModel
 from model_library.register_models import register_provider
+
+
+def map_xai_finish_reason(
+    finish_reason: str | None,
+) -> FinishReasonInfo:
+    match finish_reason:
+        case "REASON_STOP":
+            reason = FinishReason.STOP
+        case "REASON_MAX_LEN" | "REASON_MAX_CONTEXT":
+            reason = FinishReason.MAX_TOKENS
+        case "REASON_TOOL_CALLS":
+            reason = FinishReason.TOOL_CALLS
+        case "REASON_TIME_LIMIT":
+            reason = FinishReason.MAX_TOKENS
+        case _:
+            reason = FinishReason.UNKNOWN
+
+    return FinishReasonInfo(reason=reason, raw=finish_reason)
 
 
 @register_provider("grok")
@@ -291,6 +311,7 @@ class XAIModel(LLM):
         return QueryResult(
             output_text=latest_response.content,
             reasoning=latest_response.reasoning_content,
+            finish_reason=map_xai_finish_reason(latest_response.finish_reason),
             metadata=QueryResultMetadata(
                 # see _calculate_cost
                 in_tokens=latest_response.usage.prompt_tokens
