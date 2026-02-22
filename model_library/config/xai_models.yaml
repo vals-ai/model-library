@@ -23,7 +23,6 @@ xai-models:
     default_parameters:
       temperature: 0.7
       top_p: 0.95
-
   grok/grok-code-fast-1:
     label: Grok Code Fast
     description: A speedy and economical reasoning model that excels at agentic coding. Tailored specifically for code generation and debugging across multiple programming languages.
