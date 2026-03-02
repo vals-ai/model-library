@@ -9,6 +9,7 @@ base-config:
     batch: false
     temperature: false
     tools: false
+    output_schema: false
   metadata:
     available_for_everyone: true
     available_as_evaluator: false
@@ -47,6 +48,7 @@ gemini-3-models:
       tools: true
       batch: true
       temperature: true
+      output_schema: true
     costs_per_million_token:
       cache:
         read_discount: 0.1
@@ -80,7 +82,8 @@ gemini-3-models:
     default_parameters:
       temperature: 1
       reasoning_effort: "high"
-
+    metadata:
+      available_as_evaluator: true
   google/gemini-3-flash-preview:
     label: Gemini 3 Flash (12/25)
     description: Google's newest budget workhorse model
@@ -126,6 +129,7 @@ gemini-2.5-models:
       tools: true
       batch: true
       temperature: true
+      output_schema: true
     properties:
       context_window: 1_048_576
       max_tokens: 8_192
@@ -478,6 +482,7 @@ old-gemini-models:
       images: true
       files: true
       videos: true
+      output_schema: true
     properties:
       context_window: 1_048_576
       max_tokens: 8_192
@@ -498,6 +503,7 @@ old-gemini-models:
       images: true
       files: true
       videos: true
+      output_schema: true
     metadata:
       deprecated: true
     properties:

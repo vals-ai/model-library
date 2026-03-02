@@ -14,7 +14,7 @@ bq_module = importlib.import_module("model_library.retriers.token.benchmark_queu
 from model_library.retriers.token.benchmark_queue import (
     benchmark_queue,
 )
-from model_library.retriers.token.utils import get_status, set_redis_client
+from model_library.retriers.token.utils import KEY_PREFIX, current_run, get_status, set_redis_client
 
 MODEL_KEY = ("openai.gpt-4", "abc123")
 
@@ -29,19 +29,19 @@ def redis():
 
 
 def _queue_key():
-    return f"{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:queue"
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:queue"
 
 
 def _alive_key(run_id: str):
-    return f"{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:alive:{run_id}"
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:alive:{run_id}"
 
 
 def _dispatched_key():
-    return f"{MODEL_KEY[0]}:{MODEL_KEY[1]}:tokens:inflight:dispatched"
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:tokens:inflight:dispatched"
 
 
 def _benchmark_run_key():
-    return f"{MODEL_KEY[0]}:{MODEL_KEY[1]}:tokens:inflight:benchmark_run"
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:tokens:inflight:benchmark_run"
 
 
 async def _simulate_process_death(redis, run_id: str):
@@ -380,16 +380,17 @@ async def test_get_queue_status_during_run(redis):
 
     await asyncio.sleep(0.02)
 
-    statuses = (await get_status()).benchmark_queue
+    models = (await get_status()).models
 
-    assert len(statuses) == 1
-    status = statuses[0]
-    assert status.length == 2
-    assert status.entries[0].run_id == "run-1"
-    assert status.entries[1].run_id == "run-2"
-    assert status.entries[0].alive is True
-    assert status.entries[1].alive is True
-    assert status.entries[0].heartbeat_ttl > 0
+    assert len(models) == 1
+    queue = models[0].queue
+    assert queue is not None
+    assert queue.length == 2
+    assert queue.entries[0].run_id == "run-1"
+    assert queue.entries[1].run_id == "run-2"
+    assert queue.entries[0].alive is True
+    assert queue.entries[1].alive is True
+    assert queue.entries[0].heartbeat_ttl > 0
 
     holder_task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -398,24 +399,25 @@ async def test_get_queue_status_during_run(redis):
 
 
 async def test_get_queue_status_empty(redis):
-    """Status on empty queue returns empty list."""
-    statuses = (await get_status()).benchmark_queue
+    """Status on empty queue returns empty models list."""
+    models = (await get_status()).models
 
-    assert statuses == []
+    assert models == []
 
 
 async def test_get_queue_status_dead_entry(redis):
     """Status correctly reports dead entries (no alive key)."""
     await redis.rpush(_queue_key(), "dead-run")
 
-    statuses = (await get_status()).benchmark_queue
+    models = (await get_status()).models
 
-    assert len(statuses) == 1
-    status = statuses[0]
-    assert status.length == 1
-    assert status.entries[0].run_id == "dead-run"
-    assert status.entries[0].alive is False
-    assert status.entries[0].heartbeat_ttl == -1
+    assert len(models) == 1
+    queue = models[0].queue
+    assert queue is not None
+    assert queue.length == 1
+    assert queue.entries[0].run_id == "dead-run"
+    assert queue.entries[0].alive is False
+    assert queue.entries[0].heartbeat_ttl == -1
 
 
 async def test_get_queue_status_all_queues(redis):
@@ -432,12 +434,12 @@ async def test_get_queue_status_all_queues(redis):
 
     await asyncio.sleep(0.02)
 
-    statuses = (await get_status()).benchmark_queue
+    models = (await get_status()).models
 
-    assert len(statuses) == 2
-    queue_keys = {s.queue_key for s in statuses}
-    assert f"{model_a[0]}:{model_a[1]}:benchmark:queue" in queue_keys
-    assert f"{model_b[0]}:{model_b[1]}:benchmark:queue" in queue_keys
+    queue_keys = {m.queue.queue_key for m in models if m.queue}
+    assert len(queue_keys) == 2
+    assert f"{KEY_PREFIX}:{model_a[0]}:{model_a[1]}:benchmark:queue" in queue_keys
+    assert f"{KEY_PREFIX}:{model_b[0]}:{model_b[1]}:benchmark:queue" in queue_keys
 
     task_a.cancel()
     task_b.cancel()
@@ -663,3 +665,26 @@ async def test_self_promote_when_head_crashes_between_lrem_and_notify(redis):
     task1.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task1
+
+
+# ── Contextvar ──────────────────────────────────────────────────────
+
+
+async def test_contextvar_set_during_execution(redis):
+    """current_run contextvar is set with run_id and is_queued=True inside the context."""
+    captured = None
+
+    async with benchmark_queue(MODEL_KEY, "run-ctx", logger):
+        captured = current_run.get()
+
+    assert captured is not None
+    assert captured.run_id == "run-ctx"
+    assert captured.is_queued is True
+
+
+async def test_contextvar_reset_after_exit(redis):
+    """current_run contextvar is reset to None after exiting the context."""
+    async with benchmark_queue(MODEL_KEY, "run-reset", logger):
+        assert current_run.get() is not None
+
+    assert current_run.get() is None

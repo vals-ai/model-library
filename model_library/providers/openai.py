@@ -8,6 +8,7 @@ import time
 from typing import Any, Literal, Sequence, cast
 
 from openai import APIConnectionError, AsyncOpenAI
+from openai.lib._pydantic import to_strict_json_schema
 from openai.types.chat import (
     ChatCompletionMessage,
     ChatCompletionMessageToolCall,
@@ -16,6 +17,7 @@ from openai.types.chat import (
 from openai.types.chat.chat_completion_message_tool_call import Function
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.create_embedding_response import CreateEmbeddingResponse
+from pydantic import BaseModel
 from openai.types.moderation_create_response import ModerationCreateResponse
 from openai.types.responses import (
     ResponseFunctionToolCall,
@@ -25,7 +27,7 @@ from openai.types.responses import (
 )
 from openai.types.responses.response import Response
 from openai.types.responses.tool_param import ToolParam as ResponsesToolParam
-from typing_extensions import override
+from typing_extensions import deprecated, override
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -133,6 +135,7 @@ class OpenAIBatchMixin(LLMBatchMixin):
         self,
         custom_id: str,
         input: Sequence[InputItem],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         tools_override = kwargs.pop("tools", None)
@@ -163,7 +166,8 @@ class OpenAIBatchMixin(LLMBatchMixin):
             "body": await self._root.build_body(
                 input,
                 tools=normalized_tools,
-                **kwargs,
+                output_schema=output_schema,
+                **kwargs,  # pyright: ignore[reportArgumentType]
             ),
         }
 
@@ -573,6 +577,7 @@ class OpenAIModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         parsed_input: list[dict[str, Any] | ChatCompletionMessage] = []
@@ -622,6 +627,7 @@ class OpenAIModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
         """
@@ -629,8 +635,9 @@ class OpenAIModel(LLM):
         Generally not used for openai models
         Used by providers using openai as a delegate
         """
-
-        body = await self.build_body(input, tools=tools, **kwargs)
+        body = await self.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
         output_text: str = ""
         reasoning_text: str = ""
@@ -719,7 +726,7 @@ class OpenAIModel(LLM):
                 )
 
         if not output_text and not reasoning_text and not raw_tool_calls:
-            raise ModelNoOutputError()
+            raise ModelNoOutputError(str({"finish_reason": completions_finish_reason}))
 
         tool_calls: list[ToolCall] = []
         for raw_tool_call in raw_tool_calls:
@@ -798,10 +805,13 @@ class OpenAIModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         if self.use_completions:
-            return await self._build_body_completions(input, tools=tools, **kwargs)
+            return await self._build_body_completions(
+                input, tools=tools, output_schema=output_schema, **kwargs
+            )
 
         if self.deep_research:
             await self._check_deep_research_args(tools, **kwargs)
@@ -842,6 +852,24 @@ class OpenAIModel(LLM):
         if self.verbosity is not None:
             body["text"] = {"format": {"type": "text"}, "verbosity": self.verbosity}
 
+        if output_schema is not None:
+            schema = (
+                output_schema
+                if isinstance(output_schema, dict)
+                else to_strict_json_schema(output_schema)
+            )
+            text_block: dict[str, Any] = {
+                "format": {
+                    "type": "json_schema",
+                    "name": "structured_output",
+                    "schema": schema,
+                    "strict": True,
+                }
+            }
+            if self.verbosity is not None:
+                text_block["verbosity"] = self.verbosity
+            body["text"] = text_block
+
         if self.supports_temperature:
             if self.temperature is not None:
                 body["temperature"] = self.temperature
@@ -860,14 +888,19 @@ class OpenAIModel(LLM):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
         if self.use_completions:
             if self.deep_research:
                 raise Exception("Use responses endpoint for deep research models")
-            return await self._query_completions(input, tools=tools, **kwargs)
+            return await self._query_completions(
+                input, tools=tools, output_schema=output_schema, **kwargs
+            )
 
-        body = await self.build_body(input, tools=tools, **kwargs)
+        body = await self.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
         try:
             stream = await self.get_client().responses.create(
@@ -947,6 +980,17 @@ class OpenAIModel(LLM):
             if response.status == "incomplete" and response.incomplete_details
             else None
         )
+
+        if not response.output_text and not tool_calls and not reasoning:
+            raise ModelNoOutputError(
+                str(
+                    {
+                        "status": response.status,
+                        "incomplete_reason": incomplete_reason,
+                        "response_id": response.id,
+                    }
+                )
+            )
 
         result = QueryResult(
             output_text=response.output_text,
@@ -1030,17 +1074,20 @@ class OpenAIModel(LLM):
             self.logger.warning(f"Failed to get rate limit: {e}")
             return None
 
+    @deprecated("Use query(output_schema=...) instead")
     @override
     async def query_json(
         self,
         input: Sequence[InputItem],
         pydantic_model: type[PydanticT],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> PydanticT:
         # re-use existing body
         body = await self.build_body(
             input,
             tools=[],
+            output_schema=output_schema,
             **kwargs,
         )
 

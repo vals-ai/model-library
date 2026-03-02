@@ -9,6 +9,7 @@ from google.genai.types import (
     JobState,
     UploadFileConfig,
 )
+from pydantic import BaseModel
 from typing_extensions import override
 
 from model_library.base import BatchResult, InputItem, LLMBatchMixin
@@ -145,10 +146,13 @@ class GoogleBatchMixin(LLMBatchMixin):
         self,
         custom_id: str,
         input: Sequence[InputItem],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         self._root.logger.debug(f"Creating batch request for custom_id: {custom_id}")
-        body = await self._root.build_body(input, tools=[], **kwargs)
+        body = await self._root.build_body(
+            input, tools=[], output_schema=output_schema, **kwargs
+        )
 
         contents_any = body["contents"]
         serialized_contents: list[dict[str, Any]] = [

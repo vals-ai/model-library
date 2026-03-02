@@ -1,5 +1,6 @@
 import hashlib
 import io
+import json
 import logging
 import pickle
 import threading
@@ -21,7 +22,7 @@ from typing import (
 import tiktoken
 from pydantic import BaseModel, SecretStr, model_serializer
 from tiktoken.core import Encoding
-from typing_extensions import override
+from typing_extensions import deprecated, override
 
 import model_library.base.serialize as init_serialize_opts
 from model_library.base.batch import (
@@ -48,7 +49,7 @@ from model_library.base.utils import (
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
 from model_library.retriers.token import TokenRetrier
-from model_library.utils import truncate_str
+from model_library.utils import PrettyModel, truncate_str
 
 _ = init_serialize_opts
 
@@ -73,7 +74,7 @@ class TokenRetryParams(BaseModel):
     limit_refresh_seconds: Literal[60] = 60
 
 
-class LLMConfig(BaseModel):
+class LLMConfig(PrettyModel):
     max_tokens: int | None = None
     temperature: float | None = None
     top_p: float | None = None
@@ -87,13 +88,14 @@ class LLMConfig(BaseModel):
     supports_batch: bool = False
     supports_temperature: bool = True
     supports_tools: bool = False
+    supports_output_schema: bool = False
     native: bool = True
     provider_config: ProviderConfig | None = None
     registry_key: str | None = None
     custom_api_key: SecretStr | None = None
 
 
-class DelegateConfig(BaseModel):
+class DelegateConfig(PrettyModel):
     base_url: str
     api_key: SecretStr
 
@@ -168,6 +170,7 @@ class LLM(ABC):
         self.supports_batch: bool = config.supports_batch
         self.supports_temperature: bool = config.supports_temperature
         self.supports_tools: bool = config.supports_tools
+        self.supports_output_schema: bool = config.supports_output_schema
 
         self.native: bool = config.native
         self.delegate: "LLM | None" = None
@@ -216,7 +219,7 @@ class LLM(ABC):
         """
         start = time.perf_counter()
         result = await func()
-        return result, round(time.perf_counter() - start, 4)
+        return result, time.perf_counter() - start
 
     async def delegate_query(
         self,
@@ -224,12 +227,17 @@ class LLM(ABC):
         *,
         tools: list[ToolDefinition] = [],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
         if not self.delegate:
             raise Exception("Delegate not set")
         return await self.delegate._query_impl(  # pyright: ignore[reportPrivateUsage]
-            input, tools=tools, query_logger=query_logger, **kwargs
+            input,
+            tools=tools,
+            query_logger=query_logger,
+            output_schema=output_schema,
+            **kwargs,
         )
 
     async def query(
@@ -241,6 +249,7 @@ class LLM(ABC):
         # for backwards compatibility
         files: list[FileInput] = [],
         images: list[FileInput] = [],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         query_logger: logging.Logger | None = None,
         **kwargs: object,
     ) -> QueryResult:
@@ -249,6 +258,10 @@ class LLM(ABC):
         Join input with history
         Log, Time, and Retry
         """
+
+        if output_schema is not None and not self.supports_output_schema:
+            model_name = self._registry_key or f"{self.provider}/{self.model_name}"
+            raise Exception(f"{model_name} does not support structured outputs")
 
         # verbose on debug
         verbose = self.logger.isEnabledFor(logging.DEBUG)
@@ -295,7 +308,11 @@ class LLM(ABC):
 
         async def query_func() -> QueryResult:
             return await self._query_impl(
-                input, tools=tools, query_logger=query_logger, **kwargs
+                input,
+                tools=tools,
+                query_logger=query_logger,
+                output_schema=output_schema,
+                **kwargs,
             )
 
         async def timed_query() -> tuple[QueryResult, float]:
@@ -337,6 +354,14 @@ class LLM(ABC):
         output, duration = await run_with_retry()
         output.metadata.duration_seconds = duration
         output.metadata.cost = await self._calculate_cost(output.metadata)
+
+        if output_schema is not None and output.output_text:
+            if isinstance(output_schema, dict):
+                output.output_parsed = json.loads(output.output_text)
+            else:
+                output.output_parsed = output_schema.model_validate_json(
+                    output.output_text
+                )
 
         query_logger.info(f"Query completed: {repr(output)}")
         query_logger.debug(output.model_dump(exclude={"history", "raw"}))
@@ -423,6 +448,7 @@ class LLM(ABC):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
         """
@@ -443,7 +469,8 @@ class LLM(ABC):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
-        **kwargs: Any,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
+        **kwargs: object,
     ) -> dict[str, Any]:
         """
         Builds the body of the request to the model provider
@@ -455,7 +482,7 @@ class LLM(ABC):
     async def parse_input(
         self,
         input: Sequence[InputItem],
-        **kwargs: Any,
+        **kwargs: object,
     ) -> Any:
         """
         Parses input into the appropriate format for the model
@@ -598,6 +625,7 @@ class LLM(ABC):
         self.logger.debug(f"Combined Token Count Input: {count}")
         return count
 
+    @deprecated("Use query(output_schema=...) instead")
     async def query_json(
         self,
         input: Sequence[InputItem],
@@ -606,19 +634,7 @@ class LLM(ABC):
     ) -> PydanticT:
         """Query the model with JSON response format using Pydantic model.
 
-        This is a convenience method that is not implemented for all providers.
-        Only OpenAI and Google providers currently support this method.
-
-        Args:
-            input: Input items (text, files, etc.)
-            pydantic_model: Pydantic model class defining the expected response structure
-            **kwargs: Additional arguments passed to the query method
-
-        Returns:
-            Instance of the pydantic_model with the model's response
-
-        Raises:
-            NotImplementedError: If the provider does not support structured JSON output
+        Deprecated: Use query(output_schema=...) instead.
         """
         raise NotImplementedError(
             f"query_json is not implemented for {self.__class__.__name__}. "

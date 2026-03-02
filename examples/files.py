@@ -21,17 +21,20 @@ secret_file_content = secret_pdf()
 async def file_base64(model: LLM):
     console_log("\n--- File Base64 ---\n")
 
-    await model.query(
-        [
-            TextInput(text="What is the secret?"),
-            FileWithBase64(
-                type="file",
-                name="file_base64.pdf",
-                mime=mime,
-                base64=base64.b64encode(secret_file_content).decode("utf-8"),
-            ),
-        ],
-    )
+    try:
+        await model.query(
+            [
+                TextInput(text="What is the secret?"),
+                FileWithBase64(
+                    type="file",
+                    name="file_base64.pdf",
+                    mime=mime,
+                    base64=base64.b64encode(secret_file_content).decode("utf-8"),
+                ),
+            ],
+        )
+    except Exception as e:
+        console_log(f"Error: {e}")
 
 
 async def file_id(model: LLM):
@@ -42,28 +45,34 @@ async def file_id(model: LLM):
     )
     console_log(f"Uploaded File ID: {uploaded_file.file_id}")
 
-    await model.query(
-        [
-            TextInput(text="What is the secret?"),
-            uploaded_file,
-        ],
-    )
+    try:
+        await model.query(
+            [
+                TextInput(text="What is the secret?"),
+                uploaded_file,
+            ],
+        )
+    except Exception as e:
+        console_log(f"Error: {e}")
 
 
 async def file_url(model: LLM):
     console_log("\n--- File URL ---\n")
 
-    await model.query(
-        [
-            TextInput(text="What is in this document?"),
-            FileWithUrl(
-                type="file",
-                name="file_url.pdf",
-                mime=mime,
-                url="https://ontheline.trincoll.edu/images/bookdown/sample-local-pdf.pdf",
-            ),
-        ],
-    )
+    try:
+        await model.query(
+            [
+                TextInput(text="What is in this document?"),
+                FileWithUrl(
+                    type="file",
+                    name="file_url.pdf",
+                    mime=mime,
+                    url="https://ontheline.trincoll.edu/images/bookdown/sample-local-pdf.pdf",
+                ),
+            ],
+        )
+    except Exception as e:
+        console_log(f"Error: {e}")
 
 
 async def main():

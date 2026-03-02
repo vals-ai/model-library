@@ -1,13 +1,122 @@
 import logging
-from collections.abc import Mapping, Sequence
+import uuid
+from collections.abc import Iterator, Mapping, Sequence
+from contextlib import contextmanager
+from datetime import datetime
+from pathlib import Path
 
 import httpx
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
+from pprint import pformat
+
 from pydantic.main import BaseModel
 
 MAX_LLM_LOG_LENGTH = 100
 logger = logging.getLogger("llm")
+
+
+class PrettyModel(BaseModel):
+    """BaseModel with pformat __repr__ and __str__"""
+
+    def __repr__(self) -> str:
+        attrs = vars(self).copy()
+        for name in self.__class__.model_computed_fields:
+            attrs[name] = getattr(self, name)
+        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
+
+    __str__ = __repr__
+
+
+def create_run_dir(benchmark: str, model_name: str, base: Path = Path("logs")) -> Path:
+    """Create a timestamped run directory for benchmark logs
+
+    Returns: Path like logs/<benchmark>/<model>/<timestamp>_<uuid>/
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    run_dir = (
+        base
+        / benchmark
+        / model_name.replace("/", "_")
+        / f"{timestamp}_{uuid.uuid4().hex[:6]}"
+    )
+    run_dir.mkdir(parents=True, exist_ok=True)
+    return run_dir
+
+
+@contextmanager
+def create_file_logger(
+    name: str,
+    log_file: str | Path,
+    level: int = logging.INFO,
+    console: bool = False,
+) -> Iterator[logging.Logger]:
+    """Context manager that creates a logger writing to a file
+
+    Usage:
+        with create_file_logger("agent", "logs/run.log") as logger:
+            agent = Agent(llm=llm, tools=tools, logger=logger)
+            result = await agent.run(input)
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+    fmt = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    handlers: list[logging.Handler] = []
+
+    path = Path(log_file)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    file_handler = logging.FileHandler(path, encoding="utf-8")
+    file_handler.setFormatter(fmt)
+    handlers.append(file_handler)
+
+    if console:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(fmt)
+        handlers.append(console_handler)
+
+    for h in handlers:
+        logger.addHandler(h)
+
+    try:
+        yield logger
+    finally:
+        for h in handlers:
+            logger.removeHandler(h)
+            h.close()
+
+
+def setup_history_dir(logger: logging.Logger) -> Path | None:
+    """Create directory structure for history serialization
+
+    Detects FileHandler on the logger, converts:
+      .../question.log → .../question/agent.log + .../question/histories/
+    """
+    file_handler = None
+    for handler in logger.handlers:
+        if isinstance(handler, logging.FileHandler):
+            file_handler = handler
+            break
+
+    if file_handler is None:
+        logger.warning("serialize_histories enabled but no FileHandler found, skipping")
+        return None
+
+    log_path = Path(file_handler.baseFilename)
+    output_dir = log_path.with_suffix("")
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    histories_dir = output_dir / "histories"
+    histories_dir.mkdir(exist_ok=True)
+
+    # Redirect handler to write inside the new directory
+    new_log_path = output_dir / "agent.log"
+    file_handler.close()
+    if log_path.exists() and log_path.stat().st_size == 0:
+        log_path.unlink()
+    file_handler.baseFilename = str(new_log_path)
+    file_handler.stream = file_handler._open()
+
+    return histories_dir
 
 
 def truncate_str(s: str | None, max_len: int = MAX_LLM_LOG_LENGTH) -> str:

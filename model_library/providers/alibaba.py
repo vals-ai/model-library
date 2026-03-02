@@ -1,15 +1,18 @@
-from typing import Any, Literal
+from typing import Any, Literal, Sequence
 
-from pydantic import SecretStr
+from openai.types.chat import ChatCompletionMessage
+from pydantic import BaseModel, SecretStr
 from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
     DelegateConfig,
     DelegateOnly,
+    InputItem,
     LLMConfig,
     QueryResultCost,
     QueryResultMetadata,
+    ToolDefinition,
 )
 from model_library.register_models import register_provider
 
@@ -35,6 +38,32 @@ class AlibabaModel(DelegateOnly):
             use_completions=True,
             delegate_provider="openai",
         )
+
+    def _fix_content_null_in_messages(self, messages: list[Any]) -> list[Any]:
+        """Set content to \"\" for assistant messages with content=None so Qwen API accepts the request."""
+        fixed: list[Any] = []
+        for msg in messages:
+            if isinstance(msg, ChatCompletionMessage) and msg.content is None:
+                fixed.append(msg.model_copy(update={"content": ""}))
+            else:
+                fixed.append(msg)
+        return fixed
+
+    @override
+    async def build_body(
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
+        **kwargs: object,
+    ) -> dict[str, Any]:
+        body = await super().build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
+        if "messages" in body:
+            body["messages"] = self._fix_content_null_in_messages(body["messages"])
+        return body
 
     @override
     def _get_extra_body(self) -> dict[str, Any]:

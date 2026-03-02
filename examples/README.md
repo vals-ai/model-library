@@ -11,6 +11,7 @@ examples/
 ├── images.py                    # Image handling (base64, file ID, URL)
 ├── files.py                     # File handling (base64, file ID, URL)
 ├── tool_calls.py                # Tool calling and multi-turn conversations
+├── agent.py                     # Agent loop with tools, hooks, and state
 ├── embeddings.py                # Embedding generation with OpenAI/Azure
 ├── setup.py                     # Setup utilities and logging configuration
 ├── data/
@@ -21,6 +22,7 @@ examples/
     ├── custom_retrier.py        # Custom retry logic and error handling
     ├── deep_research.py         # Deep research with web search and code interpreter
     └── stress.py                # Concurrent stress testing
+    └── structured_output.py     # Structured Outputs (JSON schema or Pydantic models)
 ```
 
 ## How to Run

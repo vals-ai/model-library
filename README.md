@@ -201,6 +201,8 @@ You can run `make examples` (default models) or `make example <model>` to run al
 
 `python -m examples.embeddings`
 
+`python -m examples.structured_output`
+
 `python -m examples.advanced.batch`
 
 `python -m examples.advanced.custom_retrier`

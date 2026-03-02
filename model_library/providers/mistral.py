@@ -13,6 +13,7 @@ from mistralai import (
 from mistralai.models.completionevent import CompletionEvent
 from mistralai.models.toolcall import ToolCall as MistralToolCall
 from mistralai.utils.eventstreaming import EventStreamAsync
+from pydantic import BaseModel
 from typing_extensions import override
 
 from model_library import model_library_settings
@@ -209,6 +210,7 @@ class MistralModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         # mistral supports max 8 images, merge extra images into the 8th image
@@ -252,9 +254,12 @@ class MistralModel(LLM):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
-        body = await self.build_body(input, tools=tools, **kwargs)
+        body = await self.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
         response: EventStreamAsync[
             CompletionEvent
@@ -308,7 +313,7 @@ class MistralModel(LLM):
             raise MaxOutputTokensExceededError()
 
         if not text and not reasoning and not raw_tool_calls:
-            raise ModelNoOutputError()
+            raise ModelNoOutputError(str({"finish_reason": finish_reason}))
 
         tool_calls: list[ToolCall] = []
 

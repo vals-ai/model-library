@@ -2,11 +2,12 @@ import io
 import logging
 from typing import Any, Literal, Sequence
 
-from pydantic import SecretStr
+from pydantic import BaseModel, SecretStr
 from typing_extensions import override
 from xai_sdk import AsyncClient
 from xai_sdk.aio.chat import Chat
 from xai_sdk.chat import Content, Response, system, tool_result, user
+from xai_sdk.chat import file as xai_file
 from xai_sdk.chat import image as xai_image
 from xai_sdk.chat import tool as xai_tool
 from xai_sdk.proto.v6.chat_pb2 import Message, Tool
@@ -188,7 +189,11 @@ class XAIModel(LLM):
         self,
         file: FileInput,
     ) -> Content:
-        raise NotImplementedError()
+        match file:
+            case FileWithId():
+                return xai_file(file_id=file.file_id)
+            case _:
+                raise BadInputError("Unsupported file type")
 
     @override
     async def parse_tools(
@@ -222,11 +227,25 @@ class XAIModel(LLM):
         bytes: io.BytesIO,
         type: Literal["image", "file"] = "file",
     ) -> FileWithId:
-        raise NotImplementedError()
+        response = await self.get_client().files.upload(
+            bytes,
+            filename=name,
+        )
+        return FileWithId(
+            type=type,
+            name=response.filename,
+            mime=mime,
+            file_id=response.id,
+        )
 
     @override
     async def build_body(
-        self, input: Sequence[InputItem], *, tools: list[ToolDefinition], **kwargs: Any
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
+        **kwargs: Any,
     ) -> dict[str, Any]:
         messages: Sequence[Message] = []
         if "system_prompt" in kwargs:
@@ -269,14 +288,21 @@ class XAIModel(LLM):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
         if self.delegate:
             return await self.delegate_query(
-                input, tools=tools, query_logger=query_logger, **kwargs
+                input,
+                tools=tools,
+                query_logger=query_logger,
+                output_schema=output_schema,
+                **kwargs,
             )
 
-        body = await self.build_body(input, tools=tools, **kwargs)
+        body = await self.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
         chat: Chat = self.get_client().chat.create(**body)
 
@@ -308,14 +334,28 @@ class XAIModel(LLM):
         ):
             raise MaxOutputTokensExceededError()
 
+        if (
+            not latest_response.content
+            and not latest_response.reasoning_content
+            and not tool_calls
+        ):
+            raise ModelNoOutputError(
+                str({"finish_reason": latest_response.finish_reason})
+            )
+
         return QueryResult(
             output_text=latest_response.content,
             reasoning=latest_response.reasoning_content,
             finish_reason=map_xai_finish_reason(latest_response.finish_reason),
             metadata=QueryResultMetadata(
                 # see _calculate_cost
-                in_tokens=latest_response.usage.prompt_tokens
-                - latest_response.usage.cached_prompt_text_tokens,
+                # proto3 scalar ints default to 0; CopyFrom on partial
+                # streaming chunks can leave prompt_tokens < cached
+                in_tokens=max(
+                    0,
+                    latest_response.usage.prompt_tokens
+                    - latest_response.usage.cached_prompt_text_tokens,
+                ),
                 out_tokens=latest_response.usage.completion_tokens,
                 reasoning_tokens=latest_response.usage.reasoning_tokens,
                 cache_read_tokens=latest_response.usage.cached_prompt_text_tokens,

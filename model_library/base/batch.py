@@ -19,6 +19,7 @@ class LLMBatchMixin(ABC):
         self,
         custom_id: str,
         input: Sequence[InputItem],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         """Return a single query request

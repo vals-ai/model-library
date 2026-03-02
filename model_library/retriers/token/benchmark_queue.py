@@ -1,9 +1,15 @@
 import asyncio
 import logging
+import time
 from contextlib import asynccontextmanager
 
 from model_library.retriers.token import utils
-from model_library.retriers.token.utils import AsyncRedisClient
+from model_library.retriers.token.utils import (
+    KEY_PREFIX,
+    AsyncRedisClient,
+    RunContext,
+    current_run,
+)
 
 HOURS_24 = 86400
 
@@ -66,11 +72,13 @@ async def benchmark_queue(
         yield
         return
 
-    key = f"{model_registry_key[0]}:{model_registry_key[1]}:benchmark"
+    key = f"{KEY_PREFIX}:{model_registry_key[0]}:{model_registry_key[1]}:benchmark"
     run_queue_key = f"{key}:queue"
     my_notify_key = f"{key}:notify:{run_id}"
     alive_key = f"{key}:alive:{run_id}"
-    inflight_key = f"{model_registry_key[0]}:{model_registry_key[1]}:tokens:inflight"
+    inflight_key = (
+        f"{KEY_PREFIX}:{model_registry_key[0]}:{model_registry_key[1]}:tokens:inflight"
+    )
     dispatched_key = f"{inflight_key}:dispatched"
     benchmark_run_key = f"{inflight_key}:benchmark_run"
 
@@ -82,6 +90,18 @@ async def benchmark_queue(
     try:
         # initialize heartbeat with short TTL
         await utils.redis_client.set(alive_key, "1", ex=HEARTBEAT_TTL)
+
+        # per-run metadata for debugging
+        run_meta_key = f"{key}:run:{run_id}"
+        await utils.redis_client.hset(
+            run_meta_key,
+            mapping={
+                "total_requests": total_requests or 0,
+                "slot_acquired": 0,
+                "enqueued_at": time.time(),
+            },
+        )
+        await utils.redis_client.expire(run_meta_key, HOURS_24)
 
         # Idempotent enqueue (handles server restart where run is already in queue)
         # NOTE: lpos returns the index (0 for first element), so we must check `is None`
@@ -131,8 +151,19 @@ async def benchmark_queue(
 
         slot_acquired_flag = True
         slot_acquired.set()
+        await utils.redis_client.hset(
+            run_meta_key,
+            mapping={
+                "slot_acquired": 1,
+                "slot_acquired_at": time.time(),
+            },
+        )
 
-        yield
+        run_token = current_run.set(RunContext(run_id=run_id, is_queued=True))
+        try:
+            yield
+        finally:
+            current_run.reset(run_token)
 
     finally:
         if heartbeat_task:
@@ -142,6 +173,9 @@ async def benchmark_queue(
         await utils.redis_client.lrem(run_queue_key, 1, run_id)
 
         await utils.redis_client.delete(alive_key)
+        await utils.redis_client.delete(
+            f"{key}:run:{run_id}", f"{key}:run:{run_id}:dispatched"
+        )
 
         # atomic cleanup: only delete shared keys if we're still the active run
         if slot_acquired_flag:

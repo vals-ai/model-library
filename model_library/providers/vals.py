@@ -10,6 +10,7 @@ from typing import Any, Literal, Sequence, cast
 
 import redis
 from redis.client import Redis
+from pydantic import BaseModel
 from typing_extensions import override
 
 from model_library import model_library_settings
@@ -47,13 +48,16 @@ class DummyAIBatchMixin(LLMBatchMixin):
         self,
         custom_id: str,
         input: Sequence[InputItem],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         return {
             "custom_id": custom_id,
             "method": "",
             "url": "",
-            "body": await self._root.build_body(input, tools=[], **kwargs),
+            "body": await self._root.build_body(
+                input, tools=[], output_schema=output_schema, **kwargs
+            ),
         }
 
     @override
@@ -239,6 +243,7 @@ class DummyAIModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         messages = await self.parse_input(input)
@@ -282,9 +287,12 @@ class DummyAIModel(LLM):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
-        body = await self.build_body(input, tools=tools, **kwargs)
+        body = await self.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
         fail_rate = FAIL_RATE
 

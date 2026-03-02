@@ -1,9 +1,8 @@
 import logging
 from typing import Any, Literal, Sequence
 
+from pydantic import BaseModel, SecretStr
 from typing_extensions import override
-
-from pydantic import SecretStr
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -82,6 +81,7 @@ class KimiModel(DelegateOnly):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
         preprocessed = await self._preprocess_files(input)
@@ -90,5 +90,6 @@ class KimiModel(DelegateOnly):
             tools=tools,
             query_logger=query_logger,
             extra_body=self._get_extra_body(),
+            output_schema=output_schema,
             **kwargs,
         )

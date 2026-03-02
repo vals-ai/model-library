@@ -2,6 +2,7 @@ import io
 import logging
 from typing import Any, Literal, Sequence
 
+from pydantic import BaseModel
 from typing_extensions import override
 
 from model_library.base import (
@@ -90,6 +91,7 @@ class DelegateOnly(LLM):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
         assert self.delegate
@@ -98,6 +100,7 @@ class DelegateOnly(LLM):
             tools=tools,
             query_logger=query_logger,
             extra_body=self._get_extra_body(),
+            output_schema=output_schema,
             **kwargs,
         )
 
@@ -107,10 +110,13 @@ class DelegateOnly(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         assert self.delegate
-        return await self.delegate.build_body(input, tools=tools, **kwargs)
+        return await self.delegate.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
     @override
     async def parse_input(

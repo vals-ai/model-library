@@ -51,6 +51,8 @@ def create_config(
             config["supports_temperature"] = supports.temperature
         if supports.tools is not None:
             config["supports_tools"] = supports.tools
+        if supports.output_schema is not None:
+            config["supports_output_schema"] = supports.output_schema
     else:
         raise Exception(f"{registry_config.label} has no supports")
 

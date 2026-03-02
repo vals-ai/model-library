@@ -1,17 +1,18 @@
+import json
 from pprint import pformat
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 
-from pydantic import BaseModel, Field
+from pydantic import Field, computed_field
 from typing_extensions import override
 
-from model_library.utils import truncate_str
+from model_library.utils import PrettyModel, truncate_str
 
 """
 --- FILES ---
 """
 
 
-class FileBase(BaseModel):
+class FileBase(PrettyModel):
     type: Literal["image", "file"]
     name: str
     mime: str
@@ -21,7 +22,7 @@ class FileBase(BaseModel):
         attrs = vars(self).copy()
         if "base64" in attrs:
             attrs["base64"] = truncate_str(attrs["base64"])
-        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2)}\n)"
+        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
 
 
 class FileWithBase64(FileBase):
@@ -50,7 +51,7 @@ FileInput = Annotated[
 """
 
 
-class ToolBody(BaseModel):
+class ToolBody(PrettyModel):
     name: str
     description: str
     properties: dict[str, Any]
@@ -58,16 +59,30 @@ class ToolBody(BaseModel):
     kwargs: dict[str, Any] = {}
 
 
-class ToolDefinition(BaseModel):
+class ToolDefinition(PrettyModel):
     name: str  # acts as a key
     body: ToolBody | Any
 
 
-class ToolCall(BaseModel):
+class ToolCall(PrettyModel):
     id: str
     call_id: str | None = None
     name: str
     args: dict[str, Any] | str
+
+    @computed_field
+    @property
+    def parsed_args(self) -> dict[str, Any] | None:
+        """Parsed args as a dict, or None if args is an unparseable string"""
+        if isinstance(self.args, dict):
+            return self.args
+        try:
+            loaded = json.loads(self.args)
+            if isinstance(loaded, dict):
+                return cast(dict[str, Any], loaded)
+            return None
+        except (json.JSONDecodeError, TypeError):
+            return None
 
 
 """
@@ -75,25 +90,25 @@ class ToolCall(BaseModel):
 """
 
 
-class ToolInput(BaseModel):
+class ToolInput(PrettyModel):
     tools: list[ToolDefinition] = []
 
 
-class ToolResult(BaseModel):
+class ToolResult(PrettyModel):
     tool_call: ToolCall
     result: Any
 
 
-class TextInput(BaseModel):
+class TextInput(PrettyModel):
     text: str
 
 
-class RawResponse(BaseModel):
+class RawResponse(PrettyModel):
     # used to store a received response
     response: Any
 
 
-class RawInput(BaseModel):
+class RawInput(PrettyModel):
     # used to pass in anything provider specific (e.g. a mock conversation)
     input: Any
 

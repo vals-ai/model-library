@@ -7,6 +7,7 @@ base-config:
     tools: true
     batch: true
     temperature: true
+    output_schema: true
   metadata:
     available_as_evaluator: false
     available_for_everyone: true
@@ -34,6 +35,23 @@ gpt-5-models:
       max_tokens: 128_000
       training_cutoff: "2024-09"
       reasoning_model: true
+
+  openai/gpt-5.3-codex:
+    label: GPT 5.3 Codex
+    description: GPT-5.3-Codex is OpenAI's frontier agentic coding model designed for long-running, detailed software engineering tasks.
+    release_date: 2026-02-24
+    properties:
+      context_window: 400_000
+    metadata:
+      available_for_everyone: false
+    default_parameters:
+      reasoning_effort: "xhigh"
+    costs_per_million_token:
+      input: 1.75
+      output: 14
+      cache:
+        read: 0.175
+        read_discount: 1.0
 
   openai/gpt-5.2-codex:
     label: GPT 5.2 Codex
@@ -398,6 +416,7 @@ deep-research-models:
       files: true
       tools: true
       temperature: false
+      output_schema: false
     properties:
       context_window: 200_000
       max_tokens: 100_000
@@ -637,6 +656,7 @@ gpt-4o-models:
     release_date: 2024-05-13
     supports:
       images: true
+      output_schema: false
     metadata:
       available_for_everyone: false
     costs_per_million_token:
@@ -696,6 +716,7 @@ gpt-4-models:
     documentation_url: https://platform.openai.com/docs/models#gpt-4-turbo-and-gpt-4
     supports:
       temperature: true
+      output_schema: false
     metadata:
       available_for_everyone: false
       deprecated: true
@@ -806,6 +827,7 @@ gpt-3.5-models:
     documentation_url: https://platform.openai.com/docs/models#gpt-3-5-turbo
     supports:
       temperature: true
+      output_schema: false
     metadata:
       available_for_everyone: false
       deprecated: true

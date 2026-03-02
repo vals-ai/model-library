@@ -67,7 +67,8 @@ tag_regex = "^v(?P<version>.*)$"
 exclude = [
   "model_library/config",
   ".*",
-  "tests/**"
+  "tests/**",
+  "build/**",
 ]
 
 [tool.basedpyright]
@@ -75,6 +76,7 @@ exclude = [
   "model_library/config",
   ".*",
   "tests/**",
+  "build/**",
 ]
 typeCheckingMode = "strict"
 reportExplicitAny = false

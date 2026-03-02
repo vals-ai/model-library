@@ -71,6 +71,9 @@ llama-models:
     supports:
       tools: true
       images: true
+    metadata:
+      deprecated: false
+    
 
   together/meta-llama/Llama-4-Scout-17B-16E-Instruct:
     label: Llama 4 Scout

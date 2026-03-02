@@ -5,6 +5,7 @@ from typing import Any, Literal, Sequence
 from ai21 import AsyncAI21Client
 from ai21.models.chat import AssistantMessage, ChatMessage, ToolMessage
 from ai21.models.chat.chat_completion_response import ChatCompletionResponse
+from pydantic import BaseModel
 from typing_extensions import override
 
 from model_library import model_library_settings
@@ -162,6 +163,7 @@ class AI21LabsModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         messages: list[ChatMessage] = []
@@ -194,9 +196,12 @@ class AI21LabsModel(LLM):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
-        body = await self.build_body(input, tools=tools, **kwargs)
+        body = await self.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
         response: ChatCompletionResponse = (
             await self.get_client().chat.completions.create(**body, stream=False)  # pyright: ignore[reportAny, reportUnknownMemberType]
@@ -218,6 +223,9 @@ class AI21LabsModel(LLM):
                     args=tool_call.function.arguments,
                 )
             )
+
+        if not choice.message.content and not tool_calls:
+            raise ModelNoOutputError(str({"finish_reason": choice.finish_reason}))
 
         output = QueryResult(
             output_text=choice.message.content,

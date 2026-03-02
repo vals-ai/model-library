@@ -6,6 +6,7 @@ base-config:
     files: true
     tools: true
     temperature: true
+    output_schema: true
   metadata:
     available_for_everyone: true
     available_as_evaluator: false
@@ -50,6 +51,8 @@ claude-4-models:
     default_parameters:
       temperature: 1
       compute_effort: "max"
+    metadata:
+      available_as_evaluator: true
 
 
   anthropic/claude-opus-4-6:
@@ -73,6 +76,8 @@ claude-4-models:
       - anthropic/claude-opus-4-6-thinking:
           properties:
             reasoning_model: true
+    metadata:
+      available_as_evaluator: true
 
   anthropic/claude-opus-4-5-20251101:
     label: Claude Opus 4.5 (Nonthinking)
@@ -100,6 +105,8 @@ claude-4-models:
     description: Advanced model for specialized complex
       tasks with superior reasoning and 200K context window.
     release_date: 2025-08-05
+    supports:
+      output_schema: false
     properties:
       context_window: 200_000
       max_tokens: 32_000
@@ -122,6 +129,8 @@ claude-4-models:
     description: Previous flagship for advanced, specialized
       reasoning and technical agent applications.
     release_date: 2025-05-22
+    supports:
+      output_schema: false
     properties:
       context_window: 200_000
       max_tokens: 32_000
@@ -174,6 +183,8 @@ claude-4-models:
     description: Balanced high-performance AI for coding,
       agents, and production workloads, with extended context and reasoning.
     release_date: 2025-05-22
+    supports:
+      output_schema: false
     properties:
       context_window: 200_000
       max_tokens: 64_000
@@ -221,6 +232,8 @@ claude-4-models:
 
 claude-3-7-models:
   base-config:
+    supports:
+      output_schema: false
     metadata:
       deprecated: true
 
@@ -246,6 +259,8 @@ claude-3-7-models:
 
 claude-3-5-models:
   base-config:
+    supports:
+      output_schema: false
     metadata:
       deprecated: true
 
@@ -309,6 +324,8 @@ claude-3-5-models:
 
 claude-3-models:
   base-config:
+    supports:
+      output_schema: false
     metadata:
       deprecated: true
 
@@ -374,6 +391,7 @@ claude-2-models:
   base-config:
     supports:
       images: false
+      output_schema: false
     metadata:
       available_for_everyone: false
       deprecated: true

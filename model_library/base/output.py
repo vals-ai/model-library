@@ -11,7 +11,7 @@ from typing_extensions import override
 
 from model_library.base.input import InputItem, ToolCall
 from model_library.base.utils import add_optional
-from model_library.utils import truncate_str
+from model_library.utils import PrettyModel, truncate_str
 
 
 class FinishReason(str, Enum):
@@ -45,12 +45,12 @@ class FinishReason(str, Enum):
     """The finish reason is unknown or not recognized."""
 
 
-class FinishReasonInfo(BaseModel):
+class FinishReasonInfo(PrettyModel):
     reason: FinishReason
     raw: str | None
 
 
-class Citation(BaseModel):
+class Citation(PrettyModel):
     type: str | None = None
     title: str | None = None
     url: str | None = None
@@ -61,17 +61,12 @@ class Citation(BaseModel):
     index: int | None = None
     container_id: str | None = None
 
-    @override
-    def __repr__(self):
-        attrs = vars(self).copy()
-        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2)}\n)"
 
-
-class QueryResultExtras(BaseModel):
+class QueryResultExtras(PrettyModel):
     citations: list[Citation] = Field(default_factory=list)
 
 
-class QueryResultCost(BaseModel):
+class QueryResultCost(PrettyModel):
     """
     Cost information for a query
     Includes total cost and a structured breakdown.
@@ -155,7 +150,7 @@ class QueryResultCost(BaseModel):
         )
 
 
-class RateLimit(BaseModel):
+class RateLimit(PrettyModel):
     """Rate limit information"""
 
     request_limit: int | None = None
@@ -197,15 +192,18 @@ class RateLimit(BaseModel):
         return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
 
 
-class QueryResultMetadata(BaseModel):
-    """
-    Metadata for a query: token usage and timing.
-
-    """
+class QueryResultMetadata(PrettyModel):
+    """Metadata for a query: token usage and timing"""
 
     cost: QueryResultCost | None = None  # set post query
-    duration_seconds: float | None = None  # set post query
+    duration_seconds: float | None = None  # set post query; rounded to ms
     in_tokens: int = 0
+
+    @field_validator("duration_seconds", mode="before")
+    @classmethod
+    def _round_duration(cls, v: float | None) -> float | None:
+        return round(v, 3) if v is not None else None
+
     out_tokens: int = 0
     reasoning_tokens: int | None = None
     cache_read_tokens: int | None = None
@@ -263,19 +261,15 @@ class QueryResultMetadata(BaseModel):
             cost=cast(QueryResultCost | None, add_optional(self.cost, other.cost)),
         )
 
-    @override
-    def __repr__(self):
-        attrs = vars(self).copy()
-        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
 
-
-class QueryResult(BaseModel):
+class QueryResult(PrettyModel):
     """
     Result of a query
     Contains the text, reasoning, metadata, tool calls, and history
     """
 
     output_text: str | None = None
+    output_parsed: dict[str, Any] | BaseModel | None = None
     reasoning: str | None = None
     finish_reason: FinishReasonInfo = Field(
         default_factory=lambda: FinishReasonInfo(reason=FinishReason.UNKNOWN, raw=None)

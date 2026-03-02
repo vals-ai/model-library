@@ -4,10 +4,10 @@ import logging
 import time
 from typing import Any, Literal, Sequence, cast
 
-from anthropic import APIConnectionError, AsyncAnthropic
+from anthropic import APIConnectionError, AsyncAnthropic, transform_schema
 from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
 from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
-from pydantic import SecretStr
+from pydantic import BaseModel, SecretStr
 from typing_extensions import override
 
 from model_library import model_library_settings
@@ -41,6 +41,7 @@ from model_library.base import (
 from model_library.exceptions import (
     ImmediateRetryException,
     MaxOutputTokensExceededError,
+    ModelNoOutputError,
     NoMatchingToolCallError,
 )
 from model_library.model_utils import get_default_budget_tokens
@@ -92,6 +93,7 @@ class AnthropicBatchMixin(LLMBatchMixin):
         self,
         custom_id: str,
         input: Sequence[InputItem],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         """Create a single batch request in Anthropic's format.
@@ -100,7 +102,9 @@ class AnthropicBatchMixin(LLMBatchMixin):
         """
         # Build the message body using the parent model's build_body method
         tools = cast(list[ToolDefinition], kwargs.pop("tools", []))
-        body = await self._root.build_body(input, tools=tools, **kwargs)
+        body = await self._root.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
         return {
             "custom_id": custom_id,
@@ -558,6 +562,7 @@ class AnthropicModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
@@ -603,6 +608,15 @@ class AnthropicModel(LLM):
             if self.temperature is not None:
                 body["temperature"] = self.temperature
 
+        if output_schema is not None:
+            schema = transform_schema(output_schema)
+            output_config = body.get("output_config", {})
+            output_config["format"] = {
+                "type": "json_schema",
+                "schema": schema,
+            }
+            body["output_config"] = output_config
+
         parsed_tools = await self.parse_tools(tools)
         if parsed_tools:
             if "system" not in body:
@@ -620,14 +634,21 @@ class AnthropicModel(LLM):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
         if self.delegate:
             return await self.delegate_query(
-                input, tools=tools, query_logger=query_logger, **kwargs
+                input,
+                tools=tools,
+                query_logger=query_logger,
+                output_schema=output_schema,
+                **kwargs,
             )
 
-        body = await self.build_body(input, tools=tools, **kwargs)
+        body = await self.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
         client = self.get_client()
 
@@ -677,6 +698,11 @@ class AnthropicModel(LLM):
 
         if message.stop_reason == "max_tokens" and not text and not reasoning:
             raise MaxOutputTokensExceededError()
+
+        if not text and not reasoning and not tool_calls:
+            raise ModelNoOutputError(
+                str({"stop_reason": message.stop_reason, "message_id": message.id})
+            )
 
         return QueryResult(
             output_text=text,
@@ -743,7 +769,9 @@ class AnthropicModel(LLM):
             if not input:
                 return 0
 
-            body = await self.build_body(input, tools=tools, **kwargs)
+            body = await self.build_body(
+                input, tools=tools, output_schema=None, **kwargs
+            )
 
             # Remove fields not supported by count_tokens endpoint
             body.pop("max_tokens", None)

@@ -27,7 +27,8 @@ from google.genai.types import (
     UploadFileConfig,
 )
 from google.oauth2 import service_account
-from typing_extensions import override
+from pydantic import BaseModel
+from typing_extensions import deprecated, override
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -339,6 +340,7 @@ class GoogleModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
         generation_config = GenerateContentConfig(
@@ -369,6 +371,15 @@ class GoogleModel(LLM):
         if tools:
             generation_config.tools = cast(ToolListUnion, await self.parse_tools(tools))
 
+        if output_schema is not None:
+            if isinstance(output_schema, dict):
+                # response_schema doesn't support additionalProperties in JSON schema
+                # so we use response_json_schema instead of response_schema
+                generation_config.response_json_schema = output_schema
+            else:
+                generation_config.response_schema = output_schema
+            generation_config.response_mime_type = "application/json"
+
         generation_config = generation_config.model_copy(update=kwargs)
 
         body: dict[str, Any] = {
@@ -385,9 +396,12 @@ class GoogleModel(LLM):
         *,
         tools: list[ToolDefinition],
         query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
-        body: dict[str, Any] = await self.build_body(input, tools=tools, **kwargs)
+        body: dict[str, Any] = await self.build_body(
+            input, tools=tools, output_schema=output_schema, **kwargs
+        )
 
         text: str = ""
         reasoning: str = ""
@@ -458,7 +472,7 @@ class GoogleModel(LLM):
 
         if not text and not reasoning and not tool_calls:
             self.logger.error(f"Empty response. Chunks: {chunks}")
-            raise ModelNoOutputError("Model returned empty response")
+            raise ModelNoOutputError(str({"finish_reason": finish_reason}))
 
         result = QueryResult(
             output_text=text,
@@ -552,15 +566,19 @@ class GoogleModel(LLM):
 
         return await super()._calculate_cost(metadata, batch, bill_reasoning=True)
 
+    @deprecated("Use query(output_schema=...) instead")
     @override
     async def query_json(
         self,
         input: Sequence[InputItem],
         pydantic_model: type[PydanticT],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> PydanticT:
         # Create the request body with JSON schema
-        body: dict[str, Any] = await self.build_body(input, tools=[], **kwargs)
+        body: dict[str, Any] = await self.build_body(
+            input, tools=[], output_schema=output_schema, **kwargs
+        )
 
         # Get the JSON schema from the Pydantic model
         json_schema = pydantic_model.model_json_schema()

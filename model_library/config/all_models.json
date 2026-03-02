@@ -1,4 +1,100 @@
 {
+    "openai/gpt-5.3-codex": {
+        "company": "OpenAI",
+        "label": "GPT 5.3 Codex",
+        "description": "GPT-5.3-Codex is OpenAI's frontier agentic coding model designed for long-running, detailed software engineering tasks.",
+        "release_date": "2026-02-24",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 400000,
+            "max_tokens": 128000,
+            "training_cutoff": "2024-09",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.75,
+            "output": 14.0,
+            "cache": {
+                "read": 0.175,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-5.3-codex",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.3-codex",
+        "slug": "openai_gpt-5.3-codex"
+    },
+    "alibaba/qwen3.5-flash": {
+        "company": "Alibaba",
+        "label": "Qwen 3.5 Flash",
+        "description": "Fast, cost-effective Qwen 3.5 model with thinking enabled by default; ideal for simple tasks. Supports context cache and batch at half price.",
+        "release_date": "2026-02-23",
+        "open_source": true,
+        "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/models",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.4,
+            "cache": {
+                "read": 0.02,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0
+        },
+        "provider_endpoint": "qwen3.5-flash",
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3.5-flash",
+        "slug": "alibaba_qwen3.5-flash"
+    },
     "google/gemini-3.1-pro-preview": {
         "company": "Google",
         "label": "Gemini 3.1 Pro Preview (02/26)",
@@ -18,13 +114,14 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
             "internal_only": false,
-            "available_as_evaluator": false,
+            "available_as_evaluator": true,
             "ignored_for_cost": false
         },
         "provider_properties": {},
@@ -79,13 +176,14 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
             "internal_only": false,
-            "available_as_evaluator": false,
+            "available_as_evaluator": true,
             "ignored_for_cost": false
         },
         "provider_properties": {
@@ -464,13 +562,14 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
             "internal_only": false,
-            "available_as_evaluator": false,
+            "available_as_evaluator": true,
             "ignored_for_cost": false
         },
         "provider_properties": {
@@ -519,13 +618,14 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
             "available_for_everyone": true,
             "internal_only": false,
-            "available_as_evaluator": false,
+            "available_as_evaluator": true,
             "ignored_for_cost": false
         },
         "provider_properties": {
@@ -959,7 +1059,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1009,7 +1110,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1056,7 +1158,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1101,7 +1204,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1151,7 +1255,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1203,7 +1308,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1333,7 +1439,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1535,7 +1642,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1589,7 +1697,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1754,7 +1863,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1815,7 +1925,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1865,7 +1976,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -1915,7 +2027,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -2196,7 +2309,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -2247,7 +2361,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -2502,7 +2617,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -2566,7 +2682,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -2639,7 +2756,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -2690,7 +2808,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -2749,7 +2868,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -2800,7 +2920,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -2858,7 +2979,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -3018,7 +3140,7 @@
         },
         "supports": {
             "images": true,
-            "files": false,
+            "files": true,
             "temperature": true,
             "tools": true
         },
@@ -3069,7 +3191,7 @@
         },
         "supports": {
             "images": true,
-            "files": false,
+            "files": true,
             "temperature": true,
             "tools": true
         },
@@ -3123,7 +3245,7 @@
         },
         "supports": {
             "images": true,
-            "files": false,
+            "files": true,
             "temperature": true,
             "tools": true
         },
@@ -3174,7 +3296,7 @@
         },
         "supports": {
             "images": true,
-            "files": false,
+            "files": true,
             "temperature": true,
             "tools": true
         },
@@ -3227,7 +3349,7 @@
         },
         "supports": {
             "images": true,
-            "files": false,
+            "files": true,
             "temperature": true,
             "tools": true
         },
@@ -3633,7 +3755,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -3685,7 +3808,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -3737,7 +3861,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -3789,7 +3914,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -3839,7 +3965,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -3889,7 +4016,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -4117,7 +4245,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -4168,7 +4297,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -4431,7 +4561,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -4482,7 +4613,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -4541,7 +4673,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -4602,7 +4735,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -4653,7 +4787,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -4756,7 +4891,7 @@
         },
         "supports": {
             "images": true,
-            "files": false,
+            "files": true,
             "temperature": true,
             "tools": true
         },
@@ -4807,7 +4942,7 @@
         },
         "supports": {
             "images": true,
-            "files": false,
+            "files": true,
             "temperature": true,
             "tools": true
         },
@@ -4861,7 +4996,7 @@
         },
         "supports": {
             "images": true,
-            "files": false,
+            "files": true,
             "temperature": true,
             "tools": true
         },
@@ -4993,7 +5128,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -5045,7 +5181,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -5097,7 +5234,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -5149,7 +5287,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -5202,7 +5341,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -5253,7 +5393,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -5311,7 +5452,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -5401,7 +5543,8 @@
             "files": true,
             "batch": false,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -5673,7 +5816,8 @@
             "files": true,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -5737,7 +5881,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -5812,7 +5957,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -5863,7 +6009,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -5923,7 +6070,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -5974,7 +6122,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -6073,7 +6222,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -6172,7 +6322,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -6223,7 +6374,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -6281,7 +6433,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -6333,7 +6486,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -6385,7 +6539,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -6435,7 +6590,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -6485,7 +6641,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -6538,7 +6695,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -6591,7 +6749,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -6644,7 +6803,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -6695,7 +6855,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -6746,7 +6907,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -7623,7 +7785,7 @@
             "tools": true
         },
         "metadata": {
-            "deprecated": true,
+            "deprecated": false,
             "available_for_everyone": true,
             "internal_only": false,
             "available_as_evaluator": false,
@@ -7668,7 +7830,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -7809,7 +7972,8 @@
             "files": true,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -7988,7 +8152,8 @@
             "files": false,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -8231,7 +8396,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -8280,7 +8446,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -8330,7 +8497,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -8436,7 +8604,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -8484,7 +8653,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -8532,7 +8702,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -8584,7 +8755,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -8634,7 +8806,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -8685,7 +8858,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -8962,7 +9136,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -9015,7 +9190,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -9065,7 +9241,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -9429,7 +9606,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -9699,7 +9877,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -9752,7 +9931,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -9883,7 +10063,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10014,7 +10195,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10062,7 +10244,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10110,7 +10293,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10161,7 +10345,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10211,7 +10396,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10264,7 +10450,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10316,7 +10503,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10364,7 +10552,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10412,7 +10601,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10463,7 +10653,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -10550,7 +10741,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -10602,7 +10794,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -10652,7 +10845,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -10705,7 +10899,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -10755,7 +10950,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -10805,7 +11001,8 @@
             "files": false,
             "batch": true,
             "temperature": false,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": true,
@@ -11095,7 +11292,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -11146,7 +11344,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -11473,7 +11672,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -11526,7 +11726,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -11577,7 +11778,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": true
         },
         "metadata": {
             "deprecated": false,
@@ -11627,7 +11829,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -11675,7 +11878,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -11727,7 +11931,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -11775,7 +11980,8 @@
             "files": true,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -11822,7 +12028,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": false,
@@ -13466,7 +13673,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -13514,7 +13722,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -13562,7 +13771,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -13687,7 +13897,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -13737,7 +13948,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -13785,7 +13997,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -13835,7 +14048,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -13888,7 +14102,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -13938,7 +14153,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -13990,7 +14206,8 @@
             "images": true,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -14456,7 +14673,8 @@
             "files": false,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -14504,7 +14722,8 @@
             "files": false,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -14552,7 +14771,8 @@
             "files": false,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -14604,7 +14824,8 @@
             "files": false,
             "batch": false,
             "temperature": false,
-            "tools": false
+            "tools": false,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -14651,7 +14872,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -14697,7 +14919,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -16164,7 +16387,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -16394,7 +16618,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -16532,7 +16757,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -16578,7 +16804,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -16626,7 +16853,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -16672,7 +16900,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -16718,7 +16947,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -17033,7 +17263,8 @@
             "files": false,
             "batch": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -17077,7 +17308,8 @@
             "images": false,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -17126,7 +17358,8 @@
             "images": false,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -17173,7 +17406,8 @@
             "images": false,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -17222,7 +17456,8 @@
             "images": false,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -17269,7 +17504,8 @@
             "images": false,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,
@@ -17316,7 +17552,8 @@
             "images": false,
             "files": true,
             "temperature": true,
-            "tools": true
+            "tools": true,
+            "output_schema": false
         },
         "metadata": {
             "deprecated": true,

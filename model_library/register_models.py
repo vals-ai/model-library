@@ -36,6 +36,7 @@ class Supports(BaseModel):
     batch: bool | None = None
     temperature: bool | None = None
     tools: bool | None = None
+    output_schema: bool | None = None
 
 
 class Metadata(BaseModel):
