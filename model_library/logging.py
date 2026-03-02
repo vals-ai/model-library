@@ -18,17 +18,20 @@ def set_logging(
         enable (bool): Enable or disable logging.
         handler (logging.Handler, optional): A custom logging handler. Defaults to RichHandler.
     """
-    if enable:
-        _llm_logger.setLevel(level)
-    else:
+    if not enable:
         _llm_logger.setLevel(logging.CRITICAL)
-
-    if not enable or _llm_logger.hasHandlers():
         return
 
-    if handler is None:
+    _llm_logger.setLevel(level)
+
+    if handler is not None:
+        for existing_handler in list(_llm_logger.handlers):
+            _llm_logger.removeHandler(existing_handler)
+    elif _llm_logger.hasHandlers():
+        return
+    else:
         console = Console()
-        handler = RichHandler(console=console, markup=True, show_time=False)
+        handler = RichHandler(console=console, markup=False, show_time=False)
 
     handler.setFormatter(logging.Formatter("%(name)s - %(levelname)s - %(message)s"))
     _llm_logger.addHandler(handler)
