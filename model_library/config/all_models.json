@@ -3,7 +3,7 @@
         "company": "Google",
         "label": "Gemini 3 Flash Lite Preview",
         "description": "Google's lightweight model, optimized for speed and cost.",
-        "release_date": "2026-03-26",
+        "release_date": "2026-03-03",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
         "properties": {

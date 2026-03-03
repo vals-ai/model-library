@@ -88,7 +88,7 @@ gemini-3-models:
   google/gemini-3.1-flash-lite-preview:
     label: Gemini 3 Flash Lite Preview
     description: Google's lightweight model, optimized for speed and cost.
-    release_date: 2026-03-26
+    release_date: 2026-03-03
     metadata:
       available_for_everyone: true
     properties:
