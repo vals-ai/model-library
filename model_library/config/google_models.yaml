@@ -84,6 +84,24 @@ gemini-3-models:
       reasoning_effort: "high"
     metadata:
       available_as_evaluator: true
+
+  google/gemini-3.1-flash-lite-preview:
+    label: Gemini 3 Flash Lite Preview
+    description: Google's lightweight model, optimized for speed and cost.
+    release_date: 2026-03-26
+    metadata:
+      available_for_everyone: true
+    properties:
+      context_window: 1048576
+      max_tokens: 65536
+      reasoning_model: true
+    costs_per_million_token: # guessing based on 2.5 flash lite
+      input: 0.25
+      output: 1.50
+    default_parameters:
+      temperature: 1
+      reasoning_effort: "high"
+
   google/gemini-3-flash-preview:
     label: Gemini 3 Flash (12/25)
     description: Google's newest budget workhorse model

@@ -1,4 +1,56 @@
 {
+    "google/gemini-3.1-flash-lite-preview": {
+        "company": "Google",
+        "label": "Gemini 3 Flash Lite Preview",
+        "description": "Google's lightweight model, optimized for speed and cost.",
+        "release_date": "2026-03-26",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.25,
+            "output": 1.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-3.1-flash-lite-preview",
+        "provider_name": "google",
+        "full_key": "google/gemini-3.1-flash-lite-preview",
+        "slug": "google_gemini-3.1-flash-lite-preview"
+    },
     "openai/gpt-5.3-codex": {
         "company": "OpenAI",
         "label": "GPT 5.3 Codex",
