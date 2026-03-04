@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import time
+from collections.abc import Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Protocol
@@ -7,18 +10,17 @@ from pydantic import BaseModel
 from redis.asyncio import Redis
 from redis.asyncio.lock import Lock
 
-
 # ── Run identification ──────────────────────────────────────────────
 #
 # RunContext propagates run identity from benchmark_queue into TokenRetrier.
 # benchmark_queue sets it before yield, resets in finally. When unset,
-# TokenRetrier falls back to dynamic_estimate_instance_id (constructor param).
+# TokenRetrier falls back to instance_id (constructor param, always required).
 #
 # Fields:
 #   run_id    — benchmark run ID (queued) or instance_id (fallback)
 #   is_queued — True inside benchmark_queue context manager. Controls:
-#     - Straggler detection: only queued runs check the Redis benchmark_run
-#       key. If it differs from run_id, the run is demoted to MAX_PRIORITY.
+#     - Straggler detection: only queued runs check the queue head via lindex.
+#       If it differs from run_id, the run is demoted to MAX_PRIORITY.
 #     - Per-run dispatched counter: only incremented for queued runs.
 #     Does NOT affect: dynamic estimates, inflight tracking, priority queues,
 #     or token deduction — those work identically for all runs.
@@ -59,14 +61,10 @@ class AsyncRedisClient(Protocol):
     async def delete(self, *names: str) -> int: ...
     async def expire(self, name: str, time: int) -> bool: ...
     async def incr(self, name: str) -> int: ...
-    async def decr(self, name: str) -> int: ...
-    async def incrby(self, name: str, amount: int) -> int: ...
-    async def decrby(self, name: str, amount: int) -> int: ...
     async def lpos(self, name: str, value: str) -> int | None: ...
     async def rpush(self, name: str, *values: str) -> int: ...
     async def lrem(self, name: str, count: int, value: str) -> int: ...
     async def lindex(self, name: str, index: int) -> str | None: ...
-    async def llen(self, name: str) -> int: ...
     async def lrange(self, name: str, start: int, end: int) -> list[str]: ...
     async def blpop(
         self, keys: list[str], timeout: int | float | None = 0
@@ -80,9 +78,14 @@ class AsyncRedisClient(Protocol):
         self, name: str, min: float | str, max: float | str, withscores: bool = False
     ) -> list[str]: ...
     async def sadd(self, name: str, *values: str) -> int: ...
+    async def srem(self, name: str, *values: str) -> int: ...
     async def scard(self, name: str) -> int: ...
+    async def smembers(self, name: str) -> set[str]: ...
     async def zcard(self, name: str) -> int: ...
-    async def hset(self, name: str, mapping: dict[str, str | int | float]) -> int: ...
+    async def hexists(self, name: str, key: str) -> bool: ...
+    async def hset(
+        self, name: str, mapping: Mapping[str, str | int | float]
+    ) -> int: ...
     async def hgetall(self, name: str) -> dict[str, str]: ...
     async def keys(self, pattern: str) -> list[str]: ...
     async def eval(
@@ -93,43 +96,7 @@ class AsyncRedisClient(Protocol):
 
 KEY_PREFIX = "model_library"
 
-# ── Redis key reference ─────────────────────────────────────────────
-#
-# All keys are prefixed with KEY_PREFIX ("model_library").
-# {P} = provider.model_name (e.g. "openai.gpt-4")
-# {K} = sha256 hash of the API key
-# {R} = request ID
-# {N} = priority level (int, -5 to 5)
-# {RUN} = benchmark run ID
-# {INST} = dynamic estimate run_id (benchmark run_id or instance_id fallback)
-#
-# Token retry
-#   model_library:{P}:{K}:tokens                         STRING  remaining token count
-#   model_library:{P}:{K}:tokens:limit                   STRING  token limit
-#   model_library:{P}:{K}:tokens:version                 STRING  loop version UUID (stale loop detection)
-#   model_library:{P}:{K}:tokens:config                  HASH    init config (limit, limit_refresh_seconds, tokens_per_second, version, initialized_at)
-#   model_library:{P}:{K}:tokens:lock                    LOCK    token deduction lock
-#   model_library:{P}:{K}:tokens:task:refill              STRING  refill loop alive (TTL-based)
-#   model_library:{P}:{K}:tokens:task:correction          STRING  correction loop alive (TTL-based)
-#   model_library:{P}:{K}:tokens:dynamic_estimate:{INST}  STRING  EMA ratio for dynamic token estimation
-#
-# Inflight tracking
-#   model_library:{P}:{K}:tokens:inflight                ZSET    inflight requests (member=request_id, score=timestamp)
-#   model_library:{P}:{K}:tokens:inflight:{R}            HASH    per-request metadata (run_id, priority at queue entry; full data at dispatch)
-#   model_library:{P}:{K}:tokens:inflight:dispatched     SET     all dispatched request IDs (for early release counting)
-#   model_library:{P}:{K}:tokens:inflight:benchmark_run  STRING  active benchmark run ID
-#
-# Priority queues
-#   model_library:{P}:{K}:priority:{N}                   ZSET    requests waiting at priority N (member=request_id, score=timestamp)
-#
-# Benchmark queue
-#   model_library:{P}:{K}:benchmark:queue                LIST    FIFO run queue (values=run_id)
-#   model_library:{P}:{K}:benchmark:queue:evict          LOCK    eviction lock
-#   model_library:{P}:{K}:benchmark:alive:{RUN}          STRING  heartbeat (TTL-based)
-#   model_library:{P}:{K}:benchmark:notify:{RUN}         LIST    notification channel (blpop)
-#   model_library:{P}:{K}:benchmark:run:{RUN}            HASH    per-run metadata (total_requests, slot_acquired, enqueued_at, slot_acquired_at)
-#   model_library:{P}:{K}:benchmark:run:{RUN}:dispatched STRING  per-run dispatched counter (incr)
-#
+# Redis key schema: see docs/token-retry.md
 
 redis_client: AsyncRedisClient = None  # pyright: ignore[reportAssignmentType]
 
@@ -179,7 +146,7 @@ async def cleanup_all_keys() -> int:
 
 
 class InflightRequest(BaseModel):
-    request_id: str
+    question_id: str
     elapsed_seconds: float
     estimate_input: int | None
     estimate_output: int | None
@@ -212,7 +179,6 @@ class TokenRetryStatus(BaseModel):
     priorities: dict[str, int]
     refill_alive: bool
     correction_alive: bool
-    dispatched_count: int
     active_benchmark_run: str | None
     dynamic_estimates: list[DynamicEstimate]
 
@@ -230,6 +196,8 @@ class QueueEntry(BaseModel):
     slot_acquired: bool
     enqueued_at: float | None
     slot_acquired_at: float | None
+    popped_at: float | None
+    completed_at: float | None
     popped: bool = False
 
 
@@ -264,7 +232,11 @@ async def get_status() -> Status:
             if r.run_id:
                 inflight_by_run[r.run_id] = inflight_by_run.get(r.run_id, 0) + 1
 
-    queue_statuses = await _get_queue_status(inflight_by_run, queued_by_run)
+    # derive base keys from token keys so popped detection works even when queue list is gone
+    token_base_keys = [t.token_key.removesuffix(":tokens") for t in token_retry]
+    queue_statuses = await _get_queue_status(
+        inflight_by_run, queued_by_run, token_base_keys
+    )
 
     # group by model key (strip prefix + suffixes for clean display key)
     prefix_and_colon = f"{KEY_PREFIX}:"
@@ -303,7 +275,6 @@ async def _get_token_retry_status() -> tuple[
     queued_by_run: dict[str, dict[str, int]] = {}  # run_id -> {priority: count}
     for token_key in token_keys:
         limit_key = f"{token_key}:limit"
-        inflight_key = f"{token_key}:inflight"
 
         tokens_raw = await redis_client.get(token_key)
         tokens_remaining = int(tokens_raw) if tokens_raw else 0
@@ -328,36 +299,39 @@ async def _get_token_retry_status() -> tuple[
         )
 
         now = time.time()
-        inflight_entries = await redis_client.zrangebyscore(
-            inflight_key, "-inf", "+inf", withscores=True
-        )
 
-        # fetch per-request metadata hashes
+        # fetch inflight from per-run ZSETs via active_runs SET
+        active_run_ids = await redis_client.smembers(f"{token_key}:active_runs")
         inflight: list[InflightRequest] = []
-        for member, score in inflight_entries:
-            meta = await redis_client.hgetall(f"{inflight_key}:{member}")
-            run_id_val = meta.get("run_id", "") or meta.get("benchmark_run", "")
-            inflight.append(
-                InflightRequest(
-                    request_id=member,
-                    elapsed_seconds=round(now - float(score), 1),
-                    estimate_input=int(meta["estimate_input"])
-                    if "estimate_input" in meta
-                    else None,
-                    estimate_output=int(meta["estimate_output"])
-                    if "estimate_output" in meta
-                    else None,
-                    estimate_total=int(meta["estimate_total"])
-                    if "estimate_total" in meta
-                    else None,
-                    priority=int(meta["priority"]) if "priority" in meta else None,
-                    attempts=int(meta["attempts"]) if "attempts" in meta else None,
-                    run_id=run_id_val if run_id_val else None,
-                    dispatched_at=float(meta["dispatched_at"])
-                    if "dispatched_at" in meta
-                    else None,
-                )
+        for rid in active_run_ids:
+            run_inflight_key = f"{token_key}:run:{rid}:inflight"
+            entries = await redis_client.zrangebyscore(
+                run_inflight_key, "-inf", "+inf", withscores=True
             )
+            for member, score in entries:
+                meta = await redis_client.hgetall(f"{token_key}:inflight:{member}")
+                run_id_val = meta.get("run_id", "")
+                inflight.append(
+                    InflightRequest(
+                        question_id=member,
+                        elapsed_seconds=round(now - float(score), 1),
+                        estimate_input=int(meta["estimate_input"])
+                        if "estimate_input" in meta
+                        else None,
+                        estimate_output=int(meta["estimate_output"])
+                        if "estimate_output" in meta
+                        else None,
+                        estimate_total=int(meta["estimate_total"])
+                        if "estimate_total" in meta
+                        else None,
+                        priority=int(meta["priority"]) if "priority" in meta else None,
+                        attempts=int(meta["attempts"]) if "attempts" in meta else None,
+                        run_id=run_id_val if run_id_val else None,
+                        dispatched_at=float(meta["dispatched_at"])
+                        if "dispatched_at" in meta
+                        else None,
+                    )
+                )
         inflight.sort(key=lambda r: r.elapsed_seconds, reverse=True)
 
         base = token_key.removesuffix(":tokens")
@@ -369,7 +343,7 @@ async def _get_token_retry_status() -> tuple[
             )
             priorities[str(priority)] = len(members)
             for member in members:
-                meta = await redis_client.hgetall(f"{inflight_key}:{member}")
+                meta = await redis_client.hgetall(f"{token_key}:inflight:{member}")
                 rid = meta.get("run_id", "")
                 if rid:
                     queued_by_run.setdefault(rid, {})
@@ -378,9 +352,6 @@ async def _get_token_retry_status() -> tuple[
 
         refill_alive = await redis_client.exists(f"{token_key}:task:refill") > 0
         correction_alive = await redis_client.exists(f"{token_key}:task:correction") > 0
-
-        dispatched_count = await redis_client.scard(f"{inflight_key}:dispatched")
-        active_benchmark_run = await redis_client.get(f"{inflight_key}:benchmark_run")
 
         # dynamic estimate ratios
         dynamic_estimate_keys = await redis_client.keys(
@@ -395,6 +366,10 @@ async def _get_token_retry_status() -> tuple[
                     DynamicEstimate(run_id=de_run_id, ratio=float(ratio_raw))
                 )
 
+        # active benchmark run = queue head
+        queue_key = f"{base}:benchmark:queue"
+        active_benchmark_run = await redis_client.lindex(queue_key, 0)
+
         statuses.append(
             TokenRetryStatus(
                 token_key=token_key,
@@ -405,7 +380,6 @@ async def _get_token_retry_status() -> tuple[
                 priorities=priorities,
                 refill_alive=refill_alive,
                 correction_alive=correction_alive,
-                dispatched_count=dispatched_count,
                 active_benchmark_run=active_benchmark_run,
                 dynamic_estimates=dynamic_estimates,
             )
@@ -417,15 +391,17 @@ async def _get_token_retry_status() -> tuple[
 async def _get_queue_status(
     inflight_by_run: dict[str, int],
     queued_by_run: dict[str, dict[str, int]],
+    token_base_keys: list[str] | None = None,
 ) -> list[QueueStatus]:
     queue_keys = sorted(await redis_client.keys(f"{KEY_PREFIX}:*:benchmark:queue"))
+
+    seen_base_keys: set[str] = set()
 
     statuses: list[QueueStatus] = []
     for run_queue_key in queue_keys:
         base_key = run_queue_key.removesuffix(":queue")
+        seen_base_keys.add(base_key)
         run_ids = await redis_client.lrange(run_queue_key, 0, -1)
-
-        queued_run_ids = set(run_ids)
 
         entries: list[QueueEntry] = []
         for i, run_id in enumerate(run_ids):
@@ -438,9 +414,8 @@ async def _get_queue_status(
             meta = await redis_client.hgetall(run_meta_key)
             total_raw = meta.get("total_requests", "0")
 
-            # per-run dispatched counter
-            dispatched_raw = await redis_client.get(f"{run_meta_key}:dispatched")
-            dispatched_count = int(dispatched_raw) if dispatched_raw else 0
+            # per-run dispatched counter (SET of question_ids)
+            dispatched_count = await redis_client.scard(f"{run_meta_key}:dispatched")
 
             entries.append(
                 QueueEntry(
@@ -460,21 +435,47 @@ async def _get_queue_status(
                     slot_acquired_at=float(meta["slot_acquired_at"])
                     if "slot_acquired_at" in meta
                     else None,
+                    popped_at=float(meta["popped_at"]) if "popped_at" in meta else None,
+                    completed_at=float(meta["completed_at"])
+                    if "completed_at" in meta
+                    else None,
                 )
             )
 
-        # popped runs: run_ids with inflight or queued requests but no longer in the queue list
-        # only include if this queue has a metadata hash for the run (scoped by base_key)
-        popped_run_ids = (set(inflight_by_run) | set(queued_by_run)) - queued_run_ids
-        for run_id in sorted(popped_run_ids):
-            run_meta_key = f"{base_key}:run:{run_id}"
-            meta = await redis_client.hgetall(run_meta_key)
-            if not meta:
-                continue  # run doesn't belong to this queue
-            total_raw = meta.get("total_requests", "0")
-            dispatched_raw = await redis_client.get(f"{run_meta_key}:dispatched")
-            dispatched_count = int(dispatched_raw) if dispatched_raw else 0
+        if entries:
+            statuses.append(
+                QueueStatus(
+                    queue_key=run_queue_key,
+                    length=len(run_ids),
+                    entries=entries,
+                )
+            )
 
+    # discover popped/completed runs from metadata hashes (survives queue LIST deletion)
+    covered_run_ids: set[str] = set()
+    for s in statuses:
+        for e in s.entries:
+            covered_run_ids.add(e.run_id)
+
+    all_benchmark_bases = set(seen_base_keys)
+    if token_base_keys:
+        for base_key in token_base_keys:
+            all_benchmark_bases.add(f"{base_key}:benchmark")
+
+    for benchmark_base in all_benchmark_bases:
+        run_meta_keys = await redis_client.keys(f"{benchmark_base}:run:*")
+        entries = list[QueueEntry]()
+        for rmk in sorted(run_meta_keys):
+            if rmk.endswith(":dispatched"):
+                continue
+            run_id = rmk.removeprefix(f"{benchmark_base}:run:")
+            if run_id in covered_run_ids:
+                continue
+            meta = await redis_client.hgetall(rmk)
+            if not meta:
+                continue
+            total_raw = meta.get("total_requests", "0")
+            dispatched_count = await redis_client.scard(f"{rmk}:dispatched")
             entries.append(
                 QueueEntry(
                     run_id=run_id,
@@ -493,17 +494,26 @@ async def _get_queue_status(
                     slot_acquired_at=float(meta["slot_acquired_at"])
                     if "slot_acquired_at" in meta
                     else None,
+                    popped_at=float(meta["popped_at"]) if "popped_at" in meta else None,
+                    completed_at=float(meta["completed_at"])
+                    if "completed_at" in meta
+                    else None,
                     popped=True,
                 )
             )
-
+            covered_run_ids.add(run_id)
         if entries:
-            statuses.append(
-                QueueStatus(
-                    queue_key=run_queue_key,
-                    length=len(run_ids),
-                    entries=entries,
+            queue_key = f"{benchmark_base}:queue"
+            existing = next((s for s in statuses if s.queue_key == queue_key), None)
+            if existing:
+                existing.entries.extend(entries)
+            else:
+                statuses.append(
+                    QueueStatus(
+                        queue_key=queue_key,
+                        length=0,
+                        entries=entries,
+                    )
                 )
-            )
 
     return statuses

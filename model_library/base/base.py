@@ -48,7 +48,7 @@ from model_library.base.utils import (
 )
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
-from model_library.retriers.token import TokenRetrier
+from model_library.retriers.token import TokenRetrier, current_run
 from model_library.utils import PrettyModel, truncate_str
 
 _ = init_serialize_opts
@@ -251,6 +251,7 @@ class LLM(ABC):
         images: list[FileInput] = [],
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         query_logger: logging.Logger | None = None,
+        question_id: str | None = None,
         **kwargs: object,
     ) -> QueryResult:
         """
@@ -297,10 +298,17 @@ class LLM(ABC):
         # join input with history
         input = [*history, *input]
 
-        # unique logger for the query
-        query_id = uuid.uuid4().hex[:14]
+        # resolve identity: run_id groups requests per run, question_id is unique per question
+        run_ctx = current_run.get()
+        run_id = run_ctx.run_id if run_ctx else self.instance_id
+        if not question_id:
+            question_id = uuid.uuid4().hex[:14]  # uuid for non agentic queries
+
+        # is_queued is True if we are in a benchmark queue context
+        is_queued = bool(run_ctx and run_ctx.is_queued)
+
         if not query_logger:
-            query_logger = self.logger.getChild(f"query={query_id}")
+            query_logger = self.logger.getChild(f"query={question_id}")
 
         query_logger.info(
             "Query started:\n" + item_info + tool_info + f"--- kwargs: {short_kwargs}\n"
@@ -334,12 +342,12 @@ class LLM(ABC):
                 retrier = TokenRetrier(
                     logger=query_logger,
                     client_registry_key=self._client_registry_key_model_specific,
-                    request_id=query_id,
+                    run_id=run_id,
+                    question_id=question_id,
+                    is_queued=is_queued,
                     estimate_input_tokens=estimate_input_tokens,
                     estimate_output_tokens=estimate_output_tokens,
-                    dynamic_estimate_instance_id=self.instance_id
-                    if self.token_retry_params.use_dynamic_estimate
-                    else None,
+                    use_dynamic_estimate=self.token_retry_params.use_dynamic_estimate,
                 )
             else:
                 retrier = ExponentialBackoffRetrier(logger=query_logger)

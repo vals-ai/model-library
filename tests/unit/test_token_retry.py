@@ -14,7 +14,7 @@ from model_library.base.output import QueryResult, QueryResultMetadata
 from model_library.exceptions import ImmediateRetryException, RetryException
 from model_library.retriers.base import BaseRetrier
 from model_library.retriers.token import TokenRetrier, set_redis_client
-from model_library.retriers.token.utils import KEY_PREFIX, RunContext, current_run, get_status
+from model_library.retriers.token.utils import KEY_PREFIX, get_status
 
 CLIENT_KEY = ("provider", "model")
 TOKEN_KEY = f"{KEY_PREFIX}:provider:model:tokens"
@@ -45,17 +45,34 @@ def redis():
     return client
 
 
-@pytest.fixture
-def token_retrier():
-    """Helper to create a standard TokenRetrier instance."""
+def _make_retrier(
+    *,
+    run_id: str = "test-instance",
+    question_id: str = "test-qid",
+    is_queued: bool = False,
+    estimate_input_tokens: int = 100,
+    estimate_output_tokens: int = 50,
+    use_dynamic_estimate: bool = True,
+    token_wait_time: float = 1.0,
+) -> TokenRetrier:
+    """Helper to create a TokenRetrier with sensible defaults."""
     return TokenRetrier(
         logger=logging.getLogger("test"),
         client_registry_key=CLIENT_KEY,
-        request_id="test-req",
-        estimate_input_tokens=100,
-        estimate_output_tokens=50,
-        token_wait_time=1.0,
+        run_id=run_id,
+        question_id=question_id,
+        is_queued=is_queued,
+        estimate_input_tokens=estimate_input_tokens,
+        estimate_output_tokens=estimate_output_tokens,
+        use_dynamic_estimate=use_dynamic_estimate,
+        token_wait_time=token_wait_time,
     )
+
+
+@pytest.fixture
+def token_retrier():
+    """Standard non-queued TokenRetrier instance."""
+    return _make_retrier()
 
 
 async def _init_tokens(redis, value: int = 1000, limit: int = 1000):
@@ -90,7 +107,6 @@ async def test_pre_function_waits_for_tokens(redis, token_retrier: TokenRetrier)
     async def bump_tokens(*args, **kwargs):
         await redis.set(TOKEN_KEY, "200")
 
-    mock_asyncio_sleep = asyncio.sleep  # already mocked by fixture
     with patch("asyncio.sleep", new_callable=AsyncMock, side_effect=bump_tokens):
         await token_retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
@@ -466,226 +482,123 @@ async def test_get_status_multiple_models(redis):
     assert keys == {f"{KEY_PREFIX}:anthropic:key2:tokens", f"{KEY_PREFIX}:openai:key1:tokens"}
 
 
-# ── Straggler detection & dispatch tracking ──────────────────────────
+# ── Constructor & identity ───────────────────────────────────────────
 
 
-async def test_initial_priority_is_zero(token_retrier: TokenRetrier):
-    """New requests start at INITIAL_PRIORITY (0), not 1."""
-    assert token_retrier.priority == 0
+async def test_initial_priority_is_zero():
+    """New requests start at INITIAL_PRIORITY (0)."""
+    retrier = _make_retrier()
+    assert retrier.priority == 0
 
 
-async def test_contextvar_sets_run_id():
-    """TokenRetrier reads run_id from contextvar when set."""
-    token = current_run.set(RunContext(run_id="run-42", is_queued=True))
-    try:
-        retrier = TokenRetrier(
-            logger=logging.getLogger("test"),
-            client_registry_key=CLIENT_KEY,
-            request_id="req-1",
-            estimate_input_tokens=100,
-            estimate_output_tokens=50,
-        )
-        assert retrier._run_id == "run-42"
-        assert retrier._is_queued is True
-    finally:
-        current_run.reset(token)
+async def test_run_id_stored():
+    """run_id is stored as _run_id."""
+    retrier = _make_retrier(run_id="run-42", is_queued=True)
+    assert retrier._run_id == "run-42"
+    assert retrier._is_queued is True
 
 
-async def test_contextvar_fallback_to_instance_id():
-    """Without contextvar, _run_id falls back to dynamic_estimate_instance_id."""
-    retrier = TokenRetrier(
-        logger=logging.getLogger("test"),
-        client_registry_key=CLIENT_KEY,
-        request_id="req-1",
-        estimate_input_tokens=100,
-        estimate_output_tokens=50,
-        dynamic_estimate_instance_id="inst-abc",
-    )
+async def test_non_queued_defaults():
+    """Non-queued retrier uses provided run_id and is not queued."""
+    retrier = _make_retrier(run_id="inst-abc")
     assert retrier._run_id == "inst-abc"
     assert retrier._is_queued is False
 
 
-async def test_contextvar_no_fallback():
-    """Without contextvar or instance_id, _run_id is None."""
-    retrier = TokenRetrier(
-        logger=logging.getLogger("test"),
-        client_registry_key=CLIENT_KEY,
-        request_id="req-1",
-        estimate_input_tokens=100,
-        estimate_output_tokens=50,
-    )
-    assert retrier._run_id is None
-    assert retrier._is_queued is False
+async def test_dynamic_estimate_disabled():
+    """use_dynamic_estimate=False disables dynamic estimate key but keeps run tracking."""
+    retrier = _make_retrier(run_id="inst-abc", use_dynamic_estimate=False)
+    assert retrier._run_id == "inst-abc"
     assert retrier.dynamic_estimate_key is None
+    assert retrier._run_inflight_key is not None
 
 
 async def test_dynamic_estimate_key_uses_run_id():
-    """Dynamic estimate key is built from contextvar run_id, not instance_id."""
-    token = current_run.set(RunContext(run_id="run-99", is_queued=True))
-    try:
-        retrier = TokenRetrier(
-            logger=logging.getLogger("test"),
-            client_registry_key=CLIENT_KEY,
-            request_id="req-1",
-            estimate_input_tokens=100,
-            estimate_output_tokens=50,
-            dynamic_estimate_instance_id="inst-abc",  # should be ignored
-        )
-        assert retrier.dynamic_estimate_key == f"{TOKEN_KEY}:dynamic_estimate:run-99"
-    finally:
-        current_run.reset(token)
+    """Dynamic estimate key is built from run_id."""
+    retrier = _make_retrier(run_id="run-99", is_queued=True)
+    assert retrier.dynamic_estimate_key == f"{TOKEN_KEY}:dynamic_estimate:run-99"
 
 
-async def test_validate_straggler_when_queued(redis):
-    """validate() detects straggler: is_queued but active benchmark != our run."""
+# ── Straggler detection ──────────────────────────────────────────────
+
+
+async def test_straggler_detected_in_pre_function(redis):
+    """Queued retrier gets MAX_PRIORITY when another run is queue head."""
     await _init_tokens(redis, value=1000)
 
-    benchmark_run_key = f"{TOKEN_KEY}:inflight:benchmark_run"
-    await redis.set(benchmark_run_key, "run-2")  # another run has the slot
+    queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
+    await redis.rpush(queue_key, "run-2")  # another run is at head
 
-    token = current_run.set(RunContext(run_id="run-1", is_queued=True))
-    try:
-        retrier = TokenRetrier(
-            logger=logging.getLogger("test"),
-            client_registry_key=CLIENT_KEY,
-            request_id="req-1",
-            estimate_input_tokens=100,
-            estimate_output_tokens=50,
-        )
-        await retrier.validate()
-        assert retrier._is_straggler is True
-    finally:
-        current_run.reset(token)
+    retrier = _make_retrier(run_id="run-1", question_id="q1", is_queued=True)
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    assert retrier.priority == -5  # MAX_PRIORITY
 
 
-async def test_validate_not_straggler_when_active(redis):
-    """validate() is not straggler when our run is the active benchmark."""
+async def test_not_straggler_when_queue_head(redis):
+    """Queued retrier keeps normal priority when it's the queue head."""
     await _init_tokens(redis, value=1000)
 
-    benchmark_run_key = f"{TOKEN_KEY}:inflight:benchmark_run"
-    await redis.set(benchmark_run_key, "run-1")
+    queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
+    await redis.rpush(queue_key, "run-1")  # our run is at head
 
-    token = current_run.set(RunContext(run_id="run-1", is_queued=True))
-    try:
-        retrier = TokenRetrier(
-            logger=logging.getLogger("test"),
-            client_registry_key=CLIENT_KEY,
-            request_id="req-1",
-            estimate_input_tokens=100,
-            estimate_output_tokens=50,
-        )
-        await retrier.validate()
-        assert retrier._is_straggler is False
-    finally:
-        current_run.reset(token)
+    retrier = _make_retrier(run_id="run-1", question_id="q1", is_queued=True)
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    assert retrier.priority == 0  # INITIAL_PRIORITY
 
 
-async def test_validate_not_straggler_when_not_queued(redis):
-    """validate() skips straggler detection for non-queued runs."""
-    await _init_tokens(redis, value=1000)
-
-    retrier = TokenRetrier(
-        logger=logging.getLogger("test"),
-        client_registry_key=CLIENT_KEY,
-        request_id="req-1",
-        estimate_input_tokens=100,
-        estimate_output_tokens=50,
-    )
-    await retrier.validate()
-    assert retrier._is_straggler is False
-
-
-async def test_straggler_gets_max_priority(redis):
-    """Straggler request gets MAX_PRIORITY (-5) in _pre_function."""
-    await _init_tokens(redis, value=1000)
-
-    token = current_run.set(RunContext(run_id="run-1", is_queued=True))
-    try:
-        retrier = TokenRetrier(
-            logger=logging.getLogger("test"),
-            client_registry_key=CLIENT_KEY,
-            request_id="req-straggler",
-            estimate_input_tokens=100,
-            estimate_output_tokens=50,
-        )
-        retrier._is_straggler = True
-
-        await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
-
-        assert retrier.priority == -5
-    finally:
-        current_run.reset(token)
-
-
-async def test_non_queued_skips_straggler_check(redis, token_retrier: TokenRetrier):
-    """Non-queued requests keep INITIAL_PRIORITY."""
+async def test_not_straggler_when_not_queued(redis, token_retrier: TokenRetrier):
+    """Non-queued requests skip straggler check, keep INITIAL_PRIORITY."""
     await _init_tokens(redis, value=1000)
 
     assert token_retrier._is_queued is False
-
     await token_retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     assert token_retrier.priority == 0
 
 
-async def test_dispatched_set_populated_on_deduction(
-    redis, token_retrier: TokenRetrier
-):
-    """After token deduction, request_id is added to the dispatched set."""
+# ── Per-question metadata ────────────────────────────────────────────
+
+
+async def test_metadata_stores_run_id(redis):
+    """Per-question metadata hash stores run_id field."""
     await _init_tokens(redis, value=1000)
 
-    await token_retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+    retrier = _make_retrier(run_id="run-77", question_id="q-meta", is_queued=True)
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
-    dispatched_key = f"{TOKEN_KEY}:inflight:dispatched"
-    count = await redis.scard(dispatched_key)
+    meta = await redis.hgetall(f"{TOKEN_KEY}:inflight:q-meta")
+    assert meta["run_id"] == "run-77"
+
+
+async def test_metadata_hash_has_ttl(redis):
+    """Per-question metadata hash gets a TTL after deduction."""
+    await _init_tokens(redis, value=1000)
+
+    retrier = _make_retrier(question_id="q-ttl")
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    ttl = await redis.ttl(f"{TOKEN_KEY}:inflight:q-ttl")
+    assert ttl > 0  # has a TTL
+
+
+# ── Per-run dispatched counter ────────────────────────────────────────
+
+
+async def test_dispatched_counter_incremented(redis):
+    """Per-run dispatched counter tracks question_ids via SET for queued runs."""
+    await _init_tokens(redis, value=1000)
+
+    retrier = _make_retrier(run_id="run-dispatch", question_id="q-d1", is_queued=True)
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    counter_key = f"{KEY_PREFIX}:{CLIENT_KEY[0]}:{CLIENT_KEY[1]}:benchmark:run:run-dispatch:dispatched"
+    count = await redis.scard(counter_key)
     assert count == 1
 
 
-async def test_per_request_metadata_stores_run_id(redis):
-    """Per-request metadata hash stores run_id field from contextvar."""
-    await _init_tokens(redis, value=1000)
-
-    token = current_run.set(RunContext(run_id="run-77", is_queued=True))
-    try:
-        retrier = TokenRetrier(
-            logger=logging.getLogger("test"),
-            client_registry_key=CLIENT_KEY,
-            request_id="req-meta",
-            estimate_input_tokens=100,
-            estimate_output_tokens=50,
-        )
-        await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
-
-        meta = await redis.hgetall(f"{TOKEN_KEY}:inflight:req-meta")
-        assert meta["run_id"] == "run-77"
-        assert "benchmark_run" not in meta
-    finally:
-        current_run.reset(token)
-
-
-async def test_per_run_dispatched_counter_incremented(redis):
-    """Per-run dispatched counter is incremented for queued runs."""
-    await _init_tokens(redis, value=1000)
-
-    token = current_run.set(RunContext(run_id="run-dispatch", is_queued=True))
-    try:
-        retrier = TokenRetrier(
-            logger=logging.getLogger("test"),
-            client_registry_key=CLIENT_KEY,
-            request_id="req-d1",
-            estimate_input_tokens=100,
-            estimate_output_tokens=50,
-        )
-        await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
-
-        counter_key = f"{KEY_PREFIX}:{CLIENT_KEY[0]}:{CLIENT_KEY[1]}:benchmark:run:run-dispatch:dispatched"
-        count = await redis.get(counter_key)
-        assert count == "1"
-    finally:
-        current_run.reset(token)
-
-
-async def test_per_run_dispatched_counter_skipped_for_non_queued(redis, token_retrier: TokenRetrier):
+async def test_dispatched_counter_skipped_for_non_queued(redis, token_retrier: TokenRetrier):
     """Per-run dispatched counter is NOT incremented for non-queued runs."""
     await _init_tokens(redis, value=1000)
 
@@ -696,40 +609,164 @@ async def test_per_run_dispatched_counter_skipped_for_non_queued(redis, token_re
     assert keys == []
 
 
+# ── question_id dispatch tracking ─────────────────────────────────────
+
+
+async def test_question_id_in_dispatched_set(redis):
+    """question_id is used as the member in the dispatched SET."""
+    await _init_tokens(redis, value=1000)
+
+    retrier = _make_retrier(run_id="run-qid", question_id="question-1", is_queued=True)
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    dispatched_key = f"{KEY_PREFIX}:{CLIENT_KEY[0]}:{CLIENT_KEY[1]}:benchmark:run:run-qid:dispatched"
+    assert await redis.sismember(dispatched_key, "question-1")
+
+
+async def test_question_id_idempotent_across_turns(redis):
+    """Multiple queries with the same question_id only count as 1 in dispatched SET."""
+    await _init_tokens(redis, value=10000)
+
+    for _ in range(5):
+        retrier = _make_retrier(
+            run_id="run-qid-idemp",
+            question_id="question-1",
+            is_queued=True,
+        )
+        await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    dispatched_key = f"{KEY_PREFIX}:{CLIENT_KEY[0]}:{CLIENT_KEY[1]}:benchmark:run:run-qid-idemp:dispatched"
+    count = await redis.scard(dispatched_key)
+    assert count == 1  # all 5 turns share question_id
+
+
+async def test_question_id_in_inflight_zset(redis):
+    """question_id is used as the member in the per-run inflight ZSET."""
+    await _init_tokens(redis, value=1000)
+
+    retrier = _make_retrier(run_id="run-inf", question_id="q-check")
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    inflight_key = f"{TOKEN_KEY}:run:run-inf:inflight"
+    members = await redis.zrangebyscore(inflight_key, "-inf", "+inf")
+    assert "q-check" in members
+
+
+# ── Dynamic estimate ratio ────────────────────────────────────────────
+
+
 async def test_dynamic_estimate_ratio_written_to_run_key(redis):
-    """After execute, the EMA ratio is stored under the run_id key, not instance_id."""
+    """After execute, the EMA ratio is stored under the run_id key."""
     await _init_tokens(redis, value=1000, limit=2000)
 
-    token = current_run.set(RunContext(run_id="run-ema", is_queued=True))
-    try:
-        retrier = TokenRetrier(
-            logger=logging.getLogger("test"),
-            client_registry_key=CLIENT_KEY,
-            request_id="req-ema",
-            estimate_input_tokens=100,
-            estimate_output_tokens=50,
-            dynamic_estimate_instance_id="inst-should-be-ignored",
-        )
+    retrier = _make_retrier(run_id="run-ema", question_id="q-ema", is_queued=True)
 
-        mock_qr = MagicMock()
-        mock_qr.metadata.total_input_tokens = 200
-        mock_qr.metadata.total_output_tokens = 100
-        mock_qr.metadata.cache_read_tokens = 0
-        mock_qr.metadata.extra = {}
+    mock_qr = MagicMock()
+    mock_qr.metadata.total_input_tokens = 200
+    mock_qr.metadata.total_output_tokens = 100
+    mock_qr.metadata.cache_read_tokens = 0
+    mock_qr.metadata.extra = {}
 
-        await retrier.execute(AsyncMock(return_value=(mock_qr, 0.5)))
+    await retrier.execute(AsyncMock(return_value=(mock_qr, 0.5)))
 
-        # ratio stored under run_id key
-        run_key = f"{TOKEN_KEY}:dynamic_estimate:run-ema"
-        ratio = await redis.get(run_key)
-        assert ratio is not None
-        assert float(ratio) > 1.0  # actual 300 > estimate 150
+    # ratio stored under run_id key
+    run_key = f"{TOKEN_KEY}:dynamic_estimate:run-ema"
+    ratio = await redis.get(run_key)
+    assert ratio is not None
+    assert float(ratio) > 1.0  # actual 300 > estimate 150
 
-        # no key under instance_id
-        inst_key = f"{TOKEN_KEY}:dynamic_estimate:inst-should-be-ignored"
-        assert await redis.get(inst_key) is None
-    finally:
-        current_run.reset(token)
+
+async def test_dynamic_estimate_has_ttl(redis):
+    """Dynamic estimate key gets a TTL after ratio update."""
+    await _init_tokens(redis, value=1000, limit=2000)
+
+    retrier = _make_retrier(run_id="run-ttl", question_id="q-ttl")
+
+    mock_qr = MagicMock()
+    mock_qr.metadata.total_input_tokens = 100
+    mock_qr.metadata.total_output_tokens = 50
+    mock_qr.metadata.cache_read_tokens = 0
+    mock_qr.metadata.extra = {}
+
+    await retrier.execute(AsyncMock(return_value=(mock_qr, 0.5)))
+
+    de_key = f"{TOKEN_KEY}:dynamic_estimate:run-ttl"
+    ttl = await redis.ttl(de_key)
+    assert ttl > 0  # has a TTL
+
+
+# ── Execute cleanup ──────────────────────────────────────────────────
+
+
+async def test_execute_cleans_up_inflight(redis):
+    """execute finally removes question from inflight ZSET and deletes metadata."""
+    await _init_tokens(redis, value=1000, limit=2000)
+
+    retrier = _make_retrier(run_id="run-cleanup", question_id="q-cleanup")
+
+    mock_qr = MagicMock()
+    mock_qr.metadata.total_input_tokens = 100
+    mock_qr.metadata.total_output_tokens = 50
+    mock_qr.metadata.cache_read_tokens = 0
+    mock_qr.metadata.extra = {}
+
+    await retrier.execute(AsyncMock(return_value=(mock_qr, 0.5)))
+
+    # inflight entry removed
+    inflight_key = f"{TOKEN_KEY}:run:run-cleanup:inflight"
+    assert await redis.zcard(inflight_key) == 0
+
+    # metadata hash deleted
+    meta_key = f"{TOKEN_KEY}:inflight:q-cleanup"
+    assert not await redis.exists(meta_key)
+
+    # active_runs cleaned (was last inflight)
+    assert not await redis.sismember(f"{TOKEN_KEY}:active_runs", "run-cleanup")
+
+
+async def test_execute_keeps_active_runs_when_others_inflight(redis):
+    """execute finally does NOT remove run from active_runs if other questions are inflight."""
+    await _init_tokens(redis, value=10000, limit=10000)
+
+    # simulate another question already inflight for same run
+    inflight_key = f"{TOKEN_KEY}:run:run-shared:inflight"
+    await redis.zadd(inflight_key, {"other-question": time.time()})
+    await redis.sadd(f"{TOKEN_KEY}:active_runs", "run-shared")
+
+    retrier = _make_retrier(run_id="run-shared", question_id="q-mine")
+
+    mock_qr = MagicMock()
+    mock_qr.metadata.total_input_tokens = 100
+    mock_qr.metadata.total_output_tokens = 50
+    mock_qr.metadata.cache_read_tokens = 0
+    mock_qr.metadata.extra = {}
+
+    await retrier.execute(AsyncMock(return_value=(mock_qr, 0.5)))
+
+    # our question removed from inflight
+    members = await redis.zrangebyscore(inflight_key, "-inf", "+inf")
+    assert "q-mine" not in members
+    assert "other-question" in members
+
+    # active_runs still contains run (other question still inflight)
+    assert await redis.sismember(f"{TOKEN_KEY}:active_runs", "run-shared")
+
+
+async def test_execute_cleans_up_on_exception(redis):
+    """execute finally cleans up even when func raises a non-retriable exception."""
+    await _init_tokens(redis, value=1000, limit=2000)
+
+    retrier = _make_retrier(run_id="run-err", question_id="q-err")
+
+    with pytest.raises(ValueError, match="boom"):
+        await retrier.execute(AsyncMock(side_effect=ValueError("boom")))
+
+    # inflight entry removed
+    assert await redis.zcard(f"{TOKEN_KEY}:run:run-err:inflight") == 0
+    # metadata deleted
+    assert not await redis.exists(f"{TOKEN_KEY}:inflight:q-err")
+    # active_runs cleaned
+    assert not await redis.sismember(f"{TOKEN_KEY}:active_runs", "run-err")
 
 
 # ── Full tokens shutdown ──────────────────────────────────────────────
@@ -839,22 +876,25 @@ async def test_refill_loop_continues_when_tokens_not_full(redis, mock_asyncio_sl
     assert iteration_count[0] >= 3
 
 
-async def test_refill_loop_continues_when_inflight_requests(redis, mock_asyncio_sleep):
-    """Refill loop stays alive when tokens are full but requests are inflight."""
+async def test_refill_loop_continues_when_active_runs(redis, mock_asyncio_sleep):
+    """Refill loop stays alive when tokens are full but runs have active requests."""
     from model_library.retriers.token.token import refill_tasks
 
     key_tuple = ("inflight", "refill")
     token_key = f"{KEY_PREFIX}:inflight:refill:tokens"
-    inflight_key = f"{token_key}:inflight"
+    active_runs_key = f"{token_key}:active_runs"
     iteration_count = [0]
     time_val = [0.0]
+
+    run_inflight_key = f"{token_key}:run:some-run:inflight"
 
     async def advance_time(*args):
         time_val[0] += 301.0
         iteration_count[0] += 1
-        # after 3 iterations, remove inflight entry so loop can exit
+        # after 3 iterations, remove active run so loop can exit
         if iteration_count[0] >= 3:
-            await redis.zrem(inflight_key, "long-running-req")
+            await redis.zrem(run_inflight_key, "long-running-req")
+            # reaper will srem from active_runs when it sees empty ZSET
 
     mock_asyncio_sleep.side_effect = advance_time
 
@@ -869,11 +909,12 @@ async def test_refill_loop_continues_when_inflight_requests(redis, mock_asyncio_
             get_rate_limit_func=AsyncMock(return_value=None),
         )
 
-        # simulate a long-running inflight request
-        await redis.zadd(inflight_key, {"long-running-req": 0.0})
+        # simulate an active run with an inflight request
+        await redis.sadd(active_runs_key, "some-run")
+        await redis.zadd(run_inflight_key, {"long-running-req": time_val[0]})
 
         _, refill_task = refill_tasks[f"refill:{token_key}"]
         await asyncio.wait_for(refill_task, timeout=1.0)
 
-    # loop survived past the shutdown threshold because of inflight request
+    # loop survived past the shutdown threshold because of active run
     assert iteration_count[0] >= 3

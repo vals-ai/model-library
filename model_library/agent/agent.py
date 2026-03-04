@@ -127,6 +127,7 @@ class Agent:
         input: Sequence[InputItem],
         *,
         state: dict[str, Any] | None = None,
+        question_id: str | None = None,
     ) -> AgentResult:
         """Run the agent loop
 
@@ -198,7 +199,7 @@ class Agent:
                 # query LLM
                 try:
                     response = await self._llm.query(
-                        input=history, tools=self._tool_defs
+                        input=history, tools=self._tool_defs, question_id=question_id
                     )
                 except Exception as query_error:
                     self._logger.warning(f"Query failed: {query_error}", exc_info=True)

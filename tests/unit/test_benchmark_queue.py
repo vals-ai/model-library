@@ -36,12 +36,8 @@ def _alive_key(run_id: str):
     return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:alive:{run_id}"
 
 
-def _dispatched_key():
-    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:tokens:inflight:dispatched"
-
-
-def _benchmark_run_key():
-    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:tokens:inflight:benchmark_run"
+def _run_dispatched_key(run_id: str):
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:run:{run_id}:dispatched"
 
 
 async def _simulate_process_death(redis, run_id: str):
@@ -461,9 +457,9 @@ async def test_early_release_when_all_dispatched(redis):
     async def run1():
         async with benchmark_queue(MODEL_KEY, "run-1", logger, total_requests=total):
             order.append("run-1-start")
-            # simulate all requests being dispatched
+            # simulate all requests being dispatched (per-run dispatched SET)
             for i in range(total):
-                await redis.sadd(_dispatched_key(), f"req-{i}")
+                await redis.sadd(_run_dispatched_key("run-1"), f"req-{i}")
             # hold the slot — heartbeat should early-release before this finishes
             await asyncio.sleep(10)
             order.append("run-1-end")
@@ -486,36 +482,6 @@ async def test_early_release_when_all_dispatched(redis):
         await task1
 
 
-async def test_benchmark_run_key_set_in_redis(redis):
-    """benchmark_run key is set after acquiring slot and cleaned on exit."""
-    async with benchmark_queue(MODEL_KEY, "run-1", logger):
-        val = await redis.get(_benchmark_run_key())
-        assert val == "run-1"
-
-    # key is cleaned up by atomic cleanup on normal exit
-    val = await redis.get(_benchmark_run_key())
-    assert val is None
-
-
-async def test_dispatched_key_cleaned_on_exit(redis):
-    """Dispatched set is deleted in finally block."""
-    async with benchmark_queue(MODEL_KEY, "run-1", logger, total_requests=5):
-        await redis.sadd(_dispatched_key(), "req-1", "req-2")
-        assert await redis.scard(_dispatched_key()) == 2
-
-    assert await redis.exists(_dispatched_key()) == 0
-
-
-async def test_stale_dispatched_cleared_on_start(redis):
-    """Stale dispatched set from a previous run is cleared when slot is acquired."""
-    # simulate stale data from a crashed run
-    await redis.sadd(_dispatched_key(), "old-req-1", "old-req-2")
-
-    async with benchmark_queue(MODEL_KEY, "run-1", logger, total_requests=5):
-        count = await redis.scard(_dispatched_key())
-        assert count == 0  # stale data cleared
-
-
 async def test_no_early_release_without_total_requests(redis):
     """Without total_requests, dispatched set is ignored for release."""
     order = []
@@ -523,8 +489,8 @@ async def test_no_early_release_without_total_requests(redis):
     async def run1():
         async with benchmark_queue(MODEL_KEY, "run-1", logger):
             order.append("run-1-start")
-            # add dispatched items — should not trigger early release
-            await redis.sadd(_dispatched_key(), "req-1", "req-2", "req-3")
+            # add dispatched items — should not trigger early release (no total_requests)
+            await redis.sadd(_run_dispatched_key("run-1"), "req-1", "req-2", "req-3")
             await asyncio.sleep(0.1)
             order.append("run-1-end")
 
@@ -539,6 +505,30 @@ async def test_no_early_release_without_total_requests(redis):
 
 
 @patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)
+async def test_no_early_release_when_disabled(redis):
+    """early_release=False prevents dispatched-based release even with total_requests."""
+    total = 3
+    order = []
+
+    async def run1():
+        async with benchmark_queue(MODEL_KEY, "run-1", logger, total_requests=total, early_release=False):
+            order.append("run-1-start")
+            for i in range(total):
+                await redis.sadd(_run_dispatched_key("run-1"), f"req-{i}")
+            await asyncio.sleep(0.2)
+            order.append("run-1-end")
+
+    async def run2():
+        async with benchmark_queue(MODEL_KEY, "run-2", logger):
+            order.append("run-2")
+
+    await asyncio.gather(run1(), run2())
+
+    # run-2 only starts after run-1 finishes (early release disabled)
+    assert order == ["run-1-start", "run-1-end", "run-2"]
+
+
+@patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)
 async def test_early_release_notifies_next_run(redis):
     """After early release, the next queued run starts while the first is still executing."""
     total = 2
@@ -547,7 +537,7 @@ async def test_early_release_notifies_next_run(redis):
     async def run1():
         async with benchmark_queue(MODEL_KEY, "run-1", logger, total_requests=total):
             for i in range(total):
-                await redis.sadd(_dispatched_key(), f"req-{i}")
+                await redis.sadd(_run_dispatched_key("run-1"), f"req-{i}")
             # wait for run-2 to start (proves early release worked)
             await asyncio.wait_for(run2_started.wait(), timeout=5.0)
 
@@ -559,21 +549,18 @@ async def test_early_release_notifies_next_run(redis):
 
 
 @patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)
-async def test_waiting_run_not_removed_by_stale_dispatched(redis):
-    """A waiting run must not early-release itself when it sees another run's dispatched count.
+async def test_waiting_run_not_released_before_slot_acquired(redis):
+    """A waiting run must not early-release before acquiring the slot.
 
-    Regression: dispatched set is shared per-model. Without the slot_acquired guard,
-    a waiting run's heartbeat would see the dispatched count, trigger early release,
-    remove itself from the queue, and get stuck on blpop forever.
-
-    Setup: pre-populate the dispatched set and have run-1 NOT use total_requests,
-    so only the waiting runs' heartbeats check the dispatched count.
+    The slot_acquired guard prevents a run's heartbeat from checking dispatched
+    count while still waiting in queue. Even if the per-run dispatched set is
+    pre-populated, the run should wait for its turn.
     """
     total = 3
 
-    # pre-populate dispatched set (simulates stale data from executing run)
+    # pre-populate run-2's dispatched set (simulates unexpected state)
     for i in range(total):
-        await redis.sadd(_dispatched_key(), f"req-{i}")
+        await redis.sadd(_run_dispatched_key("run-2"), f"req-{i}")
 
     async def run1():
         async with benchmark_queue(MODEL_KEY, "run-1", logger):
@@ -618,23 +605,6 @@ async def test_finally_safe_when_blpop_times_out(redis):
     with pytest.raises(RuntimeError, match="timed out"):
         async with benchmark_queue(MODEL_KEY, "run-1", logger):
             pass
-
-    # benchmark_run_key should NOT have been set (slot was never acquired)
-    assert await redis.get(_benchmark_run_key()) is None
-
-
-async def test_cleanup_does_not_delete_next_runs_keys(redis):
-    """Atomic cleanup skips deletion when another run has taken over benchmark_run_key."""
-    # run-1 acquires slot, then another run overwrites benchmark_run_key
-    async with benchmark_queue(MODEL_KEY, "run-1", logger, total_requests=5):
-        await redis.sadd(_dispatched_key(), "req-1")
-        # simulate run-2 taking over (as if early release happened and run-2 acquired)
-        await redis.set(_benchmark_run_key(), "run-2")
-        await redis.sadd(_dispatched_key(), "run-2-req")
-
-    # run-1's cleanup should NOT have deleted run-2's keys
-    assert await redis.get(_benchmark_run_key()) == "run-2"
-    assert await redis.scard(_dispatched_key()) == 2
 
 
 @patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)

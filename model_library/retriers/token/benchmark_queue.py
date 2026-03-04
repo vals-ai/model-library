@@ -13,15 +13,6 @@ from model_library.retriers.token.utils import (
 
 HOURS_24 = 86400
 
-# atomic compare-and-delete: only delete keys if KEYS[1] still equals ARGV[1]
-CLEANUP_IF_OWNER_LUA = """
-local current = redis.call('GET', KEYS[1])
-if current == ARGV[1] then
-    redis.call('DEL', KEYS[1], KEYS[2])
-    return 1
-end
-return 0
-"""
 HEARTBEAT_INTERVAL = 5
 HEARTBEAT_TTL = 300  # 5 minutes
 
@@ -44,6 +35,7 @@ async def benchmark_queue(
     logger: logging.Logger,
     enabled: bool = True,
     total_requests: int | None = None,
+    early_release: bool = True,
 ):
     """
     FIFO queue that serializes benchmark runs for a given model
@@ -76,14 +68,8 @@ async def benchmark_queue(
     run_queue_key = f"{key}:queue"
     my_notify_key = f"{key}:notify:{run_id}"
     alive_key = f"{key}:alive:{run_id}"
-    inflight_key = (
-        f"{KEY_PREFIX}:{model_registry_key[0]}:{model_registry_key[1]}:tokens:inflight"
-    )
-    dispatched_key = f"{inflight_key}:dispatched"
-    benchmark_run_key = f"{inflight_key}:benchmark_run"
 
     heartbeat_task = None
-    slot_acquired_flag = False
 
     await utils.validate_redis_client()
 
@@ -114,8 +100,15 @@ async def benchmark_queue(
         if first_run == run_id:
             await utils.redis_client.rpush(my_notify_key, "go")
 
-        # signal heartbeat that slot has been acquired and dispatched set cleared
+        # signal heartbeat that slot has been acquired
         slot_acquired = asyncio.Event()
+
+        # per-run dispatched key for early release counting
+        run_dispatched_key = (
+            f"{key}:run:{run_id}:dispatched"
+            if total_requests and early_release
+            else None
+        )
 
         # start heartbeat (refreshes my alive key + evict dead head + early release)
         heartbeat_task = asyncio.create_task(
@@ -126,7 +119,7 @@ async def benchmark_queue(
                 key,
                 run_id,
                 logger,
-                dispatched_key=dispatched_key if total_requests else None,
+                dispatched_key=run_dispatched_key,
                 total_requests=total_requests,
                 slot_acquired=slot_acquired,
             )
@@ -143,13 +136,6 @@ async def benchmark_queue(
 
         logger.info(f"Benchmark queue: {run_id} acquired slot")
 
-        # register active run in Redis so TokenRetrier can detect stragglers
-        await utils.redis_client.set(benchmark_run_key, run_id, ex=HOURS_24)
-
-        if total_requests is not None:
-            await utils.redis_client.delete(dispatched_key)
-
-        slot_acquired_flag = True
         slot_acquired.set()
         await utils.redis_client.hset(
             run_meta_key,
@@ -173,15 +159,16 @@ async def benchmark_queue(
         await utils.redis_client.lrem(run_queue_key, 1, run_id)
 
         await utils.redis_client.delete(alive_key)
-        await utils.redis_client.delete(
-            f"{key}:run:{run_id}", f"{key}:run:{run_id}:dispatched"
-        )
-
-        # atomic cleanup: only delete shared keys if we're still the active run
-        if slot_acquired_flag:
-            await utils.redis_client.eval(
-                CLEANUP_IF_OWNER_LUA, 2, benchmark_run_key, dispatched_key, run_id
-            )
+        # mark completed and keep metadata alive for popped run visibility
+        now = time.time()
+        run_meta = f"{key}:run:{run_id}"
+        fields: dict[str, float] = {"completed_at": now}
+        # set popped_at if not already set by early release in heartbeat
+        if not await utils.redis_client.hexists(run_meta, "popped_at"):
+            fields["popped_at"] = now
+        await utils.redis_client.hset(run_meta, mapping=fields)
+        await utils.redis_client.expire(run_meta, HOURS_24)
+        await utils.redis_client.expire(f"{run_meta}:dispatched", HOURS_24)
 
         await _notify_next(utils.redis_client, run_queue_key, key)
 
@@ -212,7 +199,7 @@ async def _heartbeat(
             await redis_client.set(alive_key, "1", ex=HEARTBEAT_TTL)
 
             # early release: all requests dispatched
-            # only check after slot acquired (dispatched set is shared across runs)
+            # only check after slot acquired
             if (
                 dispatched_key
                 and total_requests is not None
@@ -224,6 +211,10 @@ async def _heartbeat(
                     logger.info(
                         f"Benchmark queue: all {total_requests} dispatched, "
                         f"early releasing {run_id}"
+                    )
+                    run_meta_key = f"{base_key}:run:{run_id}"
+                    await redis_client.hset(
+                        run_meta_key, mapping={"popped_at": time.time()}
                     )
                     await redis_client.lrem(run_queue_key, 1, run_id)
                     await _notify_next(redis_client, run_queue_key, base_key)
