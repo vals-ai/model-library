@@ -1,7 +1,7 @@
 {
     "google/gemini-3.1-flash-lite-preview": {
         "company": "Google",
-        "label": "Gemini 3 Flash Lite Preview",
+        "label": "Gemini 3.1 Flash Lite Preview",
         "description": "Google's lightweight model, optimized for speed and cost.",
         "release_date": "2026-03-03",
         "open_source": false,
