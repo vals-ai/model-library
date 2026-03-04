@@ -340,6 +340,84 @@ class TestAgentToolExecution:
         assert record.tool_call.parsed_args is None
         assert "Unparseable" in record.tool_output.output
 
+    async def test_missing_required_param_records_error(self):
+        """Tool with required params called without them → error record"""
+        tc = ToolCall(id="tc_1", name="echo", args={})  # missing "text"
+        llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
+        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()])
+
+        result = await agent.run([TextInput(text="test")])
+
+        assert isinstance(result.turns[0], AgentTurn)
+        record = result.turns[0].tool_call_records[0]
+        assert not record.success
+        assert record.error is not None
+        assert "Missing required parameters" in record.error.message
+        assert "text" in record.error.message
+
+    async def test_missing_multiple_required_params(self):
+        tc = ToolCall(id="tc_1", name="set_state", args={})  # missing "key" and "value"
+        llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
+        agent = Agent(logger=_logger, llm=llm, tools=[StateTool()])
+
+        result = await agent.run([TextInput(text="test")])
+
+        assert isinstance(result.turns[0], AgentTurn)
+        record = result.turns[0].tool_call_records[0]
+        assert not record.success
+        assert "key" in record.error.message
+        assert "value" in record.error.message
+
+    async def test_partial_required_params_reports_missing(self):
+        tc = make_tool_call("set_state", {"key": "k"})  # has "key", missing "value"
+        llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
+        agent = Agent(logger=_logger, llm=llm, tools=[StateTool()])
+
+        result = await agent.run([TextInput(text="test")])
+
+        assert isinstance(result.turns[0], AgentTurn)
+        record = result.turns[0].tool_call_records[0]
+        assert not record.success
+        assert "value" in record.error.message
+        assert "key" not in record.error.message  # "key" was provided
+
+    async def test_optional_params_not_required(self):
+        """Tool with explicit required subset — extra params are optional"""
+
+        class OptionalTool(Tool):
+            name = "opt"
+            description = "Has optional params"
+            parameters = {"needed": {"type": "string"}, "optional": {"type": "string"}}
+            required = ["needed"]
+
+            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                return ToolOutput(output=args["needed"])
+
+        tc = make_tool_call("opt", {"needed": "yes"})  # "optional" omitted
+        llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
+        agent = Agent(logger=_logger, llm=llm, tools=[OptionalTool()])
+
+        result = await agent.run([TextInput(text="test")])
+
+        assert isinstance(result.turns[0], AgentTurn)
+        record = result.turns[0].tool_call_records[0]
+        assert record.success
+        assert record.tool_output.output == "yes"
+
+    async def test_no_params_tool_accepts_empty_args(self):
+        tc = ToolCall(id="tc_1", name="fail", args={})
+        llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
+        # FailingTool has parameters={}, required=[] — should pass validation
+        # (it will fail in execute, but that's a different error)
+        agent = Agent(logger=_logger, llm=llm, tools=[FailingTool()])
+
+        result = await agent.run([TextInput(text="test")])
+
+        assert isinstance(result.turns[0], AgentTurn)
+        record = result.turns[0].tool_call_records[0]
+        # Fails from execute(), not from validation
+        assert "tool broke" in record.error.message
+
     async def test_state_shared_between_tools(self):
         set_call = make_tool_call("set_state", {"key": "found", "value": "yes"})
         echo_call = make_tool_call("echo", {"text": "check"})

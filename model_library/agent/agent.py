@@ -341,6 +341,12 @@ class Agent:
             if tool_call.parsed_args is None:
                 raise ValueError(f"Unparseable tool call args: {tool_call.args!r}")
 
+            missing = [r for r in tool.required if r not in tool_call.parsed_args]
+            if missing:
+                raise ValueError(
+                    f"Missing required parameters for '{tool_call.name}': {missing}"
+                )
+
             tool_output = await tool.execute(tool_call.parsed_args, state, self._logger)
         except Exception as e:
             self._logger.error(f"Tool '{tool_call.name}' raised: {e}", exc_info=True)
