@@ -242,6 +242,8 @@ xai-models:
       context_window: 8_192
       max_tokens: 0
       training_cutoff: null
+    metadata:
+      deprecated: true
     supports:
       images: true
     costs_per_million_token:

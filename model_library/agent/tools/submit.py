@@ -9,35 +9,24 @@ class SubmitTool(Tool):
     Signals the agent to stop and surfaces the submitted string as the final answer.
     """
 
-    def __init__(
-        self,
-        *,
-        name: str = "submit",
-        description: str = """
-        Submits the final answer to the user. This tool takes your answer as its sole parameter, produces no outputs, and marks the task as complete.
-        You MUST use this tool to submit your final result. The user will not see your response if you do not use this tool to submit.
-        You will not be able to continue working after this tool is called; the conversation will be ended.
-        """.strip(),
-        parameter_name: str = "answer",
-        parameter_description: str = "The final answer to submit.",
-    ):
-        super().__init__(
-            name=name,
-            description=description,
-            parameters={
-                parameter_name: {
-                    "type": "string",
-                    "description": parameter_description,
-                }
-            },
-        )
-        self._parameter_name = parameter_name
+    name = "submit"
+    description = (
+        "Submits the final answer to the user. This tool takes your answer as its sole parameter, produces no outputs, and marks the task as complete. "
+        "You MUST use this tool to submit your final result. The user will not see your response if you do not use this tool to submit. "
+        "You will not be able to continue working after this tool is called; the conversation will be ended."
+    )
+    parameters: dict[str, Any] = {
+        "answer": {
+            "type": "string",
+            "description": "The final answer to submit.",
+        }
+    }
 
     async def execute(
         self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
     ) -> ToolOutput:
         try:
-            answer = args[self._parameter_name]
+            answer = args["answer"]
             if answer is None:
                 raise ValueError("answer not provided")
             return ToolOutput(output=answer, done=True)

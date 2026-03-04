@@ -20,7 +20,7 @@ from model_library.retriers.base import retry_decorator
 
 CONCURRENCY_PER_PROVIDER = 10
 MAX_RETRIES = 5
-DEFAULT_TIMEOUT = 120
+DEFAULT_TIMEOUT = 240
 DEEP_RESEARCH_TIMEOUT = 600  # 10 minutes for deep research models
 
 # registry

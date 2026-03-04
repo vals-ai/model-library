@@ -36,20 +36,41 @@ class Tool(ABC):
     - Set error to mark the call as failed (for internal tracking)
     - Handle errors internally, don't raise from execute()
     - Unhandled exceptions are caught but sent to the LLM as raw strings
+
+    Subclasses must define: name, description, parameters (as class attributes or via __init__).
     """
+
+    name: str
+    description: str
+    parameters: dict[str, Any]
+    required: list[str]
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        super().__init_subclass__(**kwargs)
+        if getattr(cls, "__abstractmethods__", None):
+            return
+        for attr in ("name", "description", "parameters"):
+            if not hasattr(cls, attr):
+                raise TypeError(f"{cls.__name__} must define class attribute '{attr}'")
+        if not hasattr(cls, "required"):
+            cls.required = list(cls.parameters.keys())
 
     def __init__(
         self,
-        name: str,
-        description: str,
-        parameters: dict[str, Any],
         *,
+        name: str | None = None,
+        description: str | None = None,
+        parameters: dict[str, Any] | None = None,
         required: list[str] | None = None,
     ):
-        self.name = name
-        self.description = description
-        self.parameters = parameters
-        self.required = required or list(parameters.keys())
+        if name is not None:
+            self.name = name
+        if description is not None:
+            self.description = description
+        if parameters is not None:
+            self.parameters = parameters
+        if required is not None:
+            self.required = required
 
     @abstractmethod
     async def execute(

@@ -39,35 +39,43 @@ def retry_on_429(
 
 
 class TavilyWebSearch(Tool):
-    def __init__(self, max_end_date: str, tavily_api_key: str | None = None):
-        super().__init__(
-            name="web_search",
-            description=(
-                "Search the public internet for information. Each result will contain a url, a title, and one excerpt taken directly from the page."
-            ),
-            parameters={
-                "search_query": {
-                    "type": "string",
-                    "description": "The query to search for",
-                },
-                "start_date": {
-                    "type": "string",
-                    "description": "(optional) The start date for the search range in the format YYYY-MM-DD",
-                },
-                "end_date": {
-                    "type": "string",
-                    "description": f"(optional) The end date for the search range in the format YYYY-MM-DD. If the value is later than {max_end_date}, it will be set to {max_end_date}.",
-                },
-                "number_of_results": {
-                    "type": "integer",
-                    "description": "(optional) The number of search results to return.",
-                    "maximum": 20,
-                    "minimum": 1,
-                    "default": 10,
-                },
+    name = "web_search"
+    description = "Search the public internet for information. Each result will contain a url, a title, and one excerpt taken directly from the page."
+    parameters: dict[str, Any] = {
+        "search_query": {
+            "type": "string",
+            "description": "The query to search for",
+        },
+        "start_date": {
+            "type": "string",
+            "description": "(optional) The start date for the search range in the format YYYY-MM-DD",
+        },
+        "end_date": {
+            "type": "string",
+            "description": "(optional) The end date for the search range in the format YYYY-MM-DD",
+        },
+        "number_of_results": {
+            "type": "integer",
+            "description": "(optional) The number of search results to return.",
+            "maximum": 20,
+            "minimum": 1,
+            "default": 10,
+        },
+    }
+    required = ["search_query"]
+
+    def __init__(
+        self, max_end_date: str, tavily_api_key: str | None = None, **kwargs: Any
+    ):
+        super().__init__(**kwargs)
+        # Override end_date description to include the max_end_date constraint
+        self.parameters = {
+            **self.parameters,
+            "end_date": {
+                "type": "string",
+                "description": f"(optional) The end date for the search range in the format YYYY-MM-DD. If the value is later than {max_end_date}, it will be set to {max_end_date}.",
             },
-            required=["search_query"],
-        )
+        }
         self._client = httpx.AsyncClient(timeout=TAVILY_TIMEOUT)
         self._api_key = tavily_api_key or model_library_settings.TAVILY_API_KEY
         self.max_end_date = max_end_date

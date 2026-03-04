@@ -35,17 +35,14 @@ from .setup import console_log, setup
 class GetWeather(Tool):
     """Returns fake weather data for a city."""
 
-    def __init__(self):
-        super().__init__(
-            name="get_weather",
-            description="Get current weather for a city. Returns temperature and conditions.",
-            parameters={
-                "city": {
-                    "type": "string",
-                    "description": "City name, e.g. 'San Francisco'",
-                },
-            },
-        )
+    name = "get_weather"
+    description = "Get current weather for a city. Returns temperature and conditions."
+    parameters = {
+        "city": {
+            "type": "string",
+            "description": "City name, e.g. 'San Francisco'",
+        },
+    }
 
     async def execute(
         self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
@@ -58,15 +55,15 @@ class GetWeather(Tool):
 class SaveNote(Tool):
     """Saves a note to shared state. Demonstrates state passing between tools."""
 
-    def __init__(self):
-        super().__init__(
-            name="save_note",
-            description="Save a note to the session. Other tools can read it later.",
-            parameters={
-                "key": {"type": "string", "description": "Note identifier"},
-                "content": {"type": "string", "description": "Note content"},
-            },
-        )
+    name = "save_note"
+    description = "Save a note to the session. Other tools can read it later."
+    parameters = {
+        "key": {"type": "string", "description": "Note identifier"},
+        "content": {"type": "string", "description": "Note content"},
+    }
+
+    def __init__(self, custom_logic: str | None = None):
+        self.custom_logic = custom_logic
 
     async def execute(
         self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger

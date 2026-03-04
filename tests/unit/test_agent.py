@@ -80,20 +80,18 @@ def mock_llm(*responses: QueryResult | Exception) -> MagicMock:
 
 
 class EchoTool(Tool):
-    def __init__(self):
-        super().__init__(name="echo", description="Echo the input", parameters={"text": {"type": "string"}})
+    name = "echo"
+    description = "Echo the input"
+    parameters = {"text": {"type": "string"}}
 
     async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
         return ToolOutput(output=args.get("text", ""))
 
 
 class StateTool(Tool):
-    def __init__(self):
-        super().__init__(
-            name="set_state",
-            description="Set a state value",
-            parameters={"key": {"type": "string"}, "value": {"type": "string"}},
-        )
+    name = "set_state"
+    description = "Set a state value"
+    parameters = {"key": {"type": "string"}, "value": {"type": "string"}}
 
     async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
         state[args["key"]] = args["value"]
@@ -101,16 +99,18 @@ class StateTool(Tool):
 
 
 class DoneTool(Tool):
-    def __init__(self):
-        super().__init__(name="submit", description="Submit final answer", parameters={"answer": {"type": "string"}})
+    name = "submit"
+    description = "Submit final answer"
+    parameters = {"answer": {"type": "string"}}
 
     async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
         return ToolOutput(output=args["answer"], done=True)
 
 
 class FailingTool(Tool):
-    def __init__(self):
-        super().__init__(name="fail", description="Always fails", parameters={})
+    name = "fail"
+    description = "Always fails"
+    parameters: dict[str, Any] = {}
 
     async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
         raise RuntimeError("tool broke")
@@ -119,16 +119,18 @@ class FailingTool(Tool):
 class ErrorReturnTool(Tool):
     """Tool that returns an error via ToolOutput (doesn't raise)"""
 
-    def __init__(self):
-        super().__init__(name="soft_fail", description="Returns error", parameters={})
+    name = "soft_fail"
+    description = "Returns error"
+    parameters: dict[str, Any] = {}
 
     async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
         return ToolOutput(output="error details", error="something went wrong")
 
 
 class LLMCallingTool(Tool):
-    def __init__(self):
-        super().__init__(name="retrieve", description="Retrieve info", parameters={"q": {"type": "string"}})
+    name = "retrieve"
+    description = "Retrieve info"
+    parameters = {"q": {"type": "string"}}
 
     async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
         sub_metadata = QueryResultMetadata(
@@ -848,15 +850,97 @@ class TestToolDefinition:
 
     def test_required_defaults_to_all_params(self):
         class MultiParamTool(Tool):
-            def __init__(self):
-                super().__init__(
-                    name="multi",
-                    description="test",
-                    parameters={"a": {"type": "string"}, "b": {"type": "integer"}},
-                )
+            name = "multi"
+            description = "test"
+            parameters = {"a": {"type": "string"}, "b": {"type": "integer"}}
 
             async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
                 return ToolOutput(output="ok")
 
         tool = MultiParamTool()
         assert set(tool.required) == {"a", "b"}
+
+    def test_missing_name_raises(self):
+        with pytest.raises(TypeError, match="must define class attribute 'name'"):
+
+            class NoNameTool(Tool):
+                description = "test"
+                parameters: dict[str, Any] = {}
+
+                async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                    return ToolOutput(output="ok")
+
+    def test_missing_description_raises(self):
+        with pytest.raises(TypeError, match="must define class attribute 'description'"):
+
+            class NoDescTool(Tool):
+                name = "test"
+                parameters: dict[str, Any] = {}
+
+                async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                    return ToolOutput(output="ok")
+
+    def test_missing_parameters_raises(self):
+        with pytest.raises(TypeError, match="must define class attribute 'parameters'"):
+
+            class NoParamsTool(Tool):
+                name = "test"
+                description = "test"
+
+                async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                    return ToolOutput(output="ok")
+
+    def test_required_auto_derived_from_parameters(self):
+        class AutoRequiredTool(Tool):
+            name = "auto"
+            description = "test"
+            parameters = {"x": {"type": "string"}, "y": {"type": "integer"}}
+
+            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                return ToolOutput(output="ok")
+
+        assert set(AutoRequiredTool.required) == {"x", "y"}
+
+    def test_explicit_required_not_overridden(self):
+        class PartialRequiredTool(Tool):
+            name = "partial"
+            description = "test"
+            parameters = {"a": {"type": "string"}, "b": {"type": "string"}}
+            required = ["a"]
+
+            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                return ToolOutput(output="ok")
+
+        assert PartialRequiredTool.required == ["a"]
+
+    def test_init_override(self):
+        class OverridableTool(Tool):
+            name = "base"
+            description = "base desc"
+            parameters = {"a": {"type": "string"}}
+
+            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                return ToolOutput(output="ok")
+
+        tool = OverridableTool(name="custom", description="custom desc")
+        assert tool.name == "custom"
+        assert tool.description == "custom desc"
+        assert tool.parameters == {"a": {"type": "string"}}
+
+    def test_class_attrs_work_without_super_init(self):
+        class NoSuperTool(Tool):
+            name = "nosup"
+            description = "no super init"
+            parameters = {"q": {"type": "string"}}
+
+            def __init__(self):
+                pass  # deliberately skip super().__init__()
+
+            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                return ToolOutput(output="ok")
+
+        tool = NoSuperTool()
+        assert tool.name == "nosup"
+        assert tool.description == "no super init"
+        assert tool.parameters == {"q": {"type": "string"}}
+        assert tool.required == ["q"]
