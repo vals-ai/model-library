@@ -37,7 +37,8 @@ class Tool(ABC):
     - Handle errors internally, don't raise from execute()
     - Unhandled exceptions are caught but sent to the LLM as raw strings
 
-    Subclasses must define: name, description, parameters (as class attributes or via __init__).
+    Subclasses must define: name, description, parameters, and required (as class attributes or via __init__).
+    If "required" is not specified, all parameters are assumed to be required.
     """
 
     name: str
@@ -79,6 +80,13 @@ class Tool(ABC):
 
     @property
     def definition(self) -> ToolDefinition:
+        # verifies that required parameters are also parameters
+        for required_param in self.required:
+            if required_param not in self.parameters:
+                raise ValueError(
+                    f"Required parameter '{required_param}' not found in parameters"
+                )
+
         return ToolDefinition(
             name=self.name,
             body=ToolBody(

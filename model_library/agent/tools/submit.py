@@ -21,6 +21,7 @@ class SubmitTool(Tool):
             "description": "The final answer to submit.",
         }
     }
+    required: list[str] = ["answer"]
 
     async def execute(
         self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
