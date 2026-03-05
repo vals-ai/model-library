@@ -165,7 +165,6 @@ async def process_model(model_str: str, provider_name: str):
 
 
 MODEL_OVERRIDES = ["dumbmar", "bedrock", "ai21labs", "o1", "o3-mini", "sonnet-4-6"]
-IGNORED_MODELS = ["inception/mercury", "openai/gpt-5.3-codex"]  # known to be broken
 ERROR_OVERRIDES = [
     "overloaded",
     "rate limit",
