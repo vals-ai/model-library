@@ -138,6 +138,30 @@ async def agent_with_web_search(model: LLM, logger: logging.Logger):
     console_log(f"Turns: {result.total_turns}, Tool calls: {result.tool_calls_count}")
 
 
+async def agent_with_bash(model: LLM, logger: logging.Logger):
+    """Agent with bash: can run shell commands to answer questions."""
+    console_log("\n--- Agent with Bash ---\n")
+
+    from model_library.agent.tools.bash import BashTool
+
+    agent = Agent(
+        logger=logger,
+        llm=model,
+        tools=[BashTool(working_dir="/tmp"), SubmitTool()],
+        config=AgentConfig(max_turns=5),
+    )
+    result = await agent.run(
+        [
+            TextInput(
+                text="Use bash to list the files in /tmp, then submit a summary of what you found."
+            )
+        ]
+    )
+
+    console_log(f"Answer: {result.final_answer}")
+    console_log(f"Turns: {result.total_turns}, Tool calls: {result.tool_calls_count}")
+
+
 async def agent_with_hooks(model: LLM, logger: logging.Logger):
     """Agent with lifecycle hooks: should_stop and determine_answer."""
     console_log("\n--- Agent with Hooks ---\n")
@@ -198,7 +222,8 @@ async def main():
 
     with create_file_logger("llm.agent.example", log_file) as logger:
         # await basic_agent(args.model, logger)
-        await agent_with_submit_tool(model, logger)
+        # await agent_with_submit_tool(model, logger)
+        await agent_with_bash(model, logger)
         # await agent_with_web_search(model, logger)
         # await agent_with_hooks(args.model, logger)
 
