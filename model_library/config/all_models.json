@@ -1,4 +1,172 @@
 {
+    "openai/gpt-5.4-2026-03-05-low": {
+        "company": "OpenAI",
+        "label": "GPT 5.4",
+        "description": "OpenAI's advanced model, suited well for complex agentic tasks such as coding, complex document understanding & generation, general tool-use, and more.",
+        "release_date": "2026-03-05",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2024-09",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 2.5,
+            "output": 15.0,
+            "cache": {
+                "read": 0.25,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "gpt-5.4-2026-03-05",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.4-2026-03-05-low",
+        "slug": "openai_gpt-5.4-2026-03-05-low"
+    },
+    "openai/gpt-5.4-2026-03-05-high": {
+        "company": "OpenAI",
+        "label": "GPT 5.4",
+        "description": "OpenAI's advanced model, suited well for complex agentic tasks such as coding, complex document understanding & generation, general tool-use, and more.",
+        "release_date": "2026-03-05",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2024-09",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 2.5,
+            "output": 15.0,
+            "cache": {
+                "read": 0.25,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-5.4-2026-03-05",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.4-2026-03-05-high",
+        "slug": "openai_gpt-5.4-2026-03-05-high"
+    },
+    "openai/gpt-5.4-2026-03-05": {
+        "company": "OpenAI",
+        "label": "GPT 5.4",
+        "description": "OpenAI's advanced model, suited well for complex agentic tasks such as coding, complex document understanding & generation, general tool-use, and more.",
+        "release_date": "2026-03-05",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2024-09",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 2.5,
+            "output": 15.0,
+            "cache": {
+                "read": 0.25,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-5.4-2026-03-05-high": {
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "openai/gpt-5.4-2026-03-05-low": {
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-5.4-2026-03-05",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.4-2026-03-05",
+        "slug": "openai_gpt-5.4-2026-03-05"
+    },
     "google/gemini-3.1-flash-lite-preview": {
         "company": "Google",
         "label": "Gemini 3.1 Flash Lite Preview",
