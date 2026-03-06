@@ -39,6 +39,16 @@
             "batch": {
                 "input_discount": 0.5,
                 "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 5.0,
+                "output": 22.5,
+                "cache": {
+                    "read": 0.5,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
             }
         },
         "alternative_keys": [],
@@ -90,6 +100,16 @@
             "batch": {
                 "input_discount": 0.5,
                 "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 5.0,
+                "output": 22.5,
+                "cache": {
+                    "read": 0.5,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
             }
         },
         "alternative_keys": [],
@@ -141,6 +161,16 @@
             "batch": {
                 "input_discount": 0.5,
                 "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 5.0,
+                "output": 22.5,
+                "cache": {
+                    "read": 0.5,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
             }
         },
         "alternative_keys": [

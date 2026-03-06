@@ -51,6 +51,12 @@ gpt-5-models:
       output: 15
       cache:
         read: 0.25
+      context:
+        threshold: 272_000
+        input: 5.0
+        output: 22.5
+        cache:
+          read: 0.5
     default_parameters:
       reasoning_effort: "xhigh"
     alternative_keys:
