@@ -6,25 +6,15 @@ import logging
 import sys
 from pathlib import Path
 
-from collections.abc import Callable
-from datetime import date
-
 from model_library.agent.agent import Agent, AgentResult
 from model_library.agent.config import AgentConfig
 from model_library.agent.tool import Tool
-from model_library.agent.tools import BashTool, StopTool, SubmitTool, TavilyWebSearch
+from model_library.agent.tools import TOOL_REGISTRY
 from dotenv import load_dotenv
 
 from model_library.base import TextInput
 from model_library.registry_utils import get_registry_model
 from model_library.utils import create_file_logger
-
-TOOL_REGISTRY: dict[str, Callable[[], Tool]] = {
-    "stop": StopTool,
-    "submit": SubmitTool,
-    "web_search": lambda: TavilyWebSearch(max_end_date=date.today().isoformat()),
-    "bash": lambda: BashTool(working_dir=str(Path.cwd())),
-}
 
 
 def get_tool(name: str) -> Tool:
@@ -91,10 +81,25 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--output", default=None, help="Write AgentResult JSON to this path"
     )
+    parser.add_argument(
+        "--tool-module",
+        default=None,
+        help="Python module name (e.g. 'tools') that exports a TOOL_REGISTRY dict to merge with built-in tools. Ensure the module's parent directory is on PYTHONPATH.",
+    )
     return parser
 
 
+def _load_tool_module(module_name: str) -> None:
+    """Import a Python module by name and merge its TOOL_REGISTRY into the global one."""
+    import importlib
+
+    mod = importlib.import_module(module_name)
+    TOOL_REGISTRY.update(mod.TOOL_REGISTRY)
+
+
 def _collect_tools(args: argparse.Namespace) -> list[Tool]:
+    if args.tool_module:
+        _load_tool_module(args.tool_module)
     tools: list[Tool] = []
     if args.tools:
         for name in args.tools.split(","):

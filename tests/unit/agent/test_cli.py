@@ -11,7 +11,15 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from model_library.agent import AgentConfig
-from model_library.agent.cli import _build_parser, _collect_tools, _read_problem_statement, _run, main
+from model_library.agent.cli import (
+    _build_parser,
+    _collect_tools,
+    _load_tool_module,
+    _read_problem_statement,
+    _run,
+    main,
+)
+from model_library.agent.tools import TOOL_REGISTRY
 from model_library.agent.tools.stop import StopTool
 from model_library.agent.tools.submit import SubmitTool
 from model_library.base.input import TextInput
@@ -90,6 +98,57 @@ class TestCLI:
         args = _parse("--model", "m", "--problem-statement", "x", "--tools", "nonexistent")
         with pytest.raises(KeyError, match="nonexistent"):
             _collect_tools(args)
+
+    # --- --tool-module / _load_tool_module ---
+
+    def test_tool_module_default_is_none(self):
+        args = _parse("--model", "m", "--problem-statement", "x")
+        assert args.tool_module is None
+
+    def test_tool_module_flag_parsed(self):
+        args = _parse("--model", "m", "--problem-statement", "x", "--tool-module", "my_tools")
+        assert args.tool_module == "my_tools"
+
+    def test_load_tool_module_merges_registry(self):
+        fake_tool_cls = lambda: MagicMock()
+        fake_mod = MagicMock()
+        fake_mod.TOOL_REGISTRY = {"custom_tool": fake_tool_cls}
+        original_keys = set(TOOL_REGISTRY.keys())
+        with patch("importlib.import_module", return_value=fake_mod) as mock_import:
+            _load_tool_module("my_tools")
+            mock_import.assert_called_once_with("my_tools")
+        assert "custom_tool" in TOOL_REGISTRY
+        assert TOOL_REGISTRY["custom_tool"] is fake_tool_cls
+        # cleanup
+        del TOOL_REGISTRY["custom_tool"]
+        assert set(TOOL_REGISTRY.keys()) == original_keys
+
+    def test_load_tool_module_missing_raises(self):
+        with pytest.raises(ModuleNotFoundError):
+            _load_tool_module("nonexistent_module_xyz_12345")
+
+    def test_collect_tools_with_tool_module(self):
+        fake_tool = MagicMock()
+        fake_tool_cls = lambda: fake_tool
+        fake_mod = MagicMock()
+        fake_mod.TOOL_REGISTRY = {"custom_tool": fake_tool_cls}
+        args = _parse(
+            "--model", "m", "--problem-statement", "x",
+            "--tool-module", "my_tools", "--tools", "custom_tool",
+        )
+        with patch("importlib.import_module", return_value=fake_mod):
+            tools = _collect_tools(args)
+        assert len(tools) == 1
+        assert tools[0] is fake_tool
+        # cleanup
+        del TOOL_REGISTRY["custom_tool"]
+
+    def test_collect_tools_without_tool_module_skips_import(self):
+        args = _parse("--model", "m", "--problem-statement", "x", "--tools", "submit")
+        with patch("importlib.import_module") as mock_import:
+            tools = _collect_tools(args)
+            mock_import.assert_not_called()
+        assert len(tools) == 1
 
     # --- _read_problem_statement ---
 
