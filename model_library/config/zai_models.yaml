@@ -20,7 +20,6 @@ base-config:
 glm-5-models:
   zai/glm-5:
     label: GLM 5
-    description: "z.AI flagship model"
     release_date: 2026-02-11
     costs_per_million_token: # guessing!!!
       input: 1
@@ -45,7 +44,6 @@ glm-5-models:
 glm-4-models:
   zai/glm-4.7-flashx:
     label: GLM 4.7 Flash
-    description: "z.AI lightweight fast model"
     release_date: 2026-01-19
     properties:
       context_window: 200_000
@@ -64,7 +62,6 @@ glm-4-models:
   
   zai/glm-4.7:
     label: GLM 4.7
-    description: "Latest model from ZAI"
     release_date: 2025-12-22
     properties:
       context_window: 200_000
@@ -81,7 +78,6 @@ glm-4-models:
 
   zai/glm-4.5:
     label: GLM 4.5
-    description: "z.AI old model"
     release_date: 2025-07-28
     properties:
       context_window: 128_000
@@ -101,7 +97,6 @@ glm-4-models:
 
   zai/glm-4.5-air:
     label: GLM 4.5 Air
-    description: "z.AI lightweight model"
     release_date: 2025-07-28
     properties:
       context_window: 128_000
@@ -119,7 +114,6 @@ glm-4-models:
 
   zai/glm-4.6:
     label: GLM 4.6
-    description: "z.AI flagship model"
     release_date: 2025-09-30
     properties:
       context_window: 200_000

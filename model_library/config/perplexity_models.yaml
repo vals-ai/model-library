@@ -24,7 +24,6 @@ perplexity-models:
 
   perplexity/sonar:
     label: Sonar
-    description: Lightweight web search model optimized for fast factual answers with citations.
     documentation_url: https://docs.perplexity.ai/models/models/sonar
     properties:
       context_window: 128000
@@ -34,7 +33,6 @@ perplexity-models:
 
   perplexity/sonar-pro:
     label: Sonar Pro
-    description: Premium search model for deeper research and analytical tasks with higher context window.
     documentation_url: https://docs.perplexity.ai/models/models/sonar-pro
     properties:
       context_window: 200000
@@ -44,7 +42,6 @@ perplexity-models:
 
   perplexity/sonar-reasoning:
     label: Sonar Reasoning
-    description: Reasoning-focused search model that exposes intermediate thinking for step-by-step answers.
     documentation_url: https://docs.perplexity.ai/models/models/sonar-reasoning
     metadata:
       deprecated: true
@@ -57,7 +54,6 @@ perplexity-models:
 
   perplexity/sonar-reasoning-pro:
     label: Sonar Reasoning Pro
-    description: Advanced reasoning model combining multi-step analysis with rich web retrieval.
     documentation_url: https://docs.perplexity.ai/models/models/sonar-reasoning-pro
     properties:
       context_window: 128000
@@ -68,7 +64,6 @@ perplexity-models:
 
   perplexity/sonar-deep-research:
     label: Sonar Deep Research
-    description: Exhaustive research agent that performs multi-engine search, reasoning, and source synthesis.
     documentation_url: https://docs.perplexity.ai/models/models/sonar-deep-research
     properties:
       context_window: 128000

@@ -24,7 +24,6 @@ ai21labs-models:
 
   ai21labs/jamba-large-1.7:
     label: Jamba 1.7 Large
-    description: The most powerful and efficient long context model
     release_date: 2025-07-03
     properties:
       context_window: 256_000
@@ -35,7 +34,6 @@ ai21labs-models:
 
   ai21labs/jamba-mini-1.7:
     label: Jamba 1.7 Mini
-    description: The most powerful and efficient long context model
     release_date: 2025-07-03
     metadata:
       deprecated: true
@@ -48,7 +46,6 @@ ai21labs-models:
 
   ai21labs/jamba-large-1.6:
     label: Jamba 1.6 Large
-    description: The most powerful and efficient long context model
     release_date: 2025-03-06
     metadata:
       deprecated: true
@@ -62,7 +59,6 @@ ai21labs-models:
 
   ai21labs/jamba-mini-1.6:
     label: Jamba 1.6 Mini
-    description: The most powerful and efficient long context model
     release_date: 2025-03-06
     metadata:
       deprecated: true
@@ -76,7 +72,6 @@ ai21labs-models:
 
   ai21labs/jamba-large-1.5:
     label: Jamba 1.5 Large
-    description: The most powerful and efficient long context model
     release_date: 2024-08-22
     properties:
       context_window: 256_000
@@ -90,7 +85,6 @@ ai21labs-models:
 
   ai21labs/jamba-mini-1.5:
     label: Jamba 1.5 Mini
-    description: Efficient & lightweight model for a wide range of tasks
     release_date: 2024-08-22
     properties:
       context_window: 256_000

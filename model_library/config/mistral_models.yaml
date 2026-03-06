@@ -26,7 +26,6 @@ magistral-models:
 
   mistralai/magistral-medium-2506:
     label: Magistral Medium 1.0 (06/2025)
-    description: Magistral Medium 2506
     documentation_url: https://mistral.ai/news/magistral
     release_date: 2025-06-10
     properties:
@@ -43,7 +42,6 @@ magistral-models:
 
   mistralai/magistral-medium-2509:
     label: Magistral Medium 1.2 (09/2025)
-    description: Reasoning model with vision support released in September 2025.
     release_date: 2025-09-18
     properties:
       context_window: 128_000
@@ -57,7 +55,6 @@ magistral-models:
   mistralai/magistral-small-2509:
     label: Magistral Small 1.2 (09/2025)
     open_source: true
-    description: Small reasoning model with vision support released in September 2025.
     release_date: 2025-09-18
     properties:
       context_window: 128_000
@@ -81,7 +78,6 @@ mistralai-models:
 
   mistralai/mistral-large-2512:
     label: Mistral Large 3
-    description: Mistral's latest flagship model
     release_date: 2025-12-02
     open_source: true
     properties:
@@ -98,7 +94,6 @@ mistralai-models:
 
   mistralai/devstral-2512:
     label: Devstral 2
-    description: Enterprise grade coding model that excels at using tools to explore codebases and power software engineering agents.
     documentation_url: https://docs.mistral.ai/models/devstral-2-25-12
     release_date: 2025-12-09
     open_source: true
@@ -116,7 +111,6 @@ mistralai-models:
 
   mistralai/labs-devstral-small-2512:
     label: Devstral Small 2
-    description: Open source coding model that excels at using tools to explore codebases and power software engineering agents.
     documentation_url: https://docs.mistral.ai/models/devstral-small-2-25-12
     release_date: 2025-12-09
     open_source: true
@@ -134,7 +128,6 @@ mistralai-models:
 
   mistralai/mistral-medium-2505:
     label: Mistral Medium 3.1 (05/2025)
-    description: Mistral Medium 2505
     documentation_url: https://mistral.ai/news/mistral-medium-3
     release_date: 2025-05-07
     properties:
@@ -149,7 +142,6 @@ mistralai-models:
 
   mistralai/mistral-small-2503:
     label: Mistral Small 3.1 (03/2025)
-    description: Mistral Small 2503
     documentation_url: https://mistral.ai/news/mistral-small-3-1
     release_date: 2025-03-17
     properties:
@@ -164,7 +156,6 @@ mistralai-models:
 
   mistralai/pixtral-large-2411:
     label: Pixtral Large (11/2024)
-    description: Latest version of the Pixtral Large model.
     release_date: 2024-11-18
     properties:
       context_window: 128_000
@@ -178,7 +169,6 @@ mistralai-models:
 
   mistralai/mistral-large-2411:
     label: Mistral Large (11/2024)
-    description: Latest version of the Mistral Large model.
     release_date: 2024-11-18
     properties:
       context_window: 128_000
@@ -190,7 +180,6 @@ mistralai-models:
 
   mistralai/mistral-small-2402:
     label: Mistral Small (02/2024)
-    description: Latest version of the Mistral Small model.
     release_date: 2024-09-17
     properties:
       context_window: 32_000

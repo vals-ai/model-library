@@ -13,7 +13,6 @@ vals-models:
   vals/dumbmar-5o-ultra-thinking:
     label: Dummy Model
     open_source: false
-    description: Vals Dummy Model for testing
     release_date: null
     supports:
       images: false
@@ -28,7 +27,6 @@ vals-models:
   vals/dumbmar-5o-evaluator:
     label: Dummy Evaluator Model
     open_source: false
-    description: Vals Dummy Model for evaluating
     release_date: null
     supports:
       images: false

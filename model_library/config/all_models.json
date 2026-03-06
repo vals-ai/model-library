@@ -2,7 +2,6 @@
     "openai/gpt-5.4-2026-03-05-low": {
         "company": "OpenAI",
         "label": "GPT 5.4",
-        "description": "OpenAI's advanced model, suited well for complex agentic tasks such as coding, complex document understanding & generation, general tool-use, and more.",
         "release_date": "2026-03-05",
         "open_source": false,
         "documentation_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
@@ -63,7 +62,6 @@
     "openai/gpt-5.4-2026-03-05-high": {
         "company": "OpenAI",
         "label": "GPT 5.4",
-        "description": "OpenAI's advanced model, suited well for complex agentic tasks such as coding, complex document understanding & generation, general tool-use, and more.",
         "release_date": "2026-03-05",
         "open_source": false,
         "documentation_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
@@ -124,7 +122,6 @@
     "openai/gpt-5.4-2026-03-05": {
         "company": "OpenAI",
         "label": "GPT 5.4",
-        "description": "OpenAI's advanced model, suited well for complex agentic tasks such as coding, complex document understanding & generation, general tool-use, and more.",
         "release_date": "2026-03-05",
         "open_source": false,
         "documentation_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
@@ -200,7 +197,6 @@
     "google/gemini-3.1-flash-lite-preview": {
         "company": "Google",
         "label": "Gemini 3.1 Flash Lite Preview",
-        "description": "Google's lightweight model, optimized for speed and cost.",
         "release_date": "2026-03-03",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -252,7 +248,6 @@
     "openai/gpt-5.3-codex": {
         "company": "OpenAI",
         "label": "GPT 5.3 Codex",
-        "description": "GPT-5.3-Codex is OpenAI's frontier agentic coding model designed for long-running, detailed software engineering tasks.",
         "release_date": "2026-02-24",
         "open_source": false,
         "documentation_url": "",
@@ -303,7 +298,6 @@
     "alibaba/qwen3.5-flash": {
         "company": "Alibaba",
         "label": "Qwen 3.5 Flash",
-        "description": "Fast, cost-effective Qwen 3.5 model with thinking enabled by default; ideal for simple tasks. Supports context cache and batch at half price.",
         "release_date": "2026-02-23",
         "open_source": true,
         "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/models",
@@ -348,7 +342,6 @@
     "google/gemini-3.1-pro-preview": {
         "company": "Google",
         "label": "Gemini 3.1 Pro Preview (02/26)",
-        "description": "Gemini 3.1 Pro Preview provides better thinking, improved token efficiency, and a more grounded, factually consistent experience. Optimized for software engineering and agentic workflows.",
         "release_date": "2026-02-19",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -411,7 +404,6 @@
     "anthropic/claude-sonnet-4-6": {
         "company": "Anthropic",
         "label": "Claude Sonnet 4.6",
-        "description": "The latest model in Anthropic's Claude Sonnet series",
         "release_date": "2026-02-17",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -467,7 +459,6 @@
     "alibaba/qwen3.5-plus-thinking": {
         "company": "Alibaba",
         "label": "Qwen 3.5 Plus",
-        "description": "Qwen3.5-397B-A17B \u2014 natively multimodal, open-weight model suited for agentic tasks",
         "release_date": "2026-02-16",
         "open_source": true,
         "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/getting-started/models",
@@ -524,7 +515,6 @@
     "alibaba/qwen3.5-plus": {
         "company": "Alibaba",
         "label": "Qwen 3.5 Plus",
-        "description": "Qwen3.5-397B-A17B \u2014 natively multimodal, open-weight model suited for agentic tasks",
         "release_date": "2026-02-16",
         "open_source": true,
         "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/getting-started/models",
@@ -592,7 +582,6 @@
     "minimax/MiniMax-M2.5-Lightning": {
         "company": "MiniMax",
         "label": "MiniMax-M2.5",
-        "description": null,
         "release_date": "2026-02-12",
         "open_source": true,
         "documentation_url": "https://platform.minimax.io/docs",
@@ -639,7 +628,6 @@
     "minimax/MiniMax-M2.5": {
         "company": "MiniMax",
         "label": "MiniMax-M2.5",
-        "description": null,
         "release_date": "2026-02-12",
         "open_source": true,
         "documentation_url": "https://platform.minimax.io/docs",
@@ -694,7 +682,6 @@
     "zai/glm-5-thinking": {
         "company": "zAI",
         "label": "GLM 5",
-        "description": "z.AI flagship model",
         "release_date": "2026-02-11",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -740,7 +727,6 @@
     "zai/glm-5": {
         "company": "zAI",
         "label": "GLM 5",
-        "description": "z.AI flagship model",
         "release_date": "2026-02-11",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -797,7 +783,6 @@
     "anthropic/claude-opus-4-6-thinking": {
         "company": "Anthropic",
         "label": "Claude Opus 4.6 (Thinking)",
-        "description": null,
         "release_date": "2026-02-05",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -853,7 +838,6 @@
     "anthropic/claude-opus-4-6": {
         "company": "Anthropic",
         "label": "Claude Opus 4.6 (Nonthinking)",
-        "description": null,
         "release_date": "2026-02-05",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -917,7 +901,6 @@
     "kimi/kimi-k2.5-thinking": {
         "company": "Moonshot AI",
         "label": "Kimi K2.5",
-        "description": null,
         "release_date": "2026-01-26",
         "open_source": true,
         "documentation_url": "https://platform.moonshot.ai/docs",
@@ -963,7 +946,6 @@
     "kimi/kimi-k2.5": {
         "company": "Moonshot AI",
         "label": "Kimi K2.5",
-        "description": null,
         "release_date": "2026-01-26",
         "open_source": true,
         "documentation_url": "https://platform.moonshot.ai/docs",
@@ -1020,7 +1002,6 @@
     "alibaba/qwen3-max-2026-01-23": {
         "company": "Alibaba",
         "label": "Qwen 3 Max Thinking",
-        "description": "Qwen 3 Max with enhanced reasoning capabilities",
         "release_date": "2026-01-23",
         "open_source": false,
         "properties": {
@@ -1058,7 +1039,6 @@
     "zai/glm-4.7-flashx": {
         "company": "zAI",
         "label": "GLM 4.7 Flash",
-        "description": "z.AI lightweight fast model",
         "release_date": "2026-01-19",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -1106,7 +1086,6 @@
     "minimax/MiniMax-M2.1": {
         "company": "MiniMax",
         "label": "MiniMax-M2.1",
-        "description": null,
         "release_date": "2025-12-23",
         "open_source": true,
         "documentation_url": "https://platform.minimax.io/docs",
@@ -1153,7 +1132,6 @@
     "zai/glm-4.7": {
         "company": "zAI",
         "label": "GLM 4.7",
-        "description": "Latest model from ZAI",
         "release_date": "2025-12-22",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -1201,7 +1179,6 @@
     "vercel/zai/glm-4.7": {
         "company": "zAI",
         "label": "GLM 4.7",
-        "description": "Latest model from ZAI",
         "release_date": "2025-12-22",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -1247,7 +1224,6 @@
     "xiaomi/mimo-v2-flash": {
         "company": "Xiaomi",
         "label": "MiMo V2 Flash",
-        "description": "MiMo V2 Flash is Xiaomi's Mixture-of-Experts (MoE) language model with 309B total parameters and 15B active parameters. Designed for high-speed reasoning and agentic workflows, it utilizes a novel hybrid attention architecture and Multi-Token Prediction (MTP) to achieve state-of-the-art performance while significantly reducing inference costs.",
         "release_date": "2025-12-17",
         "open_source": true,
         "documentation_url": "https://platform.xiaomimimo.com/#/docs/",
@@ -1293,7 +1269,6 @@
     "google/gemini-3-flash-preview": {
         "company": "Google",
         "label": "Gemini 3 Flash (12/25)",
-        "description": "Google's newest budget workhorse model",
         "release_date": "2025-12-17",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -1345,7 +1320,6 @@
     "openai/gpt-5.2-pro-2025-12-11": {
         "company": "OpenAI",
         "label": "GPT 5.2 Pro",
-        "description": "GPT-5.2 Pro is a higher-compute version of GPT-5.2 designed for stronger, more consistent reasoning on complex tasks.",
         "release_date": "2025-12-11",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5.2-pro",
@@ -1393,7 +1367,6 @@
     "openai/gpt-5.2-pro": {
         "company": "OpenAI",
         "label": "GPT 5.2 Pro",
-        "description": "GPT-5.2 Pro is a higher-compute version of GPT-5.2 designed for stronger, more consistent reasoning on complex tasks.",
         "release_date": "2025-12-11",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5.2-pro",
@@ -1439,7 +1412,6 @@
     "openai/gpt-5.2-codex": {
         "company": "OpenAI",
         "label": "GPT 5.2 Codex",
-        "description": "GPT 5.2 optimized for code",
         "release_date": "2025-12-11",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5.2-codex",
@@ -1490,7 +1462,6 @@
     "openai/gpt-5.2-2025-12-11": {
         "company": "OpenAI",
         "label": "GPT 5.2",
-        "description": "GPT-5.2 is OpenAI's most advanced frontier model for everyday professional use and agentic tasks, with leading long-context reasoning, multi-step tool use, and vision capabilities.",
         "release_date": "2025-12-11",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5.2",
@@ -1543,7 +1514,6 @@
     "openai/gpt-5.2": {
         "company": "OpenAI",
         "label": "GPT 5.2",
-        "description": "GPT-5.2 is OpenAI's most advanced frontier model for everyday professional use and agentic tasks, with leading long-context reasoning, multi-step tool use, and vision capabilities.",
         "release_date": "2025-12-11",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5.2",
@@ -1594,7 +1564,6 @@
     "mistralai/labs-devstral-small-2512": {
         "company": "Mistral",
         "label": "Devstral Small 2",
-        "description": "Open source coding model that excels at using tools to explore codebases and power software engineering agents.",
         "release_date": "2025-12-09",
         "open_source": true,
         "documentation_url": "https://docs.mistral.ai/models/devstral-small-2-25-12",
@@ -1634,7 +1603,6 @@
     "mistralai/devstral-2512": {
         "company": "Mistral",
         "label": "Devstral 2",
-        "description": "Enterprise grade coding model that excels at using tools to explore codebases and power software engineering agents.",
         "release_date": "2025-12-09",
         "open_source": true,
         "documentation_url": "https://docs.mistral.ai/models/devstral-2-25-12",
@@ -1674,7 +1642,6 @@
     "openai/gpt-5.1-codex-max": {
         "company": "OpenAI",
         "label": "GPT 5.1 Codex Max",
-        "description": "GPT 5.1 optimized for code",
         "release_date": "2025-12-04",
         "open_source": false,
         "documentation_url": "",
@@ -1725,7 +1692,6 @@
     "mistralai/mistral-large-2512": {
         "company": "Mistral",
         "label": "Mistral Large 3",
-        "description": "Mistral's latest flagship model",
         "release_date": "2025-12-02",
         "open_source": true,
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
@@ -1765,7 +1731,6 @@
     "fireworks/deepseek-v3p2-thinking": {
         "company": "DeepSeek",
         "label": "DeepSeek V3.2 (Thinking)",
-        "description": "",
         "release_date": "2025-12-01",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -1815,7 +1780,6 @@
     "fireworks/deepseek-v3p2": {
         "company": "DeepSeek",
         "label": "DeepSeek V3.2 (Nonthinking)",
-        "description": "",
         "release_date": "2025-12-01",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -1877,7 +1841,6 @@
     "anthropic/claude-opus-4-5-20251101-thinking": {
         "company": "Anthropic",
         "label": "Claude Opus 4.5 (Thinking)",
-        "description": null,
         "release_date": "2025-11-24",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -1932,7 +1895,6 @@
     "anthropic/claude-opus-4-5-20251101": {
         "company": "Anthropic",
         "label": "Claude Opus 4.5 (Nonthinking)",
-        "description": null,
         "release_date": "2025-11-24",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -1995,7 +1957,6 @@
     "grok/grok-4-1-fast-reasoning": {
         "company": "xAI",
         "label": "Grok 4.1 Fast (Reasoning)",
-        "description": "",
         "release_date": "2025-11-19",
         "open_source": false,
         "documentation_url": "",
@@ -2046,7 +2007,6 @@
     "grok/grok-4-1-fast-non-reasoning": {
         "company": "xAI",
         "label": "Grok 4.1 Fast Non-Reasoning",
-        "description": "",
         "release_date": "2025-11-19",
         "open_source": false,
         "documentation_url": "",
@@ -2097,7 +2057,6 @@
     "google/gemini-3-pro-preview": {
         "company": "Google",
         "label": "Gemini 3 Pro (11/25)",
-        "description": "Gemini 3 Pro, Google's most powerful model.",
         "release_date": "2025-11-18",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -2160,7 +2119,6 @@
     "openai/gpt-5.1-codex-mini": {
         "company": "OpenAI",
         "label": "GPT 5.1 Codex Mini",
-        "description": "OpenAI's miniature coding model",
         "release_date": "2025-11-13",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5.1-codex-mini",
@@ -2211,7 +2169,6 @@
     "openai/gpt-5.1-codex": {
         "company": "OpenAI",
         "label": "GPT 5.1 Codex",
-        "description": "GPT 5.1 optimized for code",
         "release_date": "2025-11-13",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5.1-codex",
@@ -2262,7 +2219,6 @@
     "openai/gpt-5.1-2025-11-13": {
         "company": "OpenAI",
         "label": "GPT 5.1",
-        "description": "GPT-5.1 is OpenAI's flagship model for coding and agentic tasks with configurable reasoning and non-reasoning effort.",
         "release_date": "2025-11-13",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5.1",
@@ -2313,7 +2269,6 @@
     "kimi/kimi-k2-thinking": {
         "company": "Moonshot AI",
         "label": "Kimi K2 Thinking",
-        "description": null,
         "release_date": "2025-11-06",
         "open_source": true,
         "documentation_url": "https://platform.moonshot.ai/docs",
@@ -2366,7 +2321,6 @@
     "inception/mercury": {
         "company": "Inception",
         "label": "Mercury",
-        "description": null,
         "release_date": "2025-11-06",
         "open_source": false,
         "documentation_url": "https://docs.inceptionlabs.ai/get-started/models",
@@ -2403,7 +2357,6 @@
     "fireworks/kimi-k2-thinking": {
         "company": "Moonshot AI",
         "label": "Kimi K2 Thinking",
-        "description": null,
         "release_date": "2025-11-06",
         "open_source": true,
         "documentation_url": "https://platform.moonshot.ai/docs",
@@ -2447,7 +2400,6 @@
     "minimax/MiniMax-M2": {
         "company": "MiniMax",
         "label": "MiniMax-M2",
-        "description": "MiniMax-M2 is a cost-efficient open-source model optimized for agentic applications and coding in particular.",
         "release_date": "2025-10-26",
         "open_source": true,
         "documentation_url": "https://platform.minimax.io/docs",
@@ -2494,7 +2446,6 @@
     "fireworks/minimax-m2": {
         "company": "MiniMax AI",
         "label": "MiniMax-M2",
-        "description": "MiniMax-M2 is a cost-efficient open-source model optimized for agentic applications and coding in particular.",
         "release_date": "2025-10-26",
         "open_source": true,
         "documentation_url": "https://platform.minimax.io/docs",
@@ -2544,7 +2495,6 @@
     "anthropic/claude-haiku-4-5-20251001-thinking": {
         "company": "Anthropic",
         "label": "Claude Haiku 4.5 (Thinking)",
-        "description": null,
         "release_date": "2025-10-15",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -2596,7 +2546,6 @@
     "anthropic/claude-haiku-4-5-20251001": {
         "company": "Anthropic",
         "label": "Claude Haiku 4.5 (Nonthinking)",
-        "description": null,
         "release_date": "2025-10-15",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -2656,7 +2605,6 @@
     "zai/glm-4.6": {
         "company": "zAI",
         "label": "GLM 4.6",
-        "description": "z.AI flagship model",
         "release_date": "2025-09-30",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -2714,7 +2662,6 @@
     "fireworks/glm-4p6": {
         "company": "zAI",
         "label": "GLM 4.6",
-        "description": "z.AI flagship model",
         "release_date": "2025-09-30",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -2760,7 +2707,6 @@
     "deepseek/deepseek-reasoner": {
         "company": "DeepSeek",
         "label": "DeepSeek Reasoner",
-        "description": "DeepSeek's latest reasoning model",
         "release_date": "2025-09-29",
         "open_source": true,
         "documentation_url": "https://api-docs.deepseek.com/",
@@ -2806,7 +2752,6 @@
     "deepseek/deepseek-chat": {
         "company": "DeepSeek",
         "label": "DeepSeek Chat",
-        "description": "DeepSeek's latest chat model",
         "release_date": "2025-09-29",
         "open_source": true,
         "documentation_url": "https://api-docs.deepseek.com/",
@@ -2852,7 +2797,6 @@
     "anthropic/claude-sonnet-4-5-20250929-thinking": {
         "company": "Anthropic",
         "label": "Claude Sonnet 4.5 (Thinking)",
-        "description": "Anthropic's latest flagship model",
         "release_date": "2025-09-29",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -2917,7 +2861,6 @@
     "anthropic/claude-sonnet-4-5-20250929": {
         "company": "Anthropic",
         "label": "Claude Sonnet 4.5 (Nonthinking)",
-        "description": "Anthropic's latest flagship model",
         "release_date": "2025-09-29",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -2990,7 +2933,6 @@
     "google/gemini-2.5-flash-preview-09-2025-thinking": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Preview (9/25) (Thinking)",
-        "description": "Gemini 2.5 Flash is the best price-performance model suitable for large scale processing with support for multiple modalities.",
         "release_date": "2025-09-25",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -3042,7 +2984,6 @@
     "google/gemini-2.5-flash-preview-09-2025": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Preview (9/25) (Nonthinking)",
-        "description": "Gemini 2.5 Flash is the best price-performance model suitable for large scale processing with support for multiple modalities.",
         "release_date": "2025-09-25",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -3102,7 +3043,6 @@
     "google/gemini-2.5-flash-lite-preview-09-2025-thinking": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Lite (9/25) (Thinking)",
-        "description": "Gemini 2.5 Flash-Lite offers ultra-fast, cost-efficient processing at scale, with support for text, images, video, and audio input modalities and large context length.",
         "release_date": "2025-09-25",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -3154,7 +3094,6 @@
     "google/gemini-2.5-flash-lite-preview-09-2025": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Lite (9/25) (Nonthinking)",
-        "description": "Gemini 2.5 Flash-Lite offers ultra-fast, cost-efficient processing at scale, with support for text, images, video, and audio input modalities and large context length.",
         "release_date": "2025-09-25",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -3214,7 +3153,6 @@
     "openai/gpt-5-codex": {
         "company": "OpenAI",
         "label": "GPT 5 Codex",
-        "description": "GPT-5-Codex is a version of GPT-5 optimized for agentic coding tasks.",
         "release_date": "2025-09-23",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5-codex",
@@ -3265,7 +3203,6 @@
     "alibaba/qwen3-vl-plus-2025-09-23": {
         "company": "Alibaba",
         "label": "Qwen 3 VL Plus",
-        "description": "Qwen 3 VL Plus (2025-09-23)",
         "release_date": "2025-09-23",
         "open_source": true,
         "properties": {
@@ -3302,7 +3239,6 @@
     "alibaba/qwen3-max-2025-09-23": {
         "company": "Alibaba",
         "label": "Qwen 3 Max 2025-09-23",
-        "description": "Largest and most recent Qwen Model",
         "release_date": "2025-09-23",
         "open_source": false,
         "properties": {
@@ -3340,7 +3276,6 @@
     "alibaba/qwen3-max": {
         "company": "Alibaba",
         "label": "Qwen 3 Max",
-        "description": "Largest and most recent Qwen Model",
         "release_date": "2025-09-23",
         "open_source": false,
         "properties": {
@@ -3378,7 +3313,6 @@
     "grok/grok-4-fast-reasoning-latest": {
         "company": "xAI",
         "label": "Grok 4 Fast (Reasoning)",
-        "description": "Latest advancement in cost-efficient reasoning models with unified architecture. Handles complex requests with deep chain-of-thought reasoning. Features 2M token context window and native tool use.",
         "release_date": "2025-09-19",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-4-fast-reasoning",
@@ -3429,7 +3363,6 @@
     "grok/grok-4-fast-reasoning": {
         "company": "xAI",
         "label": "Grok 4 Fast (Reasoning)",
-        "description": "Latest advancement in cost-efficient reasoning models with unified architecture. Handles complex requests with deep chain-of-thought reasoning. Features 2M token context window and native tool use.",
         "release_date": "2025-09-19",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-4-fast-reasoning",
@@ -3483,7 +3416,6 @@
     "grok/grok-4-fast-non-reasoning-latest": {
         "company": "xAI",
         "label": "Grok 4 Fast (Non-Reasoning)",
-        "description": "Cost-efficient model focused on speed and efficiency for straightforward tasks like summarization or classification without deep logical processing. Unified architecture with reasoning variant, steered via system prompts.",
         "release_date": "2025-09-19",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-4-fast-non-reasoning",
@@ -3534,7 +3466,6 @@
     "grok/grok-4-fast-non-reasoning": {
         "company": "xAI",
         "label": "Grok 4 Fast (Non-Reasoning)",
-        "description": "Cost-efficient model focused on speed and efficiency for straightforward tasks like summarization or classification without deep logical processing. Unified architecture with reasoning variant, steered via system prompts.",
         "release_date": "2025-09-19",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-4-fast-non-reasoning",
@@ -3587,7 +3518,6 @@
     "grok/grok-4-fast": {
         "company": "xAI",
         "label": "Grok 4 Fast (Reasoning)",
-        "description": "Latest advancement in cost-efficient reasoning models with unified architecture. Handles complex requests with deep chain-of-thought reasoning. Features 2M token context window and native tool use.",
         "release_date": "2025-09-19",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-4-fast-reasoning",
@@ -3638,7 +3568,6 @@
     "mistralai/magistral-small-2509": {
         "company": "Mistral",
         "label": "Magistral Small 1.2 (09/2025)",
-        "description": "Small reasoning model with vision support released in September 2025.",
         "release_date": "2025-09-18",
         "open_source": true,
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
@@ -3678,7 +3607,6 @@
     "mistralai/magistral-medium-2509": {
         "company": "Mistral",
         "label": "Magistral Medium 1.2 (09/2025)",
-        "description": "Reasoning model with vision support released in September 2025.",
         "release_date": "2025-09-18",
         "open_source": false,
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
@@ -3718,7 +3646,6 @@
     "alibaba/qwen3-max-preview": {
         "company": "Alibaba",
         "label": "Qwen 3 Max Preview",
-        "description": "Preview of the largest and most recent Qwen Model",
         "release_date": "2025-09-05",
         "open_source": false,
         "properties": {
@@ -3756,7 +3683,6 @@
     "fireworks/kimi-k2-instruct-0905": {
         "company": "Kimi",
         "label": "Kimi K2 Instruct 0905",
-        "description": "Kimi K2 0905 is an updated version of Kimi K2, a state-of-the-art mixture-of-experts (MoE) language model with 32 billion activated parameters and 1 trillion total parameters. Kimi K2 0905 has improved coding abilities, a longer context window, and agentic tool use, and a longer (262K) context window.",
         "release_date": "2025-09-04",
         "open_source": true,
         "documentation_url": "https://www.kimi.com/",
@@ -3801,7 +3727,6 @@
     "grok/grok-code-fast-1-0825": {
         "company": "xAI",
         "label": "Grok Code Fast",
-        "description": "A speedy and economical reasoning model that excels at agentic coding. Tailored specifically for code generation and debugging across multiple programming languages.",
         "release_date": "2025-08-25",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-code-fast-1",
@@ -3847,7 +3772,6 @@
     "grok/grok-code-fast-1": {
         "company": "xAI",
         "label": "Grok Code Fast",
-        "description": "A speedy and economical reasoning model that excels at agentic coding. Tailored specifically for code generation and debugging across multiple programming languages.",
         "release_date": "2025-08-25",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-code-fast-1",
@@ -3896,7 +3820,6 @@
     "grok/grok-code-fast": {
         "company": "xAI",
         "label": "Grok Code Fast",
-        "description": "A speedy and economical reasoning model that excels at agentic coding. Tailored specifically for code generation and debugging across multiple programming languages.",
         "release_date": "2025-08-25",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-code-fast-1",
@@ -3942,7 +3865,6 @@
     "fireworks/deepseek-v3p1": {
         "company": "DeepSeek",
         "label": "DeepSeek V3.1",
-        "description": "",
         "release_date": "2025-08-21",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -3990,7 +3912,6 @@
     "openai/gpt-5-nano-2025-08-07": {
         "company": "OpenAI",
         "label": "GPT 5 Nano",
-        "description": "GPT-5 nano is the fastest, most cost-efficient version of GPT-5, optimized for summarization and classification tasks.",
         "release_date": "2025-08-07",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5-nano",
@@ -4043,7 +3964,6 @@
     "openai/gpt-5-mini-2025-08-07": {
         "company": "OpenAI",
         "label": "GPT 5 Mini",
-        "description": "GPT-5 mini is a faster, more cost-efficient version of GPT-5 optimized for well-defined tasks.",
         "release_date": "2025-08-07",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5-mini",
@@ -4096,7 +4016,6 @@
     "openai/gpt-5-2025-08-07": {
         "company": "OpenAI",
         "label": "GPT 5",
-        "description": "GPT-5 is OpenAI's flagship model for coding, reasoning, and agentic tasks across domains.",
         "release_date": "2025-08-07",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5",
@@ -4149,7 +4068,6 @@
     "azure/gpt-5-nano-2025-08-07": {
         "company": "OpenAI",
         "label": "GPT 5 Nano",
-        "description": "GPT-5 nano is the fastest, most cost-efficient version of GPT-5, optimized for summarization and classification tasks.",
         "release_date": "2025-08-07",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5-nano",
@@ -4200,7 +4118,6 @@
     "azure/gpt-5-mini-2025-08-07": {
         "company": "OpenAI",
         "label": "GPT 5 Mini",
-        "description": "GPT-5 mini is a faster, more cost-efficient version of GPT-5 optimized for well-defined tasks.",
         "release_date": "2025-08-07",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5-mini",
@@ -4251,7 +4168,6 @@
     "azure/gpt-5-2025-08-07": {
         "company": "OpenAI",
         "label": "GPT 5",
-        "description": "GPT-5 is OpenAI's flagship model for coding, reasoning, and agentic tasks across domains.",
         "release_date": "2025-08-07",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-5",
@@ -4302,7 +4218,6 @@
     "fireworks/gpt-oss-20b": {
         "company": "OpenAI",
         "label": "GPT OSS 20B",
-        "description": "",
         "release_date": "2025-08-05",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -4347,7 +4262,6 @@
     "fireworks/gpt-oss-120b": {
         "company": "OpenAI",
         "label": "GPT OSS 120B",
-        "description": "",
         "release_date": "2025-08-05",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -4392,7 +4306,6 @@
     "bedrock/claude-opus-4-1-20250805-v1-thinking": {
         "company": "Amazon",
         "label": "Claude Opus 4.1 (Thinking)",
-        "description": null,
         "release_date": "2025-08-05",
         "open_source": false,
         "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
@@ -4432,7 +4345,6 @@
     "bedrock/claude-opus-4-1-20250805-v1": {
         "company": "Amazon",
         "label": "Claude Opus 4.1 (Nonthinking)",
-        "description": null,
         "release_date": "2025-08-05",
         "open_source": false,
         "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
@@ -4480,7 +4392,6 @@
     "anthropic/claude-opus-4-1-20250805-thinking": {
         "company": "Anthropic",
         "label": "Claude Opus 4.1 (Thinking)",
-        "description": "Advanced model for specialized complex tasks with superior reasoning and 200K context window.",
         "release_date": "2025-08-05",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -4532,7 +4443,6 @@
     "anthropic/claude-opus-4-1-20250805": {
         "company": "Anthropic",
         "label": "Claude Opus 4.1 (Nonthinking)",
-        "description": "Advanced model for specialized complex tasks with superior reasoning and 200K context window.",
         "release_date": "2025-08-05",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -4592,7 +4502,6 @@
     "zai/glm-4.5-air": {
         "company": "zAI",
         "label": "GLM 4.5 Air",
-        "description": "z.AI lightweight model",
         "release_date": "2025-07-28",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -4645,7 +4554,6 @@
     "zai/glm-4.5": {
         "company": "zAI",
         "label": "GLM 4.5",
-        "description": "z.AI old model",
         "release_date": "2025-07-28",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -4703,7 +4611,6 @@
     "together/zai-org/GLM-4.5-Air-FP8": {
         "company": "zAI",
         "label": "GLM 4.5 Air",
-        "description": "z.AI lightweight model",
         "release_date": "2025-07-28",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -4749,7 +4656,6 @@
     "fireworks/glm-4p5": {
         "company": "zAI",
         "label": "GLM 4.5",
-        "description": "z.AI old model",
         "release_date": "2025-07-28",
         "open_source": true,
         "documentation_url": "https://docs.z.ai/",
@@ -4795,7 +4701,6 @@
     "google/gemini-2.5-flash-lite-thinking": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Lite (Thinking)",
-        "description": "Gemini 2.5 Flash-Lite offers ultra-fast, cost-efficient processing at scale, with support for text, images, video, and audio input modalities and large context length.",
         "release_date": "2025-07-22",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -4847,7 +4752,6 @@
     "google/gemini-2.5-flash-lite": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Lite (Nonthinking)",
-        "description": "Gemini 2.5 Flash-Lite offers ultra-fast, cost-efficient processing at scale, with support for text, images, video, and audio input modalities and large context length.",
         "release_date": "2025-07-22",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -4907,7 +4811,6 @@
     "google/gemini-2.5-pro": {
         "company": "Google",
         "label": "Gemini 2.5 Pro",
-        "description": "Gemini 2.5 Pro is Google's most advanced Gemini model capable of complex reasoning over code, math, STEM problems and analyzing large datasets using multimodal inputs including audio, images, video, and PDFs with a context window exceeding 1 million tokens.",
         "release_date": "2025-07-17",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -4969,7 +4872,6 @@
     "google/gemini-2.5-flash-thinking": {
         "company": "Google",
         "label": "Gemini 2.5 Flash (7/17) (Thinking)",
-        "description": "Gemini 2.5 Flash is the best price-performance model suitable for large scale processing with support for multiple modalities, a 1 million token context window, and strong reasoning capabilities.",
         "release_date": "2025-07-17",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -5021,7 +4923,6 @@
     "google/gemini-2.5-flash": {
         "company": "Google",
         "label": "Gemini 2.5 Flash (7/17) (Nonthinking)",
-        "description": "Gemini 2.5 Flash is the best price-performance model suitable for large scale processing with support for multiple modalities, a 1 million token context window, and strong reasoning capabilities.",
         "release_date": "2025-07-17",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -5081,7 +4982,6 @@
     "together/moonshotai/Kimi-K2-Instruct": {
         "company": "Kimi",
         "label": "Kimi K2 Instruct",
-        "description": "Kimi K2 Instruct",
         "release_date": "2025-07-11",
         "open_source": true,
         "documentation_url": "https://www.kimi.com/",
@@ -5129,7 +5029,6 @@
     "grok/grok-4-latest": {
         "company": "xAI",
         "label": "Grok 4",
-        "description": "Latest and greatest flagship model offering unparalleled performance in natural language, math and reasoning. The perfect jack of all trades with native tool use and structured outputs support.",
         "release_date": "2025-07-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-4-0709",
@@ -5180,7 +5079,6 @@
     "grok/grok-4-0709": {
         "company": "xAI",
         "label": "Grok 4",
-        "description": "Latest and greatest flagship model offering unparalleled performance in natural language, math and reasoning. The perfect jack of all trades with native tool use and structured outputs support.",
         "release_date": "2025-07-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-4-0709",
@@ -5234,7 +5132,6 @@
     "grok/grok-4": {
         "company": "xAI",
         "label": "Grok 4",
-        "description": "Latest and greatest flagship model offering unparalleled performance in natural language, math and reasoning. The perfect jack of all trades with native tool use and structured outputs support.",
         "release_date": "2025-07-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-4-0709",
@@ -5285,7 +5182,6 @@
     "ai21labs/jamba-mini-1.7": {
         "company": "AI21 Labs",
         "label": "Jamba 1.7 Mini",
-        "description": "The most powerful and efficient long context model",
         "release_date": "2025-07-03",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -5324,7 +5220,6 @@
     "ai21labs/jamba-large-1.7": {
         "company": "AI21 Labs",
         "label": "Jamba 1.7 Large",
-        "description": "The most powerful and efficient long context model",
         "release_date": "2025-07-03",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -5363,7 +5258,6 @@
     "openai/o4-mini-deep-research-2025-06-26": {
         "company": "OpenAI",
         "label": "o4 Mini Deep Research",
-        "description": "o4-mini-deep-research is a faster, more affordable deep research model designed for complex, multi-step research tasks.",
         "release_date": "2025-06-26",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o4-mini-deep-research",
@@ -5416,7 +5310,6 @@
     "openai/o4-mini-deep-research": {
         "company": "OpenAI",
         "label": "o4 Mini Deep Research",
-        "description": "o4-mini-deep-research is a faster, more affordable deep research model for complex, multi-step research tasks.",
         "release_date": "2025-06-26",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o4-mini-deep-research",
@@ -5469,7 +5362,6 @@
     "openai/o3-deep-research-2025-06-26": {
         "company": "OpenAI",
         "label": "o3 Deep Research",
-        "description": "o3-deep-research is OpenAI's most advanced deep-research model, built for complex, multi-step research tasks. It can search and synthesize information from across the internet and from your own data via MCP connectors.",
         "release_date": "2025-06-26",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o3-deep-research",
@@ -5522,7 +5414,6 @@
     "openai/o3-deep-research": {
         "company": "OpenAI",
         "label": "o3 Deep Research",
-        "description": "o3-deep-research is OpenAI's most advanced deep research model, designed to tackle complex, multi-step research tasks by searching and synthesizing information from across the internet and user data (via MCP connectors).",
         "release_date": "2025-06-26",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o3-deep-research",
@@ -5575,7 +5466,6 @@
     "google/gemini-2.5-flash-lite-preview-06-17-thinking": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Lite Preview 6/17 (Thinking)",
-        "description": "Gemini 2.5 Flash-Lite offers ultra-fast, cost-efficient processing at scale, with support for text, images, video, and audio input modalities and large context length.",
         "release_date": "2025-06-17",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -5627,7 +5517,6 @@
     "google/gemini-2.5-flash-lite-preview-06-17": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Lite Preview 6/17 (Nonthinking)",
-        "description": "Gemini 2.5 Flash-Lite offers ultra-fast, cost-efficient processing at scale, with support for text, images, video, and audio input modalities and large context length.",
         "release_date": "2025-06-17",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -5687,7 +5576,6 @@
     "openai/o3-pro-2025-06-10": {
         "company": "OpenAI",
         "label": "o3 Pro",
-        "description": "o3-pro is a higher-compute version of the o3 family designed for stronger, more consistent reasoning.",
         "release_date": "2025-06-10",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o3-pro",
@@ -5737,7 +5625,6 @@
     "mistralai/magistral-medium-2506": {
         "company": "Mistral",
         "label": "Magistral Medium 1.0 (06/2025)",
-        "description": "Magistral Medium 2506",
         "release_date": "2025-06-10",
         "open_source": false,
         "documentation_url": "https://mistral.ai/news/magistral",
@@ -5777,7 +5664,6 @@
     "google/gemini-2.5-pro-preview-06-05": {
         "company": "Google",
         "label": "Gemini 2.5 Pro Preview",
-        "description": "Gemini 2.5 Pro is Google's most advanced Gemini model capable of complex reasoning over code, math, STEM problems and analyzing large datasets using multimodal inputs including audio, images, video, and PDFs with a context window exceeding 1 million tokens.",
         "release_date": "2025-06-05",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -5829,7 +5715,6 @@
     "bedrock/claude-sonnet-4-20250514-v1-thinking": {
         "company": "Amazon",
         "label": "Claude Sonnet 4 (Thinking)",
-        "description": "Anthropic's latest-generation workhorse model, offering a balance of performance and speed.",
         "release_date": "2025-05-22",
         "open_source": false,
         "documentation_url": "https://www.anthropic.com/claude/sonnet",
@@ -5886,7 +5771,6 @@
     "bedrock/claude-sonnet-4-20250514-v1": {
         "company": "Amazon",
         "label": "Claude Sonnet 4 (Nonthinking)",
-        "description": "Anthropic's latest-generation workhorse model, offering a balance of performance and speed.",
         "release_date": "2025-05-22",
         "open_source": false,
         "documentation_url": "https://www.anthropic.com/claude/sonnet",
@@ -5951,7 +5835,6 @@
     "bedrock/claude-opus-4-20250514-v1-thinking": {
         "company": "Amazon",
         "label": "Claude Opus 4 (Thinking)",
-        "description": "Anthropic's most powerful model.",
         "release_date": "2025-05-22",
         "open_source": false,
         "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
@@ -5997,7 +5880,6 @@
     "bedrock/claude-opus-4-20250514-v1": {
         "company": "Amazon",
         "label": "Claude Opus 4 (Nonthinking)",
-        "description": "Anthropic's most powerful model.",
         "release_date": "2025-05-22",
         "open_source": false,
         "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
@@ -6051,7 +5933,6 @@
     "anthropic/claude-sonnet-4-20250514-thinking": {
         "company": "Anthropic",
         "label": "Claude Sonnet 4 (Thinking)",
-        "description": "Balanced high-performance AI for coding, agents, and production workloads, with extended context and reasoning.",
         "release_date": "2025-05-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -6116,7 +5997,6 @@
     "anthropic/claude-sonnet-4-20250514": {
         "company": "Anthropic",
         "label": "Claude Sonnet 4 (Nonthinking)",
-        "description": "Balanced high-performance AI for coding, agents, and production workloads, with extended context and reasoning.",
         "release_date": "2025-05-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -6192,7 +6072,6 @@
     "anthropic/claude-opus-4-20250514-thinking": {
         "company": "Anthropic",
         "label": "Claude Opus 4 (Thinking)",
-        "description": "Previous flagship for advanced, specialized reasoning and technical agent applications.",
         "release_date": "2025-05-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -6244,7 +6123,6 @@
     "anthropic/claude-opus-4-20250514": {
         "company": "Anthropic",
         "label": "Claude Opus 4 (Nonthinking)",
-        "description": "Previous flagship for advanced, specialized reasoning and technical agent applications.",
         "release_date": "2025-05-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -6304,7 +6182,6 @@
     "google/gemini-2.5-flash-preview-05-20-thinking": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Preview 5/20 (Thinking)",
-        "description": "Gemini 2.5 Flash is the best price-performance model suitable for large scale processing with support for multiple modalities, a 1 million token context window, and strong reasoning capabilities.",
         "release_date": "2025-05-20",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -6356,7 +6233,6 @@
     "google/gemini-2.5-flash-preview-05-20": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Preview 5/20 (Nonthinking)",
-        "description": "Gemini 2.5 Flash is the best price-performance model suitable for large scale processing with support for multiple modalities, a 1 million token context window, and strong reasoning capabilities.",
         "release_date": "2025-05-20",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -6416,7 +6292,6 @@
     "mistralai/mistral-medium-2505": {
         "company": "Mistral",
         "label": "Mistral Medium 3.1 (05/2025)",
-        "description": "Mistral Medium 2505",
         "release_date": "2025-05-07",
         "open_source": false,
         "documentation_url": "https://mistral.ai/news/mistral-medium-3",
@@ -6456,7 +6331,6 @@
     "google/gemini-2.5-pro-preview-05-06": {
         "company": "Google",
         "label": "Gemini 2.5 Pro Preview",
-        "description": "Gemini 2.5 Pro is Google's most advanced Gemini model capable of complex reasoning over code, math, STEM problems and analyzing large datasets using multimodal inputs including audio, images, video, and PDFs with a context window exceeding 1 million tokens.",
         "release_date": "2025-05-06",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -6508,7 +6382,6 @@
     "fireworks/qwen3-235b-a22b": {
         "company": "Alibaba",
         "label": "Qwen 3 (235B)",
-        "description": "",
         "release_date": "2025-04-28",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -6556,7 +6429,6 @@
     "google/gemini-2.5-flash-preview-04-17-thinking": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Preview 4/17 (Thinking)",
-        "description": "Gemini 2.5 Flash is the best price-performance model suitable for large scale processing with support for multiple modalities, a 1 million token context window, and strong reasoning capabilities.",
         "release_date": "2025-04-17",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -6608,7 +6480,6 @@
     "google/gemini-2.5-flash-preview-04-17": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Preview 4/17 (Nonthinking)",
-        "description": "Gemini 2.5 Flash is the best price-performance model suitable for large scale processing with support for multiple modalities, a 1 million token context window, and strong reasoning capabilities.",
         "release_date": "2025-04-17",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -6668,7 +6539,6 @@
     "openai/o4-mini-2025-04-16": {
         "company": "OpenAI",
         "label": "o4 Mini",
-        "description": "o4-mini is a small, cost-efficient o-series reasoning model optimized for fast, effective reasoning.",
         "release_date": "2025-04-16",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o4-mini",
@@ -6721,7 +6591,6 @@
     "openai/o3-2025-04-16": {
         "company": "OpenAI",
         "label": "o3",
-        "description": "o3 is a reasoning model for complex tasks, well-rounded across domains including math, science, coding, and visual reasoning.",
         "release_date": "2025-04-16",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o3",
@@ -6774,7 +6643,6 @@
     "azure/o4-mini-2025-04-16": {
         "company": "OpenAI",
         "label": "o4 Mini",
-        "description": "o4-mini is a small, cost-efficient o-series reasoning model optimized for fast, effective reasoning.",
         "release_date": "2025-04-16",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o4-mini",
@@ -6825,7 +6693,6 @@
     "azure/o3-2025-04-16": {
         "company": "OpenAI",
         "label": "o3",
-        "description": "o3 is a reasoning model for complex tasks, well-rounded across domains including math, science, coding, and visual reasoning.",
         "release_date": "2025-04-16",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o3",
@@ -6876,7 +6743,6 @@
     "openai/gpt-4.1-nano-2025-04-14": {
         "company": "OpenAI",
         "label": "GPT 4.1 Nano",
-        "description": "GPT-4.1 nano is the fastest, most cost-efficient version of GPT-4.1 optimized for instruction following and tool calling.",
         "release_date": "2025-04-14",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4.1-nano",
@@ -6930,7 +6796,6 @@
     "openai/gpt-4.1-mini-2025-04-14": {
         "company": "OpenAI",
         "label": "GPT 4.1 Mini",
-        "description": "GPT-4.1 mini is a smaller, faster version of GPT-4.1 optimized for instruction following and tool calling.",
         "release_date": "2025-04-14",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4.1-mini",
@@ -6984,7 +6849,6 @@
     "openai/gpt-4.1-2025-04-14": {
         "company": "OpenAI",
         "label": "GPT 4.1",
-        "description": "GPT-4.1 is optimized for instruction following and tool calling.",
         "release_date": "2025-04-14",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4.1",
@@ -7038,7 +6902,6 @@
     "azure/gpt-4.1-nano-2025-04-14": {
         "company": "OpenAI",
         "label": "GPT 4.1 Nano",
-        "description": "GPT-4.1 nano is the fastest, most cost-efficient version of GPT-4.1 optimized for instruction following and tool calling.",
         "release_date": "2025-04-14",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4.1-nano",
@@ -7090,7 +6953,6 @@
     "azure/gpt-4.1-mini-2025-04-14": {
         "company": "OpenAI",
         "label": "GPT 4.1 Mini",
-        "description": "GPT-4.1 mini is a smaller, faster version of GPT-4.1 optimized for instruction following and tool calling.",
         "release_date": "2025-04-14",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4.1-mini",
@@ -7142,7 +7004,6 @@
     "azure/gpt-4.1-2025-04-14": {
         "company": "OpenAI",
         "label": "GPT 4.1",
-        "description": "GPT-4.1 is optimized for instruction following and tool calling.",
         "release_date": "2025-04-14",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4.1",
@@ -7194,7 +7055,6 @@
     "grok/grok-3-mini-low-reasoning": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7241,7 +7101,6 @@
     "grok/grok-3-mini-latest": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7287,7 +7146,6 @@
     "grok/grok-3-mini-high-reasoning": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7334,7 +7192,6 @@
     "grok/grok-3-mini-fast-low-reasoning": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7381,7 +7238,6 @@
     "grok/grok-3-mini-fast-latest": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7427,7 +7283,6 @@
     "grok/grok-3-mini-fast-high-reasoning": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7474,7 +7329,6 @@
     "grok/grok-3-mini-fast-beta": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7520,7 +7374,6 @@
     "grok/grok-3-mini-fast": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7566,7 +7419,6 @@
     "grok/grok-3-mini-beta": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7612,7 +7464,6 @@
     "grok/grok-3-mini": {
         "company": "xAI",
         "label": "Grok 3 Mini Reasoning",
-        "description": "Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3-mini",
@@ -7692,7 +7543,6 @@
     "grok/grok-3-latest": {
         "company": "xAI",
         "label": "Grok 3",
-        "description": "Excels at enterprise use cases like data extraction, coding, and text summarization. Possesses deep domain knowledge in finance, healthcare, law, and science.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3",
@@ -7738,7 +7588,6 @@
     "grok/grok-3-fast-latest": {
         "company": "xAI",
         "label": "Grok 3",
-        "description": "Excels at enterprise use cases like data extraction, coding, and text summarization. Possesses deep domain knowledge in finance, healthcare, law, and science.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3",
@@ -7784,7 +7633,6 @@
     "grok/grok-3-fast-beta": {
         "company": "xAI",
         "label": "Grok 3",
-        "description": "Excels at enterprise use cases like data extraction, coding, and text summarization. Possesses deep domain knowledge in finance, healthcare, law, and science.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3",
@@ -7830,7 +7678,6 @@
     "grok/grok-3-fast": {
         "company": "xAI",
         "label": "Grok 3",
-        "description": "Excels at enterprise use cases like data extraction, coding, and text summarization. Possesses deep domain knowledge in finance, healthcare, law, and science.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3",
@@ -7876,7 +7723,6 @@
     "grok/grok-3-beta": {
         "company": "xAI",
         "label": "Grok 3",
-        "description": "Excels at enterprise use cases like data extraction, coding, and text summarization. Possesses deep domain knowledge in finance, healthcare, law, and science.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3",
@@ -7922,7 +7768,6 @@
     "grok/grok-3": {
         "company": "xAI",
         "label": "Grok 3",
-        "description": "Excels at enterprise use cases like data extraction, coding, and text summarization. Possesses deep domain knowledge in finance, healthcare, law, and science.",
         "release_date": "2025-04-09",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs/models/grok-3",
@@ -7974,7 +7819,6 @@
     "together/meta-llama/Llama-4-Scout-17B-16E-Instruct": {
         "company": "Meta",
         "label": "Llama 4 Scout",
-        "description": "Llama 4 Scout 17B 16E Instruct FP8",
         "release_date": "2025-04-05",
         "open_source": true,
         "documentation_url": "https://ai.meta.com/blog/llama-4-multimodal-intelligence/",
@@ -8019,7 +7863,6 @@
     "together/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8": {
         "company": "Meta",
         "label": "Llama 4 Maverick",
-        "description": "Llama 4 Maverick 17B 128E Instruct FP8",
         "release_date": "2025-04-05",
         "open_source": true,
         "documentation_url": "https://ai.meta.com/blog/llama-4-multimodal-intelligence/",
@@ -8064,7 +7907,6 @@
     "google/gemini-2.5-pro-preview-03-25": {
         "company": "Google",
         "label": "Gemini 2.5 Pro Preview",
-        "description": "Gemini 2.5 Pro is Google's most advanced Gemini model capable of complex reasoning over code, math, STEM problems and analyzing large datasets using multimodal inputs including audio, images, video, and PDFs with a context window exceeding 1 million tokens.",
         "release_date": "2025-04-05",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -8116,7 +7958,6 @@
     "fireworks/llama4-scout-instruct-basic": {
         "company": "Meta",
         "label": "Llama 4 Scout",
-        "description": "Llama 4 Scout SOTA 128-expert MoE powerhouse for multilingual image/text understanding.",
         "release_date": "2025-04-05",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -8161,7 +8002,6 @@
     "fireworks/llama4-maverick-instruct-basic": {
         "company": "Meta",
         "label": "Llama 4 Maverick",
-        "description": "Llama 4 Maverick SOTA 128-expert MoE powerhouse for multilingual image/text understanding.",
         "release_date": "2025-04-05",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -8206,7 +8046,6 @@
     "google/gemini-2.5-pro-exp-03-25": {
         "company": "Google",
         "label": "Gemini 2.5 Pro Exp",
-        "description": "Gemini 2.5 Pro is Google's most advanced Gemini model capable of complex reasoning over code, math, STEM problems and analyzing large datasets using multimodal inputs including audio, images, video, and PDFs with a context window exceeding 1 million tokens.",
         "release_date": "2025-03-25",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -8258,7 +8097,6 @@
     "fireworks/deepseek-v3-0324": {
         "company": "DeepSeek",
         "label": "DeepSeek V3 (03/24/2025)",
-        "description": "",
         "release_date": "2025-03-24",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -8306,7 +8144,6 @@
     "mistralai/mistral-small-2503": {
         "company": "Mistral",
         "label": "Mistral Small 3.1 (03/2025)",
-        "description": "Mistral Small 2503",
         "release_date": "2025-03-17",
         "open_source": false,
         "documentation_url": "https://mistral.ai/news/mistral-small-3-1",
@@ -8346,7 +8183,6 @@
     "cohere/command-a-03-2025": {
         "company": "Cohere",
         "label": "Command A",
-        "description": "Command A is Cohere's most performant model to date, excelling at tool use, agents, retrieval augmented generation (RAG), and multilingual use cases. It supports a context length of 256K tokens with high throughput.",
         "release_date": "2025-03-13",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -8386,7 +8222,6 @@
     "google/gemma-3-27b-it": {
         "company": "Google",
         "label": "Gemma 3 27B it",
-        "description": "Gemma 3 is an open generative AI model optimized for everyday device use such as phones and tablets, capable of handling text, audio, and vision inputs with efficient parameter caching techniques.",
         "release_date": "2025-03-12",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -8431,7 +8266,6 @@
     "ai21labs/jamba-mini-1.6": {
         "company": "AI21 Labs",
         "label": "Jamba 1.6 Mini",
-        "description": "The most powerful and efficient long context model",
         "release_date": "2025-03-06",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -8472,7 +8306,6 @@
     "ai21labs/jamba-large-1.6": {
         "company": "AI21 Labs",
         "label": "Jamba 1.6 Large",
-        "description": "The most powerful and efficient long context model",
         "release_date": "2025-03-06",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -8513,7 +8346,6 @@
     "ai21labs/jamba-1.6-mini": {
         "company": "AI21 Labs",
         "label": "Jamba 1.6 Mini",
-        "description": "The most powerful and efficient long context model",
         "release_date": "2025-03-06",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -8552,7 +8384,6 @@
     "ai21labs/jamba-1.6-large": {
         "company": "AI21 Labs",
         "label": "Jamba 1.6 Large",
-        "description": "The most powerful and efficient long context model",
         "release_date": "2025-03-06",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -8591,7 +8422,6 @@
     "bedrock/deepseek-r1-v1": {
         "company": "Amazon",
         "label": "DeepSeek R1 (Bedrock)",
-        "description": "DeepSeek R1, hosted on Bedrock.",
         "release_date": "2025-03-03",
         "open_source": false,
         "documentation_url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-deepseek.html",
@@ -8631,7 +8461,6 @@
     "openai/gpt-4.5-preview-2025-02-27": {
         "company": "OpenAI",
         "label": "GPT 4.5 Preview",
-        "description": "GPT-4.5 Preview is a research preview and deprecated large model.",
         "release_date": "2025-02-27",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4.5-preview",
@@ -8682,7 +8511,6 @@
     "anthropic/claude-3-7-sonnet-20250219-thinking": {
         "company": "Anthropic",
         "label": "Claude 3.7 Sonnet (Thinking)",
-        "description": "Hybrid reasoning agent, high intelligence, vision inputs, and fast code/content generation.",
         "release_date": "2025-02-24",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -8733,7 +8561,6 @@
     "anthropic/claude-3-7-sonnet-20250219": {
         "company": "Anthropic",
         "label": "Claude 3.7 Sonnet (Nonthinking)",
-        "description": "Hybrid reasoning agent, high intelligence, vision inputs, and fast code/content generation.",
         "release_date": "2025-02-24",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -8792,7 +8619,6 @@
     "bedrock/claude-3-7-sonnet-20250219-v1": {
         "company": "Amazon",
         "label": "Claude 3.7 Sonnet (Bedrock)",
-        "description": "Claude 3.7 Sonnet, hosted on Bedrock.",
         "release_date": "2025-02-19",
         "open_source": false,
         "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
@@ -8838,7 +8664,6 @@
     "google/gemini-2.0-pro-exp-02-05": {
         "company": "Google",
         "label": "Gemini 2.0 Pro Exp",
-        "description": "Gemini 2.0 Pro is a powerful second-generation model optimized for large context processing and multimodal inputs, with strengths in speed, native tool use, and dataset comprehension.",
         "release_date": "2025-02-05",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -8887,7 +8712,6 @@
     "google/gemini-2.0-flash-001": {
         "company": "Google",
         "label": "Gemini 2.0 Flash (001)",
-        "description": "Gemini 2.0 Flash is a fast and versatile second-generation model with a 1 million token context window and support for text, image, video, and audio inputs.",
         "release_date": "2025-02-05",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -8937,7 +8761,6 @@
     "openai/o3-mini-2025-01-31": {
         "company": "OpenAI",
         "label": "o3 Mini",
-        "description": "o3-mini is a small model alternative to o3.",
         "release_date": "2025-01-31",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o3-mini",
@@ -8990,7 +8813,6 @@
     "openai/o3-mini": {
         "company": "OpenAI",
         "label": "o3 Mini",
-        "description": "o3-mini \u2014 a small model alternative to o3.",
         "release_date": "2025-01-31",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o3-mini",
@@ -9041,7 +8863,6 @@
     "azure/o3-mini-2025-01-31": {
         "company": "OpenAI",
         "label": "o3 Mini",
-        "description": "o3-mini is a small model alternative to o3.",
         "release_date": "2025-01-31",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o3-mini",
@@ -9092,7 +8913,6 @@
     "google/gemini-2.0-flash-thinking-exp-01-21": {
         "company": "Google",
         "label": "Gemini 2.0 Flash Thinking Exp",
-        "description": "Gemini 2.0 Flash Thinking is an experimental variant optimized for reasoning and longer contextual memory in multimodal scenarios including text, images, video, and audio.",
         "release_date": "2025-01-21",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -9141,7 +8961,6 @@
     "together/deepseek-ai/DeepSeek-R1": {
         "company": "DeepSeek",
         "label": "DeepSeek V3",
-        "description": "",
         "release_date": "2025-01-20",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -9189,7 +9008,6 @@
     "fireworks/deepseek-r1": {
         "company": "DeepSeek",
         "label": "DeepSeek R1",
-        "description": "",
         "release_date": "2025-01-20",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -9237,7 +9055,6 @@
     "together/deepseek-ai/DeepSeek-V3": {
         "company": "DeepSeek",
         "label": "DeepSeek V3",
-        "description": "",
         "release_date": "2024-12-26",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -9285,7 +9102,6 @@
     "fireworks/deepseek-v3": {
         "company": "DeepSeek",
         "label": "DeepSeek V3",
-        "description": "",
         "release_date": "2024-12-26",
         "open_source": true,
         "documentation_url": "https://fireworks.ai/models",
@@ -9333,7 +9149,6 @@
     "bedrock/llama3-3-70b-instruct-v1": {
         "company": "Amazon",
         "label": "Llama 3.3 70B Instruct (Bedrock)",
-        "description": "Llama 3.3 70B Instruct, hosted on Bedrock.",
         "release_date": "2024-12-18",
         "open_source": false,
         "documentation_url": "https://aws.amazon.com/bedrock/meta/",
@@ -9371,7 +9186,6 @@
     "openai/o1-2024-12-17": {
         "company": "OpenAI",
         "label": "o1",
-        "description": "o1 is a previous full o-series reasoning model trained with reinforcement learning to perform complex reasoning.",
         "release_date": "2024-12-17",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o1",
@@ -9425,7 +9239,6 @@
     "openai/o1": {
         "company": "OpenAI",
         "label": "o1",
-        "description": "o1 is a previous full o-series reasoning model trained with reinforcement learning to perform complex reasoning.",
         "release_date": "2024-12-17",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o1",
@@ -9476,7 +9289,6 @@
     "azure/o1-2024-12-17": {
         "company": "OpenAI",
         "label": "o1",
-        "description": "o1 is a previous full o-series reasoning model trained with reinforcement learning to perform complex reasoning.",
         "release_date": "2024-12-17",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o1",
@@ -9527,7 +9339,6 @@
     "cohere/command-r7b-12-2024": {
         "company": "Cohere",
         "label": "Command R7B",
-        "description": "Command R7B is a small, fast update from December 2024. It excels at RAG, tool use, agents, and complex reasoning with multiple steps. It supports a context length of 128K tokens.",
         "release_date": "2024-12-13",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -9567,7 +9378,6 @@
     "grok/grok-vision-beta": {
         "company": "xAI",
         "label": "Grok Vision Beta",
-        "description": "",
         "release_date": "2024-12-12",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs#models",
@@ -9612,7 +9422,6 @@
     "grok/grok-2-vision-latest": {
         "company": "xAI",
         "label": "Grok 2 Vision",
-        "description": "",
         "release_date": "2024-12-12",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs#models",
@@ -9657,7 +9466,6 @@
     "grok/grok-2-vision-1212": {
         "company": "xAI",
         "label": "Grok 2 Vision",
-        "description": "",
         "release_date": "2024-12-12",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs#models",
@@ -9705,7 +9513,6 @@
     "grok/grok-2-vision": {
         "company": "xAI",
         "label": "Grok 2 Vision",
-        "description": "",
         "release_date": "2024-12-12",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs#models",
@@ -9750,7 +9557,6 @@
     "grok/grok-beta": {
         "company": "xAI",
         "label": "Grok Beta",
-        "description": "",
         "release_date": "2024-12-11",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs#models",
@@ -9795,7 +9601,6 @@
     "grok/grok-2-1212": {
         "company": "xAI",
         "label": "Grok 2",
-        "description": "",
         "release_date": "2024-12-11",
         "open_source": false,
         "documentation_url": "https://docs.x.ai/docs#models",
@@ -9840,7 +9645,6 @@
     "google/gemini-2.0-flash-exp": {
         "company": "Google",
         "label": "Gemini 2.0 Flash Exp",
-        "description": "Gemini 2.0 Flash Experimental is a developer preview for advanced use cases requiring extended context and multimodal reasoning capabilities.",
         "release_date": "2024-12-11",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -9889,7 +9693,6 @@
     "together/meta-llama/Llama-3.3-70B-Instruct-Turbo": {
         "company": "Meta",
         "label": "Llama 3.3 Instruct Turbo (70B)",
-        "description": "Llama 3.3 Instruct Turbo, 70B parameters with FP16 quantization.",
         "release_date": "2024-12-06",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -9936,7 +9739,6 @@
     "together/llama-3.3-70b-instruct": {
         "company": "Meta",
         "label": "Llama 3.3 Instruct Turbo (70B)",
-        "description": "Llama 3.3 Instruct Turbo, 70B parameters with FP16 quantization.",
         "release_date": "2024-12-06",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -9981,7 +9783,6 @@
     "amazon/amazon.nova-pro-v1:0": {
         "company": "Amazon",
         "label": "Nova Pro",
-        "description": "Highly capable multimodal model offering the best combination of accuracy, speed, and cost for a wide range of tasks.",
         "release_date": "2024-12-03",
         "open_source": false,
         "documentation_url": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
@@ -10025,7 +9826,6 @@
     "amazon/amazon.nova-micro-v1:0": {
         "company": "Amazon",
         "label": "Nova Micro",
-        "description": "Text-only model that delivers the lowest latency responses at very low cost. Features 128k token context window and supports 200+ languages, optimized for 15 key languages.",
         "release_date": "2024-12-03",
         "open_source": false,
         "documentation_url": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
@@ -10068,7 +9868,6 @@
     "amazon/amazon.nova-lite-v1:0": {
         "company": "Amazon",
         "label": "Nova Lite",
-        "description": "Very low cost multimodal model that is lightning fast for processing image, video, and text inputs. Features 300k token context window and supports document processing. Optimized for 15 languages.",
         "release_date": "2024-12-03",
         "open_source": false,
         "documentation_url": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
@@ -10112,7 +9911,6 @@
     "openai/gpt-4o-2024-11-20": {
         "company": "OpenAI",
         "label": "GPT 4o (2024-11-20)",
-        "description": "GPT-4o is a fast, intelligent, flexible GPT model that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-11-20",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4o",
@@ -10166,7 +9964,6 @@
     "azure/gpt-4o-2024-11-20": {
         "company": "OpenAI",
         "label": "GPT 4o (2024-11-20)",
-        "description": "GPT-4o is a fast, intelligent, flexible GPT model that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-11-20",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4o",
@@ -10218,7 +10015,6 @@
     "mistralai/pixtral-large-2411": {
         "company": "Mistral",
         "label": "Pixtral Large (11/2024)",
-        "description": "Latest version of the Pixtral Large model.",
         "release_date": "2024-11-18",
         "open_source": false,
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
@@ -10258,7 +10054,6 @@
     "mistralai/mistral-large-2411": {
         "company": "Mistral",
         "label": "Mistral Large (11/2024)",
-        "description": "Latest version of the Mistral Large model.",
         "release_date": "2024-11-18",
         "open_source": false,
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
@@ -10298,7 +10093,6 @@
     "openai/gpt-4-1106-preview": {
         "company": "OpenAI",
         "label": "GPT 4 Preview (2023-11-06)",
-        "description": "GPT-4 Turbo preview model featuring improved instruction following, JSON mode, and reproducible outputs.",
         "release_date": "2024-11-06",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models#gpt-4-turbo-and-gpt-4",
@@ -10345,7 +10139,6 @@
     "bedrock/claude-3-5-sonnet-20240620-v2": {
         "company": "Amazon",
         "label": "Claude 3.5 Sonnet (Bedrock)",
-        "description": "Claude 3.5 Sonnet is a multimodal understanding foundation model. It is multilingual and can reason over text, images and videos.",
         "release_date": "2024-10-22",
         "open_source": false,
         "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
@@ -10385,7 +10178,6 @@
     "bedrock/claude-3-5-haiku-20241022-v1": {
         "company": "Amazon",
         "label": "Claude 3.5 Haiku (Bedrock)",
-        "description": "Claude 3.5 Haiku, hosted on Bedrock.",
         "release_date": "2024-10-22",
         "open_source": false,
         "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
@@ -10431,7 +10223,6 @@
     "anthropic/claude-3.5-sonnet-latest": {
         "company": "Anthropic",
         "label": "Claude 3.5 Sonnet Latest",
-        "description": "Claude Sonnet 3.5 is a deprecated model with high performance for coding and analysis tasks, supports multilingual and vision input.",
         "release_date": "2024-10-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -10480,7 +10271,6 @@
     "anthropic/claude-3-5-sonnet-latest": {
         "company": "Anthropic",
         "label": "Claude 3.5 Sonnet Latest",
-        "description": "Claude Sonnet 3.5 is a deprecated model with high performance for coding and analysis tasks, supports multilingual and vision input.",
         "release_date": "2024-10-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -10529,7 +10319,6 @@
     "anthropic/claude-3-5-sonnet-20241022": {
         "company": "Anthropic",
         "label": "Claude 3.5 Sonnet Latest",
-        "description": "Claude Sonnet 3.5 is a deprecated model with high performance for coding and analysis tasks, supports multilingual and vision input.",
         "release_date": "2024-10-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -10581,7 +10370,6 @@
     "anthropic/claude-3-5-haiku-latest": {
         "company": "Anthropic",
         "label": "Claude 3.5 Haiku Latest",
-        "description": "Claude Haiku 3.5 is the fastest model from Anthropic, optimized for instant responses and targeted tasks. Supports vision and text inputs.",
         "release_date": "2024-10-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -10632,7 +10420,6 @@
     "anthropic/claude-3-5-haiku-20241022": {
         "company": "Anthropic",
         "label": "Claude 3.5 Haiku Latest",
-        "description": "Claude Haiku 3.5 is the fastest model from Anthropic, optimized for instant responses and targeted tasks. Supports vision and text inputs.",
         "release_date": "2024-10-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -10686,7 +10473,6 @@
     "anthropic/claude-3-5-haiku": {
         "company": "Anthropic",
         "label": "Claude 3.5 Haiku Latest",
-        "description": "Claude Haiku 3.5 is the fastest model from Anthropic, optimized for instant responses and targeted tasks. Supports vision and text inputs.",
         "release_date": "2024-10-22",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -10737,7 +10523,6 @@
     "google/gemini-pro-1.5": {
         "company": "Google",
         "label": "Gemini 1.5 Pro (002)",
-        "description": "Gemini 1.5 Pro is a high-performance model with multimodal capabilities useful for complex reasoning tasks and dataset analysis.",
         "release_date": "2024-09-24",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -10786,7 +10571,6 @@
     "google/gemini-1.5-pro-latest": {
         "company": "Google",
         "label": "Gemini 1.5 Pro (002)",
-        "description": "Gemini 1.5 Pro is a high-performance model with multimodal capabilities useful for complex reasoning tasks and dataset analysis.",
         "release_date": "2024-09-24",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -10835,7 +10619,6 @@
     "google/gemini-1.5-pro-002": {
         "company": "Google",
         "label": "Gemini 1.5 Pro (002)",
-        "description": "Gemini 1.5 Pro is a high-performance model with multimodal capabilities useful for complex reasoning tasks and dataset analysis.",
         "release_date": "2024-09-24",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -10887,7 +10670,6 @@
     "google/gemini-1.5-flash-002": {
         "company": "Google",
         "label": "Gemini 1.5 Flash (002)",
-        "description": "Gemini 1.5 Flash is an efficient and speedy version of Gemini 1.5 with support for multiple data types and large contexts.",
         "release_date": "2024-09-24",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -10936,7 +10718,6 @@
     "mistralai/mistral-small-2402": {
         "company": "Mistral",
         "label": "Mistral Small (02/2024)",
-        "description": "Latest version of the Mistral Small model.",
         "release_date": "2024-09-17",
         "open_source": false,
         "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
@@ -10976,7 +10757,6 @@
     "openai/o1-preview-2024-09-12": {
         "company": "OpenAI",
         "label": "o1 Preview",
-        "description": "o1 Preview is a research preview of the o1-series reasoning model trained with reinforcement learning to perform complex reasoning.",
         "release_date": "2024-09-12",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o1-preview",
@@ -11029,7 +10809,6 @@
     "openai/o1-preview": {
         "company": "OpenAI",
         "label": "o1 Preview",
-        "description": "o1 Preview is a research preview of the o1 series reasoning model. Trained with reinforcement learning to perform complex reasoning and produce a long internal chain-of-thought before responding.",
         "release_date": "2024-09-12",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o1-preview",
@@ -11080,7 +10859,6 @@
     "openai/o1-mini-2024-09-12": {
         "company": "OpenAI",
         "label": "o1 Mini",
-        "description": "o1-mini is a small model alternative to o1 designed for high-reasoning tasks.",
         "release_date": "2024-09-12",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o1-mini",
@@ -11134,7 +10912,6 @@
     "openai/o1-mini": {
         "company": "OpenAI",
         "label": "o1 Mini",
-        "description": "o1-mini is a small model alternative to o1 designed for high-reasoning tasks.",
         "release_date": "2024-09-12",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o1-mini",
@@ -11185,7 +10962,6 @@
     "openai/gpt-o1-preview": {
         "company": "OpenAI",
         "label": "o1 Preview",
-        "description": "o1 Preview is a research preview of the o1-series reasoning model trained with reinforcement learning to perform complex reasoning.",
         "release_date": "2024-09-12",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o1-preview",
@@ -11236,7 +11012,6 @@
     "azure/o1-mini-2024-09-12": {
         "company": "OpenAI",
         "label": "o1 Mini",
-        "description": "o1-mini is a small model alternative to o1 designed for high-reasoning tasks.",
         "release_date": "2024-09-12",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/o1-mini",
@@ -11287,7 +11062,6 @@
     "cohere/command-r-plus-08-2024": {
         "company": "Cohere",
         "label": "Command R+ (08/2024)",
-        "description": "Command R+ (August 2024) is designed for complex RAG workflows and multi-step tool use, supporting 128K context length.",
         "release_date": "2024-08-30",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -11327,7 +11101,6 @@
     "cohere/command-r-08-2024": {
         "company": "Cohere",
         "label": "Command R (08/2024)",
-        "description": "Command R (August 2024) is an updated instruction-following conversational model suitable for complex workflows including code generation, retrieval augmentations, and tool use, with 128K context.",
         "release_date": "2024-08-30",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -11367,7 +11140,6 @@
     "ai21labs/jamba-mini-1.5": {
         "company": "AI21 Labs",
         "label": "Jamba 1.5 Mini",
-        "description": "Efficient & lightweight model for a wide range of tasks",
         "release_date": "2024-08-22",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -11408,7 +11180,6 @@
     "ai21labs/jamba-large-1.5": {
         "company": "AI21 Labs",
         "label": "Jamba 1.5 Large",
-        "description": "The most powerful and efficient long context model",
         "release_date": "2024-08-22",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -11449,7 +11220,6 @@
     "ai21labs/jamba-1.5-mini": {
         "company": "AI21 Labs",
         "label": "Jamba 1.5 Mini",
-        "description": "Efficient & lightweight model for a wide range of tasks",
         "release_date": "2024-08-22",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -11488,7 +11258,6 @@
     "ai21labs/jamba-1.5-large": {
         "company": "AI21 Labs",
         "label": "Jamba 1.5 Large",
-        "description": "The most powerful and efficient long context model",
         "release_date": "2024-08-22",
         "open_source": true,
         "documentation_url": "https://www.ai21.com/jamba",
@@ -11527,7 +11296,6 @@
     "openai/gpt-4o-2024-08-06": {
         "company": "OpenAI",
         "label": "GPT 4o (2024-08-06)",
-        "description": "GPT-4o is a fast, intelligent, flexible GPT model that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-08-06",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4o",
@@ -11579,7 +11347,6 @@
     "openai/gpt-4o": {
         "company": "OpenAI",
         "label": "GPT 4o",
-        "description": "GPT-4o is a fast, intelligent, flexible GPT model that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-08-06",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4o",
@@ -11631,7 +11398,6 @@
     "together/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo": {
         "company": "Meta",
         "label": "Llama 3.1 Instruct Turbo (8B)",
-        "description": "Llama 3.1 Instruct Turbo, 8B parameters with FP8 quantization.",
         "release_date": "2024-07-23",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -11678,7 +11444,6 @@
     "together/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo": {
         "company": "Meta",
         "label": "Llama 3.1 Instruct Turbo (70B)",
-        "description": "Llama 3.1 Instruct Turbo, 70B parameters with FP8 quantization.",
         "release_date": "2024-07-23",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -11725,7 +11490,6 @@
     "together/meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo": {
         "company": "Meta",
         "label": "Llama 3.1 Instruct Turbo (405B)",
-        "description": "Llama 3.1 Instruct Turbo, 405B parameters with FP8 quantization and reduced context.",
         "release_date": "2024-07-23",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -11772,7 +11536,6 @@
     "together/llama-3.1-8b-instruct": {
         "company": "Meta",
         "label": "Llama 3.1 Instruct Turbo (8B)",
-        "description": "Llama 3.1 Instruct Turbo, 8B parameters with FP8 quantization.",
         "release_date": "2024-07-23",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -11817,7 +11580,6 @@
     "together/llama-3.1-70b-instruct": {
         "company": "Meta",
         "label": "Llama 3.1 Instruct Turbo (70B)",
-        "description": "Llama 3.1 Instruct Turbo, 70B parameters with FP8 quantization.",
         "release_date": "2024-07-23",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -11862,7 +11624,6 @@
     "together/llama-3.1-405b-instruct": {
         "company": "Meta",
         "label": "Llama 3.1 Instruct Turbo (405B)",
-        "description": "Llama 3.1 Instruct Turbo, 405B parameters with FP8 quantization and reduced context.",
         "release_date": "2024-07-23",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -11907,7 +11668,6 @@
     "openai/gpt-4o-mini-2024-07-18": {
         "company": "OpenAI",
         "label": "GPT 4o Mini",
-        "description": "GPT-4o mini is a fast, affordable small model for focused tasks that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-07-18",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4o-mini",
@@ -11961,7 +11721,6 @@
     "openai/gpt-4o-mini": {
         "company": "OpenAI",
         "label": "GPT 4o Mini",
-        "description": "GPT-4o mini is a fast, affordable small model for focused tasks that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-07-18",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4o-mini",
@@ -12013,7 +11772,6 @@
     "azure/gpt-4o-mini-2024-07-18": {
         "company": "OpenAI",
         "label": "GPT 4o Mini",
-        "description": "GPT-4o mini is a fast, affordable small model for focused tasks that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-07-18",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4o-mini",
@@ -12065,7 +11823,6 @@
     "anthropic/claude-3.5-sonnet": {
         "company": "Anthropic",
         "label": "Claude 3.5 Sonnet",
-        "description": "Claude Sonnet 3.5 (June 2024) variant for code and content generation, multilingual and vision-capable, deprecated.",
         "release_date": "2024-06-20",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -12114,7 +11871,6 @@
     "anthropic/claude-3-5-sonnet-20240620": {
         "company": "Anthropic",
         "label": "Claude 3.5 Sonnet",
-        "description": "Claude Sonnet 3.5 (June 2024) variant for code and content generation, multilingual and vision-capable, deprecated.",
         "release_date": "2024-06-20",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -12165,7 +11921,6 @@
     "google/gemini-1.5-pro-001": {
         "company": "Google",
         "label": "Gemini 1.5 Pro (001)",
-        "description": "Gemini 1.5 Pro (early release) supports multimodal inputs and advanced reasoning on moderate context lengths.",
         "release_date": "2024-05-24",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -12214,7 +11969,6 @@
     "google/gemini-1.5-flash-001": {
         "company": "Google",
         "label": "Gemini 1.5 Flash (001)",
-        "description": "Gemini 1.5 Flash (early release) provides fast processing with vision and audio capabilities along with text understanding.",
         "release_date": "2024-05-24",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -12263,7 +12017,6 @@
     "openai/gpt-4o-2024-05-13": {
         "company": "OpenAI",
         "label": "GPT 4o (2024-05-13)",
-        "description": "GPT-4o is a fast, intelligent, flexible GPT model that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-05-13",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4o",
@@ -12314,7 +12067,6 @@
     "cohere/command-r-plus-04-2024": {
         "company": "Cohere",
         "label": "Command R+ (04/2024)",
-        "description": "Command R+ (April 2024) supports high-quality language tasks with reliable performance over long contexts (128K tokens), optimized for complex reasoning and multi-step tool use.",
         "release_date": "2024-04-24",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -12354,7 +12106,6 @@
     "cohere/command-r-plus": {
         "company": "Cohere",
         "label": "Command R+",
-        "description": "Alias for Command R+ 04-2024, featuring high-quality instruction following, long context support, and optimized for complex reasoning and retrieval augmented generation.",
         "release_date": "2024-04-24",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -12394,7 +12145,6 @@
     "cohere/command-r": {
         "company": "Cohere",
         "label": "Command R",
-        "description": "Alias for Command R 03-2024, an instruction-following conversational model focused on reliability and extended context for complex workflows.",
         "release_date": "2024-04-24",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -12434,7 +12184,6 @@
     "cohere/command-light": {
         "company": "Cohere",
         "label": "Command Light",
-        "description": "A smaller, faster version of the Command model that remains highly capable but optimized for speed with a shorter 4K context length.",
         "release_date": "2024-04-24",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -12474,7 +12223,6 @@
     "together/qwen-2.5-7b-instruct": {
         "company": "Alibaba",
         "label": "Qwen 2.5 Instruct Turbo (7B)",
-        "description": "Qwen 2.5 Instruct Turbo, 7B parameters with FP8 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12522,7 +12270,6 @@
     "together/qwen-2.5-72b-instruct": {
         "company": "Alibaba",
         "label": "Qwen 2.5 Instruct Turbo (72B)",
-        "description": "Qwen 2.5 Instruct Turbo, 72B parameters with FP8 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12570,7 +12317,6 @@
     "together/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF": {
         "company": "NVIDIA",
         "label": "Llama 3.1 Nemotron (70B)",
-        "description": "Nvidia's 70B Nemotron model, fine-tuned with Llama 3.1 weights.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12615,7 +12361,6 @@
     "together/mistralai/Mistral-7B-Instruct-v0.3": {
         "company": "Mistral",
         "label": "Mistral Instruct (7B) v0.3",
-        "description": "Latest third version of Mistral 7B Instruct model.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12662,7 +12407,6 @@
     "together/meta-llama/Meta-Llama-3-8B-Instruct-Turbo": {
         "company": "Meta",
         "label": "Llama 3 Instruct Turbo (8B)",
-        "description": "Llama 3 Instruct Turbo, 8B parameters with FP8 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12709,7 +12453,6 @@
     "together/meta-llama/Meta-Llama-3-8B-Instruct-Lite": {
         "company": "Meta",
         "label": "Llama 3 Instruct Lite (8B)",
-        "description": "Llama 3 Instruct Lite, 8B parameters with INT4 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12754,7 +12497,6 @@
     "together/meta-llama/Meta-Llama-3-70B-Instruct-Turbo": {
         "company": "Meta",
         "label": "Llama 3 Instruct Turbo (70B)",
-        "description": "Llama 3 Instruct Turbo, 70B parameters with FP8 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12801,7 +12543,6 @@
     "together/meta-llama/Meta-Llama-3-70B-Instruct-Lite": {
         "company": "Meta",
         "label": "Llama 3 Instruct Lite (70B)",
-        "description": "Llama 3 Instruct Lite, 70B parameters with INT4 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12846,7 +12587,6 @@
     "together/meta-llama/Llama-Vision-Free": {
         "company": "Meta",
         "label": "Llama Vision Free",
-        "description": "Free version of Llama Vision 11B Turbo with reduced rate limits.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12891,7 +12631,6 @@
     "together/meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo": {
         "company": "Meta",
         "label": "Llama 3.2 Vision (90B)",
-        "description": "Vision-enabled Llama model with 90B parameters for advanced use cases.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12938,7 +12677,6 @@
     "together/meta-llama/Llama-3.2-3B-Instruct-Turbo": {
         "company": "Meta",
         "label": "Llama 3.2 Instruct Turbo (3B)",
-        "description": "Llama 3.2 Instruct Turbo, 3B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -12985,7 +12723,6 @@
     "together/meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo": {
         "company": "Meta",
         "label": "Llama 3.2 Vision (11B)",
-        "description": "Paid version of Llama Vision 11B Turbo for high-performance visual tasks.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13032,7 +12769,6 @@
     "together/meta-llama/Llama-3-8b-hf": {
         "company": "Meta",
         "label": "Llama 3 (8B)",
-        "description": "Llama 3 Reference Model, 8B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13079,7 +12815,6 @@
     "together/meta-llama/Llama-3-8b-chat-hf": {
         "company": "Meta",
         "label": "Llama 3 Chat (8B)",
-        "description": "Llama 3 Reference Model, 8B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13126,7 +12861,6 @@
     "together/meta-llama/Llama-3-70b-chat-hf": {
         "company": "Meta",
         "label": "Llama 3 Chat (70B)",
-        "description": "Llama 3 Reference Model, 70B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13173,7 +12907,6 @@
     "together/meta-llama/Llama-3-70B": {
         "company": "Meta",
         "label": "Llama 3 (70B)",
-        "description": "Llama 3 Reference Model, 70B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13220,7 +12953,6 @@
     "together/llama-3.2-90b-vision-instruct": {
         "company": "Meta",
         "label": "Llama 3.2 Vision (90B)",
-        "description": "Vision-enabled Llama model with 90B parameters for advanced use cases.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13265,7 +12997,6 @@
     "together/llama-3.2-90b-instruct": {
         "company": "Meta",
         "label": "Llama 3.2 Instruct Turbo (90B)",
-        "description": "Llama 3.2 Instruct Turbo, 90B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13310,7 +13041,6 @@
     "together/llama-3.2-3b-instruct": {
         "company": "Meta",
         "label": "Llama 3.2 Instruct Turbo (3B)",
-        "description": "Llama 3.2 Instruct Turbo, 3B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13355,7 +13085,6 @@
     "together/llama-3.2-11b-vision-instruct": {
         "company": "Meta",
         "label": "Llama 3.2 Vision (11B)",
-        "description": "Paid version of Llama Vision 11B Turbo for high-performance visual tasks.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13400,7 +13129,6 @@
     "together/llama-3.2-11b-instruct": {
         "company": "Meta",
         "label": "Llama 3.2 Instruct Turbo (11B)",
-        "description": "Llama 3.2 Instruct Turbo, 11B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13445,7 +13173,6 @@
     "together/llama-3-8b-instruct": {
         "company": "Meta",
         "label": "Llama 3 Instruct Turbo (8B)",
-        "description": "Llama 3 Instruct Turbo, 8B parameters with FP8 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13490,7 +13217,6 @@
     "together/llama-3-8b-chat": {
         "company": "Meta",
         "label": "Llama 3 Chat (8B)",
-        "description": "Llama 3 Reference Model, 8B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13535,7 +13261,6 @@
     "together/llama-3-8b": {
         "company": "Meta",
         "label": "Llama 3 (8B)",
-        "description": "Llama 3 Reference Model, 8B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13580,7 +13305,6 @@
     "together/llama-3-70b-instruct": {
         "company": "Meta",
         "label": "Llama 3 Instruct Turbo (70B)",
-        "description": "Llama 3 Instruct Turbo, 70B parameters with FP8 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13625,7 +13349,6 @@
     "together/llama-3-70b-chat": {
         "company": "Meta",
         "label": "Llama 3 Chat (70B)",
-        "description": "Llama 3 Reference Model, 70B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13670,7 +13393,6 @@
     "together/llama-3-70b": {
         "company": "Meta",
         "label": "Llama 3 (70B)",
-        "description": "Llama 3 Reference Model, 70B parameters with FP16 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13715,7 +13437,6 @@
     "together/Qwen/Qwen2.5-Coder-32B-Instruct": {
         "company": "Alibaba",
         "label": "Qwen 2.5 Coder (32B)",
-        "description": "Qwen Coder 2.5, 32B parameters fine-tuned for coding tasks.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13763,7 +13484,6 @@
     "together/Qwen/Qwen2.5-7B-Instruct-Turbo": {
         "company": "Alibaba",
         "label": "Qwen 2.5 Instruct Turbo (7B)",
-        "description": "Qwen 2.5 Instruct Turbo, 7B parameters with FP8 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13813,7 +13533,6 @@
     "together/Qwen/Qwen2.5-72B-Instruct-Turbo": {
         "company": "Alibaba",
         "label": "Qwen 2.5 Instruct Turbo (72B)",
-        "description": "Qwen 2.5 Instruct Turbo, 72B parameters with FP8 quantization.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13863,7 +13582,6 @@
     "together/Mistral-7B-Instruct-v0.3": {
         "company": "Mistral",
         "label": "Mistral Instruct (7B) v0.3",
-        "description": "Latest third version of Mistral 7B Instruct model.",
         "release_date": "2024-04-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -13908,7 +13626,6 @@
     "openai/gpt-4-turbo-2024-04-09": {
         "company": "OpenAI",
         "label": "GPT 4 Turbo (2024-04-09)",
-        "description": "GPT-4 Turbo is an older high-intelligence GPT model that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-04-09",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4-turbo",
@@ -13957,7 +13674,6 @@
     "openai/gpt-4-turbo": {
         "company": "OpenAI",
         "label": "GPT 4 Turbo",
-        "description": "GPT-4 Turbo is an older high-intelligence GPT model that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-04-09",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4-turbo",
@@ -14006,7 +13722,6 @@
     "azure/gpt-4-turbo-2024-04-09": {
         "company": "OpenAI",
         "label": "GPT 4 Turbo (2024-04-09)",
-        "description": "GPT-4 Turbo is an older high-intelligence GPT model that accepts text and image inputs and produces text outputs.",
         "release_date": "2024-04-09",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4-turbo",
@@ -14053,7 +13768,6 @@
     "cohere/command-r-03-2024": {
         "company": "Cohere",
         "label": "Command R (03/2024)",
-        "description": "Command R 03-2024 is an instruction-following conversational model with improved quality, longer context (128K tokens), suitable for code generation, RAG, and complex workflows.",
         "release_date": "2024-03-24",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -14093,7 +13807,6 @@
     "cohere/command": {
         "company": "Cohere",
         "label": "Command",
-        "description": "Command is the base instruction-following conversational model delivering high-quality language task performance, with a context of 4K tokens.",
         "release_date": "2024-03-24",
         "open_source": false,
         "documentation_url": "https://docs.cohere.com/v2/docs/models",
@@ -14133,7 +13846,6 @@
     "anthropic/claude-3-sonnet-20240229": {
         "company": "Anthropic",
         "label": "Claude 3 Sonnet",
-        "description": "Claude Sonnet 3 is a high-performance language model supporting text and image input, with balanced skill for complex NLP tasks.",
         "release_date": "2024-02-29",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -14184,7 +13896,6 @@
     "anthropic/claude-3-sonnet": {
         "company": "Anthropic",
         "label": "Claude 3 Sonnet",
-        "description": "Claude Sonnet 3 is a high-performance language model supporting text and image input, with balanced skill for complex NLP tasks.",
         "release_date": "2024-02-29",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -14233,7 +13944,6 @@
     "anthropic/claude-3-opus-latest": {
         "company": "Anthropic",
         "label": "Claude 3 Opus",
-        "description": "Claude Opus 3 was Anthropic's most capable model for advanced tasks in its generation, supporting multimodal input.",
         "release_date": "2024-02-29",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -14284,7 +13994,6 @@
     "anthropic/claude-3-opus-20240229": {
         "company": "Anthropic",
         "label": "Claude 3 Opus",
-        "description": "Claude Opus 3 was Anthropic's most capable model for advanced tasks in its generation, supporting multimodal input.",
         "release_date": "2024-02-29",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -14338,7 +14047,6 @@
     "anthropic/claude-3-opus": {
         "company": "Anthropic",
         "label": "Claude 3 Opus",
-        "description": "Claude Opus 3 was Anthropic's most capable model for advanced tasks in its generation, supporting multimodal input.",
         "release_date": "2024-02-29",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -14389,7 +14097,6 @@
     "anthropic/claude-3-haiku-20240307": {
         "company": "Anthropic",
         "label": "Claude 3 Sonnet",
-        "description": "Claude Haiku 3 is a compact, fast model optimized for near-instant responsiveness and targeted queries with text/image input.",
         "release_date": "2024-02-29",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -14442,7 +14149,6 @@
     "anthropic/claude-3-haiku": {
         "company": "Anthropic",
         "label": "Claude 3 Sonnet",
-        "description": "Claude Haiku 3 is a compact, fast model optimized for near-instant responsiveness and targeted queries with text/image input.",
         "release_date": "2024-02-29",
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
@@ -14493,7 +14199,6 @@
     "together/google/gemma-2-9b-it": {
         "company": "Google",
         "label": "Gemma 2 (9B)",
-        "description": "Gemini 9B Instruct Turbo model.",
         "release_date": "2024-02-21",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -14540,7 +14245,6 @@
     "together/google/gemma-2-2b-it": {
         "company": "Google",
         "label": "Gemma 2 (2B)",
-        "description": "Gemini 2B Instruct Turbo model.",
         "release_date": "2024-02-21",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -14587,7 +14291,6 @@
     "together/google/gemma-2-27b-it": {
         "company": "Google",
         "label": "Gemma 2 (27B)",
-        "description": "Gemini 27B Instruct Turbo model.",
         "release_date": "2024-02-21",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -14634,7 +14337,6 @@
     "together/gemma-2-9b-instruct": {
         "company": "Google",
         "label": "Gemma 2 (9B)",
-        "description": "Gemini 9B Instruct Turbo model.",
         "release_date": "2024-02-21",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -14679,7 +14381,6 @@
     "together/gemma-2-2b-instruct": {
         "company": "Google",
         "label": "Gemma 2 (2B)",
-        "description": "Gemini 2B Instruct Turbo model.",
         "release_date": "2024-02-21",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -14724,7 +14425,6 @@
     "together/gemma-2-27b-instruct": {
         "company": "Google",
         "label": "Gemma 2 (27B)",
-        "description": "Gemini 27B Instruct Turbo model.",
         "release_date": "2024-02-21",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -14769,7 +14469,6 @@
     "together/mistralai/Mixtral-8x22B-Instruct-v0.1": {
         "company": "Mistral",
         "label": "Mixtral Instruct (8x22B)",
-        "description": "Mixtral model with 8x22B modules for large-scale inference.",
         "release_date": "2024-02-15",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -14817,7 +14516,6 @@
     "together/Mixtral-8x22B-v0.1": {
         "company": "Mistral",
         "label": "Mixtral Instruct (8x22B)",
-        "description": "Mixtral model with 8x22B modules for large-scale inference.",
         "release_date": "2024-02-15",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -14862,7 +14560,6 @@
     "together/Mixtral-8x22B-Instruct-v0.1": {
         "company": "Mistral",
         "label": "Mixtral Instruct (8x22B)",
-        "description": "Mixtral model with 8x22B modules for large-scale inference.",
         "release_date": "2024-02-15",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -14907,7 +14604,6 @@
     "google/gemini-pro-1.0": {
         "company": "Google",
         "label": "Gemini 1.0 Pro 002",
-        "description": "Gemini 1.0 Pro is an earlier generation multimodal model supporting text, image, and audio inputs with foundational reasoning abilities.",
         "release_date": "2024-02-14",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -14956,7 +14652,6 @@
     "google/gemini-pro": {
         "company": "Google",
         "label": "Gemini 1.0 Pro 002",
-        "description": "Gemini 1.0 Pro is an earlier generation multimodal model supporting text, image, and audio inputs with foundational reasoning abilities.",
         "release_date": "2024-02-14",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -15005,7 +14700,6 @@
     "google/gemini-1.0-pro-002": {
         "company": "Google",
         "label": "Gemini 1.0 Pro 002",
-        "description": "Gemini 1.0 Pro is an earlier generation multimodal model supporting text, image, and audio inputs with foundational reasoning abilities.",
         "release_date": "2024-02-14",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -15058,7 +14752,6 @@
     "google/gemini-1.0-pro": {
         "company": "Google",
         "label": "Gemini 1.0 Pro 002",
-        "description": "Gemini 1.0 Pro is an earlier generation multimodal model supporting text, image, and audio inputs with foundational reasoning abilities.",
         "release_date": "2024-02-14",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -15107,7 +14800,6 @@
     "openai/gpt-4-turbo-preview": {
         "company": "OpenAI",
         "label": "GPT 4 Turbo Preview",
-        "description": "GPT-4 Turbo Preview is a research preview of an older GPT model.",
         "release_date": "2024-01-25",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4-turbo-preview",
@@ -15154,7 +14846,6 @@
     "openai/gpt-4-0125-preview": {
         "company": "OpenAI",
         "label": "GPT 4 Preview",
-        "description": "GPT-4 Turbo preview model intended to reduce cases of laziness where the model doesn't complete a task.",
         "release_date": "2024-01-25",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models#gpt-4-turbo-and-gpt-4",
@@ -15201,7 +14892,6 @@
     "together/mistralai/Mixtral-8x7B-v0.1": {
         "company": "Mistral",
         "label": "Mixtral (8x7B)",
-        "description": "Mixtral model, combining 8x7B modules fine-tuned for complex tasks.",
         "release_date": "2023-12-15",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15248,7 +14938,6 @@
     "together/mistralai/Mixtral-8x7B-Instruct-v0.1": {
         "company": "Mistral",
         "label": "Mixtral Instruct (8x7B)",
-        "description": "Mixtral model, combining 8x7B Instruct modules fine-tuned for complex tasks.",
         "release_date": "2023-12-15",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15295,7 +14984,6 @@
     "together/mistralai/Mistral-7B-Instruct-v0.2": {
         "company": "Mistral",
         "label": "Mistral Instruct (7B) v0.2",
-        "description": "Improved second version of Mistral 7B Instruct model.",
         "release_date": "2023-12-15",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15342,7 +15030,6 @@
     "together/Mixtral-8x7B-v0.1": {
         "company": "Mistral",
         "label": "Mixtral (8x7B)",
-        "description": "Mixtral model, combining 8x7B modules fine-tuned for complex tasks.",
         "release_date": "2023-12-15",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15387,7 +15074,6 @@
     "together/Mixtral-8x7B-Instruct-v0.1": {
         "company": "Mistral",
         "label": "Mixtral Instruct (8x7B)",
-        "description": "Mixtral model, combining 8x7B Instruct modules fine-tuned for complex tasks.",
         "release_date": "2023-12-15",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15432,7 +15118,6 @@
     "together/Mistral-7B-Instruct-v0.2": {
         "company": "Mistral",
         "label": "Mistral Instruct (7B) v0.2",
-        "description": "Improved second version of Mistral 7B Instruct model.",
         "release_date": "2023-12-15",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15477,7 +15162,6 @@
     "together/mistralai/Mistral-7B-v0.1": {
         "company": "Mistral",
         "label": "Mistral (7B)",
-        "description": "First version of Mistral 7B model.",
         "release_date": "2023-09-27",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15524,7 +15208,6 @@
     "together/mistralai/Mistral-7B-Instruct-v0.1": {
         "company": "Mistral",
         "label": "Mistral Instruct (7B) v0.1",
-        "description": "First version of Mistral 7B Instruct model.",
         "release_date": "2023-09-27",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15571,7 +15254,6 @@
     "together/Mistral-7B-v0.1": {
         "company": "Mistral",
         "label": "Mistral (7B)",
-        "description": "First version of Mistral 7B model.",
         "release_date": "2023-09-27",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15616,7 +15298,6 @@
     "together/Mistral-7B-Instruct-v0.1": {
         "company": "Mistral",
         "label": "Mistral Instruct (7B) v0.1",
-        "description": "First version of Mistral 7B Instruct model.",
         "release_date": "2023-09-27",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15661,7 +15342,6 @@
     "together/togethercomputer/llama-2-7b-chat": {
         "company": "Meta",
         "label": "Llama 2 Chat (7B)",
-        "description": "Llama 2 Reference Model, 7B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15708,7 +15388,6 @@
     "together/togethercomputer/llama-2-7b": {
         "company": "Meta",
         "label": "Llama 2 (7B)",
-        "description": "Llama 2 Reference Model, 7B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15755,7 +15434,6 @@
     "together/togethercomputer/llama-2-70b-chat": {
         "company": "Meta",
         "label": "Llama 2 Chat (70B)",
-        "description": "Llama 2 Reference Model, 70B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15802,7 +15480,6 @@
     "together/togethercomputer/llama-2-13b-chat": {
         "company": "Meta",
         "label": "Llama 2 Chat (13B)",
-        "description": "Llama 2 Reference Model, 13B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15849,7 +15526,6 @@
     "together/togethercomputer/llama-2-13b": {
         "company": "Meta",
         "label": "Llama 2 (13B)",
-        "description": "Llama 2 Reference Model, 13B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15896,7 +15572,6 @@
     "together/meta-llama/Llama-2-7b-hf": {
         "company": "Meta",
         "label": "Llama 2 (7B)",
-        "description": "Llama 2 Reference Model, 7B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15941,7 +15616,6 @@
     "together/meta-llama/Llama-2-7b-chat-hf": {
         "company": "Meta",
         "label": "Llama 2 Chat (7B)",
-        "description": "Llama 2 Reference Model, 7B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -15986,7 +15660,6 @@
     "together/meta-llama/Llama-2-70b-hf": {
         "company": "Meta",
         "label": "Llama 2 (70B)",
-        "description": "Llama 2 Reference Model, 70B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16033,7 +15706,6 @@
     "together/meta-llama/Llama-2-70b-chat-hf": {
         "company": "Meta",
         "label": "Llama 2 Chat (70B)",
-        "description": "Llama 2 Reference Model, 70B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16078,7 +15750,6 @@
     "together/meta-llama/Llama-2-13b-hf": {
         "company": "Meta",
         "label": "Llama 2 (13B)",
-        "description": "Llama 2 Reference Model, 13B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16123,7 +15794,6 @@
     "together/meta-llama/Llama-2-13b-chat-hf": {
         "company": "Meta",
         "label": "Llama 2 Chat (13B)",
-        "description": "Llama 2 Reference Model, 13B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16168,7 +15838,6 @@
     "together/llama-2-7b-chat": {
         "company": "Meta",
         "label": "Llama 2 Chat (7B)",
-        "description": "Llama 2 Reference Model, 7B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16213,7 +15882,6 @@
     "together/llama-2-7b": {
         "company": "Meta",
         "label": "Llama 2 (7B)",
-        "description": "Llama 2 Reference Model, 7B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16258,7 +15926,6 @@
     "together/llama-2-70b-chat": {
         "company": "Meta",
         "label": "Llama 2 Chat (70B)",
-        "description": "Llama 2 Reference Model, 70B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16303,7 +15970,6 @@
     "together/llama-2-70b": {
         "company": "Meta",
         "label": "Llama 2 (70B)",
-        "description": "Llama 2 Reference Model, 70B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16348,7 +16014,6 @@
     "together/llama-2-13b-chat": {
         "company": "Meta",
         "label": "Llama 2 Chat (13B)",
-        "description": "Llama 2 Reference Model, 13B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16393,7 +16058,6 @@
     "together/llama-2-13b": {
         "company": "Meta",
         "label": "Llama 2 (13B)",
-        "description": "Llama 2 Reference Model, 13B parameters with FP16 quantization.",
         "release_date": "2023-07-18",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16438,7 +16102,6 @@
     "together/togethercomputer/falcon-7b-instruct": {
         "company": "Technology Innovation Institute",
         "label": "Falcon Instruct (7B)",
-        "description": "Falcon 7B Instruct model.",
         "release_date": "2023-06-20",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16485,7 +16148,6 @@
     "together/togethercomputer/falcon-7b": {
         "company": "Technology Innovation Institute",
         "label": "Falcon (7B)",
-        "description": "Falcon 7B model.",
         "release_date": "2023-06-20",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16532,7 +16194,6 @@
     "together/falcon-7b-instruct": {
         "company": "Technology Innovation Institute",
         "label": "Falcon Instruct (7B)",
-        "description": "Falcon 7B Instruct model.",
         "release_date": "2023-06-20",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16577,7 +16238,6 @@
     "together/falcon-7b": {
         "company": "Technology Innovation Institute",
         "label": "Falcon (7B)",
-        "description": "Falcon 7B model.",
         "release_date": "2023-06-20",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16622,7 +16282,6 @@
     "openai/gpt-4": {
         "company": "OpenAI",
         "label": "GPT 4",
-        "description": "GPT-4 is an older high-intelligence GPT model for text-only conversations.",
         "release_date": "2023-06-13",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-4",
@@ -16669,7 +16328,6 @@
     "together/togethercomputer/falcon-40b-instruct": {
         "company": "Technology Innovation Institute",
         "label": "Falcon Instruct (40B)",
-        "description": "Falcon 40B Instruct model.",
         "release_date": "2023-05-25",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16716,7 +16374,6 @@
     "together/togethercomputer/falcon-40b": {
         "company": "Technology Innovation Institute",
         "label": "Falcon (40B)",
-        "description": "Falcon 40B model.",
         "release_date": "2023-05-25",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16763,7 +16420,6 @@
     "together/falcon-40b-instruct": {
         "company": "Technology Innovation Institute",
         "label": "Falcon Instruct (40B)",
-        "description": "Falcon 40B Instruct model.",
         "release_date": "2023-05-25",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16808,7 +16464,6 @@
     "together/falcon-40b": {
         "company": "Technology Innovation Institute",
         "label": "Falcon (40B)",
-        "description": "Falcon 40B model.",
         "release_date": "2023-05-25",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16853,7 +16508,6 @@
     "openai/gpt-4-0314": {
         "company": "OpenAI",
         "label": "GPT 4 (2023-03-14)",
-        "description": "Snapshot of gpt-4 from March 14th 2023. (Legacy)",
         "release_date": "2023-03-14",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models#gpt-4-turbo-and-gpt-4",
@@ -16900,7 +16554,6 @@
     "together/togethercomputer/alpaca-7b": {
         "company": "Stanford",
         "label": "Alpaca (7B)",
-        "description": "Alpaca 7B Instruct model.",
         "release_date": "2023-03-13",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16947,7 +16600,6 @@
     "together/alpaca-7b": {
         "company": "Stanford",
         "label": "Alpaca (7B)",
-        "description": "Alpaca 7B Instruct model.",
         "release_date": "2023-03-13",
         "open_source": true,
         "documentation_url": "https://docs.together.ai/docs/serverless-models",
@@ -16992,7 +16644,6 @@
     "openai/gpt-3.5-turbo-0125": {
         "company": "OpenAI",
         "label": "GPT 3.5 (2023-01-25)",
-        "description": "The latest GPT-3.5 Turbo model with higher accuracy at responding in requested formats.",
         "release_date": "2023-01-25",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models#gpt-3-5-turbo",
@@ -17039,7 +16690,6 @@
     "openai/gpt-3.5-turbo": {
         "company": "OpenAI",
         "label": "GPT 3.5",
-        "description": "GPT-3.5 Turbo is a legacy text-only model for natural language and code conversations.",
         "release_date": "2023-01-25",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
@@ -17088,7 +16738,6 @@
     "openai/gpt-3.5": {
         "company": "OpenAI",
         "label": "GPT 3.5",
-        "description": "GPT-3.5 Turbo is a legacy text-only model for natural language and code conversations.",
         "release_date": "2023-01-25",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo",
@@ -17135,7 +16784,6 @@
     "openai/gpt-3.5-turbo-instruct": {
         "company": "OpenAI",
         "label": "GPT 3.5 Turbo Instruct",
-        "description": "GPT-3.5-turbo-instruct is an older model compatible only with the legacy Completions endpoint for text-based workflows.",
         "release_date": "2022-11-06",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models/gpt-3.5-turbo-instruct",
@@ -17182,7 +16830,6 @@
     "openai/gpt-3.5-turbo-1106": {
         "company": "OpenAI",
         "label": "GPT 3.5 Turbo (2022-11-06)",
-        "description": "GPT-3.5 Turbo model with improved instruction following and JSON mode.",
         "release_date": "2022-11-06",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models#gpt-3-5-turbo",
@@ -17229,7 +16876,6 @@
     "vals/dumbmar-5o-ultra-thinking": {
         "company": "Vals AI",
         "label": "Dummy Model",
-        "description": "Vals Dummy Model for testing",
         "open_source": false,
         "documentation_url": "",
         "properties": {
@@ -17269,7 +16915,6 @@
     "vals/dumbmar-5o-evaluator": {
         "company": "Vals AI",
         "label": "Dummy Evaluator Model",
-        "description": "Vals Dummy Model for evaluating",
         "open_source": false,
         "documentation_url": "",
         "properties": {
@@ -17309,7 +16954,6 @@
     "perplexity/sonar-reasoning-pro": {
         "company": "Perplexity",
         "label": "Sonar Reasoning Pro",
-        "description": "Advanced reasoning model combining multi-step analysis with rich web retrieval.",
         "open_source": false,
         "documentation_url": "https://docs.perplexity.ai/models/models/sonar-reasoning-pro",
         "properties": {
@@ -17347,7 +16991,6 @@
     "perplexity/sonar-reasoning": {
         "company": "Perplexity",
         "label": "Sonar Reasoning",
-        "description": "Reasoning-focused search model that exposes intermediate thinking for step-by-step answers.",
         "open_source": false,
         "documentation_url": "https://docs.perplexity.ai/models/models/sonar-reasoning",
         "properties": {
@@ -17385,7 +17028,6 @@
     "perplexity/sonar-pro": {
         "company": "Perplexity",
         "label": "Sonar Pro",
-        "description": "Premium search model for deeper research and analytical tasks with higher context window.",
         "open_source": false,
         "documentation_url": "https://docs.perplexity.ai/models/models/sonar-pro",
         "properties": {
@@ -17423,7 +17065,6 @@
     "perplexity/sonar-deep-research": {
         "company": "Perplexity",
         "label": "Sonar Deep Research",
-        "description": "Exhaustive research agent that performs multi-engine search, reasoning, and source synthesis.",
         "open_source": false,
         "documentation_url": "https://docs.perplexity.ai/models/models/sonar-deep-research",
         "properties": {
@@ -17461,7 +17102,6 @@
     "perplexity/sonar": {
         "company": "Perplexity",
         "label": "Sonar",
-        "description": "Lightweight web search model optimized for fast factual answers with citations.",
         "open_source": false,
         "documentation_url": "https://docs.perplexity.ai/models/models/sonar",
         "properties": {
@@ -17499,7 +17139,6 @@
     "openai/gpt-4-0613": {
         "company": "OpenAI",
         "label": "GPT 4 (2023-06-13)",
-        "description": "Snapshot of GPT-4 from June 13th 2023 with improved function calling support.",
         "open_source": false,
         "documentation_url": "https://platform.openai.com/docs/models#gpt-4-turbo-and-gpt-4",
         "properties": {
@@ -17545,7 +17184,6 @@
     "anthropic/claude-instant-1.2": {
         "company": "Anthropic",
         "label": "Claude Instant 1.2",
-        "description": "Claude Instant 1.2 was Anthropic's rapid-response, cost-optimized model for text-based queries, chat, and basic NLP workflows. It was tuned for high query volume and conversational tasks.",
         "open_source": false,
         "documentation_url": "",
         "properties": {
@@ -17595,7 +17233,6 @@
     "anthropic/claude-instant": {
         "company": "Anthropic",
         "label": "Claude Instant 1.2",
-        "description": "Claude Instant 1.2 was Anthropic's rapid-response, cost-optimized model for text-based queries, chat, and basic NLP workflows. It was tuned for high query volume and conversational tasks.",
         "open_source": false,
         "documentation_url": "",
         "properties": {
@@ -17643,7 +17280,6 @@
     "anthropic/claude-2.1": {
         "company": "Anthropic",
         "label": "Claude 2.1",
-        "description": "Claude 2.1 provided safer, more capable text generation and QA compared to previous versions, offering a 100K token context window and robust instruction following for business and developer use cases.",
         "open_source": false,
         "documentation_url": "",
         "properties": {
@@ -17693,7 +17329,6 @@
     "anthropic/claude-2.0": {
         "company": "Anthropic",
         "label": "Claude 2",
-        "description": "Claude 2.0 was a general purpose conversational model for text-only input and output, known for helpfulness, reliability, and improved safety compared to Claude 1.x. It supported longer conversations and basic analysis.",
         "open_source": false,
         "documentation_url": "",
         "properties": {
@@ -17741,7 +17376,6 @@
     "anthropic/claude-2": {
         "company": "Anthropic",
         "label": "Claude 2.1",
-        "description": "Claude 2.1 provided safer, more capable text generation and QA compared to previous versions, offering a 100K token context window and robust instruction following for business and developer use cases.",
         "open_source": false,
         "documentation_url": "",
         "properties": {
@@ -17789,7 +17423,6 @@
     "anthropic/claude-1.3": {
         "company": "Anthropic",
         "label": "Claude 1.3",
-        "description": "Claude 1.3 was one of Anthropic's earliest conversational models.",
         "open_source": false,
         "documentation_url": "",
         "properties": {

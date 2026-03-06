@@ -25,7 +25,6 @@ xai-models:
       top_p: 0.95
   grok/grok-code-fast-1:
     label: Grok Code Fast
-    description: A speedy and economical reasoning model that excels at agentic coding. Tailored specifically for code generation and debugging across multiple programming languages.
     release_date: 2025-08-25
     properties:
       context_window: 256_000
@@ -45,7 +44,6 @@ xai-models:
 
   grok/grok-4-fast-reasoning:
     label: Grok 4 Fast (Reasoning)
-    description: Latest advancement in cost-efficient reasoning models with unified architecture. Handles complex requests with deep chain-of-thought reasoning. Features 2M token context window and native tool use.
     release_date: 2025-09-19
     open_source: false
     supports:
@@ -72,7 +70,6 @@ xai-models:
 
   grok/grok-4-1-fast-reasoning:
     label: Grok 4.1 Fast (Reasoning)
-    description: ""
     release_date: 2025-11-19
     open_source: false
     supports:
@@ -96,7 +93,6 @@ xai-models:
 
   grok/grok-4-1-fast-non-reasoning:
     label: Grok 4.1 Fast Non-Reasoning
-    description: ""
     release_date: 2025-11-19
     open_source: false
     supports:
@@ -120,7 +116,6 @@ xai-models:
 
   grok/grok-4-fast-non-reasoning:
     label: Grok 4 Fast (Non-Reasoning)
-    description: Cost-efficient model focused on speed and efficiency for straightforward tasks like summarization or classification without deep logical processing. Unified architecture with reasoning variant, steered via system prompts.
     release_date: 2025-09-19
     open_source: false
     supports:
@@ -146,7 +141,6 @@ xai-models:
 
   grok/grok-4-0709:
     label: Grok 4
-    description: Latest and greatest flagship model offering unparalleled performance in natural language, math and reasoning. The perfect jack of all trades with native tool use and structured outputs support.
     release_date: 2025-07-09
     supports:
       images: true
@@ -173,7 +167,6 @@ xai-models:
 
   grok/grok-3-mini:
     label: Grok 3 Mini Reasoning
-    description: Compact reasoning model supporting reasoning effort parameter. Balances performance and efficiency for various tasks.
     release_date: 2025-04-09
     properties:
       context_window: 131_072
@@ -212,7 +205,6 @@ xai-models:
 
   grok/grok-3:
     label: Grok 3
-    description: Excels at enterprise use cases like data extraction, coding, and text summarization. Possesses deep domain knowledge in finance, healthcare, law, and science.
     release_date: 2025-04-09
     properties:
       context_window: 131_072
@@ -236,7 +228,6 @@ xai-models:
 
   grok/grok-2-vision-1212:
     label: Grok 2 Vision
-    description: ""
     release_date: 2024-12-12
     properties:
       context_window: 8_192
@@ -255,7 +246,6 @@ xai-models:
 
   grok/grok-2-1212:
     label: Grok 2
-    description: ""
     release_date: 2024-12-11
     properties:
       context_window: 131_072
@@ -269,7 +259,6 @@ xai-models:
 
   grok/grok-vision-beta:
     label: Grok Vision Beta
-    description: ""
     release_date: 2024-12-12
     properties:
       context_window: 8_192
@@ -285,7 +274,6 @@ xai-models:
 
   grok/grok-beta:
     label: Grok Beta
-    description: ""
     release_date: 2024-12-11
     properties:
       context_window: 131_072

@@ -25,10 +25,6 @@ command-models:
 
   cohere/command-a-03-2025:
     label: Command A
-    description:
-      Command A is Cohere's most performant model to date, excelling at
-      tool use, agents, retrieval augmented generation (RAG), and multilingual use
-      cases. It supports a context length of 256K tokens with high throughput.
     release_date: 2025-03-13
     properties:
       context_window: 256000
@@ -39,9 +35,6 @@ command-models:
 
   cohere/command-light:
     label: Command Light
-    description:
-      A smaller, faster version of the Command model that remains highly
-      capable but optimized for speed with a shorter 4K context length.
     release_date: 2024-04-24
     properties:
       context_window: 4000
@@ -54,9 +47,6 @@ command-models:
 
   cohere/command:
     label: Command
-    description:
-      Command is the base instruction-following conversational model delivering
-      high-quality language task performance, with a context of 4K tokens.
     release_date: 2024-03-24
     properties:
       context_window: 4000
@@ -69,9 +59,6 @@ command-models:
 
   cohere/command-r:
     label: Command R
-    description:
-      Alias for Command R 03-2024, an instruction-following conversational
-      model focused on reliability and extended context for complex workflows.
     release_date: 2024-04-24
     properties:
       context_window: 128000
@@ -85,10 +72,6 @@ command-models:
 
   cohere/command-r-03-2024:
     label: Command R (03/2024)
-    description:
-      Command R 03-2024 is an instruction-following conversational model
-      with improved quality, longer context (128K tokens), suitable for code generation,
-      RAG, and complex workflows.
     release_date: 2024-03-24
     properties:
       context_window: 128000
@@ -102,10 +85,6 @@ command-models:
 
   cohere/command-r-08-2024:
     label: Command R (08/2024)
-    description:
-      Command R (August 2024) is an updated instruction-following conversational
-      model suitable for complex workflows including code generation, retrieval augmentations,
-      and tool use, with 128K context.
     release_date: 2024-08-30
     properties:
       context_window: 128000
@@ -119,10 +98,6 @@ command-models:
 
   cohere/command-r-plus:
     label: Command R+
-    description:
-      Alias for Command R+ 04-2024, featuring high-quality instruction
-      following, long context support, and optimized for complex reasoning and retrieval
-      augmented generation.
     release_date: 2024-04-24
     properties:
       context_window: 128000
@@ -135,10 +110,6 @@ command-models:
 
   cohere/command-r-plus-04-2024:
     label: Command R+ (04/2024)
-    description:
-      Command R+ (April 2024) supports high-quality language tasks with
-      reliable performance over long contexts (128K tokens), optimized for complex
-      reasoning and multi-step tool use.
     release_date: 2024-04-24
     properties:
       context_window: 128000
@@ -151,9 +122,6 @@ command-models:
 
   cohere/command-r-plus-08-2024:
     label: Command R+ (08/2024)
-    description:
-      Command R+ (August 2024) is designed for complex RAG workflows and
-      multi-step tool use, supporting 128K context length.
     release_date: 2024-08-30
     properties:
       context_window: 128000
@@ -166,10 +134,6 @@ command-models:
 
   cohere/command-r7b-12-2024:
     label: Command R7B
-    description:
-      Command R7B is a small, fast update from December 2024. It excels
-      at RAG, tool use, agents, and complex reasoning with multiple steps. It supports
-      a context length of 128K tokens.
     release_date: 2024-12-13
     properties:
       context_window: 128000

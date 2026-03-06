@@ -14,7 +14,7 @@ def remove_none(d: Any | dict[str, Any]) -> Any | dict[str, Any]:
             k: remove_none(v)
             for k, v in d.items()
             if (v is not None and (k != "costs_per_million_token" or v != {}))
-            or k in {"max_token_output", "training_cutoff", "description"}
+            or k in {"max_token_output", "training_cutoff"}
         }
     elif isinstance(d, list):
         d = cast(list[Any], d)

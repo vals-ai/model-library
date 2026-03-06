@@ -24,10 +24,6 @@ base-config:
 gemma-models:
   google/gemma-3-27b-it:
     label: Gemma 3 27B it
-    description:
-      Gemma 3 is an open generative AI model optimized for everyday device
-      use such as phones and tablets, capable of handling text, audio, and vision
-      inputs with efficient parameter caching techniques.
     release_date: 2025-03-12
     metadata:
       deprecated: true
@@ -58,10 +54,6 @@ gemini-3-models:
 
   google/gemini-3.1-pro-preview:
     label: Gemini 3.1 Pro Preview (02/26)
-    description:
-      Gemini 3.1 Pro Preview provides better thinking, improved token
-      efficiency, and a more grounded, factually consistent experience. Optimized
-      for software engineering and agentic workflows.
     release_date: 2026-02-19
     properties:
       context_window: 1048576
@@ -87,7 +79,6 @@ gemini-3-models:
 
   google/gemini-3.1-flash-lite-preview:
     label: Gemini 3.1 Flash Lite Preview
-    description: Google's lightweight model, optimized for speed and cost.
     release_date: 2026-03-03
     metadata:
       available_for_everyone: true
@@ -104,7 +95,6 @@ gemini-3-models:
 
   google/gemini-3-flash-preview:
     label: Gemini 3 Flash (12/25)
-    description: Google's newest budget workhorse model
     release_date: 2025-12-17
     properties:
       context_window: 1048576
@@ -119,7 +109,6 @@ gemini-3-models:
 
   google/gemini-3-pro-preview:
     label: Gemini 3 Pro (11/25)
-    description: Gemini 3 Pro, Google's most powerful model.
     release_date: 2025-11-18
     properties:
       context_window: 1048576
@@ -160,11 +149,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-pro:
     label: Gemini 2.5 Pro
-    description:
-      Gemini 2.5 Pro is Google's most advanced Gemini model capable of
-      complex reasoning over code, math, STEM problems and analyzing large datasets
-      using multimodal inputs including audio, images, video, and PDFs with a context
-      window exceeding 1 million tokens.
     release_date: 2025-07-17
     metadata:
       available_as_evaluator: true
@@ -186,10 +170,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-flash:
     label: Gemini 2.5 Flash (7/17) (Nonthinking)
-    description:
-      Gemini 2.5 Flash is the best price-performance model suitable for
-      large scale processing with support for multiple modalities, a 1 million token
-      context window, and strong reasoning capabilities.
     release_date: 2025-07-17
     metadata:
       available_as_evaluator: true
@@ -209,9 +189,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-flash-preview-09-2025:
     label: Gemini 2.5 Flash Preview (9/25) (Nonthinking)
-    description:
-      Gemini 2.5 Flash is the best price-performance model suitable for
-      large scale processing with support for multiple modalities.
     release_date: 2025-09-25
     metadata:
       deprecated: true
@@ -231,10 +208,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-flash-lite:
     label: Gemini 2.5 Flash Lite (Nonthinking)
-    description:
-      Gemini 2.5 Flash-Lite offers ultra-fast, cost-efficient processing
-      at scale, with support for text, images, video, and audio input modalities and
-      large context length.
     release_date: 2025-07-22
     properties:
       context_window: 1_048_576
@@ -252,10 +225,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-flash-lite-preview-09-2025:
     label: Gemini 2.5 Flash Lite (9/25) (Nonthinking)
-    description:
-      Gemini 2.5 Flash-Lite offers ultra-fast, cost-efficient processing
-      at scale, with support for text, images, video, and audio input modalities and
-      large context length.
     release_date: 2025-09-25
     properties:
       context_window: 1_048_576
@@ -273,10 +242,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-flash-lite-preview-06-17:
     label: Gemini 2.5 Flash Lite Preview 6/17 (Nonthinking)
-    description:
-      Gemini 2.5 Flash-Lite offers ultra-fast, cost-efficient processing
-      at scale, with support for text, images, video, and audio input modalities and
-      large context length.
     release_date: 2025-06-17
     metadata:
       deprecated: true
@@ -296,10 +261,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-flash-preview-05-20:
     label: Gemini 2.5 Flash Preview 5/20 (Nonthinking)
-    description:
-      Gemini 2.5 Flash is the best price-performance model suitable for
-      large scale processing with support for multiple modalities, a 1 million token
-      context window, and strong reasoning capabilities.
     release_date: 2025-05-20
     metadata:
       deprecated: true
@@ -320,11 +281,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-pro-preview-06-05:
     label: Gemini 2.5 Pro Preview
-    description:
-      Gemini 2.5 Pro is Google's most advanced Gemini model capable of
-      complex reasoning over code, math, STEM problems and analyzing large datasets
-      using multimodal inputs including audio, images, video, and PDFs with a context
-      window exceeding 1 million tokens.
     release_date: 2025-06-05
     supports:
       batch: false
@@ -343,11 +299,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-pro-preview-05-06:
     label: Gemini 2.5 Pro Preview
-    description:
-      Gemini 2.5 Pro is Google's most advanced Gemini model capable of
-      complex reasoning over code, math, STEM problems and analyzing large datasets
-      using multimodal inputs including audio, images, video, and PDFs with a context
-      window exceeding 1 million tokens.
     release_date: 2025-05-06
     metadata:
       available_for_everyone: false
@@ -365,10 +316,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-flash-preview-04-17:
     label: Gemini 2.5 Flash Preview 4/17 (Nonthinking)
-    description:
-      Gemini 2.5 Flash is the best price-performance model suitable for
-      large scale processing with support for multiple modalities, a 1 million token
-      context window, and strong reasoning capabilities.
     release_date: 2025-04-17
     metadata:
       deprecated: true
@@ -389,11 +336,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-pro-exp-03-25:
     label: Gemini 2.5 Pro Exp
-    description:
-      Gemini 2.5 Pro is Google's most advanced Gemini model capable of
-      complex reasoning over code, math, STEM problems and analyzing large datasets
-      using multimodal inputs including audio, images, video, and PDFs with a context
-      window exceeding 1 million tokens.
     release_date: 2025-03-25
     metadata:
       available_for_everyone: false
@@ -411,11 +353,6 @@ gemini-2.5-models:
 
   google/gemini-2.5-pro-preview-03-25:
     label: Gemini 2.5 Pro Preview
-    description:
-      Gemini 2.5 Pro is Google's most advanced Gemini model capable of
-      complex reasoning over code, math, STEM problems and analyzing large datasets
-      using multimodal inputs including audio, images, video, and PDFs with a context
-      window exceeding 1 million tokens.
     release_date: 2025-04-05
     metadata:
       available_for_everyone: false
@@ -445,10 +382,6 @@ old-gemini-models:
 
   google/gemini-2.0-pro-exp-02-05:
     label: Gemini 2.0 Pro Exp
-    description:
-      Gemini 2.0 Pro is a powerful second-generation model optimized for
-      large context processing and multimodal inputs, with strengths in speed, native
-      tool use, and dataset comprehension.
     release_date: 2025-02-05
     supports:
       images: true
@@ -468,10 +401,6 @@ old-gemini-models:
 
   google/gemini-2.0-flash-thinking-exp-01-21:
     label: Gemini 2.0 Flash Thinking Exp
-    description:
-      Gemini 2.0 Flash Thinking is an experimental variant optimized for
-      reasoning and longer contextual memory in multimodal scenarios including text,
-      images, video, and audio.
     release_date: 2025-01-21
     supports:
       images: true
@@ -491,10 +420,6 @@ old-gemini-models:
 
   google/gemini-2.0-flash-001:
     label: Gemini 2.0 Flash (001)
-    description:
-      Gemini 2.0 Flash is a fast and versatile second-generation model
-      with a 1 million token context window and support for text, image, video, and
-      audio inputs.
     release_date: 2025-02-05
     supports:
       images: true
@@ -513,9 +438,6 @@ old-gemini-models:
 
   google/gemini-2.0-flash-exp:
     label: Gemini 2.0 Flash Exp
-    description:
-      Gemini 2.0 Flash Experimental is a developer preview for advanced
-      use cases requiring extended context and multimodal reasoning capabilities.
     release_date: 2024-12-11
     supports:
       images: true
@@ -534,9 +456,6 @@ old-gemini-models:
 
   google/gemini-1.5-flash-002:
     label: Gemini 1.5 Flash (002)
-    description:
-      Gemini 1.5 Flash is an efficient and speedy version of Gemini 1.5
-      with support for multiple data types and large contexts.
     release_date: 2024-09-24
     supports:
       images: true
@@ -554,9 +473,6 @@ old-gemini-models:
   
   google/gemini-1.5-flash-001:
     label: Gemini 1.5 Flash (001)
-    description:
-      Gemini 1.5 Flash (early release) provides fast processing with vision
-      and audio capabilities along with text understanding.
     release_date: 2024-05-24
     supports:
       images: true
@@ -574,9 +490,6 @@ old-gemini-models:
 
   google/gemini-1.5-pro-002:
     label: Gemini 1.5 Pro (002)
-    description:
-      Gemini 1.5 Pro is a high-performance model with multimodal capabilities
-      useful for complex reasoning tasks and dataset analysis.
     release_date: 2024-09-24
     supports:
       images: true
@@ -597,9 +510,6 @@ old-gemini-models:
 
   google/gemini-1.5-pro-001:
     label: Gemini 1.5 Pro (001)
-    description:
-      Gemini 1.5 Pro (early release) supports multimodal inputs and advanced
-      reasoning on moderate context lengths.
     release_date: 2024-05-24
     supports:
       images: true
@@ -617,9 +527,6 @@ old-gemini-models:
 
   google/gemini-1.0-pro-002:
     label: Gemini 1.0 Pro 002
-    description:
-      Gemini 1.0 Pro is an earlier generation multimodal model supporting
-      text, image, and audio inputs with foundational reasoning abilities.
     release_date: 2024-02-14
     supports:
       images: false

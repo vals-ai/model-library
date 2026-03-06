@@ -19,7 +19,6 @@ nova-models:
 
   amazon/amazon.nova-pro-v1:0:
     label: Nova Pro
-    description: Highly capable multimodal model offering the best combination of accuracy, speed, and cost for a wide range of tasks.
     release_date: 2024-12-03
     properties:
       context_window: 300_000
@@ -38,10 +37,6 @@ nova-models:
 
   amazon/amazon.nova-lite-v1:0:
     label: Nova Lite
-    description:
-      Very low cost multimodal model that is lightning fast for processing
-      image, video, and text inputs. Features 300k token context window and supports
-      document processing. Optimized for 15 languages.
     release_date: 2024-12-03
     properties:
       context_window: 300_000
@@ -60,10 +55,6 @@ nova-models:
 
   amazon/amazon.nova-micro-v1:0:
     label: Nova Micro
-    description:
-      Text-only model that delivers the lowest latency responses at very
-      low cost. Features 128k token context window and supports 200+ languages, optimized
-      for 15 key languages.
     release_date: 2024-12-03
     properties:
       context_window: 128_000
@@ -86,9 +77,6 @@ claude-models:
 
   bedrock/claude-3-5-sonnet-20240620-v2:
     label: Claude 3.5 Sonnet (Bedrock)
-    description:
-      Claude 3.5 Sonnet is a multimodal understanding foundation model.
-      It is multilingual and can reason over text, images and videos.
     release_date: 2024-10-22
     properties:
       context_window: 100_000
@@ -106,7 +94,6 @@ claude-models:
 
   bedrock/claude-3-7-sonnet-20250219-v1:
     label: Claude 3.7 Sonnet (Bedrock)
-    description: Claude 3.7 Sonnet, hosted on Bedrock.
     release_date: 2025-02-19
     properties:
       context_window: 200_000
@@ -128,9 +115,6 @@ claude-models:
 
   bedrock/claude-sonnet-4-20250514-v1:
     label: Claude Sonnet 4 (Nonthinking)
-    description:
-      Anthropic's latest-generation workhorse model, offering a balance
-      of performance and speed.
     release_date: 2025-05-22
     documentation_url: https://www.anthropic.com/claude/sonnet
     properties:
@@ -162,7 +146,6 @@ claude-models:
 
   bedrock/claude-opus-4-20250514-v1:
     label: Claude Opus 4 (Nonthinking)
-    description: Anthropic's most powerful model.
     release_date: 2025-05-22
     properties:
       context_window: 200_000
@@ -187,7 +170,6 @@ claude-models:
 
   bedrock/claude-opus-4-1-20250805-v1:
     label: Claude Opus 4.1 (Nonthinking)
-    description:
     release_date: 2025-08-05
     properties:
       context_window: 200_000
@@ -208,7 +190,6 @@ claude-models:
 
   bedrock/claude-3-5-haiku-20241022-v1:
     label: Claude 3.5 Haiku (Bedrock)
-    description: Claude 3.5 Haiku, hosted on Bedrock.
     release_date: 2024-10-22
     properties:
       context_window: 200_000
@@ -236,7 +217,6 @@ deepseek_models:
 
   bedrock/deepseek-r1-v1:
     label: DeepSeek R1 (Bedrock)
-    description: DeepSeek R1, hosted on Bedrock.
     release_date: 2025-03-03
     properties:
       context_window: 128_000
@@ -259,7 +239,6 @@ llama_models:
       temperature: true
   bedrock/llama3-3-70b-instruct-v1:
     label: Llama 3.3 70B Instruct (Bedrock)
-    description: Llama 3.3 70B Instruct, hosted on Bedrock.
     release_date: 2024-12-18
     properties:
       context_window: 128_000

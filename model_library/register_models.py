@@ -193,7 +193,6 @@ class RawModelConfig(BaseModel):
 
     company: str
     label: str
-    description: str | None = None
     release_date: date | None = None
     open_source: bool
     documentation_url: str | None = None

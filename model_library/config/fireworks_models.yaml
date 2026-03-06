@@ -29,7 +29,6 @@ qwen-models:
 
   fireworks/qwen3-235b-a22b:
     label: Qwen 3 (235B)
-    description: ""
     release_date: 2025-04-28
     metadata:
       deprecated: true
@@ -51,7 +50,6 @@ llama-4-models:
 
   fireworks/llama4-maverick-instruct-basic:
     label: Llama 4 Maverick
-    description: Llama 4 Maverick SOTA 128-expert MoE powerhouse for multilingual image/text understanding.
     release_date: 2025-04-05
     properties:
       context_window: 1_000_000
@@ -67,7 +65,6 @@ llama-4-models:
 
   fireworks/llama4-scout-instruct-basic:
     label: Llama 4 Scout
-    description: Llama 4 Scout SOTA 128-expert MoE powerhouse for multilingual image/text understanding.
     release_date: 2025-04-05
     properties:
       context_window: 10_000_000
@@ -93,7 +90,6 @@ deepseek-models:
 
   fireworks/deepseek-r1:
     label: DeepSeek R1
-    description: ""
     release_date: 2025-01-20
     properties:
       context_window: 163_840
@@ -108,7 +104,6 @@ deepseek-models:
 
   fireworks/deepseek-v3-0324:
     label: DeepSeek V3 (03/24/2025)
-    description: ""
     release_date: 2025-03-24
     properties:
       context_window: 131_072
@@ -121,7 +116,6 @@ deepseek-models:
 
   fireworks/deepseek-v3:
     label: DeepSeek V3
-    description: ""
     release_date: 2024-12-26
     properties:
       context_window: 131_072
@@ -134,7 +128,6 @@ deepseek-models:
 
   fireworks/deepseek-v3p1:
     label: DeepSeek V3.1
-    description: ""
     release_date: 2025-08-21
     properties:
       context_window: 163_840
@@ -146,7 +139,6 @@ deepseek-models:
 
   fireworks/deepseek-v3p2:
     label: DeepSeek V3.2 (Nonthinking)
-    description: ""
     release_date: 2025-12-01
     properties:
       context_window: 160_000
@@ -176,7 +168,6 @@ openai-models:
 
   fireworks/gpt-oss-120b:
     label: GPT OSS 120B
-    description: ""
     release_date: 2025-08-05
     properties:
       context_window: 128_000
@@ -189,7 +180,6 @@ openai-models:
 
   fireworks/gpt-oss-20b:
     label: GPT OSS 20B
-    description: ""
     release_date: 2025-08-05
     properties:
       context_window: 128_000
@@ -210,7 +200,6 @@ kimi-models:
 
   fireworks/kimi-k2-instruct-0905:
     label: Kimi K2 Instruct 0905
-    description: Kimi K2 0905 is an updated version of Kimi K2, a state-of-the-art mixture-of-experts (MoE) language model with 32 billion activated parameters and 1 trillion total parameters. Kimi K2 0905 has improved coding abilities, a longer context window, and agentic tool use, and a longer (262K) context window.
     release_date: 2025-09-04
     properties:
       context_window: 256_000
@@ -244,7 +233,6 @@ minimax-models:
 
   fireworks/minimax-m2:
     label: MiniMax-M2
-    description: MiniMax-M2 is a cost-efficient open-source model optimized for agentic applications and coding in particular.
     release_date: 2025-10-26
     metadata:
       deprecated: true

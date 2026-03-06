@@ -19,7 +19,6 @@ qwen-3-vl-models:
   alibaba/qwen3-vl-plus-2025-09-23:
     label: Qwen 3 VL Plus
     open_source: true
-    description: Qwen 3 VL Plus (2025-09-23)
     release_date: 2025-09-23
     metadata:
       deprecated: true
@@ -45,7 +44,6 @@ qwen-3-max-models:
 
   alibaba/qwen3-max-2026-01-23:
     label: Qwen 3 Max Thinking
-    description: Qwen 3 Max with enhanced reasoning capabilities
     release_date: 2026-01-23
     properties:
       context_window: 256_000
@@ -54,7 +52,6 @@ qwen-3-max-models:
 
   alibaba/qwen3-max-preview:
     label: Qwen 3 Max Preview
-    description: Preview of the largest and most recent Qwen Model
     release_date: 2025-09-05
     properties:
       context_window: 262_144
@@ -63,7 +60,6 @@ qwen-3-max-models:
 
   alibaba/qwen3-max-2025-09-23:
     label: Qwen 3 Max 2025-09-23
-    description: Largest and most recent Qwen Model
     release_date: 2025-09-23
     properties:
       context_window: 262_144
@@ -73,7 +69,6 @@ qwen-3-max-models:
 
   alibaba/qwen3-max:
     label: Qwen 3 Max
-    description: Largest and most recent Qwen Model
     release_date: 2025-09-23
     metadata:
       available_for_everyone: true
@@ -106,7 +101,6 @@ qwen-3.5-plus-models:
   alibaba/qwen3.5-plus:
     label: Qwen 3.5 Plus
     open_source: true
-    description: Qwen3.5-397B-A17B — natively multimodal, open-weight model suited for agentic tasks
     documentation_url: https://www.alibabacloud.com/help/en/model-studio/getting-started/models
     release_date: 2026-02-16
     metadata:
@@ -137,7 +131,6 @@ qwen-3.5-flash-models:
   alibaba/qwen3.5-flash:
     label: Qwen 3.5 Flash
     open_source: true
-    description: Fast, cost-effective Qwen 3.5 model with thinking enabled by default; ideal for simple tasks. Supports context cache and batch at half price.
     documentation_url: https://www.alibabacloud.com/help/en/model-studio/models
     release_date: 2026-02-23
     metadata:
