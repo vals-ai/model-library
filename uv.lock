@@ -1,5 +1,5 @@
 version = 1
-revision = 2
+revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
     "python_full_version >= '3.13'",
@@ -1138,6 +1138,7 @@ dependencies = [
     { name = "pillow" },
     { name = "pydantic" },
     { name = "pytest-xdist" },
+    { name = "python-dotenv" },
     { name = "pyyaml" },
     { name = "redis" },
     { name = "rich" },
@@ -1171,6 +1172,7 @@ requires-dist = [
     { name = "pillow" },
     { name = "pydantic", specifier = ">=2.11.7,<3.0" },
     { name = "pytest-xdist", specifier = ">=3.8.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
     { name = "redis", specifier = ">=6.2.0,<7.0" },
     { name = "rich" },
