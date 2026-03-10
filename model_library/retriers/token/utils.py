@@ -14,10 +14,10 @@ from redis.asyncio.lock import Lock
 #
 # RunContext propagates run identity from benchmark_queue into TokenRetrier.
 # benchmark_queue sets it before yield, resets in finally. When unset,
-# TokenRetrier falls back to instance_id (constructor param, always required).
+# TokenRetrier falls back to LLM.run_id (from LLMConfig or auto-generated).
 #
 # Fields:
-#   run_id    — benchmark run ID (queued) or instance_id (fallback)
+#   run_id    — benchmark run ID (queued) or LLM.run_id (fallback)
 #   is_queued — True inside benchmark_queue context manager. Controls:
 #     - Straggler detection: only queued runs check the queue head via lindex.
 #       If it differs from run_id, the run is demoted to MAX_PRIORITY.
@@ -27,7 +27,7 @@ from redis.asyncio.lock import Lock
 #
 # Dynamic estimate scoping:
 #   - Queued: keyed by run_id — each benchmark run starts at ratio 1.0
-#   - Non-queued: keyed by instance_id — cross-run learning preserved
+#   - Non-queued: keyed by LLM.run_id — cross-run learning preserved
 #
 # Edge case — nested benchmark contexts:
 #   All TokenRetrier instances inside one benchmark_queue context share the
@@ -40,7 +40,7 @@ class RunContext:
     """Identifies the current run for TokenRetrier requests.
 
     Set via contextvar by benchmark_queue (queued runs) or left unset
-    to fall back to instance_id (non-benchmark runs).
+    to fall back to LLM.run_id (non-benchmark runs).
     """
 
     run_id: str

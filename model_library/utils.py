@@ -1,15 +1,12 @@
 import logging
-import uuid
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime
 from pathlib import Path
+from pprint import pformat
 
 import httpx
 from anthropic import AsyncAnthropic
 from openai import AsyncOpenAI
-from pprint import pformat
-
 from pydantic.main import BaseModel
 
 MAX_LLM_LOG_LENGTH = 100
@@ -26,22 +23,6 @@ class PrettyModel(BaseModel):
         return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
 
     __str__ = __repr__
-
-
-def create_run_dir(benchmark: str, model_name: str, base: Path = Path("logs")) -> Path:
-    """Create a timestamped run directory for benchmark logs
-
-    Returns: Path like logs/<benchmark>/<model>/<timestamp>_<uuid>/
-    """
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    run_dir = (
-        base
-        / benchmark
-        / model_name.replace("/", "_")
-        / f"{timestamp}_{uuid.uuid4().hex[:6]}"
-    )
-    run_dir.mkdir(parents=True, exist_ok=True)
-    return run_dir
 
 
 @contextmanager
@@ -85,38 +66,41 @@ def create_file_logger(
             h.close()
 
 
-def setup_history_dir(logger: logging.Logger) -> Path | None:
-    """Create directory structure for history serialization
+@contextmanager
+def run_logging(
+    logger: logging.Logger,
+    log_dir: Path,
+    question_id: str,
+) -> Iterator[Path | None]:
+    """Manage file logging for an agent run.
 
-    Detects FileHandler on the logger, converts:
-      .../question.log → .../question/agent.log + .../question/histories/
+    Creates log_dir/<question_id>/agent.log and yields that directory.
+    If the logger already has a FileHandler, yields its parent directory instead.
+
+    The FileHandler is removed on exit.
     """
-    file_handler = None
-    for handler in logger.handlers:
-        if isinstance(handler, logging.FileHandler):
-            file_handler = handler
-            break
+    # Use existing FileHandler if present (walk up the logger hierarchy, skip root)
+    current: logging.Logger | None = logger
+    while current and current is not logging.root:
+        for h in current.handlers:
+            if isinstance(h, logging.FileHandler):
+                yield Path(h.baseFilename).parent
+                return
+        current = current.parent if current.propagate else None
 
-    if file_handler is None:
-        logger.warning("serialize_histories enabled but no FileHandler found, skipping")
-        return None
-
-    log_path = Path(file_handler.baseFilename)
-    output_dir = log_path.with_suffix("")
+    # Create our own FileHandler
+    output_dir = log_dir / question_id
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    histories_dir = output_dir / "histories"
-    histories_dir.mkdir(exist_ok=True)
-
-    # Redirect handler to write inside the new directory
-    new_log_path = output_dir / "agent.log"
-    file_handler.close()
-    if log_path.exists() and log_path.stat().st_size == 0:
-        log_path.unlink()
-    file_handler.baseFilename = str(new_log_path)
-    file_handler.stream = file_handler._open()
-
-    return histories_dir
+    file_handler = logging.FileHandler(output_dir / "agent.log", encoding="utf-8")
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    )
+    logger.addHandler(file_handler)
+    try:
+        yield output_dir
+    finally:
+        logger.removeHandler(file_handler)
+        file_handler.close()
 
 
 def truncate_str(s: str | None, max_len: int = MAX_LLM_LOG_LENGTH) -> str:
@@ -132,18 +116,6 @@ def get_logger(name: str | None = None):
     if not name:
         return logger
     return logging.getLogger(f"{logger.name}.{name}")
-
-
-def deep_model_dump(obj: object) -> object:
-    if isinstance(obj, BaseModel):
-        return deep_model_dump(obj.model_dump(exclude_unset=True, exclude_none=True))
-
-    if isinstance(obj, Mapping):
-        return {k: deep_model_dump(v) for k, v in obj.items()}  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-    if isinstance(obj, Sequence) and not isinstance(obj, (str, bytes)):
-        return [deep_model_dump(v) for v in obj]  # pyright: ignore[reportUnknownVariableType, reportUnknownArgumentType]
-
-    return obj
 
 
 def default_httpx_client():

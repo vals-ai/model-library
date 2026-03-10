@@ -314,11 +314,12 @@ class AnthropicModel(LLM):
         provider: str = "anthropic",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
         delegate_config: DelegateConfig | None = None,
     ):
         self.delegate_config = delegate_config
 
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         # https://docs.anthropic.com/en/api/openai-sdk
         self.delegate = (
@@ -675,7 +676,7 @@ class AnthropicModel(LLM):
                 **stream_kwargs,
             ) as stream:  # pyright: ignore[reportAny]
                 message = await stream.get_final_message()
-            self.logger.info(f"Anthropic Response finished: {message.id}")
+            self.logger.debug(f"Anthropic Response finished: {message.id}")
         except APIConnectionError:
             raise ImmediateRetryException("Failed to connect to Anthropic")
 

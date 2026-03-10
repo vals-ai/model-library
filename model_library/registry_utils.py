@@ -1,3 +1,4 @@
+import logging
 from functools import cache
 from pathlib import Path
 from typing import TypedDict
@@ -86,7 +87,9 @@ def create_config(
 
 
 def _get_model_from_registry(
-    registry_config: ModelConfig, override_config: LLMConfig | None
+    registry_config: ModelConfig,
+    override_config: LLMConfig | None,
+    logger: logging.Logger | None = None,
 ) -> LLM:
     """
     Utility to return a model class from a registry entry.
@@ -102,6 +105,7 @@ def _get_model_from_registry(
         model_name=provider_endpoint,
         provider=registry_config.provider_name,
         config=model_config,
+        logger=logger,
     )
 
 
@@ -110,20 +114,30 @@ def get_registry_config(model_str: str) -> ModelConfig | None:
     return config
 
 
-def get_registry_model(model_str: str, override_config: LLMConfig | None = None) -> LLM:
+def get_registry_model(
+    model_str: str,
+    override_config: LLMConfig | None = None,
+    logger: logging.Logger | None = None,
+) -> LLM:
     """Get a model including default config"""
     registry_config = get_registry_config(model_str)
     if not registry_config:
         raise Exception(f"Model {model_str} not found in registry")
 
-    return _get_model_from_registry(registry_config, override_config)
+    return _get_model_from_registry(registry_config, override_config, logger=logger)
 
 
-def get_raw_model(model_str: str, config: LLMConfig | None = None) -> LLM:
+def get_raw_model(
+    model_str: str,
+    config: LLMConfig | None = None,
+    logger: logging.Logger | None = None,
+) -> LLM:
     """Get a model exluding default config"""
     provider, model_name = model_str.split("/", 1)
     ModelClass = get_provider_registry()[provider]
-    return ModelClass(model_name=model_name, provider=provider, config=config)
+    return ModelClass(
+        model_name=model_name, provider=provider, config=config, logger=logger
+    )
 
 
 @cache

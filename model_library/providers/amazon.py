@@ -114,8 +114,9 @@ class AmazonModel(LLM):
         provider: Literal["amazon"] = "amazon",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
         self.supports_cache = "amazon" in self.model_name or "claude" in self.model_name
         self.supports_cache = (
             self.supports_cache and "v2" not in self.model_name

@@ -76,8 +76,9 @@ class AI21LabsModel(LLM):
         provider: Literal["ai21labs"] = "ai21labs",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
     @override
     async def parse_input(

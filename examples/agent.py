@@ -25,7 +25,6 @@ from model_library.agent.tools.submit import SubmitTool
 from model_library.base import LLM
 from model_library.base.input import TextInput
 from model_library.registry_utils import get_registry_model
-from model_library.utils import create_file_logger, create_run_dir
 
 from .setup import console_log, setup
 
@@ -76,29 +75,30 @@ class SaveNote(Tool):
 # --- Run ---
 
 
-async def basic_agent(model: LLM, logger: logging.Logger):
+async def basic_agent(model: LLM):
     """Minimal agent: LLM + tools, run until the model stops calling tools."""
     console_log("\n--- Basic Agent ---\n")
 
-    agent = Agent(logger=logger, llm=model, tools=[GetWeather(), SaveNote()])
+    agent = Agent(name="basic", llm=model, tools=[GetWeather(), SaveNote()])
     result = await agent.run(
         [
             TextInput(
                 text="What's the weather in Tokyo? Save it as a note called 'tokyo_weather'."
             )
-        ]
+        ],
+        question_id="question_1",
     )
 
     console_log(f"Answer: {result.final_answer}")
     console_log(f"Turns: {result.total_turns}, Tool calls: {result.tool_calls_count}")
 
 
-async def agent_with_submit_tool(model: LLM, logger: logging.Logger):
+async def agent_with_submit_tool(model: LLM):
     """Agent with a submit tool that signals completion via done=True."""
     console_log("\n--- Agent with Submit Tool ---\n")
 
     agent = Agent(
-        logger=logger,
+        name="submit",
         llm=model,
         tools=[GetWeather(), SubmitTool()],
         config=AgentConfig(max_turns=10),
@@ -108,20 +108,21 @@ async def agent_with_submit_tool(model: LLM, logger: logging.Logger):
             TextInput(
                 text="Check the weather in San Francisco, then submit a one-sentence summary."
             )
-        ]
+        ],
+        question_id="question_1",
     )
 
     console_log(f"Final answer: {result.final_answer}")
 
 
-async def agent_with_web_search(model: LLM, logger: logging.Logger):
+async def agent_with_web_search(model: LLM):
     """Agent with web search: uses TavilyWebSearch to answer questions about the real world."""
     console_log("\n--- Agent with Web Search ---\n")
 
     from model_library.agent.tools.web_search import TavilyWebSearch
 
     agent = Agent(
-        logger=logger,
+        name="web_search",
         llm=model,
         tools=[TavilyWebSearch(max_end_date="2025-04-07"), SubmitTool()],
         config=AgentConfig(max_turns=5),
@@ -131,21 +132,22 @@ async def agent_with_web_search(model: LLM, logger: logging.Logger):
             TextInput(
                 text="Search for the latest news about AI regulation, then submit a brief summary."
             )
-        ]
+        ],
+        question_id="question_1",
     )
 
     console_log(f"Answer: {result.final_answer}")
     console_log(f"Turns: {result.total_turns}, Tool calls: {result.tool_calls_count}")
 
 
-async def agent_with_bash(model: LLM, logger: logging.Logger):
+async def agent_with_bash(model: LLM):
     """Agent with bash: can run shell commands to answer questions."""
     console_log("\n--- Agent with Bash ---\n")
 
     from model_library.agent.tools.bash import BashTool
 
     agent = Agent(
-        logger=logger,
+        name="bash",
         llm=model,
         tools=[BashTool(working_dir="/tmp"), SubmitTool()],
         config=AgentConfig(max_turns=5),
@@ -155,14 +157,15 @@ async def agent_with_bash(model: LLM, logger: logging.Logger):
             TextInput(
                 text="Use bash to list the files in /tmp, then submit a summary of what you found."
             )
-        ]
+        ],
+        question_id="question_1",
     )
 
     console_log(f"Answer: {result.final_answer}")
     console_log(f"Turns: {result.total_turns}, Tool calls: {result.tool_calls_count}")
 
 
-async def agent_with_hooks(model: LLM, logger: logging.Logger):
+async def agent_with_hooks(model: LLM):
     """Agent with lifecycle hooks: should_stop and determine_answer."""
     console_log("\n--- Agent with Hooks ---\n")
 
@@ -182,7 +185,7 @@ async def agent_with_hooks(model: LLM, logger: logging.Logger):
         return default_determine_answer(state, turns, final_error)
 
     agent = Agent(
-        logger=logger,
+        name="hooks",
         llm=model,
         tools=[GetWeather(), SaveNote()],
         config=AgentConfig(max_turns=5),
@@ -195,6 +198,7 @@ async def agent_with_hooks(model: LLM, logger: logging.Logger):
     state: dict[str, Any] = {}
     result = await agent.run(
         [TextInput(text="Get the weather in Tokyo and save it as 'tokyo_weather'.")],
+        question_id="question_1",
         state=state,
     )
 
@@ -217,15 +221,11 @@ async def main():
 
     model = get_registry_model(args.model)
 
-    run_dir = create_run_dir("example", args.model)
-    log_file = run_dir / "agent.log"
-
-    with create_file_logger("llm.agent.example", log_file) as logger:
-        # await basic_agent(args.model, logger)
-        # await agent_with_submit_tool(model, logger)
-        await agent_with_bash(model, logger)
-        # await agent_with_web_search(model, logger)
-        # await agent_with_hooks(args.model, logger)
+    # await basic_agent(model)
+    # await agent_with_bash(model, logger)
+    await agent_with_submit_tool(model)
+    # await agent_with_web_search(model)
+    # await agent_with_hooks(model)
 
 
 if __name__ == "__main__":

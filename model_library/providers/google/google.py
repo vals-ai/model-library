@@ -187,8 +187,9 @@ class GoogleModel(LLM):
         provider: Literal["google"] = "google",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         if self.provider_config.use_vertex:
             self.supports_batch = False

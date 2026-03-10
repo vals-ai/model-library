@@ -17,7 +17,6 @@ from openai.types.chat import (
 from openai.types.chat.chat_completion_message_tool_call import Function
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
 from openai.types.create_embedding_response import CreateEmbeddingResponse
-from pydantic import BaseModel
 from openai.types.moderation_create_response import ModerationCreateResponse
 from openai.types.responses import (
     ResponseFunctionToolCall,
@@ -27,6 +26,7 @@ from openai.types.responses import (
 )
 from openai.types.responses.response import Response
 from openai.types.responses.tool_param import ToolParam as ResponsesToolParam
+from pydantic import BaseModel
 from typing_extensions import deprecated, override
 
 from model_library import model_library_settings
@@ -265,7 +265,7 @@ class OpenAIBatchMixin(LLMBatchMixin):
 
     @override
     async def cancel_batch_request(self, batch_id: str):
-        self._root.logger.info(f"Cancelling {batch_id}")
+        self._root.logger.debug(f"Cancelling {batch_id}")
         _ = await self._client.batches.cancel(batch_id)
 
     @override
@@ -323,6 +323,7 @@ class OpenAIModel(LLM):
         provider: str = "openai",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
         use_completions: bool = False,
         delegate_config: DelegateConfig | None = None,
     ):
@@ -331,7 +332,7 @@ class OpenAIModel(LLM):
         )
         self.delegate_config = delegate_config
 
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         self.deep_research = self.provider_config.deep_research
         self.verbosity = self.provider_config.verbosity
@@ -916,20 +917,21 @@ class OpenAIModel(LLM):
             stream_events.append(event)
             match event.type:
                 case "response.created":
-                    self.logger.info(f"Response created: {event.response.id}")
+                    self.logger.debug(f"Response created: {event.response.id}")
                     response = event.response
                 case "response.completed":
-                    self.logger.info(f"Response completed: {event.response.id}")
+                    self.logger.debug(f"Response completed: {event.response.id}")
                     response = event.response
                 case "response.incomplete":
-                    self.logger.warning(f"Response incomplete: {event.response.id}")
+                    self.logger.error(f"Response incomplete: {event.response.id}")
                     response = event.response
                 case "response.in_progress":
-                    self.logger.info(f"Response in progress: {event.response.id}")
+                    self.logger.debug(f"Response in progress: {event.response.id}")
                     response = event.response
                 case "response.failed":
-                    self.logger.error(f"Response failed: {event.response.id}")
-                    self.logger.error(f"Error details: {event.response.error}")
+                    self.logger.error(
+                        f"Response failed: {event.response.id} | {event.response.error}"
+                    )
                     response = event.response
                 case _:
                     continue
@@ -938,7 +940,7 @@ class OpenAIModel(LLM):
                 f"Model returned no response. Events: {[e.model_dump(exclude_unset=True, exclude_none=True) for e in stream_events]}"
             )
             raise ImmediateRetryException("Model returned no response")
-        self.logger.info(f"Response finished: {response.id}")
+        self.logger.debug(f"Response finished: {response.id}")
 
         if (
             response.incomplete_details
@@ -963,7 +965,7 @@ class OpenAIModel(LLM):
                 continue
             if output.type != "function_call":
                 continue
-            self.logger.info(f"Found tool call for response: {response.id}")
+            self.logger.debug(f"Found tool call for response: {response.id}")
             if not output.id:
                 raise Exception(f"Tool call is missing id for response: {response.id}")
             tool_calls.append(

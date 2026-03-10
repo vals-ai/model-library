@@ -25,8 +25,11 @@ from model_library.agent.tools.submit import SubmitTool
 from model_library.base.input import TextInput
 
 
+_REQUIRED = ("--name", "test", "--question-id", "q1")
+
+
 def _parse(*argv: str) -> Any:
-    return _build_parser().parse_args(list(argv))
+    return _build_parser().parse_args([*_REQUIRED, *argv])
 
 
 def _make_result(final_answer: str = "done") -> MagicMock:
@@ -181,7 +184,7 @@ class TestCLI:
         )
         captured: list[AgentConfig] = []
 
-        def fake_agent(*, llm, tools, logger, config):
+        def fake_agent(*, llm, tools, name, logger, config):
             captured.append(config)
             agent = MagicMock()
             agent.run = AsyncMock(return_value=_make_result())
@@ -234,7 +237,7 @@ class TestCLI:
         )
         captured_inputs: list[Any] = []
 
-        async def fake_run(inputs: list[Any]) -> Any:
+        async def fake_run(inputs: list[Any], *, question_id: str) -> Any:
             captured_inputs.extend(inputs)
             return _make_result()
 
@@ -257,7 +260,7 @@ class TestCLI:
         with (
             patch("model_library.agent.cli.get_registry_model", return_value=MagicMock()),
             patch("model_library.agent.cli.Agent") as mock_agent_cls,
-            patch("sys.argv", ["prog", "--model", "m", "--problem-statement", str(ps_file), "--log-file", str(tmp_path / "a.log")]),
+            patch("sys.argv", ["prog", *_REQUIRED, "--model", "m", "--problem-statement", str(ps_file), "--log-file", str(tmp_path / "a.log")]),
         ):
             mock_agent_cls.return_value.run = AsyncMock(return_value=_make_result("the answer"))
             main()
@@ -271,7 +274,7 @@ class TestCLI:
             patch("model_library.agent.cli.get_registry_model", return_value=MagicMock()),
             patch("model_library.agent.cli.Agent") as mock_agent_cls,
             patch("sys.argv", [
-                "prog", "--model", "m", "--problem-statement", str(ps_file),
+                "prog", *_REQUIRED, "--model", "m", "--problem-statement", str(ps_file),
                 "--log-file", str(tmp_path / "a.log"), "--output", str(output_file),
             ]),
         ):
@@ -286,7 +289,7 @@ class TestCLI:
         with (
             patch("model_library.agent.cli.get_registry_model", return_value=MagicMock()),
             patch("model_library.agent.cli.Agent") as mock_agent_cls,
-            patch("sys.argv", ["prog", "--model", "m", "--problem-statement", str(ps_file), "--log-file", str(tmp_path / "a.log")]),
+            patch("sys.argv", ["prog", *_REQUIRED, "--model", "m", "--problem-statement", str(ps_file), "--log-file", str(tmp_path / "a.log")]),
         ):
             mock_agent_cls.return_value.run = AsyncMock(return_value=_make_result())
             main()

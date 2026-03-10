@@ -26,9 +26,6 @@ from model_library.agent import (
 )
 
 
-_logger = logging.getLogger("test_agent")
-
-
 # --- Helpers ---
 
 
@@ -145,9 +142,9 @@ class LLMCallingTool(Tool):
 class TestAgentBasicLoop:
     async def test_single_turn_text_response(self):
         llm = mock_llm(make_text_response("hello world"))
-        agent = Agent(logger=_logger, llm=llm, tools=[])
+        agent = Agent(name="test", llm=llm, tools=[])
 
-        result = await agent.run([TextInput(text="say hello")])
+        result = await agent.run([TextInput(text="say hello")], question_id="q1")
 
         assert result.final_answer == "hello world"
         assert result.success
@@ -159,9 +156,9 @@ class TestAgentBasicLoop:
     async def test_tool_call_then_text_response(self):
         tc = make_tool_call("echo", {"text": "ping"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("got: ping"))
-        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
 
-        result = await agent.run([TextInput(text="echo test")])
+        result = await agent.run([TextInput(text="echo test")], question_id="q1")
 
         assert result.final_answer == "got: ping"
         assert result.success
@@ -173,9 +170,9 @@ class TestAgentBasicLoop:
     async def test_done_tool_stops_loop(self):
         tc = make_tool_call("submit", {"answer": "42"})
         llm = mock_llm(make_tool_response([tc]))
-        agent = Agent(logger=_logger, llm=llm, tools=[DoneTool()])
+        agent = Agent(name="test", llm=llm, tools=[DoneTool()])
 
-        result = await agent.run([TextInput(text="answer?")])
+        result = await agent.run([TextInput(text="answer?")], question_id="q1")
 
         assert result.final_answer == "42"
         assert result.success
@@ -185,9 +182,9 @@ class TestAgentBasicLoop:
         tc = make_tool_call("echo", {"text": "hi"})
         responses = [make_tool_response([tc]) for _ in range(5)]
         llm = mock_llm(*responses)
-        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()], config=AgentConfig(max_turns=3))
+        agent = Agent(name="test", llm=llm, tools=[EchoTool()], config=AgentConfig(max_turns=3))
 
-        result = await agent.run([TextInput(text="go")])
+        result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert not result.success
         assert result.final_error is not None
@@ -210,9 +207,9 @@ class TestAgentBasicLoop:
 
         with patch.object(time_module, "monotonic", side_effect=fake_monotonic):
             agent = Agent(
-                logger=_logger, llm=llm, tools=[EchoTool()], config=AgentConfig(max_time_seconds=50)
+                name="test", llm=llm, tools=[EchoTool()], config=AgentConfig(max_time_seconds=50)
             )
-            result = await agent.run([TextInput(text="go")])
+            result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert not result.success
         assert result.final_error is not None
@@ -220,36 +217,36 @@ class TestAgentBasicLoop:
 
     async def test_text_only_auto_stops_without_should_stop(self):
         llm = mock_llm(make_text_response("done"))
-        agent = Agent(logger=_logger, llm=llm, tools=[], config=AgentConfig(max_turns=10))
+        agent = Agent(name="test", llm=llm, tools=[], config=AgentConfig(max_turns=10))
 
-        result = await agent.run([TextInput(text="go")])
+        result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert result.final_answer == "done"
         assert llm.query.call_count == 1
 
     async def test_input_passed_to_llm(self):
         llm = mock_llm(make_text_response("ok"))
-        agent = Agent(logger=_logger, llm=llm, tools=[])
+        agent = Agent(name="test", llm=llm, tools=[])
 
-        await agent.run([TextInput(text="a"), TextInput(text="b")])
+        await agent.run([TextInput(text="a"), TextInput(text="b")], question_id="q1")
 
         messages = llm.query.call_args.kwargs["input"]
         assert len(messages) == 2
 
     async def test_state_defaults_to_empty_dict(self):
         llm = mock_llm(make_text_response("ok"))
-        agent = Agent(logger=_logger, llm=llm, tools=[])
+        agent = Agent(name="test", llm=llm, tools=[])
 
-        result = await agent.run([TextInput(text="go")])
+        result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert result.state == {}
 
     async def test_initial_state_preserved(self):
         llm = mock_llm(make_text_response("ok"))
-        agent = Agent(logger=_logger, llm=llm, tools=[])
+        agent = Agent(name="test", llm=llm, tools=[])
         state = {"initial": True}
 
-        result = await agent.run([TextInput(text="go")], state=state)
+        result = await agent.run([TextInput(text="go")], question_id="q1", state=state)
 
         assert result.state == state
         assert result.state["initial"] is True
@@ -262,9 +259,9 @@ class TestAgentToolExecution:
     async def test_unknown_tool_records_error(self):
         tc = make_tool_call("nonexistent", {})
         llm = mock_llm(make_tool_response([tc]), make_text_response("ok"))
-        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
 
-        result = await agent.run([TextInput(text="try unknown")])
+        result = await agent.run([TextInput(text="try unknown")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -275,9 +272,9 @@ class TestAgentToolExecution:
     async def test_tool_exception_caught_and_recorded(self):
         tc = make_tool_call("fail", {})
         llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
-        agent = Agent(logger=_logger, llm=llm, tools=[FailingTool()])
+        agent = Agent(name="test", llm=llm, tools=[FailingTool()])
 
-        result = await agent.run([TextInput(text="try failing")])
+        result = await agent.run([TextInput(text="try failing")], question_id="q1")
 
         assert result.final_answer == "recovered"
         assert isinstance(result.turns[0], AgentTurn)
@@ -291,9 +288,9 @@ class TestAgentToolExecution:
         """Tool returning ToolOutput with error set (doesn't raise)"""
         tc = make_tool_call("soft_fail", {})
         llm = mock_llm(make_tool_response([tc]), make_text_response("ok"))
-        agent = Agent(logger=_logger, llm=llm, tools=[ErrorReturnTool()])
+        agent = Agent(name="test", llm=llm, tools=[ErrorReturnTool()])
 
-        result = await agent.run([TextInput(text="try soft fail")])
+        result = await agent.run([TextInput(text="try soft fail")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -306,9 +303,9 @@ class TestAgentToolExecution:
     async def test_string_args_parsed_as_json(self):
         tc = ToolCall(id="tc_1", name="echo", args='{"text": "from json"}')
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         assert result.turns[0].tool_call_records[0].tool_call.parsed_args == {"text": "from json"}
@@ -316,9 +313,9 @@ class TestAgentToolExecution:
     async def test_invalid_json_args_errors(self):
         tc = ToolCall(id="tc_1", name="echo", args="not json")
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -330,9 +327,9 @@ class TestAgentToolExecution:
         """JSON that parses to non-dict (e.g. list) is unparseable"""
         tc = ToolCall(id="tc_1", name="echo", args="[1, 2, 3]")
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -344,9 +341,9 @@ class TestAgentToolExecution:
         """Tool with required params called without them → error record"""
         tc = ToolCall(id="tc_1", name="echo", args={})  # missing "text"
         llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
-        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -358,9 +355,9 @@ class TestAgentToolExecution:
     async def test_missing_multiple_required_params(self):
         tc = ToolCall(id="tc_1", name="set_state", args={})  # missing "key" and "value"
         llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
-        agent = Agent(logger=_logger, llm=llm, tools=[StateTool()])
+        agent = Agent(name="test", llm=llm, tools=[StateTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -371,9 +368,9 @@ class TestAgentToolExecution:
     async def test_partial_required_params_reports_missing(self):
         tc = make_tool_call("set_state", {"key": "k"})  # has "key", missing "value"
         llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
-        agent = Agent(logger=_logger, llm=llm, tools=[StateTool()])
+        agent = Agent(name="test", llm=llm, tools=[StateTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -395,9 +392,9 @@ class TestAgentToolExecution:
 
         tc = make_tool_call("opt", {"needed": "yes"})  # "optional" omitted
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(logger=_logger, llm=llm, tools=[OptionalTool()])
+        agent = Agent(name="test", llm=llm, tools=[OptionalTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -409,9 +406,9 @@ class TestAgentToolExecution:
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
         # FailingTool has parameters={}, required=[] — should pass validation
         # (it will fail in execute, but that's a different error)
-        agent = Agent(logger=_logger, llm=llm, tools=[FailingTool()])
+        agent = Agent(name="test", llm=llm, tools=[FailingTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -422,10 +419,10 @@ class TestAgentToolExecution:
         set_call = make_tool_call("set_state", {"key": "found", "value": "yes"})
         echo_call = make_tool_call("echo", {"text": "check"})
         llm = mock_llm(make_tool_response([set_call]), make_tool_response([echo_call]), make_text_response("done"))
-        agent = Agent(logger=_logger, llm=llm, tools=[StateTool(), EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[StateTool(), EchoTool()])
         state: dict[str, Any] = {}
 
-        result = await agent.run([TextInput(text="test")], state=state)
+        result = await agent.run([TextInput(text="test")], question_id="q1", state=state)
 
         assert state["found"] == "yes"
         assert result.state["found"] == "yes"
@@ -433,9 +430,9 @@ class TestAgentToolExecution:
     async def test_tool_call_duration_tracked(self):
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         record = result.turns[0].tool_call_records[0]
@@ -446,9 +443,9 @@ class TestAgentToolExecution:
         done_call = make_tool_call("submit", {"answer": "42"})
         echo_call = make_tool_call("echo", {"text": "should not run"})
         llm = mock_llm(make_tool_response([done_call, echo_call]))
-        agent = Agent(logger=_logger, llm=llm, tools=[DoneTool(), EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[DoneTool(), EchoTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert result.final_answer == "42"
         assert isinstance(result.turns[0], AgentTurn)
@@ -466,9 +463,9 @@ class TestAgentToolMetadata:
             make_tool_response([tc], metadata=make_metadata(in_tokens=100, out_tokens=50)),
             make_text_response("done"),
         )
-        agent = Agent(logger=_logger, llm=llm, tools=[LLMCallingTool()])
+        agent = Agent(name="test", llm=llm, tools=[LLMCallingTool()])
 
-        result = await agent.run([TextInput(text="retrieve")])
+        result = await agent.run([TextInput(text="retrieve")], question_id="q1")
 
         assert isinstance(result.turns[0], AgentTurn)
         turn = result.turns[0]
@@ -480,9 +477,9 @@ class TestAgentToolMetadata:
         tc = make_tool_call("echo", {"text": "hi"})
         meta = make_metadata(in_tokens=100, out_tokens=50, cost_total=0.02)
         llm = mock_llm(make_tool_response([tc], metadata=meta), make_text_response("done", metadata=meta))
-        agent = Agent(logger=_logger, llm=llm, tools=[EchoTool()])
+        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert result.final_aggregated_metadata.in_tokens == 200
         assert result.final_aggregated_metadata.out_tokens == 100
@@ -502,14 +499,14 @@ class TestAgentHooks:
             return turn_result.turn_number >= 2
 
         agent = Agent(
-            logger=_logger,
+            name="test",
             llm=llm,
             tools=[EchoTool()],
             hooks=AgentHooks(should_stop=stop_at_3),
             config=AgentConfig(max_turns=10),
         )
 
-        result = await agent.run([TextInput(text="go")])
+        result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert llm.query.call_count == 3
         assert result.total_turns == 3
@@ -527,14 +524,14 @@ class TestAgentHooks:
             return turn_result.response_text is not None and "EXIT" in turn_result.response_text
 
         agent = Agent(
-            logger=_logger,
+            name="test",
             llm=llm,
             tools=[],
             hooks=AgentHooks(should_stop=stop_on_exit),
             config=AgentConfig(max_turns=10),
         )
 
-        result = await agent.run([TextInput(text="go")])
+        result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert llm.query.call_count == 3
         assert result.final_answer == "EXIT"
@@ -549,9 +546,9 @@ class TestAgentHooks:
         ) -> str:
             return "overridden"
 
-        agent = Agent(logger=_logger, llm=llm, tools=[], hooks=AgentHooks(determine_answer=custom_answer))
+        agent = Agent(name="test", llm=llm, tools=[], hooks=AgentHooks(determine_answer=custom_answer))
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert result.final_answer == "overridden"
 
@@ -567,10 +564,10 @@ class TestAgentHooks:
             return f"score={state.get('score', 'unknown')}"
 
         agent = Agent(
-            logger=_logger, llm=llm, tools=[StateTool()], hooks=AgentHooks(determine_answer=answer_from_state)
+            name="test", llm=llm, tools=[StateTool()], hooks=AgentHooks(determine_answer=answer_from_state)
         )
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert result.final_answer == "score=100"
 
@@ -590,14 +587,14 @@ class TestAgentHooks:
             return ""
 
         agent = Agent(
-            logger=_logger,
+            name="test",
             llm=llm,
             tools=[StateTool()],
             config=AgentConfig(max_turns=3),
             hooks=AgentHooks(determine_answer=salvage),
         )
 
-        result = await agent.run([TextInput(text="go")])
+        result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert result.final_answer == "salvaged"
         assert result.final_error is not None
@@ -606,9 +603,9 @@ class TestAgentHooks:
 
     async def test_default_determine_answer_returns_text(self):
         llm = mock_llm(make_text_response("raw"))
-        agent = Agent(logger=_logger, llm=llm, tools=[])
+        agent = Agent(name="test", llm=llm, tools=[])
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert result.success
         assert result.final_answer == "raw"
@@ -619,13 +616,13 @@ class TestAgentHooks:
         llm = mock_llm(*responses)
 
         agent = Agent(
-            logger=_logger,
+            name="test",
             llm=llm,
             tools=[EchoTool()],
             config=AgentConfig(max_turns=2),
         )
 
-        result = await agent.run([TextInput(text="go")])
+        result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert result.final_error is not None
         assert result.final_error.type == "MaxTurnsExceeded"
@@ -642,10 +639,10 @@ class TestAgentHooks:
             records.append(record)
 
         agent = Agent(
-            logger=_logger, llm=llm, tools=[EchoTool()], hooks=AgentHooks(on_tool_result=on_result)
+            name="test", llm=llm, tools=[EchoTool()], hooks=AgentHooks(on_tool_result=on_result)
         )
 
-        await agent.run([TextInput(text="test")])
+        await agent.run([TextInput(text="test")], question_id="q1")
 
         assert len(records) == 2
         assert records[0].tool_call.name == "echo"
@@ -663,14 +660,14 @@ class TestAgentHooks:
         llm = mock_llm(RuntimeError("query failed"), make_text_response("recovered"))
 
         agent = Agent(
-            logger=_logger,
+            name="test",
             llm=llm,
             tools=[],
             config=AgentConfig(max_turns=5),
             hooks=AgentHooks(before_query=handle_error),
         )
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert result.final_answer == "recovered"
         assert result.success
@@ -684,9 +681,9 @@ class TestAgentHooks:
         """Without before_query, query error is re-raised and sets final_error"""
         llm = mock_llm(RuntimeError("query failed"), make_text_response("unreachable"))
 
-        agent = Agent(logger=_logger, llm=llm, tools=[], config=AgentConfig(max_turns=5))
+        agent = Agent(name="test", llm=llm, tools=[], config=AgentConfig(max_turns=5))
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert not result.success
         assert result.final_error is not None
@@ -703,9 +700,9 @@ class TestErrorHandling:
     async def test_query_exception_creates_error_turn(self):
         llm = mock_llm(ValueError("bad input"), make_text_response("unreachable"))
 
-        agent = Agent(logger=_logger, llm=llm, tools=[], config=AgentConfig(max_turns=5))
+        agent = Agent(name="test", llm=llm, tools=[], config=AgentConfig(max_turns=5))
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         assert isinstance(result.turns[0], ErrorTurn)
         assert result.turns[0].error.type == "ValueError"
@@ -719,14 +716,14 @@ class TestErrorHandling:
             return history
 
         agent = Agent(
-            logger=_logger,
+            name="test",
             llm=llm,
             tools=[FailingTool()],
             config=AgentConfig(max_turns=5),
             hooks=AgentHooks(before_query=handle_error),
         )
 
-        result = await agent.run([TextInput(text="test")])
+        result = await agent.run([TextInput(text="test")], question_id="q1")
 
         # 1 ErrorTurn + 1 failed tool call = 2
         assert result.error_count == 2

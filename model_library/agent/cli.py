@@ -78,6 +78,8 @@ def _build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Also log to the console (stderr)",
     )
+    parser.add_argument("--name", required=True, help="Agent name")
+    parser.add_argument("--question-id", required=True, help="Question ID for the run")
     parser.add_argument(
         "--output", default=None, help="Write AgentResult JSON to this path"
     )
@@ -127,8 +129,12 @@ async def _run(args: argparse.Namespace) -> AgentResult:
         level=getattr(logging, args.log_level),
         console=args.console,
     ) as logger:
-        agent = Agent(llm=llm, tools=tools, logger=logger, config=config)
-        result = await agent.run([TextInput(text=problem_statement)])
+        agent = Agent(
+            llm=llm, tools=tools, name=args.name, logger=logger, config=config
+        )
+        result = await agent.run(
+            [TextInput(text=problem_statement)], question_id=args.question_id
+        )
 
     return result
 

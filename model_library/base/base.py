@@ -93,6 +93,7 @@ class LLMConfig(PrettyModel):
     provider_config: ProviderConfig | None = None
     registry_key: str | None = None
     custom_api_key: SecretStr | None = None
+    run_id: str | None = None
 
 
 class DelegateConfig(PrettyModel):
@@ -146,13 +147,13 @@ class LLM(ABC):
         provider: str,
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        self.instance_id = uuid.uuid4().hex[:8]
-
         self.provider: str = provider
         self.model_name: str = model_name
 
         config = config or LLMConfig()
+        self.run_id: str = config.run_id or uuid.uuid4().hex[:8]
         self._registry_key = config.registry_key
 
         self.max_tokens: int | None = config.max_tokens
@@ -182,8 +183,8 @@ class LLM(ABC):
             ):
                 self.provider_config = config.provider_config
 
-        self.logger: logging.Logger = logging.getLogger(
-            f"llm.{provider}.{model_name}<instance={self.instance_id}>"
+        self.logger: logging.Logger = (logger or logging.getLogger("llm")).getChild(
+            f"{provider}.{model_name}<run={self.run_id}>"
         )
         self.custom_retrier: RetrierType | None = None
 
@@ -246,11 +247,7 @@ class LLM(ABC):
         *,
         history: Sequence[InputItem] = [],
         tools: list[ToolDefinition] = [],
-        # for backwards compatibility
-        files: list[FileInput] = [],
-        images: list[FileInput] = [],
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
-        query_logger: logging.Logger | None = None,
         question_id: str | None = None,
         **kwargs: object,
     ) -> QueryResult:
@@ -265,14 +262,11 @@ class LLM(ABC):
             raise Exception(f"{model_name} does not support structured outputs")
 
         # verbose on debug
-        verbose = self.logger.isEnabledFor(logging.DEBUG)
+        verbose = self.logger.isEnabledFor(logging.DEBUG)  # ?
 
         # format str input
         if isinstance(input, str):
             input = [TextInput(text=input)]
-
-        # prepends files and images to input
-        input = [*files, *images, *input]
 
         # format input info
         item_info = (
@@ -300,15 +294,17 @@ class LLM(ABC):
 
         # resolve identity: run_id groups requests per run, question_id is unique per question
         run_ctx = current_run.get()
-        run_id = run_ctx.run_id if run_ctx else self.instance_id
+        run_id = run_ctx.run_id if run_ctx else self.run_id
         if not question_id:
             question_id = uuid.uuid4().hex[:14]  # uuid for non agentic queries
 
         # is_queued is True if we are in a benchmark queue context
         is_queued = bool(run_ctx and run_ctx.is_queued)
 
-        if not query_logger:
-            query_logger = self.logger.getChild(f"query={question_id}")
+        query_id = uuid.uuid4().hex[:14]
+        query_logger = self.logger.getChild(
+            f"<question={question_id}><query={query_id}>"
+        )
 
         query_logger.info(
             "Query started:\n" + item_info + tool_info + f"--- kwargs: {short_kwargs}\n"

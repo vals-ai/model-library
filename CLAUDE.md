@@ -15,9 +15,7 @@ source .venv/bin/activate
 
 ```bash
 make test             # Run unit tests
-make test-integration # Run integration tests (requires API keys)
 make style            # Format (ruff format) and lint (ruff check --fix)
-make style-check      # Check formatting and linting without fixing
 make typecheck        # Run basedpyright (strict mode)
 make config           # Regenerate all_models.json from YAML configs
 ```
@@ -29,5 +27,8 @@ make config           # Regenerate all_models.json from YAML configs
 - Formatting/linting: ruff
 - Tests: pytest with pytest-asyncio; markers `@pytest.mark.unit` and `@pytest.mark.integration`
 - Package management: uv with uv.lock
-- Always run `make style` and `make typecheck` before submitting changes
-- Unit tests should not require API keys or external services
+
+- During final or one-shot changes --- NOT DURING FEEDBACK ITERATIONS
+    - Always run `make style` and `make typecheck`
+    - Always run `make config` to regenerate `all_models.json`
+    - Always update docs in `docs/` --- THESE SHOULD BE KEPT SYNCED, SIMPLE, AND SHORT

@@ -1,6 +1,8 @@
 import logging
 import time
+import uuid
 from collections.abc import Sequence
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +20,7 @@ from model_library.agent.tool import Tool, ToolOutput
 from model_library.base.base import LLM
 from model_library.base.input import InputItem, ToolCall, ToolResult
 from model_library.base.output import QueryResultMetadata
-from model_library.utils import PrettyModel, setup_history_dir
+from model_library.utils import PrettyModel, run_logging
 
 
 class AgentResult(PrettyModel):
@@ -109,25 +111,38 @@ class Agent:
         llm: LLM,
         tools: Sequence[Tool],
         *,
-        logger: logging.Logger,
+        name: str,
+        log_dir: Path = Path("logs"),
         config: AgentConfig | None = None,
         hooks: AgentHooks | None = None,
+        logger: logging.Logger | None = None,
     ):
+        self._logger = (logger or logging.getLogger("agent")).getChild(
+            f"{name}<{llm.model_name}>"
+        )
+        self._logger.setLevel(logging.DEBUG)
+
         self._llm = llm
-        self._llm.logger = logger.getChild(llm.logger.name)
+        self._llm.logger = self._logger.getChild(f"<run={llm.run_id}>")
         self._tools = {tool.name: tool for tool in tools}
         self._tool_defs = [tool.definition for tool in tools]
 
-        self._logger = logger
+        self._log_dir = self._build_log_dir(log_dir, name, llm.model_name)
         self._config = config or AgentConfig()
         self._hooks = hooks or AgentHooks()
+
+    @staticmethod
+    def _build_log_dir(base: Path, name: str, model_name: str) -> Path:
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        short_id = uuid.uuid4().hex[:6]
+        return base / name / model_name.replace("/", "_") / f"{timestamp}_{short_id}"
 
     async def run(
         self,
         input: Sequence[InputItem],
         *,
+        question_id: str,
         state: dict[str, Any] | None = None,
-        question_id: str | None = None,
     ) -> AgentResult:
         """Run the agent loop
 
@@ -142,25 +157,51 @@ class Agent:
         After the loop, determine_answer hook runs with full context.
         Default returns None, falling back to done tool output or LLM text.
         """
-        # Setup history serialization before any logging (may redirect FileHandler)
-        histories_dir: Path | None = None
-        if self._config.serialize_histories:
-            histories_dir = setup_history_dir(self._logger)
+        with run_logging(self._logger, self._log_dir, question_id) as output_dir:
+            # setup history serialization if needed
+            histories_dir: Path | None = None
+            if self._config.serialize_histories:
+                if output_dir is not None:
+                    histories_dir = output_dir / "histories"
+                    histories_dir.mkdir(exist_ok=True)
+                else:
+                    self._logger.warning(
+                        "serialize_histories enabled but no log_dir set, skipping"
+                    )
 
-        custom_hooks = {
-            name: getattr(self._hooks, name).__qualname__
-            for name, field in AgentHooks.__dataclass_fields__.items()
-            if getattr(self._hooks, name) is not field.default
-        }
-        tools_str = "\n".join(f"  {tool_def}" for tool_def in self._tool_defs)
-        self._logger.info(
-            "Agent starting:\n"
-            f"--- LLM\n{self._llm}\n"
-            f"--- Tools ({len(self._tool_defs)}):\n{tools_str}\n"
-            f"--- Config: {self._config}\n"
-            f"--- Custom hooks: {custom_hooks or 'none'}\n"
-        )
+            # log startup state
+            custom_hooks = {
+                name: getattr(self._hooks, name).__qualname__
+                for name, field in AgentHooks.__dataclass_fields__.items()
+                if getattr(self._hooks, name) is not field.default
+            }
+            tools_str = "\n".join(f"  {tool_def}" for tool_def in self._tool_defs)
+            self._logger.debug(
+                "Agent starting:\n"
+                f"--- LLM\n{self._llm}\n"
+                f"--- Tools ({len(self._tool_defs)}):\n{tools_str}\n"
+                f"--- Config: {self._config}\n"
+                f"--- Custom hooks: {custom_hooks or 'none'}\n"
+            )
 
+            # run the loop
+            return await self._run(
+                input,
+                state=state,
+                question_id=question_id,
+                output_dir=output_dir,
+                histories_dir=histories_dir,
+            )
+
+    async def _run(
+        self,
+        input: Sequence[InputItem],
+        *,
+        question_id: str,
+        state: dict[str, Any] | None = None,
+        output_dir: Path | None = None,
+        histories_dir: Path | None = None,
+    ) -> AgentResult:
         if state is None:
             state = {}
 
@@ -285,9 +326,9 @@ class Agent:
         )
         self._logger.info(f"Run complete: {result!r}")
 
-        if histories_dir is not None:
+        if output_dir is not None:
             try:
-                result_path = histories_dir.parent / "result.json"
+                result_path = output_dir / "result.json"
                 result_path.write_text(result.model_dump_json(indent=2))
             except Exception:
                 self._logger.exception("Failed to serialize result")
@@ -329,7 +370,7 @@ class Agent:
         error: SerializableException | None = None
         start = time.monotonic()
 
-        self._logger.info(f"Tool call: {tool_call.name}({tool_call.parsed_args})")
+        self._logger.debug(f"Tool call: {tool_call.name}({tool_call.parsed_args})")
 
         try:
             tool = self._tools.get(tool_call.name)
@@ -371,5 +412,5 @@ class Agent:
             error=error,
         )
 
-        self._logger.info(f"Tool result: {record!r}")
+        self._logger.debug(f"Tool result: {record!r}")
         return record

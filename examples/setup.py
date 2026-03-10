@@ -13,7 +13,7 @@ console_logger.addHandler(
 )
 
 # all other logs
-logging.root.setLevel(logging.WARN)  # set to DEBUG for more info (ex. network requests)
+# logging.root.setLevel(logging.WARN)  # set to DEBUG for more info (ex. network requests)
 
 
 def console_log(output: Any, level: int = logging.INFO, color: str = "red"):
@@ -24,6 +24,6 @@ def console_log(output: Any, level: int = logging.INFO, color: str = "red"):
 
 
 def setup(disable_logging: bool = False, load_gcp: bool = True):
-    if disable_logging:
-        llm_logger = logging.getLogger("llm")
-        llm_logger.setLevel(logging.ERROR)
+    # if disable_logging:
+    #     llm_logger = logging.getLogger("llm")
+    #     llm_logger.setLevel(logging.ERROR)

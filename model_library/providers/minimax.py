@@ -1,3 +1,4 @@
+import logging
 from typing import Literal, Sequence
 
 from pydantic import SecretStr
@@ -22,8 +23,9 @@ class MinimaxModel(DelegateOnly):
         provider: Literal["minimax"] = "minimax",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         self.init_delegate(
             config=config,

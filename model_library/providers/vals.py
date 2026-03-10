@@ -175,8 +175,9 @@ class DummyAIModel(LLM):
         provider: Literal["vals"] = "vals",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
         self.custom_retrier = None
         self.batch: LLMBatchMixin | None = (
             DummyAIBatchMixin(self) if self.supports_batch else None
