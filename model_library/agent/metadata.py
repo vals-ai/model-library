@@ -48,16 +48,45 @@ class ToolCallRecord(PrettyModel):
 
 
 class ErrorTurn(PrettyModel):
-    """Failed LLM query that was not recoverable by the retrier or before_query hook"""
+    """Failed LLM query that was not recoverable by the retrier or before_query hook
+
+    - duration_seconds: wall clock for the turn (hooks + failed query including retries)
+    """
 
     error: SerializableException
+    duration_seconds: float
+
+    @field_validator("duration_seconds", mode="before")
+    @classmethod
+    def _round_duration(cls, v: float) -> float:
+        return round(v, 3)
 
 
 class AgentTurn(PrettyModel):
-    """Successful LLM query + tool execution results"""
+    """Successful LLM query + tool execution results
+
+    - duration_seconds: wall clock for the entire turn (hooks + query + retries + tool execution)
+    - retry_overhead_seconds: portion of duration spent in retries/backoff, computed as
+      query_wall_time - query_duration (from LLM metadata). Always >= 0.
+    - query_result.metadata.duration_seconds: LLM query time only (excludes retries)
+    - tool_call_records[i].duration_seconds: individual tool execution time
+    """
 
     query_result: QueryResult
     tool_call_records: list[ToolCallRecord] = []
+    duration_seconds: float
+    retry_overhead_seconds: float = 0.0
+
+    @field_validator("duration_seconds", "retry_overhead_seconds", mode="before")
+    @classmethod
+    def _round_duration(cls, v: float) -> float:
+        return round(v, 3)
+
+    @computed_field
+    @property
+    def effective_duration_seconds(self) -> float:
+        """Wall clock minus retry overhead (duration_seconds - retry_overhead_seconds)"""
+        return round(self.duration_seconds - self.retry_overhead_seconds, 3)
 
     @computed_field
     @property

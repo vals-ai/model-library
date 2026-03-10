@@ -16,7 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import fakeredis.aioredis
 import pytest
 
-from model_library.agent import Agent, Tool, ToolOutput
+from model_library.agent import Agent, AgentConfig, Tool, ToolOutput
 from model_library.base.input import TextInput, ToolCall
 from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
 from model_library.logging import _AGENT_CHILD_RE, _AgentChildFilter
@@ -24,6 +24,8 @@ from model_library.retriers.token import TokenRetrier, set_redis_client
 from model_library.retriers.token.utils import KEY_PREFIX, RunContext, current_run
 from model_library.utils import run_logging
 
+
+_cfg = AgentConfig(turn_limit=None, time_limit=None)
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -139,7 +141,7 @@ async def test_question_id_passed_to_every_query_call():
         ),
         _make_qr("done"),
     )
-    agent = Agent(name="test", llm=llm, tools=[EchoTool()])
+    agent = Agent(name="test", llm=llm, tools=[EchoTool()], config=_cfg)
 
     await agent.run([TextInput(text="go")], question_id="q-stable")
 
@@ -151,7 +153,7 @@ async def test_question_id_passed_to_every_query_call():
 async def test_different_runs_get_different_question_ids():
     """Two separate agent.run() calls with different question_ids keep them separate."""
     llm = _mock_llm(_make_qr("a"), _make_qr("b"))
-    agent = Agent(name="test", llm=llm, tools=[])
+    agent = Agent(name="test", llm=llm, tools=[], config=_cfg)
 
     await agent.run([TextInput(text="first")], question_id="q-1")
     await agent.run([TextInput(text="second")], question_id="q-2")
@@ -244,7 +246,7 @@ async def test_llm_logger_name_format():
 async def test_agent_logger_name_format():
     llm = _mock_llm(_make_qr())
     llm.model_name = "gpt-4o"
-    agent = Agent(name="submit", llm=llm, tools=[])
+    agent = Agent(name="submit", llm=llm, tools=[], config=_cfg)
     assert agent._logger.name == "agent.submit<gpt-4o>"
 
 
@@ -252,7 +254,7 @@ async def test_agent_parents_llm_logger():
     llm = _mock_llm(_make_qr())
     llm.model_name = "gpt-4o"
     llm.run_id = "run-xyz"
-    agent = Agent(name="eval", llm=llm, tools=[])
+    agent = Agent(name="eval", llm=llm, tools=[], config=_cfg)
     assert llm.logger.name == "agent.eval<gpt-4o>.<run=run-xyz>"
 
 

@@ -18,6 +18,7 @@ from model_library.agent import (
     SerializableException,
     Tool,
     ToolOutput,
+    TurnLimit,
     TurnResult,
 )
 from model_library.agent.hooks import default_determine_answer
@@ -79,7 +80,12 @@ async def basic_agent(model: LLM):
     """Minimal agent: LLM + tools, run until the model stops calling tools."""
     console_log("\n--- Basic Agent ---\n")
 
-    agent = Agent(name="basic", llm=model, tools=[GetWeather(), SaveNote()])
+    agent = Agent(
+        name="basic",
+        llm=model,
+        tools=[GetWeather(), SaveNote()],
+        config=AgentConfig(turn_limit=None, time_limit=None),
+    )
     result = await agent.run(
         [
             TextInput(
@@ -101,7 +107,7 @@ async def agent_with_submit_tool(model: LLM):
         name="submit",
         llm=model,
         tools=[GetWeather(), SubmitTool()],
-        config=AgentConfig(max_turns=10),
+        config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None),
     )
     result = await agent.run(
         [
@@ -125,7 +131,7 @@ async def agent_with_web_search(model: LLM):
         name="web_search",
         llm=model,
         tools=[TavilyWebSearch(max_end_date="2025-04-07"), SubmitTool()],
-        config=AgentConfig(max_turns=5),
+        config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
     )
     result = await agent.run(
         [
@@ -150,7 +156,7 @@ async def agent_with_bash(model: LLM):
         name="bash",
         llm=model,
         tools=[BashTool(working_dir="/tmp"), SubmitTool()],
-        config=AgentConfig(max_turns=5),
+        config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
     )
     result = await agent.run(
         [
@@ -170,7 +176,7 @@ async def agent_with_hooks(model: LLM):
     console_log("\n--- Agent with Hooks ---\n")
 
     def stop_after_turns(turn_result: TurnResult) -> bool:
-        if turn_result.turn_number >= 3:
+        if turn_result.turn_number >= 4:
             console_log("Turn limit reached via hook")
             return True
         return False
@@ -188,7 +194,7 @@ async def agent_with_hooks(model: LLM):
         name="hooks",
         llm=model,
         tools=[GetWeather(), SaveNote()],
-        config=AgentConfig(max_turns=5),
+        config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
         hooks=AgentHooks(
             should_stop=stop_after_turns,
             determine_answer=answer_from_state,

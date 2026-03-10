@@ -6,10 +6,12 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 
 import pytest
 
-from model_library.agent import Agent, Tool, ToolOutput
+from model_library.agent import Agent, AgentConfig, Tool, ToolOutput
 from model_library.base import LLM, QueryResult
 from model_library.base.input import TextInput
 from model_library.base.output import QueryResultCost, QueryResultMetadata
+
+_cfg = AgentConfig(turn_limit=None, time_limit=None)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
@@ -102,7 +104,7 @@ async def test_agent_default_logger_uses_agent_root():
     llm = MagicMock()
     llm.model_name = "gpt-4o"
     llm.run_id = "abc"
-    agent = Agent(name="eval", llm=llm, tools=[])
+    agent = Agent(name="eval", llm=llm, tools=[], config=_cfg)
     assert agent._logger.name.startswith("agent.")
 
 
@@ -112,7 +114,7 @@ async def test_agent_custom_logger_is_parent():
     llm = MagicMock()
     llm.model_name = "gpt-4o"
     llm.run_id = "abc"
-    agent = Agent(name="eval", llm=llm, tools=[], logger=custom)
+    agent = Agent(name="eval", llm=llm, tools=[], config=_cfg, logger=custom)
     assert agent._logger.name.startswith("myapp.cloudwatch.")
     assert "eval<gpt-4o>" in agent._logger.name
 
@@ -123,7 +125,7 @@ async def test_agent_custom_logger_propagates_to_llm():
     llm = MagicMock()
     llm.model_name = "gpt-4o"
     llm.run_id = "run-xyz"
-    Agent(name="eval", llm=llm, tools=[], logger=custom)
+    Agent(name="eval", llm=llm, tools=[], config=_cfg, logger=custom)
     # Agent sets llm.logger = self._logger.getChild(f"<run={llm.run_id}>")
     assert llm.logger.name.startswith("myapp.")
     assert "<run=run-xyz>" in llm.logger.name

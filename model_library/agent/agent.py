@@ -32,16 +32,21 @@ class AgentResult(PrettyModel):
     - state: mutable dict shared across the run, modified by tools and hooks
     - error_count: ErrorTurns + failed tool calls
 
-    Durations at three levels:
-    - final_duration_seconds: wall-clock time of the entire run
-    - final_aggregated_metadata.duration_seconds: sum of LLM query durations
-    - turns[i].tool_call_records[j].duration_seconds: individual tool call duration
+    Durations (all wall clock, all rounded to ms):
+    - final_duration_seconds: total run time (includes between-turn overhead)
+    - final_turns_duration_seconds: sum of turn durations (derived from turns)
+    - final_retry_overhead_seconds: sum of retry overhead across turns (derived from turns)
+    - final_effective_duration_seconds: wall clock minus retry overhead (derived)
+    - final_aggregated_metadata.duration_seconds: sum of LLM query durations (excludes retries)
+
+    The time budget (TimeLimit.max_seconds) is checked using wall clock minus retry overhead,
+    so retry/backoff time does not count against the budget.
     """
 
     final_answer: str
     final_error: SerializableException | None = None
     turns: list[AgentTurn | ErrorTurn]
-    final_duration_seconds: float  # rounded to ms
+    final_duration_seconds: float  # wall clock, rounded to ms
     state: dict[str, Any]
 
     @field_validator("final_duration_seconds", mode="before")
@@ -91,6 +96,29 @@ class AgentResult(PrettyModel):
 
     @computed_field
     @property
+    def final_turns_duration_seconds(self) -> float:
+        return round(sum(turn.duration_seconds for turn in self.turns), 3)
+
+    @computed_field
+    @property
+    def final_retry_overhead_seconds(self) -> float:
+        return round(
+            sum(
+                turn.retry_overhead_seconds
+                for turn in self.turns
+                if isinstance(turn, AgentTurn)
+            ),
+            3,
+        )
+
+    @computed_field
+    @property
+    def final_effective_duration_seconds(self) -> float:
+        """Wall clock minus retry overhead (final_duration_seconds - final_retry_overhead_seconds)"""
+        return round(self.final_duration_seconds - self.final_retry_overhead_seconds, 3)
+
+    @computed_field
+    @property
     def final_aggregated_metadata(self) -> QueryResultMetadata:
         """Aggregated token/cost/duration metadata across all turns"""
         result = QueryResultMetadata()
@@ -113,7 +141,7 @@ class Agent:
         *,
         name: str,
         log_dir: Path = Path("logs"),
-        config: AgentConfig | None = None,
+        config: AgentConfig,
         hooks: AgentHooks | None = None,
         logger: logging.Logger | None = None,
     ):
@@ -128,7 +156,7 @@ class Agent:
         self._tool_defs = [tool.definition for tool in tools]
 
         self._log_dir = self._build_log_dir(log_dir, name, llm.model_name)
-        self._config = config or AgentConfig()
+        self._config = config
         self._hooks = hooks or AgentHooks()
 
     @staticmethod
@@ -146,11 +174,20 @@ class Agent:
     ) -> AgentResult:
         """Run the agent loop
 
+        Each turn executes in this order:
+        1. Check time limit and turn limit
+        2. before_query hook (skipped on first turn)
+        3. turn_limit.turn_message (appended to history)
+        4. time_limit.time_message (appended to history)
+        5. LLM query
+        6. Tool execution
+        7. should_stop hook
+
         The loop stops when any of these occur:
         - A tool returns done=True
         - should_stop hook returns True (default: text-only response)
-        - max_turns reached (sets MaxTurnsExceeded error)
-        - max_time_seconds exceeded (sets MaxTimeExceeded error)
+        - turn_limit.max_turns reached (sets MaxTurnsExceeded error)
+        - time_limit exceeded (sets MaxTimeExceeded error)
         - before_query hook re-raises a query error (default behavior)
         - Unhandled exception (sets error)
 
@@ -216,37 +253,76 @@ class Agent:
         final_error: SerializableException | None = None
         last_query_error: Exception | None = None
 
+        turn_limit = self._config.turn_limit
+        time_limit = self._config.time_limit
+        turn_number = 0
+        retry_overhead = 0.0
+
         try:
-            for turn_number in range(self._config.max_turns):
-                # check if we have exceeded the max time
+            while turn_limit is None or turn_number < turn_limit.max_turns:
+                turn_start = time.monotonic()
+                turn_number += 1
+                # check time limit
                 elapsed = time.monotonic() - start_time
-                if elapsed >= self._config.max_time_seconds:
+                effective_elapsed = (
+                    elapsed
+                    if (time_limit is not None and time_limit.include_retries)
+                    else elapsed - retry_overhead
+                )
+                if (
+                    time_limit is not None
+                    and effective_elapsed >= time_limit.max_seconds
+                ):
                     final_error = SerializableException(
                         type="MaxTimeExceeded",
                         message="Max time reached",
                         context={
                             "elapsed_seconds": elapsed,
-                            "max_time_seconds": self._config.max_time_seconds,
+                            "effective_elapsed_seconds": effective_elapsed,
+                            "retry_overhead_seconds": retry_overhead,
+                            "max_seconds": time_limit.max_seconds,
                         },
                     )
                     self._logger.warning(str(final_error))
                     break
 
                 # hook: before_query (skip first turn, nothing to transform)
-                if turn_number > 0:
+                if turn_number > 1:
                     history = self._hooks.before_query(history, last_query_error)
                     last_query_error = None
 
+                # hooks: optional per-turn message injection
+                if turn_limit is not None and turn_limit.turn_message is not None:
+                    msg = turn_limit.turn_message(turn_number, turn_limit.max_turns)
+                    if msg is not None:
+                        history.append(msg)
+                if time_limit is not None and time_limit.time_message is not None:
+                    msg = time_limit.time_message(
+                        effective_elapsed, time_limit.max_seconds
+                    )
+                    if msg is not None:
+                        history.append(msg)
+
                 # query LLM
                 try:
+                    query_start = time.monotonic()
                     response = await self._llm.query(
-                        input=history, tools=self._tool_defs, question_id=question_id
+                        input=history,
+                        tools=self._tool_defs,
+                        question_id=question_id,
                     )
+                    query_wall = time.monotonic() - query_start
+                    turn_retry_overhead = max(
+                        0.0, query_wall - response.metadata.default_duration_seconds
+                    )
+                    retry_overhead += turn_retry_overhead
                 except Exception as query_error:
                     self._logger.warning(f"Query failed: {query_error}", exc_info=True)
+                    turn_duration = time.monotonic() - turn_start
                     turns.append(
                         ErrorTurn(
-                            error=SerializableException.from_exception(query_error)
+                            error=SerializableException.from_exception(query_error),
+                            duration_seconds=turn_duration,
                         )
                     )
                     last_query_error = query_error
@@ -280,9 +356,12 @@ class Agent:
                 response.history = []
                 response.raw = {}
 
+                turn_duration = time.monotonic() - turn_start
                 turn = AgentTurn(
                     query_result=response,
                     tool_call_records=tool_call_records,
+                    duration_seconds=turn_duration,
+                    retry_overhead_seconds=turn_retry_overhead,
                 )
                 turns.append(turn)
 
@@ -303,10 +382,11 @@ class Agent:
                     self._logger.info("Stop: should_stop hook returned True")
                     break
             else:
+                max_turns = turn_limit.max_turns if turn_limit else None
                 final_error = SerializableException(
                     type="MaxTurnsExceeded",
-                    message=f"Max turns ({self._config.max_turns}) reached",
-                    context={"max_turns": self._config.max_turns},
+                    message=f"Max turns ({max_turns}) reached",
+                    context={"max_turns": max_turns},
                 )
                 self._logger.warning(str(final_error))
         except Exception as e:
@@ -344,9 +424,22 @@ class Agent:
         """Execute tool calls, appending results to history
 
         Short-circuits on done — remaining tool calls in the batch are skipped.
+        If max_tool_calls_per_turn is set, calls beyond the limit are not executed
+        but still get a ToolResult appended (providers require results for all calls).
         """
+        cap = self._config.max_tool_calls_per_turn
         records: list[ToolCallRecord] = []
-        for tool_call in tool_calls:
+        for i, tool_call in enumerate(tool_calls):
+            if cap is not None and i >= cap:
+                output = ToolOutput(output="Skipped: tool call limit exceeded")
+                records.append(
+                    ToolCallRecord(
+                        tool_call=tool_call, tool_output=output, duration_seconds=0.0
+                    )
+                )
+                history.append(ToolResult(tool_call=tool_call, result=output.output))
+                continue
+
             record = await self._execute_tool(tool_call, state)
             records.append(record)
             history.append(

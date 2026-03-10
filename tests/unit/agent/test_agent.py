@@ -18,12 +18,23 @@ from model_library.agent import (
     AgentTurn,
     ErrorTurn,
     SerializableException,
+    TimeLimit,
     Tool,
     ToolCallRecord,
     ToolOutput,
+    TurnLimit,
     TurnResult,
     truncate_oldest,
 )
+
+
+_cfg = AgentConfig(turn_limit=None, time_limit=None)
+
+
+def make_agent(llm: MagicMock, tools: list[Tool] | None = None, **kwargs: Any) -> Agent:
+    kwargs.setdefault("name", "test")
+    kwargs.setdefault("config", _cfg)
+    return Agent(llm=llm, tools=tools or [], **kwargs)
 
 
 # --- Helpers ---
@@ -51,11 +62,15 @@ def make_tool_response(
     tool_calls: list[ToolCall],
     metadata: QueryResultMetadata | None = None,
     output_text: str | None = None,
+    duration: float | None = None,
 ) -> QueryResult:
     """LLM response with tool calls"""
+    meta = metadata or make_metadata()
+    if duration is not None:
+        meta.duration_seconds = duration
     return QueryResult(
         output_text=output_text,
-        metadata=metadata or make_metadata(),
+        metadata=meta,
         tool_calls=tool_calls,
         history=[TextInput(text="prompt")],
     )
@@ -142,7 +157,7 @@ class LLMCallingTool(Tool):
 class TestAgentBasicLoop:
     async def test_single_turn_text_response(self):
         llm = mock_llm(make_text_response("hello world"))
-        agent = Agent(name="test", llm=llm, tools=[])
+        agent = make_agent(llm)
 
         result = await agent.run([TextInput(text="say hello")], question_id="q1")
 
@@ -156,7 +171,7 @@ class TestAgentBasicLoop:
     async def test_tool_call_then_text_response(self):
         tc = make_tool_call("echo", {"text": "ping"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("got: ping"))
-        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
+        agent = make_agent(llm, [EchoTool()])
 
         result = await agent.run([TextInput(text="echo test")], question_id="q1")
 
@@ -170,7 +185,7 @@ class TestAgentBasicLoop:
     async def test_done_tool_stops_loop(self):
         tc = make_tool_call("submit", {"answer": "42"})
         llm = mock_llm(make_tool_response([tc]))
-        agent = Agent(name="test", llm=llm, tools=[DoneTool()])
+        agent = make_agent(llm, [DoneTool()])
 
         result = await agent.run([TextInput(text="answer?")], question_id="q1")
 
@@ -182,7 +197,7 @@ class TestAgentBasicLoop:
         tc = make_tool_call("echo", {"text": "hi"})
         responses = [make_tool_response([tc]) for _ in range(5)]
         llm = mock_llm(*responses)
-        agent = Agent(name="test", llm=llm, tools=[EchoTool()], config=AgentConfig(max_turns=3))
+        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=3), time_limit=None))
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -193,31 +208,75 @@ class TestAgentBasicLoop:
         assert llm.query.call_count == 3
         assert result.total_turns == 3
 
+    async def test_turn_message_appended_to_history(self):
+        """turn_message hook injects an InputItem into history before each query"""
+        tc = make_tool_call("echo", {"text": "hi"})
+        llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
+
+        def budget_message(turn_number: int, max_turns: int) -> InputItem | None:
+            return TextInput(text=f"Turn {turn_number}/{max_turns}")
+
+        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=5, turn_message=budget_message), time_limit=None))
+        await agent.run([TextInput(text="go")], question_id="q1")
+
+        # second query should have the turn message in its input
+        second_call_input = llm.query.call_args_list[1].kwargs["input"]
+        injected = [m for m in second_call_input if isinstance(m, TextInput) and "Turn " in m.text]
+        assert len(injected) == 1
+        assert injected[0].text == "Turn 2/5"
+
+    async def test_turn_message_none_skipped(self):
+        """turn_message returning None does not append anything"""
+        llm = mock_llm(make_text_response("done"))
+
+        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5, turn_message=lambda t, m: None), time_limit=None))
+        await agent.run([TextInput(text="go")], question_id="q1")
+
+        first_call_input = llm.query.call_args_list[0].kwargs["input"]
+        assert len(first_call_input) == 1  # just the original prompt
+
     async def test_max_time_sets_error(self):
         tc = make_tool_call("echo", {"text": "hi"})
-        responses = [make_tool_response([tc]) for _ in range(5)]
+        responses = [make_tool_response([tc], duration=30.0) for _ in range(5)]
         llm = mock_llm(*responses)
 
+        # wall clock advances 30s per monotonic() call; query duration matches
+        # so retry_overhead stays 0 and effective_elapsed tracks wall time
         call_count = [0]
 
-        def fake_monotonic():
+        def fake_monotonic() -> float:
             call_count[0] += 1
-            # 0 for first iteration, 100 for second iteration's time check
-            return 0.0 if call_count[0] < 10 else 100.0
+            return call_count[0] * 5.0  # 5s per call, ~30s per turn
 
         with patch.object(time_module, "monotonic", side_effect=fake_monotonic):
-            agent = Agent(
-                name="test", llm=llm, tools=[EchoTool()], config=AgentConfig(max_time_seconds=50)
-            )
+            agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=None, time_limit=TimeLimit(max_seconds=50)))
             result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert not result.success
         assert result.final_error is not None
         assert result.final_error.type == "MaxTimeExceeded"
 
+    async def test_time_message_appended_to_history(self):
+        """time_message hook injects an InputItem into history before each query"""
+        tc = make_tool_call("echo", {"text": "hi"})
+        llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
+
+        def remaining_message(elapsed_seconds: float, max_seconds: float) -> InputItem | None:
+            remaining = max_seconds - elapsed_seconds
+            return TextInput(text=f"{remaining:.0f}s remaining")
+
+        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=None, time_limit=TimeLimit(max_seconds=300, time_message=remaining_message)))
+        await agent.run([TextInput(text="go")], question_id="q1")
+
+        # first query should have the time message
+        first_call_input = llm.query.call_args_list[0].kwargs["input"]
+        injected = [m for m in first_call_input if isinstance(m, TextInput) and "remaining" in m.text]
+        assert len(injected) == 1
+
+
     async def test_text_only_auto_stops_without_should_stop(self):
         llm = mock_llm(make_text_response("done"))
-        agent = Agent(name="test", llm=llm, tools=[], config=AgentConfig(max_turns=10))
+        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None))
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -226,7 +285,7 @@ class TestAgentBasicLoop:
 
     async def test_input_passed_to_llm(self):
         llm = mock_llm(make_text_response("ok"))
-        agent = Agent(name="test", llm=llm, tools=[])
+        agent = make_agent(llm)
 
         await agent.run([TextInput(text="a"), TextInput(text="b")], question_id="q1")
 
@@ -235,7 +294,7 @@ class TestAgentBasicLoop:
 
     async def test_state_defaults_to_empty_dict(self):
         llm = mock_llm(make_text_response("ok"))
-        agent = Agent(name="test", llm=llm, tools=[])
+        agent = make_agent(llm)
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -243,7 +302,7 @@ class TestAgentBasicLoop:
 
     async def test_initial_state_preserved(self):
         llm = mock_llm(make_text_response("ok"))
-        agent = Agent(name="test", llm=llm, tools=[])
+        agent = make_agent(llm)
         state = {"initial": True}
 
         result = await agent.run([TextInput(text="go")], question_id="q1", state=state)
@@ -259,7 +318,7 @@ class TestAgentToolExecution:
     async def test_unknown_tool_records_error(self):
         tc = make_tool_call("nonexistent", {})
         llm = mock_llm(make_tool_response([tc]), make_text_response("ok"))
-        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
+        agent = make_agent(llm, [EchoTool()])
 
         result = await agent.run([TextInput(text="try unknown")], question_id="q1")
 
@@ -272,7 +331,7 @@ class TestAgentToolExecution:
     async def test_tool_exception_caught_and_recorded(self):
         tc = make_tool_call("fail", {})
         llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
-        agent = Agent(name="test", llm=llm, tools=[FailingTool()])
+        agent = make_agent(llm, [FailingTool()])
 
         result = await agent.run([TextInput(text="try failing")], question_id="q1")
 
@@ -288,7 +347,7 @@ class TestAgentToolExecution:
         """Tool returning ToolOutput with error set (doesn't raise)"""
         tc = make_tool_call("soft_fail", {})
         llm = mock_llm(make_tool_response([tc]), make_text_response("ok"))
-        agent = Agent(name="test", llm=llm, tools=[ErrorReturnTool()])
+        agent = make_agent(llm, [ErrorReturnTool()])
 
         result = await agent.run([TextInput(text="try soft fail")], question_id="q1")
 
@@ -303,7 +362,7 @@ class TestAgentToolExecution:
     async def test_string_args_parsed_as_json(self):
         tc = ToolCall(id="tc_1", name="echo", args='{"text": "from json"}')
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
+        agent = make_agent(llm, [EchoTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -313,7 +372,7 @@ class TestAgentToolExecution:
     async def test_invalid_json_args_errors(self):
         tc = ToolCall(id="tc_1", name="echo", args="not json")
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
+        agent = make_agent(llm, [EchoTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -327,7 +386,7 @@ class TestAgentToolExecution:
         """JSON that parses to non-dict (e.g. list) is unparseable"""
         tc = ToolCall(id="tc_1", name="echo", args="[1, 2, 3]")
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
+        agent = make_agent(llm, [EchoTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -341,7 +400,7 @@ class TestAgentToolExecution:
         """Tool with required params called without them → error record"""
         tc = ToolCall(id="tc_1", name="echo", args={})  # missing "text"
         llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
-        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
+        agent = make_agent(llm, [EchoTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -355,7 +414,7 @@ class TestAgentToolExecution:
     async def test_missing_multiple_required_params(self):
         tc = ToolCall(id="tc_1", name="set_state", args={})  # missing "key" and "value"
         llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
-        agent = Agent(name="test", llm=llm, tools=[StateTool()])
+        agent = make_agent(llm, [StateTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -368,7 +427,7 @@ class TestAgentToolExecution:
     async def test_partial_required_params_reports_missing(self):
         tc = make_tool_call("set_state", {"key": "k"})  # has "key", missing "value"
         llm = mock_llm(make_tool_response([tc]), make_text_response("recovered"))
-        agent = Agent(name="test", llm=llm, tools=[StateTool()])
+        agent = make_agent(llm, [StateTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -392,7 +451,7 @@ class TestAgentToolExecution:
 
         tc = make_tool_call("opt", {"needed": "yes"})  # "optional" omitted
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(name="test", llm=llm, tools=[OptionalTool()])
+        agent = make_agent(llm, [OptionalTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -406,7 +465,7 @@ class TestAgentToolExecution:
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
         # FailingTool has parameters={}, required=[] — should pass validation
         # (it will fail in execute, but that's a different error)
-        agent = Agent(name="test", llm=llm, tools=[FailingTool()])
+        agent = make_agent(llm, [FailingTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -419,7 +478,7 @@ class TestAgentToolExecution:
         set_call = make_tool_call("set_state", {"key": "found", "value": "yes"})
         echo_call = make_tool_call("echo", {"text": "check"})
         llm = mock_llm(make_tool_response([set_call]), make_tool_response([echo_call]), make_text_response("done"))
-        agent = Agent(name="test", llm=llm, tools=[StateTool(), EchoTool()])
+        agent = make_agent(llm, [StateTool(), EchoTool()])
         state: dict[str, Any] = {}
 
         result = await agent.run([TextInput(text="test")], question_id="q1", state=state)
@@ -430,7 +489,7 @@ class TestAgentToolExecution:
     async def test_tool_call_duration_tracked(self):
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
-        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
+        agent = make_agent(llm, [EchoTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -443,7 +502,7 @@ class TestAgentToolExecution:
         done_call = make_tool_call("submit", {"answer": "42"})
         echo_call = make_tool_call("echo", {"text": "should not run"})
         llm = mock_llm(make_tool_response([done_call, echo_call]))
-        agent = Agent(name="test", llm=llm, tools=[DoneTool(), EchoTool()])
+        agent = make_agent(llm, [DoneTool(), EchoTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -463,7 +522,7 @@ class TestAgentToolMetadata:
             make_tool_response([tc], metadata=make_metadata(in_tokens=100, out_tokens=50)),
             make_text_response("done"),
         )
-        agent = Agent(name="test", llm=llm, tools=[LLMCallingTool()])
+        agent = make_agent(llm, [LLMCallingTool()])
 
         result = await agent.run([TextInput(text="retrieve")], question_id="q1")
 
@@ -477,7 +536,7 @@ class TestAgentToolMetadata:
         tc = make_tool_call("echo", {"text": "hi"})
         meta = make_metadata(in_tokens=100, out_tokens=50, cost_total=0.02)
         llm = mock_llm(make_tool_response([tc], metadata=meta), make_text_response("done", metadata=meta))
-        agent = Agent(name="test", llm=llm, tools=[EchoTool()])
+        agent = make_agent(llm, [EchoTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -496,15 +555,9 @@ class TestAgentHooks:
         llm = mock_llm(*responses)
 
         def stop_at_3(turn_result: TurnResult) -> bool:
-            return turn_result.turn_number >= 2
+            return turn_result.turn_number >= 3
 
-        agent = Agent(
-            name="test",
-            llm=llm,
-            tools=[EchoTool()],
-            hooks=AgentHooks(should_stop=stop_at_3),
-            config=AgentConfig(max_turns=10),
-        )
+        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None), hooks=AgentHooks(should_stop=stop_at_3))
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -523,13 +576,7 @@ class TestAgentHooks:
         def stop_on_exit(turn_result: TurnResult) -> bool:
             return turn_result.response_text is not None and "EXIT" in turn_result.response_text
 
-        agent = Agent(
-            name="test",
-            llm=llm,
-            tools=[],
-            hooks=AgentHooks(should_stop=stop_on_exit),
-            config=AgentConfig(max_turns=10),
-        )
+        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None), hooks=AgentHooks(should_stop=stop_on_exit))
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -546,7 +593,7 @@ class TestAgentHooks:
         ) -> str:
             return "overridden"
 
-        agent = Agent(name="test", llm=llm, tools=[], hooks=AgentHooks(determine_answer=custom_answer))
+        agent = make_agent(llm, hooks=AgentHooks(determine_answer=custom_answer))
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -563,9 +610,7 @@ class TestAgentHooks:
         ) -> str:
             return f"score={state.get('score', 'unknown')}"
 
-        agent = Agent(
-            name="test", llm=llm, tools=[StateTool()], hooks=AgentHooks(determine_answer=answer_from_state)
-        )
+        agent = make_agent(llm, [StateTool()], hooks=AgentHooks(determine_answer=answer_from_state))
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -586,13 +631,7 @@ class TestAgentHooks:
                 return "salvaged"
             return ""
 
-        agent = Agent(
-            name="test",
-            llm=llm,
-            tools=[StateTool()],
-            config=AgentConfig(max_turns=3),
-            hooks=AgentHooks(determine_answer=salvage),
-        )
+        agent = make_agent(llm, [StateTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=3), time_limit=None), hooks=AgentHooks(determine_answer=salvage))
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -603,7 +642,7 @@ class TestAgentHooks:
 
     async def test_default_determine_answer_returns_text(self):
         llm = mock_llm(make_text_response("raw"))
-        agent = Agent(name="test", llm=llm, tools=[])
+        agent = make_agent(llm)
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -615,12 +654,7 @@ class TestAgentHooks:
         responses = [make_tool_response([tc]) for _ in range(5)]
         llm = mock_llm(*responses)
 
-        agent = Agent(
-            name="test",
-            llm=llm,
-            tools=[EchoTool()],
-            config=AgentConfig(max_turns=2),
-        )
+        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=2), time_limit=None))
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -638,9 +672,7 @@ class TestAgentHooks:
         def on_result(record: ToolCallRecord, state: dict) -> None:
             records.append(record)
 
-        agent = Agent(
-            name="test", llm=llm, tools=[EchoTool()], hooks=AgentHooks(on_tool_result=on_result)
-        )
+        agent = make_agent(llm, [EchoTool()], hooks=AgentHooks(on_tool_result=on_result))
 
         await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -659,13 +691,7 @@ class TestAgentHooks:
 
         llm = mock_llm(RuntimeError("query failed"), make_text_response("recovered"))
 
-        agent = Agent(
-            name="test",
-            llm=llm,
-            tools=[],
-            config=AgentConfig(max_turns=5),
-            hooks=AgentHooks(before_query=handle_error),
-        )
+        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None), hooks=AgentHooks(before_query=handle_error))
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -681,7 +707,7 @@ class TestAgentHooks:
         """Without before_query, query error is re-raised and sets final_error"""
         llm = mock_llm(RuntimeError("query failed"), make_text_response("unreachable"))
 
-        agent = Agent(name="test", llm=llm, tools=[], config=AgentConfig(max_turns=5))
+        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None))
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -700,7 +726,7 @@ class TestErrorHandling:
     async def test_query_exception_creates_error_turn(self):
         llm = mock_llm(ValueError("bad input"), make_text_response("unreachable"))
 
-        agent = Agent(name="test", llm=llm, tools=[], config=AgentConfig(max_turns=5))
+        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None))
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -715,13 +741,7 @@ class TestErrorHandling:
         def handle_error(history: list[InputItem], error: Exception | None) -> list[InputItem]:
             return history
 
-        agent = Agent(
-            name="test",
-            llm=llm,
-            tools=[FailingTool()],
-            config=AgentConfig(max_turns=5),
-            hooks=AgentHooks(before_query=handle_error),
-        )
+        agent = make_agent(llm, [FailingTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None), hooks=AgentHooks(before_query=handle_error))
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -762,9 +782,9 @@ class TestAgentResultComputedFields:
     def test_total_turns(self):
         result = self._make_result(
             turns=[
-                AgentTurn(query_result=self._make_qr()),
-                ErrorTurn(error=SerializableException(type="E", message="e")),
-                AgentTurn(query_result=self._make_qr()),
+                AgentTurn(duration_seconds=0.0, query_result=self._make_qr()),
+                ErrorTurn(error=SerializableException(type="E", message="e"), duration_seconds=0.0),
+                AgentTurn(duration_seconds=0.0, query_result=self._make_qr()),
             ]
         )
         assert result.total_turns == 3
@@ -773,6 +793,7 @@ class TestAgentResultComputedFields:
         result = self._make_result(
             turns=[
                 AgentTurn(
+                    duration_seconds=0.0,
                     query_result=self._make_qr(),
                     tool_call_records=[
                         ToolCallRecord(tool_call=ToolCall(id="1", name="search", args={}), tool_output=ToolOutput(output="r"), duration_seconds=0.1),
@@ -789,8 +810,9 @@ class TestAgentResultComputedFields:
         err = SerializableException(type="E", message="e")
         result = self._make_result(
             turns=[
-                ErrorTurn(error=err),
+                ErrorTurn(error=err, duration_seconds=0.0),
                 AgentTurn(
+                    duration_seconds=0.0,
                     query_result=self._make_qr(),
                     tool_call_records=[
                         ToolCallRecord(tool_call=ToolCall(id="1", name="a", args={}), tool_output=ToolOutput(output="r"), duration_seconds=0.1, error=err),
@@ -805,9 +827,9 @@ class TestAgentResultComputedFields:
     def test_final_aggregated_metadata(self):
         result = self._make_result(
             turns=[
-                AgentTurn(query_result=self._make_qr(in_tokens=100, out_tokens=50)),
-                ErrorTurn(error=SerializableException(type="E", message="e")),
-                AgentTurn(query_result=self._make_qr(in_tokens=200, out_tokens=100)),
+                AgentTurn(duration_seconds=0.0, query_result=self._make_qr(in_tokens=100, out_tokens=50)),
+                ErrorTurn(error=SerializableException(type="E", message="e"), duration_seconds=0.0),
+                AgentTurn(duration_seconds=0.0, query_result=self._make_qr(in_tokens=200, out_tokens=100)),
             ]
         )
         agg = result.final_aggregated_metadata
@@ -816,9 +838,22 @@ class TestAgentResultComputedFields:
 
     def test_final_aggregated_metadata_skips_error_turns(self):
         result = self._make_result(
-            turns=[ErrorTurn(error=SerializableException(type="E", message="e"))]
+            turns=[ErrorTurn(error=SerializableException(type="E", message="e"), duration_seconds=0.0)]
         )
         assert result.final_aggregated_metadata == QueryResultMetadata()
+
+    def test_duration_computed_fields(self):
+        result = self._make_result(
+            final_duration_seconds=10.0,
+            turns=[
+                AgentTurn(duration_seconds=4.0, retry_overhead_seconds=1.0, query_result=self._make_qr()),
+                ErrorTurn(error=SerializableException(type="E", message="e"), duration_seconds=0.3),
+                AgentTurn(duration_seconds=5.0, retry_overhead_seconds=0.5, query_result=self._make_qr()),
+            ],
+        )
+        assert result.final_turns_duration_seconds == 9.3
+        assert result.final_retry_overhead_seconds == 1.5
+        assert result.final_effective_duration_seconds == 8.5  # 10.0 - 1.5
 
 
 # --- Models ---
@@ -867,7 +902,7 @@ class TestModels:
     def test_turn_result_properties(self):
         tc = ToolCall(id="tc_1", name="echo", args={"text": "hi"})
         qr = QueryResult(output_text="hello", metadata=QueryResultMetadata(), tool_calls=[tc], history=[])
-        turn = AgentTurn(query_result=qr)
+        turn = AgentTurn(duration_seconds=0.0, query_result=qr)
         tr = TurnResult(turn_number=1, turn=turn, state={}, elapsed_seconds=0.5)
 
         assert tr.response_text == "hello"
@@ -1019,3 +1054,147 @@ class TestToolDefinition:
         assert tool.description == "no super init"
         assert tool.parameters == {"q": {"type": "string"}}
         assert tool.required == ["q"]
+
+
+# --- max_tool_calls_per_turn ---
+
+
+class TestMaxToolCallsPerTurn:
+    async def test_cap_skips_excess_tool_calls(self):
+        """Tool calls beyond the cap get skip messages, not executed"""
+        tc1 = make_tool_call("echo", {"text": "first"})
+        tc2 = make_tool_call("echo", {"text": "second"})
+        tc3 = make_tool_call("echo", {"text": "third"})
+        llm = mock_llm(make_tool_response([tc1, tc2, tc3]), make_text_response("done"))
+        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=None, time_limit=None, max_tool_calls_per_turn=1))
+
+        result = await agent.run([TextInput(text="go")], question_id="q1")
+
+        assert isinstance(result.turns[0], AgentTurn)
+        records = result.turns[0].tool_call_records
+        assert len(records) == 3
+        assert records[0].tool_output.output == "first"
+        assert records[1].tool_output.output == "Skipped: tool call limit exceeded"
+        assert records[2].tool_output.output == "Skipped: tool call limit exceeded"
+
+    async def test_cap_skipped_calls_appended_to_history(self):
+        """Skipped tool calls still get ToolResult in history for provider compatibility"""
+        tc1 = make_tool_call("echo", {"text": "ok"})
+        tc2 = make_tool_call("echo", {"text": "skip me"})
+        llm = mock_llm(make_tool_response([tc1, tc2]), make_text_response("done"))
+        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=None, time_limit=None, max_tool_calls_per_turn=1))
+
+        await agent.run([TextInput(text="go")], question_id="q1")
+
+        # second LLM call should have both tool results in its input
+        second_call_input = llm.query.call_args_list[1].kwargs["input"]
+        from model_library.base.input import ToolResult
+        tool_results = [m for m in second_call_input if isinstance(m, ToolResult)]
+        assert len(tool_results) == 2
+
+
+# --- Retry time budget ---
+
+
+class TestRetryTimeBudget:
+    """Tests for retry overhead time tracking and budget behavior.
+
+    Uses a fake clock that only advances during LLM queries (simulating retry delays).
+    Other monotonic() calls (time checks, tool execution) see the same clock value,
+    so only query wall time contributes to elapsed/overhead calculations.
+    """
+
+    @staticmethod
+    def _make_timed_llm(*responses: QueryResult, wall_per_query: float = 20.0):
+        """Mock LLM where each query advances a fake clock by wall_per_query seconds"""
+        clock = [0.0]
+
+        def fake_monotonic() -> float:
+            return clock[0]
+
+        response_list = list(responses)
+        idx = [0]
+
+        async def query_side_effect(**kwargs: Any) -> QueryResult:
+            resp = response_list[idx[0]]
+            idx[0] += 1
+            clock[0] += wall_per_query
+            return resp
+
+        llm = MagicMock()
+        llm.query = AsyncMock(side_effect=query_side_effect)
+        llm.logger = logging.getLogger("mock_llm")
+        return llm, fake_monotonic
+
+    async def test_retry_overhead_excluded_from_budget(self):
+        """Retry time doesn't count: wall=80s exceeds budget=30, but effective=6s doesn't"""
+        tc = make_tool_call("echo", {"text": "hi"})
+        # 3 tool turns (reported 2s each) + 1 text turn (reported 0s)
+        # wall: 4 × 20 = 80s, overhead: 3×(20-2) + (20-0) = 74, effective: 80-74 = 6
+        llm, fake_mono = self._make_timed_llm(
+            make_tool_response([tc], duration=2.0),
+            make_tool_response([tc], duration=2.0),
+            make_tool_response([tc], duration=2.0),
+            make_text_response("done"),
+            wall_per_query=20.0,
+        )
+
+        with patch.object(time_module, "monotonic", new=fake_mono):
+            agent = make_agent(llm, [EchoTool()], config=AgentConfig(
+                turn_limit=None,
+                time_limit=TimeLimit(max_seconds=30),
+            ))
+            result = await agent.run([TextInput(text="go")], question_id="q1")
+
+        assert result.success
+        assert result.final_duration_seconds == 80
+        assert result.final_retry_overhead_seconds == 74
+        assert result.final_effective_duration_seconds == 6
+
+    async def test_include_retries_uses_wall_clock(self):
+        """With include_retries=True, wall clock counts — same scenario hits budget"""
+        tc = make_tool_call("echo", {"text": "hi"})
+        llm, fake_mono = self._make_timed_llm(
+            make_tool_response([tc], duration=2.0),
+            make_tool_response([tc], duration=2.0),
+            make_tool_response([tc], duration=2.0),
+            make_text_response("done"),
+            wall_per_query=20.0,
+        )
+
+        with patch.object(time_module, "monotonic", new=fake_mono):
+            agent = make_agent(llm, [EchoTool()], config=AgentConfig(
+                turn_limit=None,
+                time_limit=TimeLimit(max_seconds=30, include_retries=True),
+            ))
+            result = await agent.run([TextInput(text="go")], question_id="q1")
+
+        assert not result.success
+        assert result.final_error is not None
+        assert result.final_error.type == "MaxTimeExceeded"
+
+    async def test_retry_overhead_tracked_on_turns(self):
+        """Each AgentTurn records its per-turn retry overhead"""
+        tc = make_tool_call("echo", {"text": "hi"})
+        # tool turn: wall=20, reported=2 → overhead=18
+        # text turn: wall=20, reported=0 → overhead=20
+        llm, fake_mono = self._make_timed_llm(
+            make_tool_response([tc], duration=2.0),
+            make_text_response("done"),
+            wall_per_query=20.0,
+        )
+
+        with patch.object(time_module, "monotonic", new=fake_mono):
+            agent = make_agent(llm, [EchoTool()], config=AgentConfig(
+                turn_limit=None,
+                time_limit=TimeLimit(max_seconds=300),
+            ))
+            result = await agent.run([TextInput(text="go")], question_id="q1")
+
+        assert result.success
+        assert isinstance(result.turns[0], AgentTurn)
+        assert result.turns[0].retry_overhead_seconds == 18.0
+        assert isinstance(result.turns[1], AgentTurn)
+        assert result.turns[1].retry_overhead_seconds == 20.0
+        assert result.final_retry_overhead_seconds == 38.0
+        assert result.final_effective_duration_seconds < result.final_duration_seconds

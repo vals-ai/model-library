@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from model_library.agent import AgentConfig
+from model_library.agent import AgentConfig, TimeLimit, TurnLimit
 from model_library.agent.cli import (
     _build_parser,
     _collect_tools,
@@ -52,8 +52,8 @@ class TestCLI:
 
     def test_defaults(self):
         args = _parse("--model", "openai/gpt-4", "--problem-statement", "x")
-        assert args.max_turns == 100
-        assert args.max_time_seconds == 28800
+        assert args.max_turns is None
+        assert args.max_time_seconds is None
         assert args.log_level == "INFO"
         assert args.log_file == "agent.log"
         assert args.output is None
@@ -196,8 +196,10 @@ class TestCLI:
         ):
             await _run(args)
 
-        assert captured[0].max_turns == 42
-        assert captured[0].max_time_seconds == 1234.5
+        assert captured[0].turn_limit is not None
+        assert captured[0].turn_limit.max_turns == 42
+        assert captured[0].time_limit is not None
+        assert captured[0].time_limit.max_seconds == 1234.5
 
     @pytest.mark.asyncio
     async def test_log_level_passed(self, tmp_path: Path):

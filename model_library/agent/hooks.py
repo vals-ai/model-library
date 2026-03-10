@@ -12,7 +12,10 @@ from model_library.base.input import InputItem, ToolCall
 
 @dataclass
 class TurnResult:
-    """Context passed to hooks after a turn completes"""
+    """Context passed to hooks after a turn completes
+
+    turn_number is 1-indexed (first turn = 1).
+    """
 
     turn_number: int
     turn: AgentTurn

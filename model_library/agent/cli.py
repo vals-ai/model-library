@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from model_library.agent.agent import Agent, AgentResult
-from model_library.agent.config import AgentConfig
+from model_library.agent.config import AgentConfig, TimeLimit, TurnLimit
 from model_library.agent.tool import Tool
 from model_library.agent.tools import TOOL_REGISTRY
 from dotenv import load_dotenv
@@ -50,13 +50,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help=f"Comma-separated built-in tool names. Available: {list_tools()}",
     )
     parser.add_argument(
-        "--max-turns", type=int, default=100, help="Maximum agent turns (default: 100)"
+        "--max-turns",
+        type=int,
+        default=None,
+        help="Maximum agent turns (default: unlimited)",
     )
     parser.add_argument(
         "--max-time-seconds",
         type=float,
-        default=28800,
-        help="Wall-clock time limit in seconds (default: 28800 = 8h)",
+        default=None,
+        help="Wall-clock time limit in seconds (default: unlimited)",
     )
     parser.add_argument(
         "--log-file", default="agent.log", help="Log file path (default: agent.log)"
@@ -119,9 +122,15 @@ async def _run(args: argparse.Namespace) -> AgentResult:
     llm = get_registry_model(args.model)
     tools = _collect_tools(args)
     problem_statement = _read_problem_statement(args.problem_statement)
-    config = AgentConfig(
-        max_turns=args.max_turns, max_time_seconds=args.max_time_seconds
+    turn_limit = (
+        TurnLimit(max_turns=args.max_turns) if args.max_turns is not None else None
     )
+    time_limit = (
+        TimeLimit(max_seconds=args.max_time_seconds)
+        if args.max_time_seconds is not None
+        else None
+    )
+    config = AgentConfig(turn_limit=turn_limit, time_limit=time_limit)
 
     with create_file_logger(
         "model_library.agent.cli",

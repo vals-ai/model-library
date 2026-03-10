@@ -1,5 +1,12 @@
 from model_library.agent.agent import Agent, AgentResult
-from model_library.agent.config import AgentConfig, truncate_oldest
+from model_library.agent.config import (
+    AgentConfig,
+    TimeLimit,
+    TimeMessageHook,
+    TurnLimit,
+    TurnMessageHook,
+    truncate_oldest,
+)
 from model_library.agent.hooks import (
     AgentHooks,
     BeforeQueryHook,
@@ -39,6 +46,10 @@ __all__ = [
     "OnToolResultHook",
     "ShouldStopHook",
     "ToolOutput",
+    "TimeLimit",
+    "TimeMessageHook",
+    "TurnLimit",
+    "TurnMessageHook",
     "TurnResult",
     "truncate_oldest",
 ]
