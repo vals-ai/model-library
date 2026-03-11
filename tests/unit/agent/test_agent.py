@@ -2,6 +2,7 @@
 
 import logging
 import time as time_module
+from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -760,6 +761,7 @@ class TestAgentResultComputedFields:
             "turns": [],
             "final_duration_seconds": 1.0,
             "state": {},
+            "output_dir": Path("/tmp/test"),
         }
         defaults.update(kwargs)
         return AgentResult(**defaults)
@@ -910,7 +912,8 @@ class TestModels:
 
     def test_agent_result_repr(self):
         result = AgentResult(
-            final_answer="answer", final_error=None, turns=[], final_duration_seconds=1.0, state={}
+            final_answer="answer", final_error=None, turns=[], final_duration_seconds=1.0, state={},
+            output_dir=Path("/tmp/test"),
         )
         r = repr(result)
         assert "AgentResult" in r

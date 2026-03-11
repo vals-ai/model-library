@@ -71,20 +71,23 @@ def run_logging(
     logger: logging.Logger,
     log_dir: Path,
     question_id: str,
-) -> Iterator[Path | None]:
+) -> Iterator[Path]:
     """Manage file logging for an agent run.
 
-    Creates log_dir/<question_id>/agent.log and yields that directory.
-    If the logger already has a FileHandler, yields its parent directory instead.
+    Always yields a question-scoped directory for output files (result.json, histories/).
+    If the logger already has a FileHandler, reuses it (no new handler created).
+    Otherwise creates log_dir/<question_id>/agent.log.
 
-    The FileHandler is removed on exit.
+    The output directory is always scoped: <base>/<question_id>/
     """
     # Use existing FileHandler if present (walk up the logger hierarchy, skip root)
     current: logging.Logger | None = logger
     while current and current is not logging.root:
         for h in current.handlers:
             if isinstance(h, logging.FileHandler):
-                yield Path(h.baseFilename).parent
+                output_dir = Path(h.baseFilename).parent / question_id
+                output_dir.mkdir(parents=True, exist_ok=True)
+                yield output_dir
                 return
         current = current.parent if current.propagate else None
 

@@ -5,8 +5,9 @@ Tool-augmented conversation loop that queries an LLM and executes tools until a 
 ## Logging & Output
 
 ```python
-Agent(llm, tools, name="finance_agent")
-await agent.run(input, question_id="question_1")
+agent = Agent(llm, tools, name="finance_agent", config=AgentConfig(turn_limit=TurnLimit(max_turns=50), time_limit=None))
+result = await agent.run(input, question_id="question_1")
+result.output_dir  # Path to question-level output directory
 ```
 
 - `name` — required, used for logger name and log directory
@@ -92,11 +93,12 @@ await agent.run(input, question_id="question_1")
 ```
 /custom/path/output/
 ├── agent.log
-├── result.json
-└── histories/
+└── question_1/
+    ├── result.json
+    └── histories/
 ```
 
-The agent detects an existing FileHandler on the logger or any of its parents (excluding root) and uses its directory instead of creating a new one. This also works when passing a custom `logger` with a FileHandler:
+The agent detects an existing FileHandler on the logger or any of its parents (excluding root) and reuses it (no new handler created). Output files are still scoped under `<question_id>/`. This also works when passing a custom `logger` with a FileHandler:
 
 ```python
 my_logger = logging.getLogger("myapp")
@@ -104,7 +106,7 @@ my_logger.addHandler(logging.FileHandler("/custom/path/output/agent.log"))
 
 agent = Agent(name="finance_agent", llm=llm, tools=tools, logger=my_logger)
 await agent.run(input, question_id="question_1")
-# uses /custom/path/output/ — no new FileHandler created
+# logs to /custom/path/output/agent.log, output files in /custom/path/output/question_1/
 ```
 
 ## Output Files
@@ -119,12 +121,18 @@ The loop stops when any of these occur:
 
 - A tool returns `done=True`
 - `should_stop` hook returns `True` (default: text-only response)
-- `max_turns` reached (sets `MaxTurnsExceeded` error)
-- `max_time_seconds` exceeded (sets `MaxTimeExceeded` error)
+- `turn_limit.max_turns` reached (sets `MaxTurnsExceeded` error)
+- `time_limit.max_seconds` exceeded (sets `MaxTimeExceeded` error)
 - `before_query` hook re-raises a query error (default behavior)
 - Unhandled exception
 
 After the loop, `determine_answer` runs with full context. Default falls back to done tool output or last LLM text.
+
+## AgentResult
+
+`AgentResult` includes per-turn data, durations, token/cost metadata, and the output directory:
+
+- `output_dir: Path` — the question-level directory where `result.json`, `agent.log`, and `histories/` are written. Excluded from serialization (`model_dump`/`model_dump_json`).
 
 ## Configuration
 
@@ -132,9 +140,10 @@ After the loop, `determine_answer` runs with full context. Default falls back to
 
 | Field | Default | Purpose |
 |-------|---------|---------|
-| `max_turns` | 1000 | Maximum loop iterations (includes ErrorTurns) |
-| `max_time_seconds` | 28800 (8h) | Wall-clock time limit |
-| `serialize_histories` | True | Save per-turn `.bin` histories to disk |
+| `turn_limit` | required | `TurnLimit(max_turns=N)` or `None` for unlimited |
+| `time_limit` | required | `TimeLimit(max_seconds=N)` or `None` for unlimited |
+| `max_tool_calls_per_turn` | `None` | Cap on executed tool calls per turn |
+| `serialize_histories` | `True` | Save per-turn `.bin` histories to disk |
 
 ## Source Files
 

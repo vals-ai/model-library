@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from pydantic import computed_field, field_validator
+from pydantic import Field, computed_field, field_validator
 
 from model_library.agent.config import AgentConfig
 from model_library.agent.hooks import AgentHooks, TurnResult
@@ -48,6 +48,7 @@ class AgentResult(PrettyModel):
     turns: list[AgentTurn | ErrorTurn]
     final_duration_seconds: float  # wall clock, rounded to ms
     state: dict[str, Any]
+    output_dir: Path = Field(exclude=True)
 
     @field_validator("final_duration_seconds", mode="before")
     @classmethod
@@ -198,13 +199,8 @@ class Agent:
             # setup history serialization if needed
             histories_dir: Path | None = None
             if self._config.serialize_histories:
-                if output_dir is not None:
-                    histories_dir = output_dir / "histories"
-                    histories_dir.mkdir(exist_ok=True)
-                else:
-                    self._logger.warning(
-                        "serialize_histories enabled but no log_dir set, skipping"
-                    )
+                histories_dir = output_dir / "histories"
+                histories_dir.mkdir(exist_ok=True)
 
             # log startup state
             custom_hooks = {
@@ -236,7 +232,7 @@ class Agent:
         *,
         question_id: str,
         state: dict[str, Any] | None = None,
-        output_dir: Path | None = None,
+        output_dir: Path,
         histories_dir: Path | None = None,
     ) -> AgentResult:
         if state is None:
@@ -403,15 +399,15 @@ class Agent:
             turns=turns,
             final_duration_seconds=elapsed,
             state=state,
+            output_dir=output_dir,
         )
         self._logger.info(f"Run complete: {result!r}")
 
-        if output_dir is not None:
-            try:
-                result_path = output_dir / "result.json"
-                result_path.write_text(result.model_dump_json(indent=2))
-            except Exception:
-                self._logger.exception("Failed to serialize result")
+        try:
+            result_path = output_dir / "result.json"
+            result_path.write_text(result.model_dump_json(indent=2))
+        except Exception:
+            self._logger.exception("Failed to serialize result")
 
         return result
 

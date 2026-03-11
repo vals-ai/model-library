@@ -97,6 +97,7 @@ async def basic_agent(model: LLM):
 
     console_log(f"Answer: {result.final_answer}")
     console_log(f"Turns: {result.total_turns}, Tool calls: {result.tool_calls_count}")
+    console_log(f"Logs: {result.output_dir}")
 
 
 async def agent_with_submit_tool(model: LLM):
@@ -119,6 +120,7 @@ async def agent_with_submit_tool(model: LLM):
     )
 
     console_log(f"Final answer: {result.final_answer}")
+    console_log(f"Logs: {result.output_dir}")
 
 
 async def agent_with_web_search(model: LLM):
@@ -144,6 +146,7 @@ async def agent_with_web_search(model: LLM):
 
     console_log(f"Answer: {result.final_answer}")
     console_log(f"Turns: {result.total_turns}, Tool calls: {result.tool_calls_count}")
+    console_log(f"Logs: {result.output_dir}")
 
 
 async def agent_with_bash(model: LLM):
@@ -169,6 +172,7 @@ async def agent_with_bash(model: LLM):
 
     console_log(f"Answer: {result.final_answer}")
     console_log(f"Turns: {result.total_turns}, Tool calls: {result.tool_calls_count}")
+    console_log(f"Logs: {result.output_dir}")
 
 
 async def agent_with_hooks(model: LLM):
@@ -210,6 +214,7 @@ async def agent_with_hooks(model: LLM):
 
     console_log(f"Answer: {result.final_answer}")
     console_log(f"State keys: {list(state.keys())}")
+    console_log(f"Logs: {result.output_dir}")
 
 
 async def main():
@@ -228,7 +233,7 @@ async def main():
     model = get_registry_model(args.model)
 
     # await basic_agent(model)
-    # await agent_with_bash(model, logger)
+    # await agent_with_bash(model)
     await agent_with_submit_tool(model)
     # await agent_with_web_search(model)
     # await agent_with_hooks(model)

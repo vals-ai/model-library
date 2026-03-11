@@ -335,9 +335,10 @@ async def test_run_logging_reuses_existing_file_handler(tmp_path: Path):
     logger.addHandler(fh)
 
     try:
-        with run_logging(logger, tmp_path / "new_dir", "q-ignored") as output_dir:
-            assert output_dir == existing_log.parent
-            assert not (tmp_path / "new_dir" / "q-ignored").exists()
+        with run_logging(logger, tmp_path / "new_dir", "q-reuse") as output_dir:
+            assert output_dir == existing_log.parent / "q-reuse"
+            assert output_dir.exists()
+            assert not (tmp_path / "new_dir" / "q-reuse").exists()
     finally:
         logger.removeHandler(fh)
         fh.close()
@@ -353,9 +354,10 @@ async def test_run_logging_reuses_parent_file_handler(tmp_path: Path):
     parent_logger.addHandler(fh)
 
     try:
-        with run_logging(child_logger, tmp_path / "new_dir", "q-ignored") as output_dir:
-            assert output_dir == existing_log.parent
-            assert not (tmp_path / "new_dir" / "q-ignored").exists()
+        with run_logging(child_logger, tmp_path / "new_dir", "q-reuse") as output_dir:
+            assert output_dir == existing_log.parent / "q-reuse"
+            assert output_dir.exists()
+            assert not (tmp_path / "new_dir" / "q-reuse").exists()
     finally:
         parent_logger.removeHandler(fh)
         fh.close()
