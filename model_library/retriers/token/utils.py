@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Mapping
 from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any, Protocol
+from typing import Any, Awaitable, Protocol, cast
 
 from pydantic import BaseModel
 from redis.asyncio import Redis
@@ -122,9 +123,12 @@ async def validate_redis_client(
 async def get_token_keys() -> list[str]:
     """Return all valid token retry base keys"""
 
+    all_keys = await redis_client.keys(f"{KEY_PREFIX}:*:*:tokens")
+    if not all_keys:
+        return []
+    values = await asyncio.gather(*(redis_client.get(key) for key in all_keys))
     keys: list[str] = []
-    for key in await redis_client.keys(f"{KEY_PREFIX}:*:*:tokens"):
-        val = await redis_client.get(key)
+    for key, val in zip(all_keys, values):
         try:
             int(val) if val else 0
         except ValueError:
@@ -199,6 +203,7 @@ class QueueEntry(BaseModel):
     popped_at: float | None
     completed_at: float | None
     popped: bool = False
+    is_queued: bool = True
 
 
 class QueueStatus(BaseModel):
@@ -223,7 +228,7 @@ class Status(BaseModel):
 async def get_status() -> Status:
     """Get combined token retry and benchmark queue status, grouped by model key."""
 
-    token_retry, queued_by_run = await _get_token_retry_status()
+    token_retry, queued_by_run, queued_run_to_key = await _get_token_retry_status()
 
     # compute per-run inflight counts from already-fetched inflight data
     inflight_by_run: dict[str, int] = {}
@@ -237,6 +242,16 @@ async def get_status() -> Status:
     queue_statuses = await _get_queue_status(
         inflight_by_run, queued_by_run, token_base_keys
     )
+
+    # collect all run_ids already covered by queue entries
+    covered_run_ids: set[str] = set()
+    for q in queue_statuses:
+        for e in q.entries:
+            covered_run_ids.add(e.run_id)
+
+    # find non-queued runs (in token retrier but not in benchmark queue)
+    all_token_run_ids = set(inflight_by_run.keys()) | set(queued_by_run.keys())
+    unqueued_run_ids = all_token_run_ids - covered_run_ids
 
     # group by model key (strip prefix + suffixes for clean display key)
     prefix_and_colon = f"{KEY_PREFIX}:"
@@ -258,11 +273,63 @@ async def get_status() -> Status:
         else:
             grouped[display_key] = ModelStatus(key=display_key, token=None, queue=q)
 
+    # attach non-queued runs to their model's queue status
+    if unqueued_run_ids:
+        # map run_id → display_key via inflight metadata and priority set data
+        run_to_model: dict[str, str] = {}
+        for t in token_retry:
+            display_key = t.token_key.removeprefix(prefix_and_colon).removesuffix(
+                ":tokens"
+            )
+            for r in t.inflight:
+                if r.run_id and r.run_id in unqueued_run_ids:
+                    run_to_model[r.run_id] = display_key
+        # also map from priority sets (covers runs with no inflight requests yet)
+        for rid in unqueued_run_ids:
+            if rid not in run_to_model and rid in queued_run_to_key:
+                display_key = (
+                    queued_run_to_key[rid]
+                    .removeprefix(prefix_and_colon)
+                    .removesuffix(":tokens")
+                )
+                run_to_model[rid] = display_key
+
+        for rid in sorted(unqueued_run_ids):
+            display_key = run_to_model.get(rid)
+            if not display_key:
+                continue
+            entry = QueueEntry(
+                run_id=rid,
+                alive=False,
+                heartbeat_ttl=-1,
+                position=-1,
+                notified=False,
+                total_requests=None,
+                dispatched_count=0,
+                inflight_count=inflight_by_run.get(rid, 0),
+                queued_by_priority=queued_by_run.get(rid, {}),
+                slot_acquired=False,
+                enqueued_at=None,
+                slot_acquired_at=None,
+                popped_at=None,
+                completed_at=None,
+                is_queued=False,
+            )
+            model = grouped.get(display_key)
+            if model and model.queue:
+                model.queue.entries.append(entry)
+            elif model:
+                model.queue = QueueStatus(
+                    queue_key=f"{prefix_and_colon}{display_key}:benchmark:queue",
+                    length=0,
+                    entries=[entry],
+                )
+
     return Status(models=list(grouped.values()))
 
 
 async def _get_token_retry_status() -> tuple[
-    list[TokenRetryStatus], dict[str, dict[str, int]]
+    list[TokenRetryStatus], dict[str, dict[str, int]], dict[str, str]
 ]:
     from model_library.retriers.token.token import (
         MAX_PRIORITY,
@@ -270,122 +337,244 @@ async def _get_token_retry_status() -> tuple[
     )
 
     token_keys = await get_token_keys()
+    if not token_keys:
+        return [], {}, {}
+
+    results = await asyncio.gather(
+        *(
+            _get_status_for_token_key(tk, MAX_PRIORITY, MIN_PRIORITY)
+            for tk in token_keys
+        )
+    )
 
     statuses: list[TokenRetryStatus] = []
-    queued_by_run: dict[str, dict[str, int]] = {}  # run_id -> {priority: count}
-    for token_key in token_keys:
-        limit_key = f"{token_key}:limit"
+    merged_queued_by_run: dict[str, dict[str, int]] = {}
+    # map run_id → token_key for run_ids found in priority sets
+    queued_run_to_key: dict[str, str] = {}
+    for status, queued_by_run in results:
+        statuses.append(status)
+        for rid, priorities in queued_by_run.items():
+            queued_run_to_key.setdefault(rid, status.token_key)
+            merged = merged_queued_by_run.setdefault(rid, {})
+            for p_str, count in priorities.items():
+                merged[p_str] = merged.get(p_str, 0) + count
 
-        tokens_raw = await redis_client.get(token_key)
-        tokens_remaining = int(tokens_raw) if tokens_raw else 0
+    return statuses, merged_queued_by_run, queued_run_to_key
 
-        limit_raw = await redis_client.get(limit_key)
-        token_limit = int(limit_raw) if limit_raw else 0
 
-        # config hash (set at init time)
-        config_raw = await redis_client.hgetall(f"{token_key}:config")
-        config = TokenRetryConfig(
-            limit=int(config_raw["limit"]) if "limit" in config_raw else None,
-            limit_refresh_seconds=int(config_raw["limit_refresh_seconds"])
-            if "limit_refresh_seconds" in config_raw
-            else None,
-            tokens_per_second=int(config_raw["tokens_per_second"])
-            if "tokens_per_second" in config_raw
-            else None,
-            version=config_raw.get("version"),
-            initialized_at=float(config_raw["initialized_at"])
-            if "initialized_at" in config_raw
-            else None,
-        )
+async def _get_status_for_token_key(
+    token_key: str, max_priority: int, min_priority: int
+) -> tuple[TokenRetryStatus, dict[str, dict[str, int]]]:
+    """Fetch status for a single token key with parallelized Redis calls."""
+    limit_key = f"{token_key}:limit"
+    base = token_key.removesuffix(":tokens")
 
-        now = time.time()
+    # parallel: base data (split for typed gather overloads)
+    tokens_raw, limit_raw, config_raw, active_benchmark_run = await asyncio.gather(
+        redis_client.get(token_key),
+        redis_client.get(limit_key),
+        redis_client.hgetall(f"{token_key}:config"),
+        redis_client.lindex(f"{base}:benchmark:queue", 0),
+    )
+    (
+        active_run_ids,
+        refill_alive_raw,
+        correction_alive_raw,
+        dynamic_estimate_keys,
+    ) = await asyncio.gather(
+        redis_client.smembers(f"{token_key}:active_runs"),
+        redis_client.exists(f"{token_key}:task:refill"),
+        redis_client.exists(f"{token_key}:task:correction"),
+        redis_client.keys(f"{token_key}:dynamic_estimate:*"),
+    )
 
-        # fetch inflight from per-run ZSETs via active_runs SET
-        active_run_ids = await redis_client.smembers(f"{token_key}:active_runs")
-        inflight: list[InflightRequest] = []
-        for rid in active_run_ids:
-            run_inflight_key = f"{token_key}:run:{rid}:inflight"
-            entries = await redis_client.zrangebyscore(
-                run_inflight_key, "-inf", "+inf", withscores=True
-            )
-            for member, score in entries:
-                meta = await redis_client.hgetall(f"{token_key}:inflight:{member}")
-                run_id_val = meta.get("run_id", "")
-                inflight.append(
-                    InflightRequest(
-                        question_id=member,
-                        elapsed_seconds=round(now - float(score), 1),
-                        estimate_input=int(meta["estimate_input"])
-                        if "estimate_input" in meta
-                        else None,
-                        estimate_output=int(meta["estimate_output"])
-                        if "estimate_output" in meta
-                        else None,
-                        estimate_total=int(meta["estimate_total"])
-                        if "estimate_total" in meta
-                        else None,
-                        priority=int(meta["priority"]) if "priority" in meta else None,
-                        attempts=int(meta["attempts"]) if "attempts" in meta else None,
-                        run_id=run_id_val if run_id_val else None,
-                        dispatched_at=float(meta["dispatched_at"])
-                        if "dispatched_at" in meta
-                        else None,
-                    )
+    tokens_remaining = int(tokens_raw) if tokens_raw else 0
+    token_limit = int(limit_raw) if limit_raw else 0
+    refill_alive = refill_alive_raw > 0
+    correction_alive = correction_alive_raw > 0
+    config = TokenRetryConfig(
+        limit=int(config_raw["limit"]) if "limit" in config_raw else None,
+        limit_refresh_seconds=int(config_raw["limit_refresh_seconds"])
+        if "limit_refresh_seconds" in config_raw
+        else None,
+        tokens_per_second=int(config_raw["tokens_per_second"])
+        if "tokens_per_second" in config_raw
+        else None,
+        version=config_raw.get("version"),
+        initialized_at=float(config_raw["initialized_at"])
+        if "initialized_at" in config_raw
+        else None,
+    )
+
+    now = time.time()
+
+    # parallel: fetch inflight entries per active run
+    sorted_run_ids = sorted(active_run_ids)
+    inflight_entries_list = (
+        await asyncio.gather(
+            *(
+                redis_client.zrangebyscore(
+                    f"{token_key}:run:{rid}:inflight", "-inf", "+inf", withscores=True
                 )
-        inflight.sort(key=lambda r: r.elapsed_seconds, reverse=True)
-
-        base = token_key.removesuffix(":tokens")
-
-        priorities: dict[str, int] = {}
-        for priority in range(MAX_PRIORITY, MIN_PRIORITY + 1):
-            members = await redis_client.zrangebyscore(
-                f"{base}:priority:{priority}", "-inf", "+inf"
-            )
-            priorities[str(priority)] = len(members)
-            for member in members:
-                meta = await redis_client.hgetall(f"{token_key}:inflight:{member}")
-                rid = meta.get("run_id", "")
-                if rid:
-                    queued_by_run.setdefault(rid, {})
-                    p_str = str(priority)
-                    queued_by_run[rid][p_str] = queued_by_run[rid].get(p_str, 0) + 1
-
-        refill_alive = await redis_client.exists(f"{token_key}:task:refill") > 0
-        correction_alive = await redis_client.exists(f"{token_key}:task:correction") > 0
-
-        # dynamic estimate ratios
-        dynamic_estimate_keys = await redis_client.keys(
-            f"{token_key}:dynamic_estimate:*"
-        )
-        dynamic_estimates: list[DynamicEstimate] = []
-        for de_key in sorted(dynamic_estimate_keys):
-            ratio_raw = await redis_client.get(de_key)
-            if ratio_raw:
-                de_run_id = de_key.removeprefix(f"{token_key}:dynamic_estimate:")
-                dynamic_estimates.append(
-                    DynamicEstimate(run_id=de_run_id, ratio=float(ratio_raw))
-                )
-
-        # active benchmark run = queue head
-        queue_key = f"{base}:benchmark:queue"
-        active_benchmark_run = await redis_client.lindex(queue_key, 0)
-
-        statuses.append(
-            TokenRetryStatus(
-                token_key=token_key,
-                tokens_remaining=tokens_remaining,
-                token_limit=token_limit,
-                config=config,
-                inflight=inflight,
-                priorities=priorities,
-                refill_alive=refill_alive,
-                correction_alive=correction_alive,
-                active_benchmark_run=active_benchmark_run,
-                dynamic_estimates=dynamic_estimates,
+                for rid in sorted_run_ids
             )
         )
+        if sorted_run_ids
+        else []
+    )
 
-    return statuses, queued_by_run
+    all_inflight_members: list[tuple[str, float]] = []
+    for entries in inflight_entries_list:
+        # withscores=True returns list[tuple[str, float]] despite protocol typing
+        all_inflight_members.extend(cast(list[tuple[str, float]], entries))
+
+    # parallel: fetch all inflight metadata
+    inflight_metas = (
+        await asyncio.gather(
+            *(
+                redis_client.hgetall(f"{token_key}:inflight:{member}")
+                for member, _ in all_inflight_members
+            )
+        )
+        if all_inflight_members
+        else []
+    )
+
+    inflight: list[InflightRequest] = []
+    for (member, score), meta in zip(all_inflight_members, inflight_metas):
+        run_id_val = meta.get("run_id", "")
+        inflight.append(
+            InflightRequest(
+                question_id=member,
+                elapsed_seconds=round(now - float(score), 1),
+                estimate_input=int(meta["estimate_input"])
+                if "estimate_input" in meta
+                else None,
+                estimate_output=int(meta["estimate_output"])
+                if "estimate_output" in meta
+                else None,
+                estimate_total=int(meta["estimate_total"])
+                if "estimate_total" in meta
+                else None,
+                priority=int(meta["priority"]) if "priority" in meta else None,
+                attempts=int(meta["attempts"]) if "attempts" in meta else None,
+                run_id=run_id_val if run_id_val else None,
+                dispatched_at=float(meta["dispatched_at"])
+                if "dispatched_at" in meta
+                else None,
+            )
+        )
+    inflight.sort(key=lambda r: r.elapsed_seconds, reverse=True)
+
+    # parallel: fetch all priority sets
+    priority_range = list(range(max_priority, min_priority + 1))
+    priority_members_list = await asyncio.gather(
+        *(
+            redis_client.zrangebyscore(f"{base}:priority:{p}", "-inf", "+inf")
+            for p in priority_range
+        )
+    )
+
+    all_priority_members: list[str] = []
+    for members in priority_members_list:
+        all_priority_members.extend(members)
+
+    # parallel: fetch priority member metadata
+    priority_metas = (
+        await asyncio.gather(
+            *(
+                redis_client.hgetall(f"{token_key}:inflight:{member}")
+                for member in all_priority_members
+            )
+        )
+        if all_priority_members
+        else []
+    )
+
+    priorities: dict[str, int] = {}
+    queued_by_run: dict[str, dict[str, int]] = {}
+    meta_idx = 0
+    for priority, members in zip(priority_range, priority_members_list):
+        priorities[str(priority)] = len(members)
+        for _member in members:
+            meta = priority_metas[meta_idx]
+            meta_idx += 1
+            rid = meta.get("run_id", "")
+            if rid:
+                queued_by_run.setdefault(rid, {})
+                p_str = str(priority)
+                queued_by_run[rid][p_str] = queued_by_run[rid].get(p_str, 0) + 1
+
+    # parallel: fetch dynamic estimates
+    sorted_de_keys = sorted(dynamic_estimate_keys)
+    de_values = (
+        await asyncio.gather(*(redis_client.get(de_key) for de_key in sorted_de_keys))
+        if sorted_de_keys
+        else []
+    )
+    dynamic_estimates = [
+        DynamicEstimate(
+            run_id=de_key.removeprefix(f"{token_key}:dynamic_estimate:"),
+            ratio=float(ratio_raw),
+        )
+        for de_key, ratio_raw in zip(sorted_de_keys, de_values)
+        if ratio_raw
+    ]
+
+    return TokenRetryStatus(
+        token_key=token_key,
+        tokens_remaining=tokens_remaining,
+        token_limit=token_limit,
+        config=config,
+        inflight=inflight,
+        priorities=priorities,
+        refill_alive=refill_alive,
+        correction_alive=correction_alive,
+        active_benchmark_run=active_benchmark_run,
+        dynamic_estimates=dynamic_estimates,
+    ), queued_by_run
+
+
+async def _get_queue_entry(
+    base_key: str,
+    run_id: str,
+    position: int,
+    inflight_by_run: dict[str, int],
+    queued_by_run: dict[str, dict[str, int]],
+) -> QueueEntry:
+    """Fetch a single queue entry with parallelized Redis calls."""
+    alive_key = f"{base_key}:alive:{run_id}"
+    notify_key = f"{base_key}:notify:{run_id}"
+    run_meta_key = f"{base_key}:run:{run_id}"
+
+    alive_raw, ttl_raw, notified_raw, meta, dispatched_count = await asyncio.gather(
+        redis_client.exists(alive_key),
+        redis_client.ttl(alive_key),
+        redis_client.exists(notify_key),
+        redis_client.hgetall(run_meta_key),
+        redis_client.scard(f"{run_meta_key}:dispatched"),
+    )
+
+    alive = alive_raw > 0
+    total_raw = meta.get("total_requests", "0")
+    return QueueEntry(
+        run_id=run_id,
+        alive=alive,
+        heartbeat_ttl=ttl_raw if alive else -1,
+        position=position,
+        notified=notified_raw > 0,
+        total_requests=int(total_raw) if total_raw != "0" else None,
+        dispatched_count=dispatched_count,
+        inflight_count=inflight_by_run.get(run_id, 0),
+        queued_by_priority=queued_by_run.get(run_id, {}),
+        slot_acquired=meta.get("slot_acquired") == "1",
+        enqueued_at=float(meta["enqueued_at"]) if "enqueued_at" in meta else None,
+        slot_acquired_at=float(meta["slot_acquired_at"])
+        if "slot_acquired_at" in meta
+        else None,
+        popped_at=float(meta["popped_at"]) if "popped_at" in meta else None,
+        completed_at=float(meta["completed_at"]) if "completed_at" in meta else None,
+    )
 
 
 async def _get_queue_status(
@@ -397,51 +586,38 @@ async def _get_queue_status(
 
     seen_base_keys: set[str] = set()
 
-    statuses: list[QueueStatus] = []
-    for run_queue_key in queue_keys:
+    # parallel: fetch run IDs for all queues
+    run_ids_per_queue = (
+        await asyncio.gather(*(redis_client.lrange(qk, 0, -1) for qk in queue_keys))
+        if queue_keys
+        else []
+    )
+
+    # parallel: fetch all queue entries across all queues
+    entry_coros: list[Awaitable[QueueEntry]] = []
+    entry_queue_idx: list[int] = []
+    for q_idx, (run_queue_key, run_ids) in enumerate(
+        zip(queue_keys, run_ids_per_queue)
+    ):
         base_key = run_queue_key.removesuffix(":queue")
         seen_base_keys.add(base_key)
-        run_ids = await redis_client.lrange(run_queue_key, 0, -1)
-
-        entries: list[QueueEntry] = []
         for i, run_id in enumerate(run_ids):
-            alive_key = f"{base_key}:alive:{run_id}"
-            notify_key = f"{base_key}:notify:{run_id}"
-            run_meta_key = f"{base_key}:run:{run_id}"
-            alive = await redis_client.exists(alive_key) > 0
-            ttl = await redis_client.ttl(alive_key) if alive else -1
-            notified = await redis_client.exists(notify_key) > 0
-            meta = await redis_client.hgetall(run_meta_key)
-            total_raw = meta.get("total_requests", "0")
-
-            # per-run dispatched counter (SET of question_ids)
-            dispatched_count = await redis_client.scard(f"{run_meta_key}:dispatched")
-
-            entries.append(
-                QueueEntry(
-                    run_id=run_id,
-                    alive=alive,
-                    heartbeat_ttl=ttl,
-                    position=i,
-                    notified=notified,
-                    total_requests=int(total_raw) if total_raw != "0" else None,
-                    dispatched_count=dispatched_count,
-                    inflight_count=inflight_by_run.get(run_id, 0),
-                    queued_by_priority=queued_by_run.get(run_id, {}),
-                    slot_acquired=meta.get("slot_acquired") == "1",
-                    enqueued_at=float(meta["enqueued_at"])
-                    if "enqueued_at" in meta
-                    else None,
-                    slot_acquired_at=float(meta["slot_acquired_at"])
-                    if "slot_acquired_at" in meta
-                    else None,
-                    popped_at=float(meta["popped_at"]) if "popped_at" in meta else None,
-                    completed_at=float(meta["completed_at"])
-                    if "completed_at" in meta
-                    else None,
-                )
+            entry_coros.append(
+                _get_queue_entry(base_key, run_id, i, inflight_by_run, queued_by_run)
             )
+            entry_queue_idx.append(q_idx)
 
+    all_entries = await asyncio.gather(*entry_coros) if entry_coros else []
+
+    entries_by_queue: dict[int, list[QueueEntry]] = {}
+    for entry, q_idx in zip(all_entries, entry_queue_idx):
+        entries_by_queue.setdefault(q_idx, []).append(entry)
+
+    statuses: list[QueueStatus] = []
+    for q_idx, (run_queue_key, run_ids) in enumerate(
+        zip(queue_keys, run_ids_per_queue)
+    ):
+        entries = entries_by_queue.get(q_idx, [])
         if entries:
             statuses.append(
                 QueueStatus(
@@ -462,58 +638,83 @@ async def _get_queue_status(
         for base_key in token_base_keys:
             all_benchmark_bases.add(f"{base_key}:benchmark")
 
-    for benchmark_base in all_benchmark_bases:
-        run_meta_keys = await redis_client.keys(f"{benchmark_base}:run:*")
-        entries = list[QueueEntry]()
+    # parallel: scan metadata keys for all benchmark bases
+    sorted_bases = sorted(all_benchmark_bases)
+    run_meta_keys_per_base = (
+        await asyncio.gather(*(redis_client.keys(f"{bb}:run:*") for bb in sorted_bases))
+        if sorted_bases
+        else []
+    )
+
+    # collect uncovered popped runs needing metadata
+    popped_lookups: list[tuple[str, str, str]] = []  # (benchmark_base, run_id, rmk)
+    for benchmark_base, run_meta_keys in zip(sorted_bases, run_meta_keys_per_base):
         for rmk in sorted(run_meta_keys):
             if rmk.endswith(":dispatched"):
                 continue
             run_id = rmk.removeprefix(f"{benchmark_base}:run:")
             if run_id in covered_run_ids:
                 continue
-            meta = await redis_client.hgetall(rmk)
-            if not meta:
-                continue
-            total_raw = meta.get("total_requests", "0")
-            dispatched_count = await redis_client.scard(f"{rmk}:dispatched")
-            entries.append(
-                QueueEntry(
-                    run_id=run_id,
-                    alive=False,
-                    heartbeat_ttl=-1,
-                    position=-1,
-                    notified=False,
-                    total_requests=int(total_raw) if total_raw != "0" else None,
-                    dispatched_count=dispatched_count,
-                    inflight_count=inflight_by_run.get(run_id, 0),
-                    queued_by_priority=queued_by_run.get(run_id, {}),
-                    slot_acquired=meta.get("slot_acquired") == "1",
-                    enqueued_at=float(meta["enqueued_at"])
-                    if "enqueued_at" in meta
-                    else None,
-                    slot_acquired_at=float(meta["slot_acquired_at"])
-                    if "slot_acquired_at" in meta
-                    else None,
-                    popped_at=float(meta["popped_at"]) if "popped_at" in meta else None,
-                    completed_at=float(meta["completed_at"])
-                    if "completed_at" in meta
-                    else None,
-                    popped=True,
+            popped_lookups.append((benchmark_base, run_id, rmk))
+            covered_run_ids.add(run_id)
+
+    # parallel: fetch metadata + dispatched count for all popped runs
+    popped_results = (
+        await asyncio.gather(
+            *(
+                asyncio.gather(
+                    redis_client.hgetall(rmk),
+                    redis_client.scard(f"{rmk}:dispatched"),
+                )
+                for _, _, rmk in popped_lookups
+            )
+        )
+        if popped_lookups
+        else []
+    )
+
+    popped_by_base: dict[str, list[QueueEntry]] = {}
+    for (benchmark_base, run_id, _), (meta, dispatched_count) in zip(
+        popped_lookups, popped_results
+    ):
+        if not meta:
+            continue
+        total_raw = meta.get("total_requests", "0")
+        entry = QueueEntry(
+            run_id=run_id,
+            alive=False,
+            heartbeat_ttl=-1,
+            position=-1,
+            notified=False,
+            total_requests=int(total_raw) if total_raw != "0" else None,
+            dispatched_count=dispatched_count,
+            inflight_count=inflight_by_run.get(run_id, 0),
+            queued_by_priority=queued_by_run.get(run_id, {}),
+            slot_acquired=meta.get("slot_acquired") == "1",
+            enqueued_at=float(meta["enqueued_at"]) if "enqueued_at" in meta else None,
+            slot_acquired_at=float(meta["slot_acquired_at"])
+            if "slot_acquired_at" in meta
+            else None,
+            popped_at=float(meta["popped_at"]) if "popped_at" in meta else None,
+            completed_at=float(meta["completed_at"])
+            if "completed_at" in meta
+            else None,
+            popped=True,
+        )
+        popped_by_base.setdefault(benchmark_base, []).append(entry)
+
+    for benchmark_base, entries in popped_by_base.items():
+        queue_key = f"{benchmark_base}:queue"
+        existing = next((s for s in statuses if s.queue_key == queue_key), None)
+        if existing:
+            existing.entries.extend(entries)
+        else:
+            statuses.append(
+                QueueStatus(
+                    queue_key=queue_key,
+                    length=0,
+                    entries=entries,
                 )
             )
-            covered_run_ids.add(run_id)
-        if entries:
-            queue_key = f"{benchmark_base}:queue"
-            existing = next((s for s in statuses if s.queue_key == queue_key), None)
-            if existing:
-                existing.entries.extend(entries)
-            else:
-                statuses.append(
-                    QueueStatus(
-                        queue_key=queue_key,
-                        length=0,
-                        entries=entries,
-                    )
-                )
 
     return statuses

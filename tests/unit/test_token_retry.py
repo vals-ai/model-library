@@ -787,6 +787,7 @@ async def test_refill_loop_exits_on_full_tokens_shutdown(redis, mock_asyncio_sle
 
     with patch("model_library.retriers.token.token.time") as mock_time_mod:
         mock_time_mod.time = lambda: time_val[0]
+        mock_time_mod.monotonic = lambda: time_val[0]
 
         await TokenRetrier.init_remaining_tokens(
             client_registry_key=key_tuple,
@@ -823,6 +824,7 @@ async def test_correction_loop_exits_on_full_tokens_shutdown(
 
     with patch("model_library.retriers.token.token.time") as mock_time_mod:
         mock_time_mod.time = lambda: time_val[0]
+        mock_time_mod.monotonic = lambda: time_val[0]
 
         await TokenRetrier.init_remaining_tokens(
             client_registry_key=key_tuple,
@@ -851,7 +853,8 @@ async def test_refill_loop_continues_when_tokens_not_full(redis, mock_asyncio_sl
         time_val[0] += 301.0
         iteration_count[0] += 1
         # keep tokens below limit so last_not_full resets each iteration
-        await redis.decrby(token_key, 500)
+        # must exceed per-iteration refill: floor(16 * 301) = 4816
+        await redis.decrby(token_key, 5000)
         # after 3 iterations, change version to stop the loop
         if iteration_count[0] >= 3:
             await redis.set(f"{token_key}:version", "force-exit")
@@ -860,6 +863,7 @@ async def test_refill_loop_continues_when_tokens_not_full(redis, mock_asyncio_sl
 
     with patch("model_library.retriers.token.token.time") as mock_time_mod:
         mock_time_mod.time = lambda: time_val[0]
+        mock_time_mod.monotonic = lambda: time_val[0]
 
         await TokenRetrier.init_remaining_tokens(
             client_registry_key=key_tuple,
@@ -900,6 +904,7 @@ async def test_refill_loop_continues_when_active_runs(redis, mock_asyncio_sleep)
 
     with patch("model_library.retriers.token.token.time") as mock_time_mod:
         mock_time_mod.time = lambda: time_val[0]
+        mock_time_mod.monotonic = lambda: time_val[0]
 
         await TokenRetrier.init_remaining_tokens(
             client_registry_key=key_tuple,
@@ -918,3 +923,92 @@ async def test_refill_loop_continues_when_active_runs(redis, mock_asyncio_sleep)
 
     # loop survived past the shutdown threshold because of active run
     assert iteration_count[0] >= 3
+
+
+# ── Refill drift compensation ─────────────────────────────────────────
+
+
+async def test_refill_compensates_for_loop_drift(redis, mock_asyncio_sleep):
+    """Refill loop scales amount by elapsed time when loop takes longer than 1s."""
+    from model_library.retriers.token.token import refill_tasks
+
+    key_tuple = ("drift", "refill")
+    token_key = f"{KEY_PREFIX}:drift:refill:tokens"
+    mono_val = [0.0]
+    time_val = [0.0]
+    iteration_count = [0]
+
+    async def advance_time_and_drain(*args):
+        # each iteration takes 2s instead of 1s (simulates slow Redis)
+        mono_val[0] += 2.0
+        time_val[0] += 2.0
+        iteration_count[0] += 1
+        if iteration_count[0] == 1:
+            # drain tokens during sleep so refill starts from 0
+            # only on first call — correction loop also triggers asyncio.sleep
+            await redis.set(token_key, "0")
+        await redis.set(f"{token_key}:version", "force-exit")
+
+    mock_asyncio_sleep.side_effect = advance_time_and_drain
+
+    with patch("model_library.retriers.token.token.time") as mock_time_mod:
+        mock_time_mod.time = lambda: time_val[0]
+        mock_time_mod.monotonic = lambda: mono_val[0]
+
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=key_tuple,
+            limit=1000,
+            limit_refresh_seconds=60,
+            logger=logging.getLogger("test"),
+            get_rate_limit_func=AsyncMock(return_value=None),
+        )
+
+        _, refill_task = refill_tasks[f"refill:{token_key}"]
+        await asyncio.wait_for(refill_task, timeout=1.0)
+
+    # tokens_per_second = floor(1000/60) = 16
+    # tokens drained to 0 during sleep, elapsed 2s → refill_amount = floor(16 * 2) = 32
+    remaining = int(await redis.get(token_key))
+    assert remaining == 32
+
+
+async def test_refill_clamps_on_clock_rollback(redis, mock_asyncio_sleep):
+    """Refill amount is clamped to 0 when monotonic clock appears to go backward."""
+    from model_library.retriers.token.token import refill_tasks
+
+    key_tuple = ("rollback", "refill")
+    token_key = f"{KEY_PREFIX}:rollback:refill:tokens"
+    mono_val = [100.0]
+    time_val = [100.0]
+    iteration_count = [0]
+
+    async def rollback_then_exit(*args):
+        iteration_count[0] += 1
+        if iteration_count[0] == 1:
+            # simulate clock going backward (shouldn't happen with monotonic, but clamp protects)
+            mono_val[0] -= 5.0
+            time_val[0] -= 5.0
+        else:
+            await redis.set(f"{token_key}:version", "force-exit")
+
+    mock_asyncio_sleep.side_effect = rollback_then_exit
+
+    with patch("model_library.retriers.token.token.time") as mock_time_mod:
+        mock_time_mod.time = lambda: time_val[0]
+        mock_time_mod.monotonic = lambda: mono_val[0]
+
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=key_tuple,
+            limit=1000,
+            limit_refresh_seconds=60,
+            logger=logging.getLogger("test"),
+            get_rate_limit_func=AsyncMock(return_value=None),
+        )
+
+        _, refill_task = refill_tasks[f"refill:{token_key}"]
+        await asyncio.wait_for(refill_task, timeout=1.0)
+
+    # init sets tokens to 1000 (limit). With clamp, negative elapsed → refill 0 → stays at 1000.
+    # Without clamp (the bug), refill would be -80 → tokens would drop below 1000.
+    remaining = int(await redis.get(token_key))
+    assert remaining == 1000

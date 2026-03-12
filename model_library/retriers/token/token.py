@@ -55,6 +55,10 @@ if current > tonumber(ARGV[2]) then
     redis.call('SET', KEYS[1], ARGV[2])
     return tonumber(ARGV[2])
 end
+if current < 0 then
+    redis.call('SET', KEYS[1], 0)
+    return 0
+end
 return current
 """
 
@@ -194,45 +198,55 @@ class TokenRetrier(BaseRetrier):
             while True:
                 await asyncio.sleep(interval)
 
-                await utils.redis_client.set(
-                    f"{key}:task:correction", "1", ex=REFILL_TASK_TTL
-                )
-
-                rate_limit = await get_rate_limit_func()
-                if rate_limit is None:
-                    logger.debug(
-                        f"no rate limit headers, exiting _header_correction_loop for {key}"
+                try:
+                    await utils.redis_client.set(
+                        f"{key}:task:correction", "1", ex=REFILL_TASK_TTL
                     )
-                    return
 
-                tokens_remaining = rate_limit.token_remaining_total
+                    rate_limit = await get_rate_limit_func()
+                    if rate_limit is None:
+                        logger.debug(
+                            f"no rate limit headers, exiting _header_correction_loop for {key}"
+                        )
+                        return
 
-                # atomic correct-down via Lua
-                elapsed = time.time() - rate_limit.unix_timestamp
-                adjusted = min(
-                    limit, floor(tokens_remaining + (tokens_per_second * elapsed))
-                )
-                result = await utils.redis_client.eval(
-                    CORRECT_TOKENS_LUA, 1, key, adjusted
-                )
-                corrected, current, adj = int(result[0]), int(result[1]), int(result[2])
-                if corrected:
-                    last_not_full = time.time()
-                    logger.info(
-                        f"Corrected {key} from {current} to {adj} based on headers ({elapsed:.1f}s old)"
+                    tokens_remaining = rate_limit.token_remaining_total
+
+                    # atomic correct-down via Lua
+                    elapsed = time.time() - rate_limit.unix_timestamp
+                    adjusted = min(
+                        limit, floor(tokens_remaining + (tokens_per_second * elapsed))
                     )
-                else:
-                    if current < limit:
+                    result = await utils.redis_client.eval(
+                        CORRECT_TOKENS_LUA, 1, key, adjusted
+                    )
+                    corrected, current, adj = (
+                        int(result[0]),
+                        int(result[1]),
+                        int(result[2]),
+                    )
+                    if corrected:
                         last_not_full = time.time()
-                    logger.debug(
-                        f"Not correcting {key} from {current} to {adj} based on headers ({elapsed:.1f}s old) (higher value)"
-                    )
+                        logger.info(
+                            f"Corrected {key} from {current} to {adj} based on headers ({elapsed:.1f}s old)"
+                        )
+                    else:
+                        if current < limit:
+                            last_not_full = time.time()
+                        logger.debug(
+                            f"Not correcting {key} from {current} to {adj} based on headers ({elapsed:.1f}s old) (higher value)"
+                        )
 
-                stop, last_not_full = await _should_stop_loop(
-                    key, version, last_not_full, "_header_correction_loop"
-                )
-                if stop:
-                    return
+                    stop, last_not_full = await _should_stop_loop(
+                        key, version, last_not_full, "_header_correction_loop"
+                    )
+                    if stop:
+                        return
+                except Exception:
+                    logger.warning(
+                        f"[Token Correction] {key} | error in correction loop, retrying",
+                        exc_info=True,
+                    )
 
         async def _token_refill_loop(
             key: str,
@@ -247,69 +261,87 @@ class TokenRetrier(BaseRetrier):
             interval: float = 1.0
             last_reap: float = 0.0
             last_not_full: float = time.time()
+            last_refill: float = time.monotonic()
 
             while True:
                 await asyncio.sleep(interval)
 
-                await utils.redis_client.set(
-                    f"{key}:task:refill", "1", ex=REFILL_TASK_TTL
-                )
-
-                # atomic refill with cap via Lua
-                current = int(
-                    await utils.redis_client.eval(
-                        REFILL_TOKENS_LUA, 1, key, tokens_per_second, limit
+                try:
+                    await utils.redis_client.set(
+                        f"{key}:task:refill", "1", ex=REFILL_TASK_TTL
                     )
-                )
-                logger.debug(
-                    f"[Token Refill] | {key} | Amount: {tokens_per_second} | Current: {current}"
-                )
-                if current == limit:
-                    logger.debug(f"[Token Cap] | {key} | Limit: {limit}")
-                else:
-                    last_not_full = time.time()
 
-                # periodically reap stale inflight and priority entries
-                now = time.time()
-                if now - last_reap >= REAP_INTERVAL:
-                    last_reap = now
+                    # scale refill by actual elapsed time to compensate for loop drift
+                    mono_now = time.monotonic()
+                    refill_amount = max(
+                        0, floor(tokens_per_second * (mono_now - last_refill))
+                    )
+                    last_refill = mono_now
 
-                    active_runs_key = f"{key}:active_runs"
-                    active_run_ids = await utils.redis_client.smembers(active_runs_key)
-                    for rid in active_run_ids:
-                        run_inflight_key = f"{key}:run:{rid}:inflight"
-                        stale = await utils.redis_client.zrangebyscore(
-                            run_inflight_key, "-inf", now - INFLIGHT_MAX_AGE
+                    # atomic refill with cap via Lua
+                    current = int(
+                        await utils.redis_client.eval(
+                            REFILL_TOKENS_LUA, 1, key, refill_amount, limit
                         )
-                        if stale:
-                            await utils.redis_client.zrem(run_inflight_key, *stale)
-                            # clean up metadata hashes
-                            for qid in stale:
-                                await utils.redis_client.delete(f"{key}:inflight:{qid}")
-                            logger.info(
-                                f"[Reap] {run_inflight_key} | Removed {len(stale)} stale inflight entries"
-                            )
-                        # if run's inflight ZSET is now empty, remove from active_runs
-                        if await utils.redis_client.zcard(run_inflight_key) == 0:
-                            await utils.redis_client.srem(active_runs_key, rid)
+                    )
+                    logger.debug(
+                        f"[Token Refill] | {key} | Amount: {refill_amount} | Current: {current}"
+                    )
+                    if current == limit:
+                        logger.debug(f"[Token Cap] | {key} | Limit: {limit}")
+                    else:
+                        last_not_full = time.time()
 
-                    base = key.removesuffix(":tokens")
-                    for p in range(MAX_PRIORITY, MIN_PRIORITY + 1):
-                        pkey = f"{base}:priority:{p}"
-                        stale = await utils.redis_client.zrangebyscore(
-                            pkey, "-inf", now - PRIORITY_STALE_AGE
+                    # periodically reap stale inflight and priority entries
+                    now = time.time()
+                    if now - last_reap >= REAP_INTERVAL:
+                        last_reap = now
+
+                        active_runs_key = f"{key}:active_runs"
+                        active_run_ids = await utils.redis_client.smembers(
+                            active_runs_key
                         )
-                        if stale:
-                            await utils.redis_client.zrem(pkey, *stale)
-                            logger.info(
-                                f"[Reap] {pkey} | Removed {len(stale)} stale priority entries"
+                        for rid in active_run_ids:
+                            run_inflight_key = f"{key}:run:{rid}:inflight"
+                            stale = await utils.redis_client.zrangebyscore(
+                                run_inflight_key, "-inf", now - INFLIGHT_MAX_AGE
                             )
+                            if stale:
+                                await utils.redis_client.zrem(run_inflight_key, *stale)
+                                # clean up metadata hashes
+                                for qid in stale:
+                                    await utils.redis_client.delete(
+                                        f"{key}:inflight:{qid}"
+                                    )
+                                logger.info(
+                                    f"[Reap] {run_inflight_key} | Removed {len(stale)} stale inflight entries"
+                                )
+                            # if run's inflight ZSET is now empty, remove from active_runs
+                            if await utils.redis_client.zcard(run_inflight_key) == 0:
+                                await utils.redis_client.srem(active_runs_key, rid)
 
-                stop, last_not_full = await _should_stop_loop(
-                    key, version, last_not_full, "_token_refill_loop"
-                )
-                if stop:
-                    return
+                        base = key.removesuffix(":tokens")
+                        for p in range(MAX_PRIORITY, MIN_PRIORITY + 1):
+                            pkey = f"{base}:priority:{p}"
+                            stale = await utils.redis_client.zrangebyscore(
+                                pkey, "-inf", now - PRIORITY_STALE_AGE
+                            )
+                            if stale:
+                                await utils.redis_client.zrem(pkey, *stale)
+                                logger.info(
+                                    f"[Reap] {pkey} | Removed {len(stale)} stale priority entries"
+                                )
+
+                    stop, last_not_full = await _should_stop_loop(
+                        key, version, last_not_full, "_token_refill_loop"
+                    )
+                    if stop:
+                        return
+                except Exception:
+                    logger.warning(
+                        f"[Token Refill] {key} | error in refill loop, retrying",
+                        exc_info=True,
+                    )
 
         await utils.validate_redis_client()
 
@@ -563,7 +595,7 @@ class TokenRetrier(BaseRetrier):
                         )
                         return
 
-                    self.logger.warning(
+                    self.logger.debug(
                         f"[Token Wait] Insufficient tokens, waiting {wait_time:.1f}s | "
                         f"estimate_tokens: {self.actual_estimate_total_tokens} | "
                         f"Priority: {self.priority}"
