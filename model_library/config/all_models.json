@@ -1,4 +1,59 @@
 {
+    "grok/grok-4.20-beta-0309-reasoning": {
+        "company": "xAI",
+        "label": "Grok 4.20 Beta (Reasoning)",
+        "release_date": "2026-03-09",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 2000000,
+            "max_tokens": 2000000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": false,
+            "temperature": true,
+            "tools": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 0.4,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "grok-4.20-beta-0309-reasoning",
+        "provider_name": "grok",
+        "full_key": "grok/grok-4.20-beta-0309-reasoning",
+        "slug": "grok_grok-4.20-beta-0309-reasoning"
+    },
     "openai/gpt-5.4-2026-03-05-low": {
         "company": "OpenAI",
         "label": "GPT 5.4",
@@ -1985,7 +2040,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.05,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -2035,7 +2090,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.05,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -3341,7 +3396,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.05,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -3391,7 +3446,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.05,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -3444,7 +3499,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.05,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -3494,7 +3549,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.05,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -3546,7 +3601,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.05,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -3755,7 +3810,7 @@
             "output": 1.5,
             "cache": {
                 "read": 0.02,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -3800,7 +3855,7 @@
             "output": 1.5,
             "cache": {
                 "read": 0.02,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -3848,7 +3903,7 @@
             "output": 1.5,
             "cache": {
                 "read": 0.02,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -5057,7 +5112,7 @@
             "output": 15.0,
             "cache": {
                 "read": 0.75,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -5107,7 +5162,7 @@
             "output": 15.0,
             "cache": {
                 "read": 0.75,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -5160,7 +5215,7 @@
             "output": 15.0,
             "cache": {
                 "read": 0.75,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             },
             "context": {
@@ -7083,7 +7138,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7129,7 +7184,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7174,7 +7229,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7220,7 +7275,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7266,7 +7321,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7311,7 +7366,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7357,7 +7412,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7402,7 +7457,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7447,7 +7502,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7492,7 +7547,7 @@
             "output": 0.5,
             "cache": {
                 "read": 0.075,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7571,7 +7626,7 @@
             "output": 15.0,
             "cache": {
                 "read": 0.75,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7616,7 +7671,7 @@
             "output": 15.0,
             "cache": {
                 "read": 0.75,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7661,7 +7716,7 @@
             "output": 15.0,
             "cache": {
                 "read": 0.75,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7706,7 +7761,7 @@
             "output": 15.0,
             "cache": {
                 "read": 0.75,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7751,7 +7806,7 @@
             "output": 15.0,
             "cache": {
                 "read": 0.75,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -7796,7 +7851,7 @@
             "output": 15.0,
             "cache": {
                 "read": 0.75,
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -9405,7 +9460,7 @@
             "input": 5.0,
             "output": 15.0,
             "cache": {
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -9449,7 +9504,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -9493,7 +9548,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -9540,7 +9595,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -9584,7 +9639,7 @@
             "input": 5.0,
             "output": 15.0,
             "cache": {
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
@@ -9628,7 +9683,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read_discount": 0.25,
+                "read_discount": 0.1,
                 "write_markup": 1.0
             }
         },
