@@ -116,6 +116,7 @@ async def test_idempotent_enqueue(redis):
     assert await redis.llen(_queue_key()) == 0
 
 
+@patch.object(bq_module, "HOURS_24", 0)
 async def test_timeout_raises(redis):
     """blpop timeout raises RuntimeError."""
     redis.blpop = AsyncMock(return_value=None)
@@ -598,6 +599,7 @@ async def test_redis_keys_use_colon_separated_format(redis):
 # ── Cleanup safety ───────────────────────────────────────────────────
 
 
+@patch.object(bq_module, "HOURS_24", 0)
 async def test_finally_safe_when_blpop_times_out(redis):
     """Finally block doesn't crash with UnboundLocalError when blpop times out."""
     redis.blpop = AsyncMock(return_value=None)

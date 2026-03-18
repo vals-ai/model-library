@@ -3,16 +3,16 @@ import logging
 from collections.abc import Sequence
 from typing import Any, Literal
 
-from mistralai import (
+from mistralai.client import Mistral
+from mistralai.client.models import (
     AssistantMessage,
     ContentChunk,
-    Mistral,
     TextChunk,
     ThinkChunk,
 )
-from mistralai.models.completionevent import CompletionEvent
-from mistralai.models.toolcall import ToolCall as MistralToolCall
-from mistralai.utils.eventstreaming import EventStreamAsync
+from mistralai.client.models.completionevent import CompletionEvent
+from mistralai.client.models.toolcall import ToolCall as MistralToolCall
+from mistralai.client.utils.eventstreaming import EventStreamAsync
 from pydantic import BaseModel
 from typing_extensions import override
 
@@ -305,16 +305,12 @@ class MistralModel(LLM):
             self.logger.error(f"Error: {e}", exc_info=True)
             raise e
 
-        if (
-            finish_reason == "length"
-            and not text
-            and not reasoning
-            and not raw_tool_calls
-        ):
-            raise MaxOutputTokensExceededError()
-
-        if not text and not reasoning and not raw_tool_calls:
-            raise ModelNoOutputError(str({"finish_reason": finish_reason}))
+        no_useful_content = not text and not reasoning and not raw_tool_calls
+        if no_useful_content:
+            log_message = str({"finish_reason": finish_reason})
+            if finish_reason == "length":
+                raise MaxOutputTokensExceededError(log_message)
+            raise ModelNoOutputError(log_message)
 
         tool_calls: list[ToolCall] = []
 

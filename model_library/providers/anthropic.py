@@ -697,13 +697,13 @@ class AnthropicModel(LLM):
                     )
                 )
 
-        if message.stop_reason == "max_tokens" and not text and not reasoning:
-            raise MaxOutputTokensExceededError()
+        no_useful_content = not text and not reasoning and not tool_calls
 
-        if not text and not reasoning and not tool_calls:
-            raise ModelNoOutputError(
-                str({"stop_reason": message.stop_reason, "message_id": message.id})
-            )
+        if no_useful_content:
+            log_message = str({"raw": str(message)})
+            if message.stop_reason == "max_tokens":
+                raise MaxOutputTokensExceededError(log_message)
+            raise ModelNoOutputError(log_message)
 
         return QueryResult(
             output_text=text,
@@ -727,7 +727,7 @@ class AnthropicModel(LLM):
             messages=[
                 {
                     "role": "user",
-                    "content": "Ping",
+                    "content": "Do not think. Say 'ok'",
                 }
             ],
             model=self.model_name,

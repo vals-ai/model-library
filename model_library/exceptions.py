@@ -43,8 +43,7 @@ class MaxOutputTokensExceededError(Exception):
     """
 
     DEFAULT_MESSAGE: str = (
-        "Output exceeded your 'Max Output Tokens' limit. "
-        "Consider increasing the limit in 'Run Suite' > 'Model Parameters'."
+        "Output exceeded max tokens limit and model produced no useful content."
     )
 
     def __init__(self, message: str | None = None):
@@ -194,6 +193,12 @@ RETRIABLE_EXCEPTION_CODES = [
     "throttling",  # AWS throttling errors
     "internal server error",
     "InternalServerError",
+    "statuscode.internal",  # gRPC INTERNAL errors (e.g. xAI native SDK)
+    "statuscode.unavailable",  # gRPC UNAVAILABLE errors (e.g. broken pipe)
+    "statuscode.invalid_argument",  # gRPC INVALID_ARGUMENT (transient under concurrency)
+    "statuscode.unknown",  # gRPC UNKNOWN errors (e.g. "Stream removed")
+    "stream removed",  # gRPC stream dropped by peer
+    "rst_stream",  # gRPC RST_STREAM errors
 ]
 
 

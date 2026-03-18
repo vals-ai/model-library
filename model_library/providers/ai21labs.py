@@ -210,10 +210,18 @@ class AI21LabsModel(LLM):
 
         if not response or not response.choices or not response.choices[0].message:
             raise ModelNoOutputError("Model returned no completions")
+
         choice = response.choices[0]
 
-        if choice.finish_reason == "length" and not choice.message.content:
-            raise MaxOutputTokensExceededError()
+        no_useful_content = (
+            not response.choices[0].message.content
+            and not response.choices[0].message.tool_calls
+        )
+        if no_useful_content:
+            log_message = str({"raw": str(response)})
+            if choice.finish_reason == "length":
+                raise MaxOutputTokensExceededError(log_message)
+            raise ModelNoOutputError(log_message)
 
         tool_calls: list[ToolCall] = []
         for tool_call in choice.message.tool_calls or []:
@@ -224,9 +232,6 @@ class AI21LabsModel(LLM):
                     args=tool_call.function.arguments,
                 )
             )
-
-        if not choice.message.content and not tool_calls:
-            raise ModelNoOutputError(str({"finish_reason": choice.finish_reason}))
 
         output = QueryResult(
             output_text=choice.message.content,

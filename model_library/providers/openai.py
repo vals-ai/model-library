@@ -642,9 +642,10 @@ class OpenAIModel(LLM):
 
         output_text: str = ""
         reasoning_text: str = ""
-        completions_finish_reason: str | None = None
-        metadata: QueryResultMetadata = QueryResultMetadata()
         raw_tool_calls: list[ChatCompletionMessageToolCall] = []
+
+        finish_reason: str | None = None
+        metadata: QueryResultMetadata = QueryResultMetadata()
 
         stream = await self.get_client().chat.completions.create(
             **body,  # pyright: ignore[reportAny]
@@ -654,6 +655,10 @@ class OpenAIModel(LLM):
         async for chunk in stream:
             if chunk.choices:
                 choice = chunk.choices[0]
+
+                if choice.finish_reason:
+                    finish_reason = choice.finish_reason
+
                 if choice.delta and choice.delta.content:
                     output_text += choice.delta.content
 
@@ -696,17 +701,6 @@ class OpenAIModel(LLM):
                             if func.arguments:
                                 raw_tool_calls[-1].function.arguments += func.arguments
 
-                if (
-                    choice.finish_reason == "length"
-                    and not output_text
-                    and not reasoning_text
-                    and not raw_tool_calls
-                ):
-                    raise MaxOutputTokensExceededError()
-
-                if choice.finish_reason:
-                    completions_finish_reason = choice.finish_reason
-
             if chunk.usage:
                 # NOTE: see _calculate_cost
                 reasoning_tokens = (
@@ -726,8 +720,20 @@ class OpenAIModel(LLM):
                     cache_read_tokens=cache_read_tokens,
                 )
 
-        if not output_text and not reasoning_text and not raw_tool_calls:
-            raise ModelNoOutputError(str({"finish_reason": completions_finish_reason}))
+        no_useful_content = (
+            not output_text and not reasoning_text and not raw_tool_calls
+        )
+
+        if no_useful_content:
+            log_message = str(
+                {
+                    "finish_reason": finish_reason,
+                    "metadata": metadata,
+                }
+            )
+            if finish_reason == "length":
+                raise MaxOutputTokensExceededError(log_message)
+            raise ModelNoOutputError(log_message)
 
         tool_calls: list[ToolCall] = []
         for raw_tool_call in raw_tool_calls:
@@ -761,9 +767,7 @@ class OpenAIModel(LLM):
         return QueryResult(
             output_text=output_text,
             reasoning=reasoning_text,
-            finish_reason=map_openai_completions_finish_reason(
-                completions_finish_reason
-            ),
+            finish_reason=map_openai_completions_finish_reason(finish_reason),
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=final_message)],
             metadata=metadata,
@@ -942,12 +946,28 @@ class OpenAIModel(LLM):
             raise ImmediateRetryException("Model returned no response")
         self.logger.debug(f"Response finished: {response.id}")
 
-        if (
-            response.incomplete_details
-            and response.incomplete_details.reason == "max_output_tokens"
-            and not response.output_text
-        ):
-            raise MaxOutputTokensExceededError()
+        no_useful_content = (
+            not response.output_text and not response.reasoning and not response.tools
+        )
+        finish_reason = (
+            None
+            if not response.incomplete_details
+            else response.incomplete_details.reason
+        )
+
+        if no_useful_content:
+            log_message = str(
+                {
+                    "status": response.status,
+                    "response_id": response.id,
+                    "finish_reason": response.incomplete_details,
+                }
+            )
+
+            if finish_reason == "max_output_tokens":
+                raise MaxOutputTokensExceededError(log_message)
+
+            raise ModelNoOutputError(log_message)
 
         tool_calls: list[ToolCall] = []
         citations: list[Citation] = []
@@ -977,28 +997,11 @@ class OpenAIModel(LLM):
                 )
             )
 
-        incomplete_reason = (
-            response.incomplete_details.reason
-            if response.status == "incomplete" and response.incomplete_details
-            else None
-        )
-
-        if not response.output_text and not tool_calls and not reasoning:
-            raise ModelNoOutputError(
-                str(
-                    {
-                        "status": response.status,
-                        "incomplete_reason": incomplete_reason,
-                        "response_id": response.id,
-                    }
-                )
-            )
-
         result = QueryResult(
             output_text=response.output_text,
             reasoning=reasoning,
             finish_reason=map_openai_responses_finish_reason(
-                response.status, incomplete_reason, bool(tool_calls)
+                response.status, finish_reason, bool(tool_calls)
             ),
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=response.output)],
@@ -1035,7 +1038,7 @@ class OpenAIModel(LLM):
                         messages=[
                             {
                                 "role": "user",
-                                "content": "Ping",
+                                "content": "Do not think. Say 'ok'",
                             }
                         ],
                         stream=True,
@@ -1044,7 +1047,7 @@ class OpenAIModel(LLM):
             else:
                 response = await self.get_client().responses.with_raw_response.create(
                     max_output_tokens=16,
-                    input="Ping",
+                    input="Do not think. Say 'ok'",
                     model=self.model_name,
                 )
             headers = response.headers

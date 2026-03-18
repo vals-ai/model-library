@@ -125,9 +125,9 @@ async def process_model(model_str: str, provider_name: str):
             logger=model.logger,
             max_tries=MAX_RETRIES,
             max_time=timeout,
-            retry_callback=lambda tries, exception, elapsed, wait: (
-                running_models[provider_name].update({model_str: (start_time, tries)})
-            ),
+            retry_callback=lambda tries, exception, elapsed, wait: running_models[
+                provider_name
+            ].update({model_str: (start_time, tries)}),
         )
 
         model.custom_retrier = retry_decorator(retrier)

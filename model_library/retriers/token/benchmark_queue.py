@@ -17,6 +17,23 @@ HEARTBEAT_INTERVAL = 5
 HEARTBEAT_TTL = 300  # 5 minutes
 
 
+async def _blpop_long(keys: list[str]) -> list[str] | None:
+    """blpop that polls in short intervals instead of holding one connection open.
+
+    Avoids socket_timeout killing the connection on keepalive-configured Redis clients.
+    """
+    poll_interval = 15  # must be shorter than redis socket_timeout
+    deadline = time.monotonic() + HOURS_24
+
+    while time.monotonic() < deadline:
+        result = await utils.redis_client.blpop(keys, timeout=poll_interval)
+
+        if result is not None:
+            return result
+
+    return None
+
+
 async def _notify_next(
     redis_client: AsyncRedisClient, run_queue_key: str, base_key: str
 ) -> None:
@@ -128,7 +145,7 @@ async def benchmark_queue(
         logger.info(f"Benchmark queue: {run_id} waiting for slot ({run_queue_key})")
 
         # block until notified
-        result = await utils.redis_client.blpop([my_notify_key], timeout=HOURS_24)
+        result = await _blpop_long([my_notify_key])
         if result is None:
             raise RuntimeError(f"Run {run_id} timed out waiting in benchmark queue")
 

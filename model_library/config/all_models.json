@@ -1,4 +1,104 @@
 {
+    "openai/gpt-5.4-nano-2026-03-17": {
+        "company": "OpenAI",
+        "label": "GPT 5.4 Nano",
+        "release_date": "2026-03-17",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 400000,
+            "max_tokens": 128000,
+            "training_cutoff": "2025-08",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 1.25,
+            "cache": {
+                "read": 0.02,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-5.4-nano-2026-03-17",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.4-nano-2026-03-17",
+        "slug": "openai_gpt-5.4-nano-2026-03-17"
+    },
+    "openai/gpt-5.4-mini-2026-03-17": {
+        "company": "OpenAI",
+        "label": "GPT 5.4 Mini",
+        "release_date": "2026-03-17",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 272000,
+            "max_tokens": 128000,
+            "training_cutoff": "2025-08",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.75,
+            "output": 4.5,
+            "cache": {
+                "read": 0.075,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-5.4-mini-2026-03-17",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.4-mini-2026-03-17",
+        "slug": "openai_gpt-5.4-mini-2026-03-17"
+    },
     "grok/grok-4.20-beta-0309-reasoning": {
         "company": "xAI",
         "label": "Grok 4.20 Beta (Reasoning)",
@@ -53,6 +153,56 @@
         "provider_name": "grok",
         "full_key": "grok/grok-4.20-beta-0309-reasoning",
         "slug": "grok_grok-4.20-beta-0309-reasoning"
+    },
+    "openai/gpt-5.4-pro-2026-03-05": {
+        "company": "OpenAI",
+        "label": "GPT 5.4 Pro",
+        "release_date": "2026-03-05",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-5.4",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2025-08",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 30.0,
+            "output": 180.0,
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 60.0,
+                "output": 270.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-5.4-pro-2026-03-05",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.4-pro-2026-03-05",
+        "slug": "openai_gpt-5.4-pro-2026-03-05"
     },
     "openai/gpt-5.4-2026-03-05-low": {
         "company": "OpenAI",

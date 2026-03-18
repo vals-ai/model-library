@@ -268,7 +268,7 @@ async def test_xai_finish_reason_all_values():
 
 
 async def test_mistral_finish_reason_all_values():
-    from mistralai.models import FinishReason as MistralFinishReason
+    from mistralai.client.models import ChatCompletionChoiceFinishReason as MistralFinishReason
 
     union_args = typing.get_args(MistralFinishReason)
     literal_values = list(typing.get_args(union_args[0]))

@@ -315,39 +315,30 @@ class XAIModel(LLM):
             raise ModelNoOutputError("Model failed to produce a response")
 
         tool_calls: list[ToolCall] = []
-        if (
-            latest_response.finish_reason == "REASON_TOOL_CALLS"
-            and latest_response.tool_calls
-        ):
-            for tool_call in latest_response.tool_calls:
-                tool_calls.append(
-                    ToolCall(
-                        id=tool_call.id,
-                        name=tool_call.function.name,
-                        args=tool_call.function.arguments,
-                    )
+        for tool_call in latest_response.tool_calls:
+            tool_calls.append(
+                ToolCall(
+                    id=tool_call.id,
+                    name=tool_call.function.name,
+                    args=tool_call.function.arguments,
                 )
-
-        if (
-            latest_response.finish_reason == "REASON_MAX_LEN"
-            and not latest_response.content
-            and not latest_response.reasoning_content
-        ):
-            raise MaxOutputTokensExceededError()
-
-        if (
-            not latest_response.content
-            and not latest_response.reasoning_content
-            and not tool_calls
-        ):
-            raise ModelNoOutputError(
-                str({"finish_reason": latest_response.finish_reason})
             )
 
+        content = latest_response.content
+        reasoning = latest_response.reasoning_content
+        finish_reason = latest_response.finish_reason
+
+        no_useful_content = not content and not reasoning and not tool_calls
+        if no_useful_content:
+            log_message = str({"raw": latest_response})
+            if finish_reason == "REASON_MAX_LEN":
+                raise MaxOutputTokensExceededError(log_message)
+            raise ModelNoOutputError(log_message)
+
         return QueryResult(
-            output_text=latest_response.content,
-            reasoning=latest_response.reasoning_content,
-            finish_reason=map_xai_finish_reason(latest_response.finish_reason),
+            output_text=content,
+            reasoning=reasoning,
+            finish_reason=map_xai_finish_reason(finish_reason),
             metadata=QueryResultMetadata(
                 # see _calculate_cost
                 # proto3 scalar ints default to 0; CopyFrom on partial

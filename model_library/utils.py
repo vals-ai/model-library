@@ -10,6 +10,7 @@ from openai import AsyncOpenAI
 from pydantic.main import BaseModel
 
 MAX_LLM_LOG_LENGTH = 100
+MAX_LOG_HISTORY = 20  # number of history items to log
 logger = logging.getLogger("llm")
 
 

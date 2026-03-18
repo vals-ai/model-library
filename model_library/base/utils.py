@@ -62,20 +62,19 @@ def add_optional(
 
 
 def get_pretty_input_types(input: Sequence["InputItem"], verbose: bool = False) -> str:
-    # for logging
     def process_item(item: "InputItem"):
         match item:
             case TextInput():
                 item_str = repr(item)
                 return item_str if verbose else truncate_str(item_str)
-            case FileBase():  # FileInput
+            case FileBase():
                 return repr(item)
             case ToolResult():
-                return repr(item)
-            case RawInput():
-                return repr(item)
-            case RawResponse():
-                return repr(item)
+                item_str = repr(item)
+                return item_str if verbose else truncate_str(item_str)
+            case RawInput() | RawResponse():
+                item_str = repr(item)
+                return item_str if verbose else truncate_str(item_str)
 
     processed_items = [f"  {process_item(item)}" for item in input]
     return "\n" + "\n".join(processed_items) if processed_items else ""

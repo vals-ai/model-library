@@ -13,9 +13,7 @@ base-config:
     ignored_for_cost: false
   properties:
     reasoning_model: false
-
 minimax-m2-models:
-
   minimax/MiniMax-M2.5:
     label: MiniMax-M2.5
     release_date: 2026-02-12

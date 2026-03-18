@@ -49,7 +49,7 @@ from model_library.base.utils import (
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
 from model_library.retriers.token import TokenRetrier, current_run
-from model_library.utils import PrettyModel, truncate_str
+from model_library.utils import MAX_LOG_HISTORY, PrettyModel, truncate_str
 
 _ = init_serialize_opts
 
@@ -273,7 +273,8 @@ class LLM(ABC):
             f"--- input ({len(input)}): {get_pretty_input_types(input, verbose)}\n"
         )
         if history:
-            item_info += f"--- history({len(history)}): {get_pretty_input_types(history, verbose)}\n"
+            logged_history = history if verbose else history[-MAX_LOG_HISTORY:]
+            item_info += f"--- history({len(history)}): {get_pretty_input_types(logged_history, verbose)}\n"
 
         # format tool info
         tool_results = [t for t in input if isinstance(t, ToolResult)]

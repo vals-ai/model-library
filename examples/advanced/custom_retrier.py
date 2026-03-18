@@ -110,7 +110,7 @@ async def custom_retrier_callback(model: LLM):
 
     model._query_impl = simulate_retry  # pyright: ignore[reportPrivateUsage]
     try:
-        await model.query("Ping!")
+        await model.query("Do not think. Say 'ok'")
     except Exception as e:
         console_log(f"Caugh exception: {e}")
 

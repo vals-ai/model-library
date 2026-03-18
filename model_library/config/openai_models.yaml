@@ -36,6 +36,65 @@ gpt-5-models:
       training_cutoff: "2024-09"
       reasoning_model: true
 
+  openai/gpt-5.4-nano-2026-03-17:
+    label: GPT 5.4 Nano
+    release_date: 2026-03-17
+    documentation_url: ""
+    properties:
+      context_window: 400_000 
+      max_tokens: 128_000
+      training_cutoff: "2025-08" # TODO: check this
+      reasoning_model: true 
+    metadata:
+      available_for_everyone: true
+    costs_per_million_token:
+      input: 0.20 
+      output: 1.25
+      cache:
+        read: 0.02
+    default_parameters:
+      reasoning_effort: "high"
+
+  openai/gpt-5.4-pro-2026-03-05:
+    label: GPT 5.4 Pro
+    release_date: 2026-03-05
+    documentation_url: "https://developers.openai.com/api/docs/models/gpt-5.4"
+    properties:
+      context_window: 1_050_000
+      max_tokens: 128_000
+      training_cutoff: "2025-08"
+      reasoning_model: true
+    metadata:
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 30
+      output: 180
+      context:
+        threshold: 272_000
+        input: 60
+        output: 270
+    default_parameters:
+      reasoning_effort: "xhigh"
+
+  openai/gpt-5.4-mini-2026-03-17:
+    label: GPT 5.4 Mini
+    release_date: 2026-03-17
+    documentation_url: ""
+    properties:
+      context_window: 272_000 
+      max_tokens: 128_000
+      training_cutoff: "2025-08"
+      reasoning_model: true 
+    metadata:
+      available_for_everyone: true
+    costs_per_million_token:
+      input: 0.75
+      output: 4.5
+      cache:
+        read: 0.075
+    default_parameters:
+      reasoning_effort: "xhigh"
+
   openai/gpt-5.4-2026-03-05:
     label: GPT 5.4
     release_date: 2026-03-05
