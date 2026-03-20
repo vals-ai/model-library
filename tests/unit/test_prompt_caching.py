@@ -2,6 +2,7 @@ from types import TracebackType
 from unittest.mock import MagicMock
 
 from model_library.base import TextInput
+from model_library.base.input import SystemInput
 from model_library.registry_utils import get_registry_model
 from tests.conftest import parametrize_models_for_provider
 from tests.test_helpers import get_example_tool_input
@@ -13,7 +14,7 @@ async def test_anthropic_build_body_adds_cache_control_on_system_only(model_key:
 
     input, system_prompt, tools = get_example_tool_input()
 
-    body = await model.build_body(input, tools=tools, system_prompt=system_prompt)
+    body = await model.build_body([SystemInput(text=system_prompt), *input], tools=tools)
 
     # system should be a list with cache_control block
     assert isinstance(body["system"], list)
@@ -28,7 +29,7 @@ async def test_anthropic_build_body_caches_system_by_default(model_key: str):
 
     input, system_prompt, tools = get_example_tool_input()
 
-    body = await model.build_body(input, tools=tools, system_prompt=system_prompt)
+    body = await model.build_body([SystemInput(text=system_prompt), *input], tools=tools)
 
     # Default: cache system with ephemeral type, no ttl provided
     assert isinstance(body["system"], list)

@@ -28,9 +28,11 @@ from model_library.base import (
     LLMConfig,
     QueryResult,
     QueryResultMetadata,
+    SystemInput,
     TextInput,
     ToolDefinition,
 )
+from model_library.exceptions import UnexpectedSystemInputError
 from model_library.register_models import register_provider
 from model_library.utils import truncate_str
 
@@ -191,6 +193,8 @@ class DummyAIModel(LLM):
         new_input: list[dict[str, Any]] = []
         for item in input:
             match item:
+                case SystemInput():
+                    raise UnexpectedSystemInputError()
                 case TextInput():
                     new_input.append({"text": truncate_str(item.text, 16000)})
                 case FileWithBase64() | FileWithUrl() | FileWithId():
@@ -246,6 +250,8 @@ class DummyAIModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
+        if isinstance(input[0], SystemInput):
+            input = input[1:]
         messages = await self.parse_input(input)
         body: dict[str, Any] = {
             "model": self.model_name,
@@ -298,8 +304,10 @@ class DummyAIModel(LLM):
 
         latency = 0
 
-        if "system_prompt" in kwargs:
-            system_prompt = str(kwargs.pop("system_prompt", ""))
+        system_prompt: str | None = None
+        if isinstance(input[0], SystemInput):
+            system_prompt = input[0].text
+        if system_prompt is not None:
             if "fail_rate" in system_prompt:
                 match = re.search(r"fail_rate:\s*(\d+\.?\d*)", system_prompt)
                 if match:

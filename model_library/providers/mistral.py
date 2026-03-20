@@ -31,6 +31,7 @@ from model_library.base import (
     QueryResultMetadata,
     RawInput,
     RawResponse,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolCall,
@@ -41,6 +42,7 @@ from model_library.exceptions import (
     BadInputError,
     MaxOutputTokensExceededError,
     ModelNoOutputError,
+    UnexpectedSystemInputError,
 )
 from model_library.file_utils import trim_images
 from model_library.register_models import register_provider
@@ -98,6 +100,11 @@ class MistralModel(LLM):
         **kwargs: Any,
     ) -> list[dict[str, Any] | Any]:
         new_input: list[dict[str, Any] | Any] = []
+
+        if isinstance(input[0], SystemInput):
+            new_input.append({"role": "system", "content": input[0].text})
+            input = input[1:]
+
         content_user: list[dict[str, Any]] = []
 
         def flush_content_user():
@@ -137,6 +144,8 @@ class MistralModel(LLM):
                     new_input.append(item.response)
                 case RawInput():
                     new_input.append(item.input)
+                case SystemInput():
+                    raise UnexpectedSystemInputError()
 
         # in case content user item is the last item
         flush_content_user()
@@ -220,17 +229,11 @@ class MistralModel(LLM):
         if isinstance(last_message, AssistantMessage):
             input.append(TextInput(text="Please Continue."))
 
-        messages: list[dict[str, Any]] = []
-        if "system_prompt" in kwargs:
-            messages.append({"role": "system", "content": kwargs.pop("system_prompt")})
-
-        messages.extend(await self.parse_input(input))
-
         tools = await self.parse_tools(tools)
 
         body: dict[str, Any] = {
             "model": self.model_name,
-            "messages": messages,
+            "messages": await self.parse_input(input),
             "tools": tools,
         }
 

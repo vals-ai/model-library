@@ -143,6 +143,15 @@ class BadInputError(Exception):
         super().__init__(message or BadInputError.DEFAULT_MESSAGE)
 
 
+class UnexpectedSystemInputError(Exception):
+    """
+    Raised when a SystemInput is encountered inside parse_input.
+    SystemInput must be at position 0 and is consumed by build_body before parse_input is called.
+    """
+
+    ...
+
+
 class NoMatchingToolCallError(Exception):
     """
     Raised when a tool call result is provided with no matching tool call

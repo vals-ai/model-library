@@ -27,6 +27,7 @@ from model_library.base import (
     QueryResultMetadata,
     RawInput,
     RawResponse,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolCall,
@@ -37,6 +38,7 @@ from model_library.exceptions import (
     BadInputError,
     MaxOutputTokensExceededError,
     NoMatchingToolCallError,
+    UnexpectedSystemInputError,
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.register_models import register_provider
@@ -200,6 +202,8 @@ class AmazonModel(LLM):
                     new_input.append(item.response)
                 case RawInput():
                     new_input.append(item.input)
+                case SystemInput():
+                    raise UnexpectedSystemInputError()
 
         if content_user and self.supports_cache:
             if not isinstance(input[-1], FileBase):
@@ -283,6 +287,11 @@ class AmazonModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
+        system_text: str | None = None
+        if isinstance(input[0], SystemInput):
+            system_text = input[0].text
+            input = input[1:]
+
         messages: list[dict[str, Any]] = []
         messages.extend(await self.parse_input(input))
 
@@ -291,10 +300,11 @@ class AmazonModel(LLM):
         if tools:
             body["toolConfig"] = {"tools": await self.parse_tools(tools)}
 
-        if "system_prompt" in kwargs:
-            body["system"] = [{"text": kwargs.pop("system_prompt")}]
+        if system_text is not None:
+            system: list[dict[str, Any]] = [{"text": system_text}]
             if self.supports_cache:
-                body["system"].append({"cachePoint": self.cache_control})
+                system.append({"cachePoint": self.cache_control})
+            body["system"] = system
 
         if self.reasoning and self.max_tokens:
             if self.max_tokens < 1024:

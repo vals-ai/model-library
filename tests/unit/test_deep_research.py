@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock
 import pytest
 
 from model_library.base import LLMConfig
+from model_library.base.input import TextInput
 from model_library.providers.openai import OpenAIConfig, OpenAIModel
 
 
@@ -111,7 +112,7 @@ async def test_query_impl_parses_deep_research_response():
     web_search_tool = Mock()
     web_search_tool.body = {"type": "web_search"}
     result = await model._query_impl(
-        [], tools=[web_search_tool], stream=False, query_logger=MagicMock()
+        [TextInput(text="")], tools=[web_search_tool], stream=False, query_logger=MagicMock()
     )  # pyright: ignore[reportPrivateUsage]
 
     assert result.output_text == "Report [1]"

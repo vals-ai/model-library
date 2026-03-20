@@ -29,6 +29,7 @@ from model_library.base import (
     QueryResultMetadata,
     RawInput,
     RawResponse,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolCall,
@@ -40,6 +41,7 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
+    UnexpectedSystemInputError,
 )
 from model_library.providers.openai import OpenAIModel
 from model_library.register_models import register_provider
@@ -130,6 +132,10 @@ class XAIModel(LLM):
     ) -> list[Message]:
         new_input: list[Message] = []
 
+        if isinstance(input[0], SystemInput):
+            new_input.append(system(input[0].text))
+            input = input[1:]
+
         content_user: list[Any] = []
 
         def flush_content_user():
@@ -166,11 +172,18 @@ class XAIModel(LLM):
                     new_input.append(item.response)
                 case RawInput():
                     new_input.append(item.input)
+                case SystemInput():
+                    raise UnexpectedSystemInputError()
 
         # in case content user item is the last item
         flush_content_user()
 
-        return new_input
+        # use Chat object to parse raw Response and other objects into the correct formats
+        # see xai's chat.py `class BaseChat` -> `def append`
+        chat: Chat = self.get_client().chat.create("dummy")
+        for message in new_input:
+            chat.append(message)
+        return list(chat.messages)
 
     @override
     async def parse_image(
@@ -247,14 +260,9 @@ class XAIModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        messages: Sequence[Message] = []
-        if "system_prompt" in kwargs:
-            messages.append(system(str(kwargs.pop("system_prompt"))))
-
         body: dict[str, Any] = {
             "model": self.model_name,
             "tools": await self.parse_tools(tools),
-            "messages": messages,
         }
 
         if self.max_tokens:
@@ -271,13 +279,7 @@ class XAIModel(LLM):
 
         body.update(kwargs)
 
-        # use Chat object to parse raw Response and other objects into the correct formats
-        # see xai's chat.py `class BaseChat` -> `def append`
-        chat: Chat = self.get_client().chat.create("dummy")
-        parsed_input = await self.parse_input(input)
-        for message in parsed_input:
-            chat.append(message)
-        body["messages"].extend(chat.messages)
+        body["messages"] = await self.parse_input(input)
 
         return body
 

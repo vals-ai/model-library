@@ -32,6 +32,7 @@ from model_library.base import (
     RateLimit,
     RawInput,
     RawResponse,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolCall,
@@ -43,6 +44,7 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
+    UnexpectedSystemInputError,
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.providers.openai import OpenAIModel
@@ -416,6 +418,8 @@ class AnthropicModel(LLM):
                     new_input.append({"role": "assistant", "content": content})
                 case RawInput():
                     new_input.append(item.input)
+                case SystemInput():
+                    raise UnexpectedSystemInputError()
 
         # in case content user item is the last item
         flush_content_user()
@@ -565,16 +569,21 @@ class AnthropicModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
+        system_text: str | None = None
+        if isinstance(input[0], SystemInput):
+            system_text = input[0].text
+            input = input[1:]
+
         body: dict[str, Any] = {
             "model": self.model_name,
             "messages": await self.parse_input(input),
         }
 
-        if "system_prompt" in kwargs:
+        if system_text is not None:
             body["system"] = [
                 {
                     "type": "text",
-                    "text": kwargs.pop("system_prompt"),
+                    "text": system_text,
                     "cache_control": self.cache_control,
                 }
             ]

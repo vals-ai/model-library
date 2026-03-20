@@ -1,6 +1,6 @@
 import asyncio
 
-from model_library.base import LLM
+from model_library.base import LLM, SystemInput, TextInput
 from model_library.registry_utils import get_registry_model
 
 from ..setup import console_log, setup
@@ -14,8 +14,12 @@ async def stress(model: LLM, size: int):
     async def run_single():
         prompt = "Tell me a bedtime story. Keep it under 50 words"
         return await model.query(
-            prompt * 50,
-            system_prompt="You are a pirate, answer in the speaking style of a pirate. Keeps responses under 10 words",
+            [
+                SystemInput(
+                    text="You are a pirate, answer in the speaking style of a pirate. Keeps responses under 10 words"
+                ),
+                TextInput(text=prompt * 50),
+            ],
         )
 
     tasks = [run_single() for _ in range(size)]

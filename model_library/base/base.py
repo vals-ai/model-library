@@ -32,6 +32,7 @@ from model_library.base.input import (
     FileInput,
     FileWithId,
     InputItem,
+    SystemInput,
     TextInput,
     ToolDefinition,
     ToolResult,
@@ -291,6 +292,11 @@ class LLM(ABC):
         if isinstance(input, str):
             input = [TextInput(text=input)]
 
+        # back-compat: system_prompt kwarg is deprecated, use SystemInput as first input item
+        system_prompt_kwarg = kwargs.pop("system_prompt", None)
+        if system_prompt_kwarg is not None:
+            input = [SystemInput(text=str(system_prompt_kwarg)), *input]
+
         # format input info
         item_info = (
             f"--- input ({len(input)}): {get_pretty_input_types(input, verbose)}\n"
@@ -315,6 +321,15 @@ class LLM(ABC):
 
         # join input with history
         input = [*history, *input]
+
+        # validate SystemInput: at most one, must be first
+        system_inputs = [
+            i for i, item in enumerate(input) if isinstance(item, SystemInput)
+        ]
+        if len(system_inputs) > 1:
+            raise ValueError("At most one SystemInput is allowed per query")
+        if system_inputs and system_inputs[0] != 0:
+            raise ValueError("SystemInput must be the first item in the input sequence")
 
         query_logger.info(
             "Query started:\n" + item_info + tool_info + f"--- kwargs: {short_kwargs}\n"
@@ -475,6 +490,7 @@ class LLM(ABC):
         Input can consist on text, images, files, or model specific raw responses
         Optionally pass in tools
         Kwargs will be passed to the model call (apart from exceptions like system_prompt)
+        Note: system_prompt kwarg is deprecated -- pass SystemInput as the first input item instead
         Images and files should be preprocessed according to what the model supports:
             - base64
             - url
@@ -594,9 +610,15 @@ class LLM(ABC):
     ) -> str:
         input = [*history, *input]
 
-        system_prompt = kwargs.pop(
-            "system_prompt", ""
-        )  # TODO: refactor along with system prompt arg change
+        # back-compat: system_prompt kwarg is deprecated, use SystemInput as first input item
+        system_prompt_kwarg = kwargs.pop("system_prompt", None)
+        if system_prompt_kwarg is not None:
+            input = [SystemInput(text=str(system_prompt_kwarg)), *input]
+
+        system_prompt = ""
+        if isinstance(input[0], SystemInput):
+            system_prompt = input[0].text
+            input = input[1:]
 
         # special case if using a delegate
         # don't inherit method override by default

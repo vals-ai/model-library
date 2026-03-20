@@ -5,6 +5,7 @@ from model_library import set_logging
 from model_library.base import (
     LLM,
     QueryResult,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolDefinition,
@@ -36,21 +37,21 @@ async def count_tokens(model: LLM):
         ),
     ]
 
-    system_prompt = "You must make exactly 0 or 1 tool calls per answer. You must not make more than 1 tool call per answer."
-    user_prompt = "What is the weather in San Francisco right now?"
-
-    input = [TextInput(text=user_prompt)]
+    input = [
+        SystemInput(
+            text="You must make exactly 0 or 1 tool calls per answer. You must not make more than 1 tool call per answer."
+        ),
+        TextInput(text="What is the weather in San Francisco right now?"),
+    ]
 
     predicted_tokens = await model.count_tokens(
         input,
         tools=tools,
-        system_prompt=system_prompt,
     )
 
     response: QueryResult = await model.query(
         input,
         tools=tools,
-        system_prompt=system_prompt,
     )
     metadata = response.metadata
 

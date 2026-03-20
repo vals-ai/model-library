@@ -2,14 +2,14 @@ from typing import Protocol
 
 from pydantic import ConfigDict, SkipValidation, field_validator
 
-from model_library.base.input import InputItem, RawResponse
+from model_library.base.input import InputItem, RawResponse, SystemInput, ToolDefinition
 from model_library.utils import PrettyModel
 
 
 def truncate_oldest(history: list[InputItem]) -> list[InputItem]:
-    """Remove the oldest model response and associated inputs after it
+    """Remove the oldest exchange (response + following inputs) from history
 
-    Always preserves the first message (initial prompt).
+    Preserves SystemInput if present at position 0. Everything else is fair game.
     Use with before_query hook for context window management:
 
         def before_query(history, last_error):
@@ -22,20 +22,27 @@ def truncate_oldest(history: list[InputItem]) -> list[InputItem]:
     if len(history) <= 1:
         return history
 
-    result = [history[0]]
+    # preserve SystemInput at position 0
+    preamble: list[InputItem] = []
+    start = 0
+    if isinstance(history[0], SystemInput):
+        preamble.append(history[0])
+        start = 1
 
-    # skip RawResponse items (the first model response block)
-    i = 1
-    while i < len(history) and isinstance(history[i], RawResponse):
+    rest = history[start:]
+    if not rest:
+        return preamble
+
+    # skip RawResponse items (the oldest model response block)
+    i = 0
+    while i < len(rest) and isinstance(rest[i], RawResponse):
         i += 1
 
     # skip InputItems (ToolResults etc.) until next RawResponse or end
-    while i < len(history) and not isinstance(history[i], RawResponse):
+    while i < len(rest) and not isinstance(rest[i], RawResponse):
         i += 1
 
-    # keep the rest
-    result.extend(history[i:])
-    return result
+    return preamble + list(rest[i:])
 
 
 class TurnMessageHook(Protocol):
@@ -48,17 +55,32 @@ class TurnMessageHook(Protocol):
     def __call__(self, turn_number: int, max_turns: int) -> InputItem | None: ...
 
 
+class ToolFilterHook(Protocol):
+    """Called before each query to filter which tools are available for that turn
+
+    Receives the current turn number (1-indexed), max turns, and all tool definitions.
+    Return the subset of tools to make available for this turn.
+    Excluded tools are not sent to the LLM (it won't see them).
+    """
+
+    def __call__(
+        self, turn_number: int, max_turns: int, tools: list[ToolDefinition]
+    ) -> list[ToolDefinition]: ...
+
+
 class TurnLimit(PrettyModel):
     """Turn limit for agent execution
 
     - max_turns: maximum loop iterations (includes ErrorTurns)
     - turn_message: optional hook to inject a message each turn (e.g. "turn 3/10")
+    - tool_filter: optional hook to filter tools per turn (e.g. last turn only allows submit)
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     max_turns: int
     turn_message: SkipValidation[TurnMessageHook | None] = None
+    tool_filter: SkipValidation[ToolFilterHook | None] = None
 
     @field_validator("max_turns", mode="before")
     @classmethod

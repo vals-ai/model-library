@@ -20,7 +20,6 @@ from openai.types.create_embedding_response import CreateEmbeddingResponse
 from openai.types.moderation_create_response import ModerationCreateResponse
 from openai.types.responses import (
     ResponseFunctionToolCall,
-    ResponseOutputItem,
     ResponseOutputText,
     ResponseStreamEvent,
 )
@@ -54,6 +53,7 @@ from model_library.base import (
     RateLimit,
     RawInput,
     RawResponse,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolCall,
@@ -65,6 +65,7 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
+    UnexpectedSystemInputError,
 )
 from model_library.model_utils import get_reasoning_in_tag
 from model_library.register_models import register_provider
@@ -373,6 +374,18 @@ class OpenAIModel(LLM):
     ) -> list[dict[str, Any] | Any]:
         new_input: list[dict[str, Any] | Any] = []
 
+        if isinstance(input[0], SystemInput):
+            if self.use_completions:
+                new_input.append({"role": "system", "content": input[0].text})
+            else:
+                new_input.append(
+                    {
+                        "role": "developer",
+                        "content": [{"type": "input_text", "text": input[0].text}],
+                    }
+                )
+            input = input[1:]
+
         content_user: list[dict[str, Any]] = []
 
         def flush_content_user():
@@ -432,6 +445,8 @@ class OpenAIModel(LLM):
                         new_input.extend(item.response)
                 case RawInput():
                     new_input.append(item.input)
+                case SystemInput():
+                    raise UnexpectedSystemInputError()
 
         # in case content user item is the last item
         flush_content_user()
@@ -580,17 +595,9 @@ class OpenAIModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
-        parsed_input: list[dict[str, Any] | ChatCompletionMessage] = []
-        if "system_prompt" in kwargs:
-            parsed_input.append(
-                {"role": "system", "content": kwargs.pop("system_prompt")}
-            )
-
-        parsed_input.extend(await self.parse_input(input))
-
         body: dict[str, Any] = {
             "model": self.model_name,
-            "messages": parsed_input,
+            "messages": await self.parse_input(input),
             # enable usage data in streaming responses
             "stream_options": {"include_usage": True},
         }
@@ -824,24 +831,11 @@ class OpenAIModel(LLM):
         if self.deep_research:
             await self._check_deep_research_args(tools, **kwargs)
 
-        parsed_input: list[dict[str, Any] | ResponseOutputItem] = []
-        if "system_prompt" in kwargs:
-            parsed_input.append(
-                {
-                    "role": "developer",
-                    "content": [
-                        {"type": "input_text", "text": kwargs.pop("system_prompt")}
-                    ],
-                }
-            )
-
-        parsed_input.extend(await self.parse_input(input))
-
         parsed_tools = await self.parse_tools(tools)
 
         body: dict[str, Any] = {
             "model": self.model_name,
-            "input": parsed_input,
+            "input": await self.parse_input(input),
         }
 
         if self.max_tokens:

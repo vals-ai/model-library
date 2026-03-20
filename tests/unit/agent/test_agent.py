@@ -1124,19 +1124,48 @@ class TestTruncateOldest:
         assert truncate_oldest([]) == []
 
     def test_removes_first_response_block(self):
-        prompt = TextInput(text="prompt")
         resp1 = RawResponse(response="model reply 1")
         tool_result1 = TextInput(text="tool output 1")
         resp2 = RawResponse(response="model reply 2")
         tool_result2 = TextInput(text="tool output 2")
 
-        msgs: list[InputItem] = [prompt, resp1, tool_result1, resp2, tool_result2]
-        result = truncate_oldest(msgs)
+        result = truncate_oldest([resp1, tool_result1, resp2, tool_result2])
 
-        assert len(result) == 3
-        assert result[0] is prompt
-        assert result[1] is resp2
-        assert result[2] is tool_result2
+        assert result == [resp2, tool_result2]
+
+    def test_removes_first_response_block_with_text_alongside_tool(self):
+        resp1 = RawResponse(response="model reply 1")
+        tool1 = TextInput(text="tool output 1")
+        text1 = TextInput(text="extra context 1")
+        resp2 = RawResponse(response="model reply 2")
+        tool2 = TextInput(text="tool output 2")
+        text2 = TextInput(text="extra context 2")
+
+        result = truncate_oldest([resp1, tool1, text1, resp2, tool2, text2])
+
+        assert result == [resp2, tool2, text2]
+
+    def test_preserves_system_input(self):
+        from model_library.base.input import SystemInput
+
+        system = SystemInput(text="you are helpful")
+        resp1 = RawResponse(response="model reply 1")
+        tool1 = TextInput(text="tool output 1")
+        resp2 = RawResponse(response="model reply 2")
+        tool2 = TextInput(text="tool output 2")
+
+        result = truncate_oldest([system, resp1, tool1, resp2, tool2])
+
+        assert result[0] is system
+        assert result[1:] == [resp2, tool2]
+
+    def test_single_exchange_returns_empty(self):
+        resp1 = RawResponse(response="model reply 1")
+        tool1 = TextInput(text="tool output 1")
+
+        result = truncate_oldest([resp1, tool1])
+
+        assert result == []
 
 
 # --- Tool definition ---

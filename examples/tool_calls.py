@@ -2,6 +2,7 @@ import asyncio
 
 from model_library.base import (
     LLM,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolDefinition,
@@ -41,9 +42,13 @@ async def tool_calls(model: LLM):
         or output1.tool_calls[0].name != "get_weather"
     ):
         output1 = await model.query(
-            [TextInput(text="What is the weather in San Francisco right now?")],
+            [
+                SystemInput(
+                    text="You must make exactly 0 or 1 tool calls per answer. You must not make more than 1 tool call per answer."
+                ),
+                TextInput(text="What is the weather in San Francisco right now?"),
+            ],
             tools=tools,
-            system_prompt="You must make exactly 0 or 1 tool calls per answer. You must not make more than 1 tool call per answer.",
         )
     print(f"\nTool Calls: {output1.tool_calls}\n")
 

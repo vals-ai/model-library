@@ -117,8 +117,10 @@ python -m examples.basics
 
 ```python
 await model.query(
-    [TextInput(text="Hello, how are you?")],
-    system_prompt="You are a pirate, answer in the speaking style of a pirate. Keeps responses under 10 words",
+    [
+        SystemInput(text="You are a pirate, answer in the speaking style of a pirate. Keeps responses under 10 words"),
+        TextInput(text="Hello, how are you?"),
+    ],
 )
 ```
 

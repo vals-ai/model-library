@@ -90,6 +90,12 @@ class ToolResult(PrettyModel):
     result: Any
 
 
+class SystemInput(PrettyModel):
+    """System prompt input item. Must be first in the input sequence if present. At most one allowed."""
+
+    text: str
+
+
 class TextInput(PrettyModel):
     text: str
 
@@ -105,5 +111,5 @@ class RawInput(PrettyModel):
 
 
 InputItem = (
-    TextInput | FileInput | ToolResult | RawInput | RawResponse
-)  # input item can either be a prompt, a file (image or file), a tool call result, a previous response, or raw input
+    SystemInput | TextInput | FileInput | ToolResult | RawInput | RawResponse
+)  # input item can either be a system prompt, a prompt, a file (image or file), a tool call result, a previous response, or raw input

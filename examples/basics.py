@@ -6,6 +6,7 @@ from model_library.base import (
     LLM,
     FileWithBase64,
     LLMConfig,
+    SystemInput,
     TextInput,
 )
 from model_library.registry_utils import get_registry_model
@@ -32,9 +33,12 @@ async def system_prompt(model: LLM):
     console_log("\n--- System Prompt ---\n")
 
     await model.query(
-        [TextInput(text="Hello, how are you?")],
-        system_prompt="You are a pirate, answer in the speaking style of a pirate. Keeps responses under 10 words",
-        # any argument passed here, besides system_prompt, will be passed directly to the model
+        [
+            SystemInput(
+                text="You are a pirate, answer in the speaking style of a pirate. Keeps responses under 10 words"
+            ),
+            TextInput(text="Hello, how are you?"),
+        ],
     )
 
 

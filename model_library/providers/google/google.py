@@ -38,7 +38,6 @@ from model_library.base import (
     FileWithBase64,
     FileWithId,
     FileWithUrl,
-    FinishReason as StandardFinishReason,
     FinishReasonInfo,
     InputItem,
     LLMBatchMixin,
@@ -50,11 +49,15 @@ from model_library.base import (
     QueryResultMetadata,
     RawInput,
     RawResponse,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolCall,
     ToolDefinition,
     ToolResult,
+)
+from model_library.base import (
+    FinishReason as StandardFinishReason,
 )
 from model_library.exceptions import (
     BadInputError,
@@ -62,6 +65,7 @@ from model_library.exceptions import (
     InvalidStructuredOutputError,
     ModelNoOutputError,
     RetryException,
+    UnexpectedSystemInputError,
 )
 from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.register_models import register_provider
@@ -248,6 +252,8 @@ class GoogleModel(LLM):
                     new_input.extend(item.response)
                 case RawInput():
                     new_input.append(item.input)
+                case SystemInput():
+                    raise UnexpectedSystemInputError()
 
         # in case content user item is the last item
         flush_content_user()
@@ -354,9 +360,9 @@ class GoogleModel(LLM):
 
         generation_config.safety_settings = self.SAFETY_CONFIG
 
-        system_prompt = kwargs.pop("system_prompt", None)
-        if system_prompt and isinstance(system_prompt, str) and system_prompt.strip():
-            generation_config.system_instruction = str(system_prompt)
+        if isinstance(input[0], SystemInput):
+            generation_config.system_instruction = input[0].text
+            input = input[1:]
 
         if self.reasoning:
             reasoning_config = ThinkingConfig(include_thoughts=True)
@@ -519,11 +525,14 @@ class GoogleModel(LLM):
         if not input:
             return 0
 
-        system_prompt = kwargs.pop("system_prompt", None)
+        system_instruction: str | None = None
+        if isinstance(input[0], SystemInput):
+            system_instruction = input[0].text
+            input = input[1:]
         contents = await self.parse_input(input, **kwargs)
         parsed_tools = await self.parse_tools(tools) if tools else None
         config = CountTokensConfig(
-            system_instruction=str(system_prompt) if system_prompt else None,
+            system_instruction=system_instruction,
             tools=parsed_tools,
         )
 

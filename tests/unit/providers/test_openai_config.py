@@ -3,7 +3,10 @@ from typing import Literal
 import pytest
 
 from model_library.base import LLMConfig
+from model_library.base.input import TextInput
 from model_library.providers.openai import OpenAIConfig, OpenAIModel
+
+_INPUT = [TextInput(text="")]
 
 
 @pytest.mark.parametrize("verbosity", ["low", "medium", "high"])
@@ -14,7 +17,7 @@ async def test_verbosity_added_to_body(verbosity: Literal["low", "medium", "high
         config=LLMConfig(provider_config=OpenAIConfig(verbosity=verbosity)),
     )
 
-    body = await model.build_body([], tools=[])
+    body = await model.build_body(_INPUT, tools=[])
 
     assert "text" in body
     assert body["text"]["verbosity"] == verbosity
@@ -27,6 +30,6 @@ async def test_verbosity_not_in_body_when_none():
         config=LLMConfig(provider_config=OpenAIConfig(verbosity=None)),
     )
 
-    body = await model.build_body([], tools=[])
+    body = await model.build_body(_INPUT, tools=[])
 
     assert "text" not in body

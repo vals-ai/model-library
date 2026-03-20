@@ -3,7 +3,7 @@ import argparse
 import asyncio
 from typing import Any, Coroutine
 
-from model_library.base import LLM, ToolBody, ToolDefinition
+from model_library.base import LLM, SystemInput, TextInput, ToolBody, ToolDefinition
 from model_library.registry_utils import get_registry_model
 
 from .setup import setup
@@ -45,8 +45,10 @@ async def run(model: LLM) -> None:
     async def query_with_logging(tag: str, question: str) -> None:
         user_prompt = f"{task_spec}\n\nQUESTION: {question}"
         await model.query(
-            input=user_prompt,
-            system_prompt=system_prefix,
+            input=[
+                SystemInput(text=system_prefix),
+                TextInput(text=user_prompt),
+            ],
             tools=tools,
         )
 

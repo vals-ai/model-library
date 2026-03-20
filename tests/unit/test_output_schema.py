@@ -4,10 +4,13 @@ import pytest
 from pydantic import BaseModel
 
 from model_library.base import LLMConfig
+from model_library.base.input import TextInput
 from model_library.providers.anthropic import AnthropicModel
 from model_library.providers.google import GoogleModel
 from model_library.providers.openai import OpenAIModel
 from model_library.registry_utils import get_registry_model
+
+_INPUT = [TextInput(text="")]
 
 
 class AnswerSchema(BaseModel):
@@ -32,7 +35,7 @@ class TestOpenAIBuildBodyOutputSchema:
         return OpenAIModel("gpt-4o")
 
     async def test_dict_schema(self, model: OpenAIModel):
-        body = await model.build_body([], tools=[], output_schema=DICT_SCHEMA)
+        body = await model.build_body(_INPUT, tools=[], output_schema=DICT_SCHEMA)
 
         fmt = body["text"]["format"]
         assert fmt["type"] == "json_schema"
@@ -41,7 +44,7 @@ class TestOpenAIBuildBodyOutputSchema:
         assert fmt["strict"] is True
 
     async def test_pydantic_model(self, model: OpenAIModel):
-        body = await model.build_body([], tools=[], output_schema=AnswerSchema)
+        body = await model.build_body(_INPUT, tools=[], output_schema=AnswerSchema)
 
         fmt = body["text"]["format"]
         assert fmt["type"] == "json_schema"
@@ -56,7 +59,7 @@ class TestGoogleBuildBodyOutputSchema:
         return GoogleModel("gemini-2.5-flash")
 
     async def test_dict_uses_response_json_schema(self, model: GoogleModel):
-        body = await model.build_body([], tools=[], output_schema=DICT_SCHEMA)
+        body = await model.build_body(_INPUT, tools=[], output_schema=DICT_SCHEMA)
 
         config = body["config"]
         assert config.response_json_schema == DICT_SCHEMA
@@ -64,7 +67,7 @@ class TestGoogleBuildBodyOutputSchema:
         assert config.response_mime_type == "application/json"
 
     async def test_pydantic_model_uses_response_schema(self, model: GoogleModel):
-        body = await model.build_body([], tools=[], output_schema=AnswerSchema)
+        body = await model.build_body(_INPUT, tools=[], output_schema=AnswerSchema)
 
         config = body["config"]
         assert config.response_schema is AnswerSchema
@@ -80,14 +83,14 @@ class TestAnthropicBuildBodyOutputSchema:
         )
 
     async def test_dict_schema(self, model: AnthropicModel):
-        body = await model.build_body([], tools=[], output_schema=DICT_SCHEMA)
+        body = await model.build_body(_INPUT, tools=[], output_schema=DICT_SCHEMA)
 
         fmt = body["output_config"]["format"]
         assert fmt["type"] == "json_schema"
         assert fmt["schema"]["type"] == "object"
 
     async def test_pydantic_model(self, model: AnthropicModel):
-        body = await model.build_body([], tools=[], output_schema=AnswerSchema)
+        body = await model.build_body(_INPUT, tools=[], output_schema=AnswerSchema)
 
         fmt = body["output_config"]["format"]
         assert fmt["type"] == "json_schema"

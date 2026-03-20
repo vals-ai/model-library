@@ -20,6 +20,7 @@ from model_library.base import (
     QueryResult,
     QueryResultMetadata,
     RawResponse,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolCall,
@@ -30,6 +31,7 @@ from model_library.exceptions import (
     BadInputError,
     MaxOutputTokensExceededError,
     ModelNoOutputError,
+    UnexpectedSystemInputError,
 )
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
@@ -86,6 +88,11 @@ class AI21LabsModel(LLM):
         **kwargs: Any,
     ) -> list[ChatMessage | AssistantMessage]:
         new_input: list[ChatMessage | AssistantMessage] = []
+
+        if isinstance(input[0], SystemInput):
+            new_input.append(ChatMessage(role="system", content=input[0].text))
+            input = input[1:]
+
         for item in input:
             match item:
                 case TextInput():
@@ -100,6 +107,8 @@ class AI21LabsModel(LLM):
                     )  # TODO: tool calling metadata and test
                 case RawResponse():
                     new_input.append(item.response)
+                case SystemInput():
+                    raise UnexpectedSystemInputError()
                 case _:
                     raise BadInputError("Unsupported input type")
         return new_input
@@ -166,17 +175,10 @@ class AI21LabsModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
-        messages: list[ChatMessage] = []
-        if "system_prompt" in kwargs:
-            messages.append(
-                ChatMessage(role="system", content=str(kwargs.pop("system_prompt")))
-            )
-        messages.extend(await self.parse_input(input))
-
         body: dict[str, Any] = {
             "max_tokens": self.max_tokens,
             "model": self.model_name,
-            "messages": messages,
+            "messages": await self.parse_input(input),
             "tools": await self.parse_tools(tools),
         }
 

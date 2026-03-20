@@ -7,11 +7,14 @@ Tests that provider config fields correctly influence model behavior
 import pytest
 
 from model_library.base import LLMConfig
+from model_library.base.input import TextInput
 from model_library.providers.anthropic import AnthropicConfig, AnthropicModel
 from model_library.providers.google.google import GoogleConfig, GoogleModel
 from model_library.providers.openai import OpenAIConfig, OpenAIModel
 from model_library.providers.zai import ZAIConfig, ZAIModel
 from model_library.registry_utils import get_registry_model
+
+_INPUT = [TextInput(text="")]
 
 
 class TestAnthropicConfig:
@@ -25,7 +28,7 @@ class TestAnthropicConfig:
             ),
         )
 
-        body = await model.build_body([], tools=[])
+        body = await model.build_body(_INPUT, tools=[])
 
         assert body["thinking"] == {"type": "adaptive"}
 
@@ -39,7 +42,7 @@ class TestAnthropicConfig:
             ),
         )
 
-        body = await model.build_body([], tools=[])
+        body = await model.build_body(_INPUT, tools=[])
 
         assert body["thinking"]["type"] == "enabled"
         assert "budget_tokens" in body["thinking"]
@@ -54,7 +57,7 @@ class TestAnthropicConfig:
             ),
         )
 
-        body = await model.build_body([], tools=[])
+        body = await model.build_body(_INPUT, tools=[])
 
         assert body["thinking"] == {"type": "disabled"}
 
@@ -68,7 +71,7 @@ class TestAnthropicConfig:
             ),
         )
 
-        body = await model.build_body([], tools=[])
+        body = await model.build_body(_INPUT, tools=[])
 
         assert body["output_config"] == {"effort": "max"}
 
@@ -82,7 +85,7 @@ class TestAnthropicConfig:
             ),
         )
 
-        body = await model.build_body([], tools=[])
+        body = await model.build_body(_INPUT, tools=[])
 
         assert "output_config" not in body
 
@@ -95,7 +98,7 @@ class TestAnthropicConfig:
             ),
         )
 
-        body = await model.build_body([], tools=[])
+        body = await model.build_body(_INPUT, tools=[])
 
         assert "output_config" not in body
 
@@ -130,7 +133,7 @@ class TestRegistryProviderConfigs:
         model = get_registry_model("anthropic/claude-opus-4-6-thinking")
         assert isinstance(model, AnthropicModel)
         assert model.provider_config.supports_auto_thinking is True
-        body = await model.build_body([], tools=[])
+        body = await model.build_body(_INPUT, tools=[])
         assert body["thinking"] == {"type": "adaptive"}
 
     async def test_openai_registry_model_has_typed_config(self):
@@ -157,7 +160,7 @@ class TestOpenAIConfig:
             config=LLMConfig(provider_config=OpenAIConfig(verbosity=verbosity)),
         )
 
-        body = await model.build_body([], tools=[])
+        body = await model.build_body(_INPUT, tools=[])
 
         assert "text" in body
         assert body["text"]["verbosity"] == verbosity
@@ -168,6 +171,6 @@ class TestOpenAIConfig:
             config=LLMConfig(provider_config=OpenAIConfig(verbosity=None)),
         )
 
-        body = await model.build_body([], tools=[])
+        body = await model.build_body(_INPUT, tools=[])
 
         assert "text" not in body

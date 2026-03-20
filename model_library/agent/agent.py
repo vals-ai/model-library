@@ -346,6 +346,7 @@ class Agent:
             while turn_limit is None or turn_number < turn_limit.max_turns:
                 turn_start = time.monotonic()
                 turn_number += 1
+
                 # check time limit
                 elapsed = time.monotonic() - start_time
                 effective_elapsed = (
@@ -369,6 +370,10 @@ class Agent:
                     )
                     logger.warning(str(final_error))
                     break
+
+                logger.info(
+                    f"Turn {turn_number}/{turn_limit.max_turns if turn_limit else '?'} starting"
+                )
 
                 # hook: before_query (skip first turn, nothing to transform)
                 if turn_number > 1:
@@ -402,12 +407,20 @@ class Agent:
                         )
                         history.append(msg)
 
+                # filter tools for this turn
+                if turn_limit is not None and turn_limit.tool_filter is not None:
+                    tools_for_turn = turn_limit.tool_filter(
+                        turn_number, turn_limit.max_turns, self._tool_defs
+                    )
+                else:
+                    tools_for_turn = self._tool_defs
+
                 # query LLM
                 try:
                     query_start = time.monotonic()
                     response = await self._llm.query(
                         input=history,
-                        tools=self._tool_defs,
+                        tools=tools_for_turn,
                         question_id=question_id,
                         run_id=run_id,
                         logger=logger,
@@ -436,13 +449,7 @@ class Agent:
                     last_query_error = query_error
                     continue
 
-                history = list(response.history)
-
-                logger.info(
-                    f"Turn {turn_number}: {len(response.tool_calls)} tool calls, "
-                    f"response={'yes' if response.output_text else 'no'}, "
-                    f"tokens={response.metadata.total_input_tokens}in/{response.metadata.total_output_tokens}out"
-                )
+                history: list[InputItem] = list(response.history)
 
                 # process tool calls
                 tool_call_records = await self._execute_tool_calls(
@@ -450,6 +457,19 @@ class Agent:
                 )
 
                 turn_duration = time.monotonic() - turn_start
+
+                logger.info(
+                    f"Turn {turn_number}/{turn_limit.max_turns if turn_limit else '?'} | {len(tool_call_records)} tool calls"
+                    + f" | in: {response.metadata.total_input_tokens}, out: {response.metadata.total_output_tokens}"
+                    + f", cost:{response.metadata.cost.total if response.metadata.cost else '?'}"
+                )
+                for r in tool_call_records:
+                    icon = "✓" if r.tool_output.error is None else "✗"
+                    error_str = f" {r.tool_output.error}" if r.tool_output.error else ""
+                    logger.info(
+                        f"  {icon} {r.tool_call.name} ({r.duration_seconds}s){error_str}"
+                    )
+
                 turn = AgentTurn(
                     query_result=response,
                     tool_call_records=tool_call_records,
