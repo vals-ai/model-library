@@ -410,6 +410,7 @@ class TokenRetrier(BaseRetrier):
         client_registry_key: tuple[str, str],
         run_id: str,
         question_id: str,
+        is_queued: bool = False,
         estimate_input_tokens: int,
         estimate_output_tokens: int,
         use_dynamic_estimate: bool = True,
@@ -444,7 +445,7 @@ class TokenRetrier(BaseRetrier):
         self.token_key = TokenRetrier.get_token_key(client_registry_key)
         self._run_id = run_id
         self._question_id = question_id
-        self._is_queued: bool | None = None  # lazy: set on first _pre_function call
+        self._is_queued = is_queued
 
         # per-run inflight tracking
         self._active_runs_key = f"{self.token_key}:active_runs"
@@ -500,11 +501,6 @@ class TokenRetrier(BaseRetrier):
         Acquires priority semaphore, checks for lower priority requests, deducts tokens from Redis.
         Logs token waits but does not count as retry attempts.
         """
-
-        # lazy: check once if this run_id is in the benchmark queue
-        if self._is_queued is None:
-            pos = await utils.redis_client.lpos(self._queue_key, self._run_id)
-            self._is_queued = pos is not None
 
         # straggler: my benchmark is no longer the queue head (early-released)
         if self._is_queued:

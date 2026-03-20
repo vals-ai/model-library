@@ -89,7 +89,7 @@ async def main():
     args = parser.parse_args()
 
     model = get_registry_model(args.model)
-    model.instance_logger.info(model)
+    model.logger.info(model)
 
     if not model.supports_files:
         raise Exception("Model does not support files")

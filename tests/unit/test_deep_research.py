@@ -31,13 +31,13 @@ async def test_check_deep_research_args_warns_low_tokens_and_missing_background(
         config=LLMConfig(provider_config=OpenAIConfig(deep_research=True)),
     )
     model.max_tokens = 10000
-    model.instance_logger = Mock()
+    model.logger = Mock()
 
     tools = [Mock(body={"type": "web_search"})]
 
     await model._check_deep_research_args(tools)  # pyright: ignore[reportPrivateUsage]
 
-    logged_messages = [call.args[0] for call in model.instance_logger.warning.call_args_list]
+    logged_messages = [call.args[0] for call in model.logger.warning.call_args_list]
     assert any("max_tokens >=" in msg for msg in logged_messages)
     assert any("background=True" in msg for msg in logged_messages)
 

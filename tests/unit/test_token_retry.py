@@ -49,6 +49,7 @@ def _make_retrier(
     *,
     run_id: str = "test-instance",
     question_id: str = "test-qid",
+    is_queued: bool = False,
     estimate_input_tokens: int = 100,
     estimate_output_tokens: int = 50,
     use_dynamic_estimate: bool = True,
@@ -60,6 +61,7 @@ def _make_retrier(
         client_registry_key=CLIENT_KEY,
         run_id=run_id,
         question_id=question_id,
+        is_queued=is_queued,
         estimate_input_tokens=estimate_input_tokens,
         estimate_output_tokens=estimate_output_tokens,
         use_dynamic_estimate=use_dynamic_estimate,
@@ -491,16 +493,16 @@ async def test_initial_priority_is_zero():
 
 async def test_run_id_stored():
     """run_id is stored as _run_id."""
-    retrier = _make_retrier(run_id="run-42")
+    retrier = _make_retrier(run_id="run-42", is_queued=True)
     assert retrier._run_id == "run-42"
-    assert retrier._is_queued is None  # lazy: not yet detected
+    assert retrier._is_queued is True
 
 
 async def test_non_queued_defaults():
-    """Non-queued retrier uses provided run_id; _is_queued starts unset."""
+    """Non-queued retrier uses provided run_id and is not queued."""
     retrier = _make_retrier(run_id="inst-abc")
     assert retrier._run_id == "inst-abc"
-    assert retrier._is_queued is None  # lazy: not yet detected
+    assert retrier._is_queued is False
 
 
 async def test_dynamic_estimate_disabled():
@@ -513,7 +515,7 @@ async def test_dynamic_estimate_disabled():
 
 async def test_dynamic_estimate_key_uses_run_id():
     """Dynamic estimate key is built from run_id."""
-    retrier = _make_retrier(run_id="run-99")
+    retrier = _make_retrier(run_id="run-99", is_queued=True)
     assert retrier.dynamic_estimate_key == f"{TOKEN_KEY}:dynamic_estimate:run-99"
 
 
@@ -526,9 +528,8 @@ async def test_straggler_detected_in_pre_function(redis):
 
     queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
     await redis.rpush(queue_key, "run-2")  # another run is at head
-    await redis.rpush(queue_key, "run-1")  # our run is behind
 
-    retrier = _make_retrier(run_id="run-1", question_id="q1")
+    retrier = _make_retrier(run_id="run-1", question_id="q1", is_queued=True)
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     assert retrier.priority == -5  # MAX_PRIORITY
@@ -541,7 +542,7 @@ async def test_not_straggler_when_queue_head(redis):
     queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
     await redis.rpush(queue_key, "run-1")  # our run is at head
 
-    retrier = _make_retrier(run_id="run-1", question_id="q1")
+    retrier = _make_retrier(run_id="run-1", question_id="q1", is_queued=True)
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     assert retrier.priority == 0  # INITIAL_PRIORITY
@@ -551,7 +552,7 @@ async def test_not_straggler_when_not_queued(redis, token_retrier: TokenRetrier)
     """Non-queued requests skip straggler check, keep INITIAL_PRIORITY."""
     await _init_tokens(redis, value=1000)
 
-    assert token_retrier._is_queued is None
+    assert token_retrier._is_queued is False
     await token_retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     assert token_retrier.priority == 0
@@ -564,7 +565,7 @@ async def test_metadata_stores_run_id(redis):
     """Per-question metadata hash stores run_id field."""
     await _init_tokens(redis, value=1000)
 
-    retrier = _make_retrier(run_id="run-77", question_id="q-meta")
+    retrier = _make_retrier(run_id="run-77", question_id="q-meta", is_queued=True)
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     meta = await redis.hgetall(f"{TOKEN_KEY}:inflight:q-meta")
@@ -589,10 +590,7 @@ async def test_dispatched_counter_incremented(redis):
     """Per-run dispatched counter tracks question_ids via SET for queued runs."""
     await _init_tokens(redis, value=1000)
 
-    queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
-    await redis.rpush(queue_key, "run-dispatch")
-
-    retrier = _make_retrier(run_id="run-dispatch", question_id="q-d1")
+    retrier = _make_retrier(run_id="run-dispatch", question_id="q-d1", is_queued=True)
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     counter_key = f"{KEY_PREFIX}:{CLIENT_KEY[0]}:{CLIENT_KEY[1]}:benchmark:run:run-dispatch:dispatched"
@@ -618,10 +616,7 @@ async def test_question_id_in_dispatched_set(redis):
     """question_id is used as the member in the dispatched SET."""
     await _init_tokens(redis, value=1000)
 
-    queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
-    await redis.rpush(queue_key, "run-qid")
-
-    retrier = _make_retrier(run_id="run-qid", question_id="question-1")
+    retrier = _make_retrier(run_id="run-qid", question_id="question-1", is_queued=True)
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     dispatched_key = f"{KEY_PREFIX}:{CLIENT_KEY[0]}:{CLIENT_KEY[1]}:benchmark:run:run-qid:dispatched"
@@ -632,13 +627,11 @@ async def test_question_id_idempotent_across_turns(redis):
     """Multiple queries with the same question_id only count as 1 in dispatched SET."""
     await _init_tokens(redis, value=10000)
 
-    queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
-    await redis.rpush(queue_key, "run-qid-idemp")
-
     for _ in range(5):
         retrier = _make_retrier(
             run_id="run-qid-idemp",
             question_id="question-1",
+            is_queued=True,
         )
         await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
@@ -666,7 +659,7 @@ async def test_dynamic_estimate_ratio_written_to_run_key(redis):
     """After execute, the EMA ratio is stored under the run_id key."""
     await _init_tokens(redis, value=1000, limit=2000)
 
-    retrier = _make_retrier(run_id="run-ema", question_id="q-ema")
+    retrier = _make_retrier(run_id="run-ema", question_id="q-ema", is_queued=True)
 
     mock_qr = MagicMock()
     mock_qr.metadata.total_input_tokens = 200

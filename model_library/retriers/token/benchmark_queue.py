@@ -7,6 +7,8 @@ from model_library.retriers.token import utils
 from model_library.retriers.token.utils import (
     KEY_PREFIX,
     AsyncRedisClient,
+    RunContext,
+    current_run,
 )
 
 HOURS_24 = 86400
@@ -160,7 +162,11 @@ async def benchmark_queue(
             },
         )
 
-        yield
+        run_token = current_run.set(RunContext(run_id=run_id, is_queued=True))
+        try:
+            yield
+        finally:
+            current_run.reset(run_token)
 
     finally:
         if heartbeat_task:

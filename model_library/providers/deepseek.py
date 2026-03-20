@@ -3,6 +3,7 @@ See deepseek data retention policy
 https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html
 """
 
+import logging
 from typing import Literal
 
 from pydantic import SecretStr
@@ -24,8 +25,9 @@ class DeepSeekModel(DelegateOnly):
         provider: Literal["deepseek"] = "deepseek",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         # https://api-docs.deepseek.com/
         self.init_delegate(

@@ -187,15 +187,16 @@ class GoogleModel(LLM):
         provider: Literal["google"] = "google",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         if self.provider_config.use_vertex:
             self.supports_batch = False
 
         if not getattr(model_library_settings, "GCP_CREDS", None):
             self.supports_batch = False
-            self.instance_logger.warning("GCP_CREDS not set, disabling batching")
+            self.logger.warning("GCP_CREDS not set, disabling batching")
 
         self.batch: LLMBatchMixin | None = (
             GoogleBatchMixin(self) if self.supports_batch else None
@@ -326,7 +327,7 @@ class GoogleModel(LLM):
         if not response.uri:
             raise Exception(f"Failed to upload file {name} - no uri returned")
 
-        self.instance_logger.info(f"File uploaded successfully: {response.name}")
+        self.logger.info(f"File uploaded successfully: {response.name}")
         return FileWithId(
             type="file",
             file_id=response.uri,
@@ -458,7 +459,7 @@ class GoogleModel(LLM):
                 finish_reason = candidates[0].finish_reason
 
         if finish_reason != FinishReason.STOP:
-            query_logger.error(
+            self.logger.error(
                 f"Unexpected finish reason: {finish_reason}, chunks: {chunks}"
             )
 
@@ -467,11 +468,11 @@ class GoogleModel(LLM):
             # we don't want to return the content that was supposed to have a tool call, without that tool call
             # and since we don't get any info on the params, we throw an error
 
-            query_logger.error("The function call was malformed")
+            self.logger.error("The function call was malformed")
             raise RetryException("The function call was malformed")
 
         if not text and not reasoning and not tool_calls:
-            query_logger.error(f"Empty response. Chunks: {chunks}")
+            self.logger.error(f"Empty response. Chunks: {chunks}")
             raise ModelNoOutputError(str({"finish_reason": finish_reason}))
 
         result = QueryResult(

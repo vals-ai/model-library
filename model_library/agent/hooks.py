@@ -115,11 +115,11 @@ def default_determine_answer(
 ) -> str:
     """Done tool output → LLM text → empty string"""
 
-    if final_error or not turns:
+    if final_error:
         return ""
 
     last_turn = turns[-1]
-    if isinstance(last_turn, ErrorTurn):
+    if not turns or isinstance(last_turn, ErrorTurn):
         return ""
 
     # done tool output

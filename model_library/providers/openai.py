@@ -259,13 +259,13 @@ class OpenAIBatchMixin(LLMBatchMixin):
         if batch and batch.request_counts:
             completed = batch.request_counts.completed
         else:
-            self._root.instance_logger.error(f"Couldn't retrieve {batch_id}")
+            self._root.logger.error(f"Couldn't retrieve {batch_id}")
             completed = 0
         return completed
 
     @override
     async def cancel_batch_request(self, batch_id: str):
-        self._root.instance_logger.debug(f"Cancelling {batch_id}")
+        self._root.logger.debug(f"Cancelling {batch_id}")
         _ = await self._client.batches.cancel(batch_id)
 
     @override
@@ -323,6 +323,7 @@ class OpenAIModel(LLM):
         provider: str = "openai",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
         use_completions: bool = False,
         delegate_config: DelegateConfig | None = None,
     ):
@@ -331,7 +332,7 @@ class OpenAIModel(LLM):
         )
         self.delegate_config = delegate_config
 
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         self.deep_research = self.provider_config.deep_research
         self.verbosity = self.provider_config.verbosity
@@ -781,12 +782,12 @@ class OpenAIModel(LLM):
     ) -> None:
         min_tokens = 30_000
         if not self.max_tokens or self.max_tokens < min_tokens:
-            self.instance_logger.warning(
+            self.logger.warning(
                 f"Recommended to set max_tokens >= {min_tokens} for deep research models"
             )
 
         if "background" not in kwargs:
-            self.instance_logger.warning(
+            self.logger.warning(
                 "Recommended to set background=True for deep research models"
             )
 
@@ -924,30 +925,30 @@ class OpenAIModel(LLM):
             stream_events.append(event)
             match event.type:
                 case "response.created":
-                    query_logger.debug(f"Response created: {event.response.id}")
+                    self.logger.debug(f"Response created: {event.response.id}")
                     response = event.response
                 case "response.completed":
-                    query_logger.debug(f"Response completed: {event.response.id}")
+                    self.logger.debug(f"Response completed: {event.response.id}")
                     response = event.response
                 case "response.incomplete":
-                    query_logger.error(f"Response incomplete: {event.response.id}")
+                    self.logger.error(f"Response incomplete: {event.response.id}")
                     response = event.response
                 case "response.in_progress":
-                    query_logger.debug(f"Response in progress: {event.response.id}")
+                    self.logger.debug(f"Response in progress: {event.response.id}")
                     response = event.response
                 case "response.failed":
-                    query_logger.error(
+                    self.logger.error(
                         f"Response failed: {event.response.id} | {event.response.error}"
                     )
                     response = event.response
                 case _:
                     continue
         if not response:
-            query_logger.error(
+            self.logger.error(
                 f"Model returned no response. Events: {[e.model_dump(exclude_unset=True, exclude_none=True) for e in stream_events]}"
             )
             raise ImmediateRetryException("Model returned no response")
-        query_logger.debug(f"Response finished: {response.id}")
+        self.logger.debug(f"Response finished: {response.id}")
 
         no_useful_content = (
             not response.output_text and not response.reasoning and not response.tools
@@ -988,7 +989,7 @@ class OpenAIModel(LLM):
                 continue
             if output.type != "function_call":
                 continue
-            query_logger.debug(f"Found tool call for response: {response.id}")
+            self.logger.debug(f"Found tool call for response: {response.id}")
             if not output.id:
                 raise Exception(f"Tool call is missing id for response: {response.id}")
             tool_calls.append(
@@ -1079,7 +1080,7 @@ class OpenAIModel(LLM):
                 token_remaining=int(headers["x-ratelimit-remaining-tokens"]),
             )
         except Exception as e:
-            self.instance_logger.warning(f"Failed to get rate limit: {e}")
+            self.logger.warning(f"Failed to get rate limit: {e}")
             return None
 
     @deprecated("Use query(output_schema=...) instead")
@@ -1109,7 +1110,7 @@ class OpenAIModel(LLM):
                 raise ImmediateRetryException("Failed to connect to OpenAI")
 
         response = await BaseRetrier.immediate_retry_wrapper(
-            func=_query, logger=self.instance_logger
+            func=_query, logger=self.logger
         )
 
         parsed: PydanticT | None = response.output_parsed
@@ -1142,7 +1143,7 @@ class OpenAIModel(LLM):
             return response.data[0].embedding
 
         return await BaseRetrier.immediate_retry_wrapper(
-            func=_get_embedding, logger=self.instance_logger
+            func=_get_embedding, logger=self.logger
         )
 
     async def moderate_content(self, text: str) -> ModerationCreateResponse:
@@ -1157,7 +1158,7 @@ class OpenAIModel(LLM):
                 raise Exception("Failed to query OpenAI's Moderation endpoint") from e
 
         return await BaseRetrier.immediate_retry_wrapper(
-            func=_moderate_content, logger=self.instance_logger
+            func=_moderate_content, logger=self.logger
         )
 
     @override

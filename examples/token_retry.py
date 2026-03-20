@@ -41,10 +41,10 @@ async def main():
     set_logging(level=logging.ERROR)
 
     model = get_registry_model(args.model)
-    model.instance_logger.info(model)
+    model.logger.info(model)
 
     limit = await model.get_rate_limit()
-    model.instance_logger.info(limit)
+    model.logger.info(limit)
 
     import redis.asyncio as redis
 
@@ -84,7 +84,7 @@ async def main():
         async with benchmark_queue(
             model_registry_key=model._client_registry_key_model_specific,  # pyright: ignore[reportPrivateUsage]
             run_id=run_id,
-            logger=model.instance_logger,
+            logger=model.logger,
             enabled=not args.no_benchmark_queue,
             total_requests=n if not args.no_benchmark_queue else None,
         ):

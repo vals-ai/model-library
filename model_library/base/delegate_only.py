@@ -74,10 +74,11 @@ class DelegateOnly(LLM):
         provider: str,
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
         config = config or LLMConfig()
         config.native = False
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
         config.native = True
 
     def _get_extra_body(self) -> dict[str, Any]:

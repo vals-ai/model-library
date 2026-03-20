@@ -84,12 +84,6 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--name", required=True, help="Agent name")
     parser.add_argument("--question-id", required=True, help="Question ID for the run")
     parser.add_argument(
-        "--max-tool-calls-per-turn",
-        type=int,
-        default=None,
-        help="Cap on tool calls per turn (default: unlimited)",
-    )
-    parser.add_argument(
         "--output", default=None, help="Write AgentResult JSON to this path"
     )
     parser.add_argument(
@@ -136,11 +130,7 @@ async def _run(args: argparse.Namespace) -> AgentResult:
         if args.max_time_seconds is not None
         else None
     )
-    config = AgentConfig(
-        turn_limit=turn_limit,
-        time_limit=time_limit,
-        max_tool_calls_per_turn=args.max_tool_calls_per_turn,
-    )
+    config = AgentConfig(turn_limit=turn_limit, time_limit=time_limit)
 
     with create_file_logger(
         "model_library.agent.cli",
@@ -148,11 +138,11 @@ async def _run(args: argparse.Namespace) -> AgentResult:
         level=getattr(logging, args.log_level),
         console=args.console,
     ) as logger:
-        agent = Agent(llm=llm, tools=tools, name=args.name, config=config)
+        agent = Agent(
+            llm=llm, tools=tools, name=args.name, logger=logger, config=config
+        )
         result = await agent.run(
-            [TextInput(text=problem_statement)],
-            question_id=args.question_id,
-            logger=logger,
+            [TextInput(text=problem_statement)], question_id=args.question_id
         )
 
     return result

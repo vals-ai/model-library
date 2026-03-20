@@ -122,7 +122,7 @@ async def process_model(model_str: str, provider_name: str):
         # custom retry logico
         # capture retry attempts
         retrier = ExponentialBackoffRetrier(
-            logger=model.instance_logger,
+            logger=model.logger,
             max_tries=MAX_RETRIES,
             max_time=timeout,
             retry_callback=lambda tries, exception, elapsed, wait: running_models[

@@ -86,8 +86,9 @@ class XAIModel(LLM):
         provider: Literal["xai"] = "xai",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         # https://docs.x.ai/docs/guides/migration
         self.delegate = (
@@ -368,7 +369,7 @@ class XAIModel(LLM):
             return 0
 
         string_input = await self.stringify_input(input, history=history, tools=tools)
-        self.instance_logger.debug(string_input)
+        self.logger.debug(string_input)
 
         tokens = await self.get_client().tokenize.tokenize_text(
             string_input, self.model_name

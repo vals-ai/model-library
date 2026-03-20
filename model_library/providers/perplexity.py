@@ -1,3 +1,4 @@
+import logging
 from typing import Literal
 
 from pydantic import SecretStr
@@ -19,8 +20,9 @@ class PerplexityModel(DelegateOnly):
         provider: Literal["perplexity"] = "perplexity",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         # https://docs.perplexity.ai/guides/chat-completions-guide
         self.init_delegate(

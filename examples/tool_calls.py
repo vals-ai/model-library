@@ -10,14 +10,26 @@ from model_library.base import (
 from model_library.registry_utils import get_registry_model
 
 from .setup import console_log, setup
-from .utils import GetWeather
 
 
 async def tool_calls(model: LLM):
     console_log("\n--- Tool Calls ---\n")
 
     tools = [
-        GetWeather().definition,
+        ToolDefinition(
+            name="get_weather",
+            body=ToolBody(
+                name="get_weather",
+                description="Get current temperature in a given location",
+                properties={
+                    "location": {
+                        "type": "string",
+                        "description": "City and country e.g. Bogotá, Colombia",
+                    },
+                },
+                required=["location"],
+            ),
+        ),
         ToolDefinition(
             name="get_danger",
             body=ToolBody(
@@ -91,7 +103,7 @@ async def main():
     args = parser.parse_args()
 
     model = get_registry_model(args.model)
-    model.instance_logger.info(model)
+    model.logger.info(model)
 
     if not model.supports_tools:
         raise Exception("Model does not support tools")

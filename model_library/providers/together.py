@@ -1,3 +1,4 @@
+import logging
 from typing import Literal
 
 from pydantic import SecretStr
@@ -29,8 +30,9 @@ class TogetherModel(DelegateOnly):
         provider: Literal["together"] = "together",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
         # https://docs.together.ai/docs/openai-api-compatibility
         self.init_delegate(
             config=config,

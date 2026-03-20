@@ -110,7 +110,7 @@ async def main():
 
     # NOTE: or get_raw_model() to skip loading yaml config
     model = get_registry_model(args.model, LLMConfig(temperature=0.7, top_p=0.95))
-    model.instance_logger.info(model)
+    model.logger.info(model)
 
     tasks: list[Coroutine[Any, Any, None]] = []
 

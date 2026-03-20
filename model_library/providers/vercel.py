@@ -1,3 +1,4 @@
+import logging
 from typing import Literal
 
 from pydantic import SecretStr
@@ -19,8 +20,9 @@ class VercelModel(DelegateOnly):
         provider: Literal["vercel"] = "vercel",
         *,
         config: LLMConfig | None = None,
+        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config)
+        super().__init__(model_name, provider, config=config, logger=logger)
 
         # https://vercel.com/docs/ai-gateway/sdks-and-apis#quick-start
         self.init_delegate(

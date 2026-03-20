@@ -149,9 +149,7 @@ class GoogleBatchMixin(LLMBatchMixin):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
-        self._root.instance_logger.debug(
-            f"Creating batch request for custom_id: {custom_id}"
-        )
+        self._root.logger.debug(f"Creating batch request for custom_id: {custom_id}")
         body = await self._root.build_body(
             input, tools=[], output_schema=output_schema, **kwargs
         )
@@ -196,7 +194,7 @@ class GoogleBatchMixin(LLMBatchMixin):
         batch_name: str,
         requests: list[dict[str, Any]],
     ) -> str:
-        self._root.instance_logger.info(
+        self._root.logger.info(
             f"Starting batch query '{batch_name}' with {len(requests)} requests"
         )
         jsonl_lines: list[str] = []
@@ -221,18 +219,18 @@ class GoogleBatchMixin(LLMBatchMixin):
                 config={"display_name": batch_name},
             )
         except Exception as e:
-            self._root.instance_logger.error(f"Error creating batch job: {e}")
+            self._root.logger.error(f"Error creating batch job: {e}")
             raise
 
         if not job.name:
             raise Exception("Failed to create batch job - no job name returned")
 
-        self._root.instance_logger.info(f"Batch job created successfully: {job.name}")
+        self._root.logger.info(f"Batch job created successfully: {job.name}")
         return job.name
 
     @override
     async def get_batch_results(self, batch_id: str) -> list[BatchResult]:
-        self._root.instance_logger.info(f"Retrieving batch results for {batch_id}")
+        self._root.logger.info(f"Retrieving batch results for {batch_id}")
 
         job = await self._root.get_client().aio.batches.get(name=batch_id)
 
@@ -247,23 +245,19 @@ class GoogleBatchMixin(LLMBatchMixin):
                 decoded = file_content.decode("utf-8")
                 results.extend(parse_predictions_jsonl(decoded))
             else:
-                self._root.instance_logger.warning(
-                    f"No results found for batch {batch_id}"
-                )
+                self._root.logger.warning(f"No results found for batch {batch_id}")
 
         else:
-            self._root.instance_logger.error(
-                f"Batch {batch_id} did not succeed: {job.state}"
-            )
+            self._root.logger.error(f"Batch {batch_id} did not succeed: {job.state}")
             if job.error:
-                self._root.instance_logger.error(f"Error: {job.error}")
+                self._root.logger.error(f"Error: {job.error}")
 
-        self._root.instance_logger.info(f"Retrieved {len(results)} batch results")
+        self._root.logger.info(f"Retrieved {len(results)} batch results")
         return results
 
     @override
     async def cancel_batch_request(self, batch_id: str):
-        self._root.instance_logger.info(f"Cancelling batch {batch_id}")
+        self._root.logger.info(f"Cancelling batch {batch_id}")
         await self._root.get_client().aio.batches.cancel(name=batch_id)
 
     @override
@@ -275,7 +269,7 @@ class GoogleBatchMixin(LLMBatchMixin):
         import asyncio
 
         try:
-            self._root.instance_logger.debug(f"Checking batch status for {batch_id}")
+            self._root.logger.debug(f"Checking batch status for {batch_id}")
             job: BatchJob = await self._root.get_client().aio.batches.get(name=batch_id)
             state = job.state
 
@@ -284,14 +278,14 @@ class GoogleBatchMixin(LLMBatchMixin):
 
             return state.name
         except asyncio.TimeoutError:
-            self._root.instance_logger.error(
+            self._root.logger.error(
                 f"Timeout getting status for batch {batch_id} after {self.BATCH_STATUS_TIMEOUT}s"
             )
             raise
         except Exception as e:
             import traceback
 
-            self._root.instance_logger.error(
+            self._root.logger.error(
                 f"Error getting batch status for {batch_id}: {e}\n"
                 f"Traceback: {traceback.format_exc()}"
             )

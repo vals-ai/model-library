@@ -1,9 +1,11 @@
 import json
+from pprint import pformat
 from typing import Annotated, Any, Literal, cast
 
 from pydantic import Field, computed_field
+from typing_extensions import override
 
-from model_library.utils import PrettyModel
+from model_library.utils import PrettyModel, truncate_str
 
 """
 --- FILES ---
@@ -14,6 +16,13 @@ class FileBase(PrettyModel):
     type: Literal["image", "file"]
     name: str
     mime: str
+
+    @override
+    def __repr__(self):
+        attrs = vars(self).copy()
+        if "base64" in attrs:
+            attrs["base64"] = truncate_str(attrs["base64"])
+        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
 
 
 class FileWithBase64(FileBase):

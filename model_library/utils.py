@@ -1,9 +1,8 @@
 import logging
-from collections.abc import Generator, Iterator
-from typing import Any
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from rich.pretty import pretty_repr
+from pprint import pformat
 
 import httpx
 from anthropic import AsyncAnthropic
@@ -16,16 +15,13 @@ logger = logging.getLogger("llm")
 
 
 class PrettyModel(BaseModel):
-    """BaseModel with pretty __repr__ and __str__"""
+    """BaseModel with pformat __repr__ and __str__"""
 
-    def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
+    def __repr__(self) -> str:
         attrs = vars(self).copy()
         for name in self.__class__.model_computed_fields:
             attrs[name] = getattr(self, name)
-        yield from attrs.items()
-
-    def __repr__(self) -> str:
-        return pretty_repr(self)
+        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
 
     __str__ = __repr__
 

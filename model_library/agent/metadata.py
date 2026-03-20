@@ -5,7 +5,7 @@ from pydantic import computed_field, field_validator
 
 from model_library.agent.tool import ToolOutput
 from model_library.base.input import ToolCall
-from model_library.base.output import FinishReasonInfo, QueryResult, QueryResultMetadata
+from model_library.base.output import QueryResult, QueryResultMetadata
 from model_library.utils import PrettyModel
 
 
@@ -28,25 +28,6 @@ class SerializableException(PrettyModel):
         )
 
 
-class ToolCallSummary(PrettyModel):
-    """Lean summary of a tool call — metadata preserved, content replaced with lengths."""
-
-    tool_name: str
-    tool_call_id: str
-    args_lengths: dict[str, int]
-    output_length: int
-    success: bool
-    done: bool
-    error: SerializableException | None = None
-    duration_seconds: float
-    metadata: QueryResultMetadata | None = None
-
-    @field_validator("duration_seconds", mode="before")
-    @classmethod
-    def _round_duration(cls, v: float) -> float:
-        return round(v, 3)
-
-
 class ToolCallRecord(PrettyModel):
     """Record of a single tool call execution"""
 
@@ -65,20 +46,6 @@ class ToolCallRecord(PrettyModel):
     def success(self) -> bool:
         return self.error is None
 
-    def to_summary(self) -> ToolCallSummary:
-        args = self.tool_call.parsed_args or {}
-        return ToolCallSummary(
-            tool_name=self.tool_call.name,
-            tool_call_id=self.tool_call.id,
-            args_lengths={k: len(str(v)) for k, v in args.items()},
-            output_length=len(self.tool_output.output),
-            success=self.success,
-            done=self.tool_output.done,
-            error=self.error,
-            duration_seconds=self.duration_seconds,
-            metadata=self.tool_output.metadata,
-        )
-
 
 class ErrorTurn(PrettyModel):
     """Failed LLM query that was not recoverable by the retrier or before_query hook
@@ -95,30 +62,8 @@ class ErrorTurn(PrettyModel):
         return round(v, 3)
 
 
-class TurnSummary(PrettyModel):
-    """Lean summary of a turn — all metadata preserved, content replaced with lengths."""
-
-    output_text_length: int
-    reasoning_length: int
-    finish_reason: FinishReasonInfo
-    metadata: QueryResultMetadata
-    tool_calls: list[ToolCallSummary] = []
-    duration_seconds: float
-    retry_overhead_seconds: float = 0.0
-
-    @field_validator("duration_seconds", "retry_overhead_seconds", mode="before")
-    @classmethod
-    def _round_duration(cls, v: float) -> float:
-        return round(v, 3)
-
-    @computed_field
-    @property
-    def effective_duration_seconds(self) -> float:
-        return round(self.duration_seconds - self.retry_overhead_seconds, 3)
-
-
 class AgentTurn(PrettyModel):
-    """Successful LLM query + tool execution results (raw, full data)
+    """Successful LLM query + tool execution results
 
     - duration_seconds: wall clock for the entire turn (hooks + query + retries + tool execution)
     - retry_overhead_seconds: portion of duration spent in retries/backoff, computed as
@@ -143,13 +88,15 @@ class AgentTurn(PrettyModel):
         """Wall clock minus retry overhead (duration_seconds - retry_overhead_seconds)"""
         return round(self.duration_seconds - self.retry_overhead_seconds, 3)
 
-    def to_summary(self) -> TurnSummary:
-        return TurnSummary(
-            output_text_length=len(self.query_result.output_text or ""),
-            reasoning_length=len(self.query_result.reasoning or ""),
-            finish_reason=self.query_result.finish_reason,
-            metadata=self.query_result.metadata,
-            tool_calls=[r.to_summary() for r in self.tool_call_records],
-            duration_seconds=self.duration_seconds,
-            retry_overhead_seconds=self.retry_overhead_seconds,
-        )
+    @computed_field
+    @property
+    def combined_metadata(self) -> QueryResultMetadata:
+        """LLM query tokens/cost/duration + sub-LLM calls from tools
+
+        Does not include tool execution time (see ToolCallRecord.duration_seconds)
+        """
+        result = self.query_result.metadata
+        for tc in self.tool_call_records:
+            if tc.tool_output.metadata:
+                result = result + tc.tool_output.metadata
+        return result

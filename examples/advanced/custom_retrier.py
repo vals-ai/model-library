@@ -97,7 +97,7 @@ async def custom_retrier_callback(model: LLM):
             raise Exception("Reached retry 2")
 
     retrier = ExponentialBackoffRetrier(
-        logger=model.instance_logger,
+        logger=model.logger,
         max_tries=3,
         max_time=500,
         retry_callback=callback,

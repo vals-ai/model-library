@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Protocol
 
 from pydantic import ConfigDict, SkipValidation, field_validator
@@ -48,24 +49,20 @@ class TurnMessageHook(Protocol):
     def __call__(self, turn_number: int, max_turns: int) -> InputItem | None: ...
 
 
-class TurnLimit(PrettyModel):
+@dataclass
+class TurnLimit:
     """Turn limit for agent execution
 
     - max_turns: maximum loop iterations (includes ErrorTurns)
     - turn_message: optional hook to inject a message each turn (e.g. "turn 3/10")
     """
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
     max_turns: int
     turn_message: SkipValidation[TurnMessageHook | None] = None
 
-    @field_validator("max_turns", mode="before")
-    @classmethod
-    def _validate_max_turns(cls, v: int) -> int:
-        if v < 1:
-            raise ValueError(f"max_turns must be >= 1, got {v}")
-        return v
+    def __post_init__(self) -> None:
+        if self.max_turns < 1:
+            raise ValueError(f"max_turns must be >= 1, got {self.max_turns}")
 
 
 class TimeMessageHook(Protocol):
@@ -80,7 +77,8 @@ class TimeMessageHook(Protocol):
     ) -> InputItem | None: ...
 
 
-class TimeLimit(PrettyModel):
+@dataclass
+class TimeLimit:
     """Wall-clock time limit for agent execution
 
     - max_seconds: deadline in seconds
@@ -97,18 +95,13 @@ class TimeLimit(PrettyModel):
     dynamically without wall-clock drift.
     """
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
-
     max_seconds: float
     include_retries: bool = False
     time_message: SkipValidation[TimeMessageHook | None] = None
 
-    @field_validator("max_seconds", mode="before")
-    @classmethod
-    def _validate_max_seconds(cls, v: float) -> float:
-        if v <= 0:
-            raise ValueError(f"max_seconds must be > 0, got {v}")
-        return v
+    def __post_init__(self) -> None:
+        if self.max_seconds <= 0:
+            raise ValueError(f"max_seconds must be > 0, got {self.max_seconds}")
 
 
 class AgentConfig(PrettyModel):
@@ -118,6 +111,7 @@ class AgentConfig(PrettyModel):
     - time_limit: wall-clock deadline config, None = unlimited
     - max_tool_calls_per_turn: cap on executed tool calls per turn, None = unlimited.
       Calls beyond the limit get a skip message as their result (not executed).
+    - serialize_histories: save per-turn histories to disk via FileHandler path
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -125,6 +119,7 @@ class AgentConfig(PrettyModel):
     turn_limit: TurnLimit | None
     time_limit: TimeLimit | None
     max_tool_calls_per_turn: int | None = None
+    serialize_histories: bool = True
 
     @field_validator("max_tool_calls_per_turn", mode="before")
     @classmethod

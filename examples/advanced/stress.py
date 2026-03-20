@@ -57,7 +57,7 @@ async def main():
     args = parser.parse_args()
 
     model = get_registry_model(args.model)
-    model.instance_logger.info(model)
+    model.logger.info(model)
 
     await stress(model, args.size)
 

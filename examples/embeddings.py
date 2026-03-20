@@ -58,7 +58,7 @@ async def main():
             model = AzureOpenAIModel("dummy")
         case _:
             raise Exception("Invalid provider")
-    model.instance_logger.info(model)
+    model.logger.info(model)
 
     await embeddings(model, size=args.size)
 
