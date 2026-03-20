@@ -24,8 +24,8 @@ xai-models:
       temperature: 0.7
       top_p: 0.95
 
-  grok/grok-4.20-beta-0309-reasoning:
-    label: Grok 4.20 Beta (Reasoning)
+  grok/grok-4.20-0309-reasoning:
+    label: Grok 4.20 (Reasoning)
     release_date: 2026-03-09
     open_source: false
     properties:
@@ -34,6 +34,27 @@ xai-models:
       training_cutoff: null
       reasoning_model: true
     documentation_url: ""
+    costs_per_million_token:
+      input: 2.00
+      output: 6.00
+      cache:
+        read: 0.20
+      context:
+        threshold: 200_000
+        input: 4.00
+        output: 12.00
+        cache:
+          read: 0.40
+
+  grok/grok-4.20-multi-agent-0309:
+    label: Grok 4.20 (Multi-Agent)
+    release_date: 2026-03-09
+    open_source: false
+    properties:
+      context_window: 2_000_000
+      max_tokens: 2_000_000
+      training_cutoff: null
+      reasoning_model: true
     costs_per_million_token:
       input: 2.00
       output: 6.00
