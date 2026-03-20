@@ -63,31 +63,40 @@ def _make_qr(text: str = "ok") -> QueryResult:
 
 
 async def test_default_logger_uses_llm_root():
-    """Without custom logger, LLM logger parents off the 'llm' root."""
+    """Without custom logger, LLM instance logger parents off the 'llm' root."""
     MockLLM = _make_mock_llm_class()
     llm = MockLLM("gpt-4o", "openai")
-    assert llm.logger.name.startswith("llm.")
+    assert llm.instance_logger.name.startswith("llm.")
 
 
-async def test_custom_logger_is_parent_of_llm_logger():
-    """Custom logger becomes the parent; LLM appends provider.model<run=...>."""
-    custom = logging.getLogger("myapp.cloudwatch")
+async def test_default_llm_logger_uses_llm_root():
+    """Without custom logger, query logger parents off 'llm.<provider>.<model><run=...>'."""
     MockLLM = _make_mock_llm_class()
-    llm = MockLLM("gpt-4o", "openai", logger=custom)
-    assert llm.logger.name.startswith("myapp.cloudwatch.")
-    assert "openai.gpt-4o" in llm.logger.name
-
-
-async def test_query_child_logger_derives_from_custom_logger():
-    """The per-query logger created inside query() is a grandchild of the custom logger."""
-    custom = logging.getLogger("myapp")
-    MockLLM = _make_mock_llm_class()
-    llm = MockLLM("gpt-4o", "openai", logger=custom)
+    llm = MockLLM("gpt-4o", "openai")
 
     query_impl_mock = AsyncMock(return_value=QueryResult(output_text="ok"))
     llm._query_impl = query_impl_mock  # pyright: ignore[reportPrivateUsage]
 
     await llm.query("Test input")
+
+    call_kwargs = query_impl_mock.call_args.kwargs
+    query_logger = call_kwargs["query_logger"]
+    assert query_logger.name.startswith("llm.openai.gpt-4o")
+    assert "<run=" in query_logger.name
+    assert "<question=" in query_logger.name
+    assert "<query=" in query_logger.name
+
+
+async def test_query_child_logger_derives_from_custom_logger():
+    """Custom logger passed to query() becomes the parent of the query logger."""
+    custom = logging.getLogger("myapp")
+    MockLLM = _make_mock_llm_class()
+    llm = MockLLM("gpt-4o", "openai")
+
+    query_impl_mock = AsyncMock(return_value=QueryResult(output_text="ok"))
+    llm._query_impl = query_impl_mock  # pyright: ignore[reportPrivateUsage]
+
+    await llm.query("Test input", logger=custom)
 
     call_kwargs = query_impl_mock.call_args.kwargs
     query_logger = call_kwargs["query_logger"]
@@ -100,32 +109,37 @@ async def test_query_child_logger_derives_from_custom_logger():
 
 
 async def test_agent_default_logger_uses_agent_root():
-    """Without custom logger, Agent logger parents off the 'agent' root."""
+    """Without custom logger, the logger passed to llm.query() parents off 'agent'."""
     llm = MagicMock()
     llm.model_name = "gpt-4o"
-    llm.run_id = "abc"
+    captured: list[logging.Logger] = []
+    llm.query = AsyncMock(side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr())
     agent = Agent(name="eval", llm=llm, tools=[], config=_cfg)
-    assert agent._logger.name.startswith("agent.")
+    await agent.run([TextInput(text="go")], question_id="q1")
+    assert captured and captured[0].name.startswith("agent.")
 
 
 async def test_agent_custom_logger_is_parent():
-    """Custom logger becomes the parent; Agent appends agent.name<model>."""
+    """Custom logger passed to run() becomes the parent of the query logger."""
     custom = logging.getLogger("myapp.cloudwatch")
     llm = MagicMock()
     llm.model_name = "gpt-4o"
-    llm.run_id = "abc"
-    agent = Agent(name="eval", llm=llm, tools=[], config=_cfg, logger=custom)
-    assert agent._logger.name.startswith("myapp.cloudwatch.")
-    assert "eval<gpt-4o>" in agent._logger.name
+    captured: list[logging.Logger] = []
+    llm.query = AsyncMock(side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr())
+    agent = Agent(name="eval", llm=llm, tools=[], config=_cfg)
+    await agent.run([TextInput(text="go")], question_id="q1", logger=custom)
+    assert captured and captured[0].name.startswith("myapp.cloudwatch.")
+    assert "eval<gpt-4o>" in captured[0].name
 
 
 async def test_agent_custom_logger_propagates_to_llm():
-    """When Agent gets a custom logger, the LLM logger it sets is a child of it."""
+    """Custom logger passed to run() is the ancestor of the logger sent to llm.query()."""
     custom = logging.getLogger("myapp")
     llm = MagicMock()
     llm.model_name = "gpt-4o"
     llm.run_id = "run-xyz"
-    Agent(name="eval", llm=llm, tools=[], config=_cfg, logger=custom)
-    # Agent sets llm.logger = self._logger.getChild(f"<run={llm.run_id}>")
-    assert llm.logger.name.startswith("myapp.")
-    assert "<run=run-xyz>" in llm.logger.name
+    captured: list[logging.Logger] = []
+    llm.query = AsyncMock(side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr())
+    agent = Agent(name="eval", llm=llm, tools=[], config=_cfg)
+    await agent.run([TextInput(text="go")], question_id="q1", logger=custom)
+    assert captured and captured[0].name.startswith("myapp.")

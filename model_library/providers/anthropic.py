@@ -128,7 +128,7 @@ class AnthropicBatchMixin(LLMBatchMixin):
             requests=cast(Any, requests),  # Type mismatch in SDK, cast to Any
         )
 
-        self._root.logger.info(
+        self._root.instance_logger.info(
             f"Created Anthropic batch {batch.id} with {len(requests)} requests"
         )
 
@@ -159,7 +159,7 @@ class AnthropicBatchMixin(LLMBatchMixin):
             result_type = cast(str, result_dict["result"]["type"])
 
             if result_type not in self.COMPLETED_RESULT_TYPES:
-                self._root.logger.warning(
+                self._root.instance_logger.warning(
                     f"Unknown result type '{result_type}' for request {custom_id}"
                 )
                 continue
@@ -257,7 +257,7 @@ class AnthropicBatchMixin(LLMBatchMixin):
         """Cancel a running batch request."""
         client = self._root.get_client()
         await client.messages.batches.cancel(batch_id)
-        self._root.logger.info(f"Canceled Anthropic batch {batch_id}")
+        self._root.instance_logger.info(f"Canceled Anthropic batch {batch_id}")
 
     @override
     async def get_batch_status(self, batch_id: str) -> str:
@@ -314,12 +314,11 @@ class AnthropicModel(LLM):
         provider: str = "anthropic",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
         delegate_config: DelegateConfig | None = None,
     ):
         self.delegate_config = delegate_config
 
-        super().__init__(model_name, provider, config=config, logger=logger)
+        super().__init__(model_name, provider, config=config)
 
         # https://docs.anthropic.com/en/api/openai-sdk
         self.delegate = (
@@ -676,7 +675,7 @@ class AnthropicModel(LLM):
                 **stream_kwargs,
             ) as stream:  # pyright: ignore[reportAny]
                 message = await stream.get_final_message()
-            self.logger.debug(f"Anthropic Response finished: {message.id}")
+            query_logger.debug(f"Anthropic Response finished: {message.id}")
         except APIConnectionError:
             raise ImmediateRetryException("Failed to connect to Anthropic")
 
@@ -783,7 +782,7 @@ class AnthropicModel(LLM):
 
             return response.input_tokens
         except Exception as e:
-            self.logger.error(f"Error counting tokens: {e}")
+            self.instance_logger.error(f"Error counting tokens: {e}")
             return await super().count_tokens(
                 input, history=history, tools=tools, **kwargs
             )

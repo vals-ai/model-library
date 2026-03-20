@@ -1,7 +1,7 @@
-import logging
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import SecretStr
+from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -20,9 +20,8 @@ class OpenRouterModel(DelegateOnly):
         provider: Literal["openrouter"] = "openrouter",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config, logger=logger)
+        super().__init__(model_name, provider, config=config)
 
         # https://openrouter.ai/docs/guides/community/openai-sdk
         self.init_delegate(
@@ -34,3 +33,9 @@ class OpenRouterModel(DelegateOnly):
             use_completions=True,
             delegate_provider="openai",
         )
+
+    @override
+    def _get_extra_body(self) -> dict[str, Any]:
+        if self.reasoning:
+            return {"reasoning": {"enabled": True}}
+        return {}

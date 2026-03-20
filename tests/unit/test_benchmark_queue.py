@@ -14,7 +14,7 @@ bq_module = importlib.import_module("model_library.retriers.token.benchmark_queu
 from model_library.retriers.token.benchmark_queue import (
     benchmark_queue,
 )
-from model_library.retriers.token.utils import KEY_PREFIX, current_run, get_status, set_redis_client
+from model_library.retriers.token.utils import KEY_PREFIX, get_status, set_redis_client
 
 MODEL_KEY = ("openai.gpt-4", "abc123")
 
@@ -639,24 +639,3 @@ async def test_self_promote_when_head_crashes_between_lrem_and_notify(redis):
         await task1
 
 
-# ── Contextvar ──────────────────────────────────────────────────────
-
-
-async def test_contextvar_set_during_execution(redis):
-    """current_run contextvar is set with run_id and is_queued=True inside the context."""
-    captured = None
-
-    async with benchmark_queue(MODEL_KEY, "run-ctx", logger):
-        captured = current_run.get()
-
-    assert captured is not None
-    assert captured.run_id == "run-ctx"
-    assert captured.is_queued is True
-
-
-async def test_contextvar_reset_after_exit(redis):
-    """current_run contextvar is reset to None after exiting the context."""
-    async with benchmark_queue(MODEL_KEY, "run-reset", logger):
-        assert current_run.get() is not None
-
-    assert current_run.get() is None

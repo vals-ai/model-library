@@ -12,22 +12,20 @@ The system has two layers:
 
 ### Run identity (`run_id`)
 
-Inflight tracking, dynamic estimates, and dispatched counting are all keyed by `run_id`. The run_id is resolved in `LLM.query()` with this precedence:
+Inflight tracking, dynamic estimates, and dispatched counting are all keyed by `run_id`. Pass `run_id` explicitly to `LLM.query()` or `Agent.run()`. If omitted, a short random UUID is generated per call.
 
-1. **`RunContext` contextvar** (set by `benchmark_queue`) — used for queued benchmark runs
-2. **`LLM.run_id`** (from `LLMConfig.run_id` or auto-generated UUID) — fallback for everything else
+For multi-process benchmarks where each question spawns a separate process (new Agent + new LLM), pass the same `run_id` to every `query()` / `agent.run()` call so all processes share a single run identity in Redis.
 
-For multi-process benchmarks where each question spawns a separate process (new Agent + new LLM), pass the same `run_id` via `LLMConfig` so all processes share a single run identity in Redis. Without this, each process gets a random UUID and inflight/estimate tracking is fragmented.
-
-When using `benchmark_queue`, the queue's `run_id` takes precedence via contextvar — `LLMConfig.run_id` is ignored.
+`TokenRetrier` detects whether a run is part of a benchmark queue by checking Redis (`LPOS`) on first use — no contextvar needed.
 
 ```
 App calls model.init_token_retry(params)
   → spawns refill loop + correction loop
 
-App calls model.query(input, question_id=...)
-  → resolves run_id: RunContext.run_id (queued) or LLM.run_id (fallback)
-  → creates TokenRetrier per request
+App calls model.query(input, run_id=..., question_id=...)
+  → run_id / question_id auto-generated if not provided
+  → creates TokenRetrier(run_id, question_id) per request
+  → _pre_function: lpos check (lazy, cached) to detect if queued
   → _pre_function: wait for tokens, deduct, enter inflight
   → _query_impl: call provider API
   → _post_function: refund difference, update dynamic estimate
@@ -35,8 +33,9 @@ App calls model.query(input, question_id=...)
 
 Benchmark runs wrap all of the above:
   async with benchmark_queue(model_key, run_id, ...):
-      → sets RunContext(run_id, is_queued=True) via contextvar
-      → all TokenRetrier instances read run_id from context
+      → enqueues run_id in Redis LIST, blocks until head
+      → yield (app dispatches requests, passing run_id explicitly)
+      → TokenRetrier detects queue membership via lpos
       → early release when dispatched count hits total_requests
 ```
 
@@ -88,13 +87,14 @@ On each retry, priority increments by 1 (toward MIN). A request waits if any low
 ### Request Lifecycle (_pre_function → execute → _post_function)
 
 **_pre_function** (token deduction):
-1. If queued and straggler (run_id != queue head via `lindex`), set priority to MAX_PRIORITY
-2. Register in priority ZSET at current level, store initial per-question metadata hash
-3. Loop until tokens deducted:
+1. Lazy queue check: `lpos(queue_key, run_id)` on first call, cached as `_is_queued`
+2. If queued and straggler (run_id != queue head via `lindex`), set priority to MAX_PRIORITY
+3. Register in priority ZSET at current level, store initial per-question metadata hash
+4. Loop until tokens deducted:
    - Check for lower-priority waiters → if found, sleep and retry
    - Attempt atomic deduction via `DEDUCT_TOKENS_LUA`
    - On success: add to per-run inflight ZSET, register run in active_runs SET, add `question_id` to per-run dispatched SET (queued only), store per-question metadata hash
-4. Finally: remove from priority ZSET; if no deduction occurred, delete metadata hash
+5. Finally: remove from priority ZSET; if no deduction occurred, delete metadata hash
 
 **execute** (wraps the actual API call):
 - On success → `_post_function`
@@ -143,15 +143,14 @@ benchmark_queue(model_key, run_id, total_requests=N, early_release=True):
   3. Enqueue (idempotent — checks lpos first)
   4. If first in queue, self-notify; otherwise blpop(notify_key)
   5. On notification:
-     - Set RunContext contextvar (run_id, is_queued=True)
-     - yield (app dispatches requests)
+     - yield (app dispatches requests, passing run_id to query()/agent.run())
+     - TokenRetrier detects queue membership via lpos on first _pre_function call
   6. Finally:
      - Cancel heartbeat task
      - Remove from queue, delete alive key
      - Set popped_at if not already set (early release sets it earlier)
      - Set completed_at
      - Notify next run
-     - Reset contextvar
 ```
 
 ### Heartbeat (_heartbeat)
@@ -165,8 +164,8 @@ Runs every 5s while in the queue:
 
 ### Straggler Detection
 
-After early release, the popped run's requests are still inflight. On each new request's `_pre_function`:
-- If queued, check queue head via `lindex`
+After early release, the popped run's requests are still inflight. `TokenRetrier` caches `_is_queued` after the first `lpos` check, so retrying requests from the same instance know they were queued even after the run is removed from the list. On each `_pre_function` call for a queued run:
+- Check queue head via `lindex`
 - If head doesn't match our `run_id` → we're a straggler → priority set to MAX_PRIORITY (-5)
 
 This gives stragglers highest priority so they finish quickly.
@@ -285,26 +284,33 @@ All scripts run atomically in Redis (no interleaving with other commands).
 model, params = await fetch_model_run_info(run.parameters, user_info)
 # ↑ calls model.init_token_retry(TokenRetryParams(...)) inside
 
+run_id = str(run.id)
+
 # 2. Enter benchmark queue (serializes runs per model)
 async with benchmark_queue(
     model._client_registry_key_model_specific,
-    str(run.id),
+    run_id,
     logger,
     total_requests=len(tests),
     early_release=True,  # False for agentic runs
 ):
     # 3. Dispatch all questions concurrently
+    # Pass run_id explicitly — TokenRetrier detects queue membership via lpos
     qa_pair_statuses = await asyncio.gather(*tasks)
-    # Each task calls model.query() → TokenRetrier handles scheduling
+    # Each task calls model.query(run_id=run_id, question_id=...) → TokenRetrier handles scheduling
 ```
 
 ### Agent integration
 
 ```python
-# Agent.run() passes a stable question_id to all turns
+# Agent.run() passes run_id and question_id to all turns
+await agent.run(input, run_id=run_id, question_id=question_id)
+
+# Internally, Agent passes both to llm.query() on every turn:
 response = await self._llm.query(
     input=history,
     tools=self._tool_defs,
+    run_id=run_id,
     question_id=question_id,  # same across all turns for this question
 )
 ```

@@ -1,4 +1,3 @@
-import logging
 from functools import cache
 from pathlib import Path
 from typing import TypedDict
@@ -89,7 +88,6 @@ def create_config(
 def _get_model_from_registry(
     registry_config: ModelConfig,
     override_config: LLMConfig | None,
-    logger: logging.Logger | None = None,
 ) -> LLM:
     """
     Utility to return a model class from a registry entry.
@@ -105,44 +103,47 @@ def _get_model_from_registry(
         model_name=provider_endpoint,
         provider=registry_config.provider_name,
         config=model_config,
-        logger=logger,
     )
 
 
 def get_registry_config(model_str: str) -> ModelConfig | None:
     config = get_model_registry().get(model_str, None)
-    return config
+    if config is not None:
+        return config
+
+    if model_str.startswith("openrouter/"):
+        from model_library.openrouter_registry import resolve_openrouter_model
+
+        return resolve_openrouter_model(model_str)
+
+    return None
 
 
 def get_registry_model(
     model_str: str,
     override_config: LLMConfig | None = None,
-    logger: logging.Logger | None = None,
 ) -> LLM:
     """Get a model including default config"""
     registry_config = get_registry_config(model_str)
     if not registry_config:
         raise Exception(f"Model {model_str} not found in registry")
 
-    return _get_model_from_registry(registry_config, override_config, logger=logger)
+    return _get_model_from_registry(registry_config, override_config)
 
 
 def get_raw_model(
     model_str: str,
     config: LLMConfig | None = None,
-    logger: logging.Logger | None = None,
 ) -> LLM:
     """Get a model exluding default config"""
     provider, model_name = model_str.split("/", 1)
     ModelClass = get_provider_registry()[provider]
-    return ModelClass(
-        model_name=model_name, provider=provider, config=config, logger=logger
-    )
+    return ModelClass(model_name=model_name, provider=provider, config=config)
 
 
 @cache
 def get_model_cost(model_str: str) -> CostProperties | None:
-    model_config = get_model_registry().get(model_str)
+    model_config = get_registry_config(model_str)
     if not model_config:
         raise Exception(f"Model {model_str} not found in registry")
     return model_config.costs_per_million_token
@@ -151,7 +152,9 @@ def get_model_cost(model_str: str) -> CostProperties | None:
 @cache
 def get_model_input_context_window(model_name: str) -> int:
     """Return the input context window for the model"""
-    model = get_model_registry()[model_name]
+    model = get_registry_config(model_name)
+    if not model:
+        raise Exception(f"Model {model_name} not found in registry")
 
     context_window = model.properties.context_window
     match model.provider_name:

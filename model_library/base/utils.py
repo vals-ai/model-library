@@ -6,14 +6,11 @@ from typing import Any, Sequence, TypeVar
 from pydantic import BaseModel
 
 from model_library.base.input import (
-    FileBase,
     InputItem,
-    RawInput,
-    RawResponse,
-    TextInput,
-    ToolResult,
 )
-from model_library.utils import truncate_str
+from rich.pretty import pretty_repr
+
+from model_library.utils import MAX_LLM_LOG_LENGTH
 
 T = TypeVar("T", bound=BaseModel)
 
@@ -62,19 +59,10 @@ def add_optional(
 
 
 def get_pretty_input_types(input: Sequence["InputItem"], verbose: bool = False) -> str:
+    max_string = None if verbose else MAX_LLM_LOG_LENGTH
+
     def process_item(item: "InputItem"):
-        match item:
-            case TextInput():
-                item_str = repr(item)
-                return item_str if verbose else truncate_str(item_str)
-            case FileBase():
-                return repr(item)
-            case ToolResult():
-                item_str = repr(item)
-                return item_str if verbose else truncate_str(item_str)
-            case RawInput() | RawResponse():
-                item_str = repr(item)
-                return item_str if verbose else truncate_str(item_str)
+        return pretty_repr(item, max_string=max_string)
 
     processed_items = [f"  {process_item(item)}" for item in input]
     return "\n" + "\n".join(processed_items) if processed_items else ""

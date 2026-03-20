@@ -1,4 +1,3 @@
-import logging
 from typing import Literal
 
 from pydantic import SecretStr
@@ -20,9 +19,8 @@ class XiaomiModel(DelegateOnly):
         provider: Literal["xiaomi"] = "xiaomi",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config, logger=logger)
+        super().__init__(model_name, provider, config=config)
 
         # https://platform.xiaomimimo.com/#/docs/quick-start/first-api-call
         self.init_delegate(
