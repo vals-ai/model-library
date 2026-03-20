@@ -1,4 +1,3 @@
-import logging
 from typing import Any, Literal
 
 from pydantic import SecretStr
@@ -38,9 +37,8 @@ class ZAIModel(DelegateOnly):
         provider: Literal["zai"] = "zai",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config, logger=logger)
+        super().__init__(model_name, provider, config=config)
 
         self.clear_thinking = self.provider_config.clear_thinking
 

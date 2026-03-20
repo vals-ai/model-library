@@ -1,4 +1,3 @@
-import logging
 from typing import Any, Literal, Sequence
 
 from openai.types.chat import ChatCompletionMessage
@@ -26,9 +25,8 @@ class AlibabaModel(DelegateOnly):
         provider: Literal["alibaba"] = "alibaba",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config, logger=logger)
+        super().__init__(model_name, provider, config=config)
 
         # https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen
         self.init_delegate(

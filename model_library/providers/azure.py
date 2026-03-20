@@ -1,5 +1,4 @@
 import json
-import logging
 from typing import Literal
 
 from openai.lib.azure import AsyncAzureOpenAI
@@ -49,12 +48,10 @@ class AzureOpenAIModel(OpenAIModel):
         provider: Literal["azure"] = "azure",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
         super().__init__(
             model_name=model_name,
             provider=provider,
             config=config,
-            logger=logger,
             use_completions=False,
         )

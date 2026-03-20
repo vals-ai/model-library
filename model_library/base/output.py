@@ -3,7 +3,7 @@
 """
 
 from enum import Enum
-from pprint import pformat
+from collections.abc import Generator
 from typing import Any, Mapping, Sequence, cast
 
 from pydantic import BaseModel, Field, computed_field, field_validator
@@ -11,7 +11,7 @@ from typing_extensions import override
 
 from model_library.base.input import InputItem, ToolCall
 from model_library.base.utils import add_optional
-from model_library.utils import PrettyModel, truncate_str
+from model_library.utils import PrettyModel
 
 
 class FinishReason(str, Enum):
@@ -186,10 +186,10 @@ class RateLimit(PrettyModel):
             )
 
     @override
-    def __repr__(self):
+    def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
         attrs = vars(self).copy()
         attrs.pop("raw", None)
-        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
+        yield from attrs.items()
 
 
 class QueryResultMetadata(PrettyModel):
@@ -299,16 +299,13 @@ class QueryResult(PrettyModel):
         return _get_from_history(self.history, "search_results")
 
     @override
-    def __repr__(self):
+    def __rich_repr__(self):
         attrs = vars(self).copy()
-        ordered_attrs = {
-            "output_text": truncate_str(attrs.pop("output_text", None), 400),
-            "reasoning": truncate_str(attrs.pop("reasoning", None), 400),
-            "metadata": attrs.pop("metadata", None),
-        }
+        yield "output_text", attrs.pop("output_text", None)
+        yield "reasoning", attrs.pop("reasoning", None)
+        yield "metadata", attrs.pop("metadata", None)
         if self.tool_calls:
-            ordered_attrs["tool_calls"] = self.tool_calls
-        return f"{self.__class__.__name__}(\n{pformat(ordered_attrs, indent=2, sort_dicts=False)}\n)"
+            yield "tool_calls", self.tool_calls
 
 
 def _get_from_history(history: Sequence[InputItem], key: str) -> Any | None:

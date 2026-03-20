@@ -67,14 +67,14 @@ async def batch(model: LLM):
 
         if model.batch.is_batch_status_completed(status):
             if model.batch.is_batch_status_failed(status):
-                model.logger.error(f"Batch failed: {status}")
+                model.instance_logger.error(f"Batch failed: {status}")
                 break
             if model.batch.is_batch_status_cancelled(status):
-                model.logger.error(f"Batch cancelled: {status}")
+                model.instance_logger.error(f"Batch cancelled: {status}")
                 break
 
             results = await model.batch.get_batch_results(result_id)
-            model.logger.info(f"Batch completed: {results}")
+            model.instance_logger.info(f"Batch completed: {results}")
             break
 
         await asyncio.sleep(1)
@@ -98,7 +98,7 @@ async def main():
     args = parser.parse_args()
 
     model = get_registry_model(args.model)
-    model.logger.info(model)
+    model.instance_logger.info(model)
 
     if not model.supports_batch:
         raise Exception("Model does not support batch")

@@ -72,7 +72,7 @@ async def main() -> None:
     args = parser.parse_args()
 
     model: LLM = get_registry_model(args.model)
-    model.logger.info(model)
+    model.instance_logger.info(model)
 
     tasks: list[Coroutine[Any, Any, None]] = []
     tasks.append(run(model))

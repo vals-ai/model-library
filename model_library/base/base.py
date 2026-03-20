@@ -7,10 +7,9 @@ import threading
 import time
 import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Generator
 from math import ceil
 from pathlib import Path
-from pprint import pformat
 from typing import (
     Any,
     Callable,
@@ -21,8 +20,9 @@ from typing import (
 
 import tiktoken
 from pydantic import BaseModel, SecretStr, model_serializer
+from rich.pretty import pretty_repr
 from tiktoken.core import Encoding
-from typing_extensions import deprecated, override
+from typing_extensions import deprecated
 
 import model_library.base.serialize as init_serialize_opts
 from model_library.base.batch import (
@@ -48,7 +48,7 @@ from model_library.base.utils import (
 )
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
-from model_library.retriers.token import TokenRetrier, current_run
+from model_library.retriers.token import TokenRetrier
 from model_library.utils import MAX_LOG_HISTORY, PrettyModel, truncate_str
 
 _ = init_serialize_opts
@@ -93,7 +93,6 @@ class LLMConfig(PrettyModel):
     provider_config: ProviderConfig | None = None
     registry_key: str | None = None
     custom_api_key: SecretStr | None = None
-    run_id: str | None = None
 
 
 class DelegateConfig(PrettyModel):
@@ -147,13 +146,11 @@ class LLM(ABC):
         provider: str,
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
         self.provider: str = provider
         self.model_name: str = model_name
 
         config = config or LLMConfig()
-        self.run_id: str = config.run_id or uuid.uuid4().hex[:8]
         self._registry_key = config.registry_key
 
         self.max_tokens: int | None = config.max_tokens
@@ -183,8 +180,8 @@ class LLM(ABC):
             ):
                 self.provider_config = config.provider_config
 
-        self.logger: logging.Logger = (logger or logging.getLogger("llm")).getChild(
-            f"{provider}.{model_name}<run={self.run_id}>"
+        self.instance_logger: logging.Logger = logging.getLogger("llm").getChild(
+            f"{provider}.{model_name}"
         )
         self.custom_retrier: RetrierType | None = None
 
@@ -206,12 +203,16 @@ class LLM(ABC):
         )
         self.get_client(api_key=raw_key)
 
-    @override
-    def __repr__(self):
+    def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
         attrs = vars(self).copy()
-        attrs.pop("logger", None)
         attrs.pop("custom_retrier", None)
-        return f"{self.__class__.__name__}(\n{pformat(attrs, indent=2, sort_dicts=False)}\n)"
+        attrs.pop("instance_logger", None)
+        yield from attrs.items()
+
+    def __repr__(self) -> str:
+        return pretty_repr(self)
+
+    __str__ = __repr__
 
     @staticmethod
     async def timer_wrapper(func: Callable[[], Awaitable[R]]) -> tuple[R, float]:
@@ -248,7 +249,10 @@ class LLM(ABC):
         history: Sequence[InputItem] = [],
         tools: list[ToolDefinition] = [],
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
+        logger: logging.Logger | None = None,
+        run_id: str | None = None,
         question_id: str | None = None,
+        in_agent: bool = False,
         **kwargs: object,
     ) -> QueryResult:
         """
@@ -261,8 +265,27 @@ class LLM(ABC):
             model_name = self._registry_key or f"{self.provider}/{self.model_name}"
             raise Exception(f"{model_name} does not support structured outputs")
 
+        # represents a run
+        if not run_id:
+            run_id = uuid.uuid4().hex[:8]
+        # represents a question (can have multiple queries if agentic)
+        if not question_id:
+            question_id = uuid.uuid4().hex[:14]
+        # represents a query
+        query_id = uuid.uuid4().hex[:14]
+
+        _base_logger = logger or self.instance_logger.getChild(f"<run={run_id}>")
         # verbose on debug
-        verbose = self.logger.isEnabledFor(logging.DEBUG)  # ?
+        verbose = _base_logger.isEnabledFor(logging.DEBUG)
+
+        child_name = (
+            f"<query={query_id}>"
+            if in_agent
+            else f"<question={question_id}><query={query_id}>"
+        )
+        query_logger = _base_logger.getChild(child_name)
+        if in_agent:
+            query_logger.setLevel(logging.WARNING)
 
         # format str input
         if isinstance(input, str):
@@ -293,23 +316,10 @@ class LLM(ABC):
         # join input with history
         input = [*history, *input]
 
-        # resolve identity: run_id groups requests per run, question_id is unique per question
-        run_ctx = current_run.get()
-        run_id = run_ctx.run_id if run_ctx else self.run_id
-        if not question_id:
-            question_id = uuid.uuid4().hex[:14]  # uuid for non agentic queries
-
-        # is_queued is True if we are in a benchmark queue context
-        is_queued = bool(run_ctx and run_ctx.is_queued)
-
-        query_id = uuid.uuid4().hex[:14]
-        query_logger = self.logger.getChild(
-            f"<question={question_id}><query={query_id}>"
-        )
-
         query_logger.info(
             "Query started:\n" + item_info + tool_info + f"--- kwargs: {short_kwargs}\n"
         )
+        query_logger.debug([repr(item) for item in input])
 
         async def query_func() -> QueryResult:
             return await self._query_impl(
@@ -341,7 +351,6 @@ class LLM(ABC):
                     client_registry_key=self._client_registry_key_model_specific,
                     run_id=run_id,
                     question_id=question_id,
-                    is_queued=is_queued,
                     estimate_input_tokens=estimate_input_tokens,
                     estimate_output_tokens=estimate_output_tokens,
                     use_dynamic_estimate=self.token_retry_params.use_dynamic_estimate,
@@ -368,8 +377,11 @@ class LLM(ABC):
                     output.output_text
                 )
 
-        query_logger.info(f"Query completed: {repr(output)}")
-        query_logger.debug(output.model_dump(exclude={"history", "raw"}))
+        max_string = None if verbose else 400
+        query_logger.info(
+            f"Query completed: {pretty_repr(output, max_string=max_string)}"
+        )
+        query_logger.debug(repr(output))
 
         return output
 
@@ -380,7 +392,7 @@ class LLM(ABC):
             limit=self.token_retry_params.limit,
             limit_refresh_seconds=self.token_retry_params.limit_refresh_seconds,
             get_rate_limit_func=self.get_rate_limit,
-            logger=self.logger,
+            logger=self.instance_logger,
         )
 
     async def _calculate_cost(
@@ -393,7 +405,9 @@ class LLM(ABC):
         from model_library.registry_utils import get_model_cost
 
         if not self._registry_key:
-            self.logger.warning("Model has no registry key, skipping cost calculation")
+            self.instance_logger.warning(
+                "Model has no registry key, skipping cost calculation"
+            )
             return None
 
         costs = get_model_cost(self._registry_key)
@@ -620,14 +634,14 @@ class LLM(ABC):
             encoding = await self.delegate.get_encoding()
         else:
             encoding = await self.get_encoding()
-        self.logger.debug(f"Token Count Encoding: {encoding}")
+        self.instance_logger.debug(f"Token Count Encoding: {encoding}")
 
         string_input = await self.stringify_input(
             input, history=history, tools=tools, **kwargs
         )
 
         count = len(encoding.encode(string_input, disallowed_special=()))
-        self.logger.debug(f"Combined Token Count Input: {count}")
+        self.instance_logger.debug(f"Combined Token Count Input: {count}")
         return count
 
     @deprecated("Use query(output_schema=...) instead")

@@ -11,7 +11,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import fakeredis.aioredis
 import pytest
@@ -19,9 +19,10 @@ import pytest
 from model_library.agent import Agent, AgentConfig, Tool, ToolOutput
 from model_library.base.input import TextInput, ToolCall
 from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
-from model_library.logging import _AGENT_CHILD_RE, _AgentChildFilter
+from model_library.base import LLM
+from model_library.base.base import TokenRetryParams
 from model_library.retriers.token import TokenRetrier, set_redis_client
-from model_library.retriers.token.utils import KEY_PREFIX, RunContext, current_run
+from model_library.retriers.token.utils import KEY_PREFIX
 from model_library.utils import run_logging
 
 
@@ -68,7 +69,6 @@ def _make_qr(text: str = "ok") -> QueryResult:
 def _mock_llm(*responses: QueryResult | Exception) -> MagicMock:
     llm = MagicMock()
     llm.query = AsyncMock(side_effect=list(responses))
-    llm.logger = logging.getLogger("mock_llm")
     llm.model_name = "test-model"
     llm.run_id = "default-run-id"
     return llm
@@ -78,7 +78,6 @@ def _make_retrier(
     *,
     run_id: str = "test-run",
     question_id: str = "test-qid",
-    is_queued: bool = False,
     estimate_input_tokens: int = 100,
     estimate_output_tokens: int = 50,
     use_dynamic_estimate: bool = False,
@@ -89,7 +88,6 @@ def _make_retrier(
         client_registry_key=CLIENT_KEY,
         run_id=run_id,
         question_id=question_id,
-        is_queued=is_queued,
         estimate_input_tokens=estimate_input_tokens,
         estimate_output_tokens=estimate_output_tokens,
         use_dynamic_estimate=use_dynamic_estimate,
@@ -102,11 +100,22 @@ async def _init_tokens(redis, value: int = 1000, limit: int = 1000):
     await redis.set(f"{TOKEN_KEY}:limit", str(limit))
 
 
-def _filter_allows(name: str) -> bool:
-    """Return True if _AgentChildFilter allows the record through."""
-    f = _AgentChildFilter()
-    record = logging.LogRecord(name, logging.INFO, "", 0, "", (), None)
-    return f.filter(record)
+def _make_mock_llm_class():
+    return type(
+        "MockLLM",
+        (LLM,),
+        {
+            "_get_default_api_key": Mock(return_value="mock_api_key"),
+            "get_client": Mock(return_value=MagicMock()),
+            "build_body": AsyncMock(return_value={}),
+            "_query_impl": AsyncMock(return_value=QueryResult()),
+            "parse_input": AsyncMock(return_value=None),
+            "parse_image": AsyncMock(return_value=None),
+            "parse_file": AsyncMock(return_value=None),
+            "parse_tools": AsyncMock(return_value=None),
+            "upload_file": AsyncMock(return_value=None),
+        },
+    )
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -162,53 +171,6 @@ async def test_different_runs_get_different_question_ids():
     assert llm.query.call_args_list[1].kwargs["question_id"] == "q-2"
 
 
-# ── run_id / question_id resolution ──────────────────────────────────
-
-
-async def test_run_context_overrides_instance_run_id():
-    """When RunContext is set, its run_id takes precedence over LLM.run_id."""
-    token = current_run.set(RunContext(run_id="context-run-42", is_queued=True))
-    try:
-        run_ctx = current_run.get()
-        assert run_ctx is not None
-        assert run_ctx.run_id == "context-run-42"
-    finally:
-        current_run.reset(token)
-
-
-async def test_run_id_falls_back_to_instance_when_no_context():
-    """Without RunContext, LLM.run_id (from config or auto-generated) is used."""
-    assert current_run.get() is None
-    instance_run_id = "inst-abc"
-    resolved = current_run.get()
-    run_id = resolved.run_id if resolved else instance_run_id
-    assert run_id == instance_run_id
-
-
-async def test_is_queued_false_without_context():
-    assert current_run.get() is None
-    run_ctx = current_run.get()
-    assert not bool(run_ctx and run_ctx.is_queued)
-
-
-async def test_is_queued_true_with_queued_context():
-    token = current_run.set(RunContext(run_id="r", is_queued=True))
-    try:
-        run_ctx = current_run.get()
-        assert bool(run_ctx and run_ctx.is_queued)
-    finally:
-        current_run.reset(token)
-
-
-async def test_is_queued_false_with_non_queued_context():
-    token = current_run.set(RunContext(run_id="r", is_queued=False))
-    try:
-        run_ctx = current_run.get()
-        assert not bool(run_ctx and run_ctx.is_queued)
-    finally:
-        current_run.reset(token)
-
-
 async def test_question_id_auto_generated_when_empty():
     """Empty question_id gets a UUID assigned (14-char hex)."""
     question_id: str | None = None
@@ -225,15 +187,6 @@ async def test_question_id_preserved_when_provided():
     assert question_id == "my-custom-qid"
 
 
-async def test_run_context_reset_after_scope():
-    """RunContext is properly cleaned up after reset."""
-    assert current_run.get() is None
-    token = current_run.set(RunContext(run_id="bench-1", is_queued=True))
-    assert current_run.get() is not None
-    current_run.reset(token)
-    assert current_run.get() is None
-
-
 # ── Logger naming ─────────────────────────────────────────────────────
 
 
@@ -246,16 +199,22 @@ async def test_llm_logger_name_format():
 async def test_agent_logger_name_format():
     llm = _mock_llm(_make_qr())
     llm.model_name = "gpt-4o"
+    captured: list[logging.Logger] = []
+    llm.query = AsyncMock(side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr())
     agent = Agent(name="submit", llm=llm, tools=[], config=_cfg)
-    assert agent._logger.name == "agent.submit<gpt-4o>"
+    await agent.run([TextInput(text="go")], question_id="q1")
+    assert captured and "agent.submit<gpt-4o>" in captured[0].name
 
 
-async def test_agent_parents_llm_logger():
+async def test_agent_passes_scoped_logger_to_llm():
     llm = _mock_llm(_make_qr())
     llm.model_name = "gpt-4o"
     llm.run_id = "run-xyz"
+    captured: list[logging.Logger] = []
+    llm.query = AsyncMock(side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr())
     agent = Agent(name="eval", llm=llm, tools=[], config=_cfg)
-    assert llm.logger.name == "agent.eval<gpt-4o>.<run=run-xyz>"
+    await agent.run([TextInput(text="go")], question_id="q1")
+    assert captured and captured[0].name.startswith("agent.eval<gpt-4o>")
 
 
 async def test_query_logger_includes_question_and_query_ids():
@@ -263,39 +222,6 @@ async def test_query_logger_includes_question_and_query_ids():
     parent = logging.getLogger("llm.openai.gpt-4o<run=abc>")
     child = parent.getChild("<question=q123><query=qry456>")
     assert child.name.endswith("<query=qry456>")
-
-
-# ── _AgentChildFilter ─────────────────────────────────────────────────
-
-
-async def test_agent_milestone_passes_filter():
-    assert _filter_allows("agent.submit<gpt-4o>") is True
-
-
-async def test_agent_child_blocked_by_filter():
-    assert _filter_allows("agent.submit<gpt-4o>.<run=abc>") is False
-
-
-async def test_agent_child_with_run_context_blocked():
-    assert _filter_allows("agent.eval<gpt-4o>.<run=abc>") is False
-
-
-async def test_deep_child_blocked():
-    assert _filter_allows("agent.x.a.b.c.d") is False
-
-
-async def test_non_agent_logger_passes_filter():
-    assert _filter_allows("llm.openai.gpt-4o") is True
-
-
-async def test_root_llm_passes_filter():
-    assert _filter_allows("llm") is True
-
-
-async def test_agent_child_regex_matches():
-    assert _AGENT_CHILD_RE.match("agent.submit<gpt-4o>.<run=abc>") is not None
-    assert _AGENT_CHILD_RE.match("agent.submit<gpt-4o>") is None
-    assert _AGENT_CHILD_RE.match("llm.openai.gpt-4o") is None
 
 
 # ── run_logging context manager ───────────────────────────────────────
@@ -482,9 +408,12 @@ async def test_metadata_cleaned_on_pre_function_failure(redis):
 
 
 async def test_queued_retrier_tracks_dispatched(redis):
+    """Run in the benchmark queue gets its dispatched counter incremented."""
     await _init_tokens(redis, value=1000)
+    queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
+    await redis.rpush(queue_key, "bench-run")
 
-    retrier = _make_retrier(run_id="bench-run", question_id="q-bench", is_queued=True)
+    retrier = _make_retrier(run_id="bench-run", question_id="q-bench")
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     dispatched_key = f"{KEY_PREFIX}:provider:model:benchmark:run:bench-run:dispatched"
@@ -492,9 +421,10 @@ async def test_queued_retrier_tracks_dispatched(redis):
 
 
 async def test_non_queued_retrier_skips_dispatched(redis):
+    """Run not in the benchmark queue does not create a dispatched entry."""
     await _init_tokens(redis, value=1000)
 
-    retrier = _make_retrier(run_id="normal-run", question_id="q-normal", is_queued=False)
+    retrier = _make_retrier(run_id="normal-run", question_id="q-normal")
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     keys = await redis.keys(f"{KEY_PREFIX}:*:benchmark:run:*:dispatched")
@@ -502,23 +432,56 @@ async def test_non_queued_retrier_skips_dispatched(redis):
 
 
 async def test_straggler_gets_max_priority(redis):
-    """Queued retrier whose run_id != queue head gets MAX_PRIORITY (-5)."""
+    """Run in the queue but not the head is demoted to MAX_PRIORITY (-5)."""
     await _init_tokens(redis, value=1000)
     queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
     await redis.rpush(queue_key, "other-run")
+    await redis.rpush(queue_key, "straggler-run")
 
-    retrier = _make_retrier(run_id="straggler-run", question_id="q-strag", is_queued=True)
+    retrier = _make_retrier(run_id="straggler-run", question_id="q-strag")
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     assert retrier.priority == -5  # MAX_PRIORITY
 
 
 async def test_non_queued_skips_straggler_check(redis):
+    """Run not in the queue is unaffected by the straggler check."""
     await _init_tokens(redis, value=1000)
     queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
     await redis.rpush(queue_key, "other-run")
 
-    retrier = _make_retrier(run_id="my-run", question_id="q-normal", is_queued=False)
+    retrier = _make_retrier(run_id="my-run", question_id="q-normal")
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     assert retrier.priority == 0  # INITIAL_PRIORITY
+
+
+# ── run_id / question_id flows through LLM.query → TokenRetrier ───────
+
+
+async def test_run_id_and_question_id_forwarded_to_token_retrier():
+    """run_id and question_id passed to llm.query() are forwarded to TokenRetrier."""
+    MockLLM = _make_mock_llm_class()
+    llm = MockLLM("gpt-4o", "openai")
+    llm.token_retry_params = TokenRetryParams(  # pyright: ignore[reportAttributeAccessIssue]
+        limit=10000, limit_refresh_seconds=60, input_modifier=1.0, output_modifier=1.0
+    )
+    llm.estimate_query_tokens = AsyncMock(return_value=(100, 50))  # pyright: ignore[reportAttributeAccessIssue]
+
+    captured: dict[str, str] = {}
+
+    class CapturingRetrier:
+        def __init__(self, **kwargs: Any):
+            captured.update({"run_id": kwargs["run_id"], "question_id": kwargs["question_id"]})
+
+        async def execute(self, func: Any, *args: Any, **kwargs: Any) -> Any:
+            return await func()
+
+        async def validate(self) -> None:
+            pass
+
+    with patch("model_library.base.base.TokenRetrier", CapturingRetrier):
+        await llm.query("test input", run_id="my-run-id", question_id="my-question-id")
+
+    assert captured["run_id"] == "my-run-id"
+    assert captured["question_id"] == "my-question-id"

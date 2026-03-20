@@ -175,9 +175,8 @@ class DummyAIModel(LLM):
         provider: Literal["vals"] = "vals",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config, logger=logger)
+        super().__init__(model_name, provider, config=config)
         self.custom_retrier = None
         self.batch: LLMBatchMixin | None = (
             DummyAIBatchMixin(self) if self.supports_batch else None
@@ -311,7 +310,7 @@ class DummyAIModel(LLM):
                     latency = int(match.group(1))
 
         for i in range(latency):
-            self.logger.info(f"Sleeping... {i + 1} of {latency} seconds remaining")
+            query_logger.info(f"Sleeping... {i + 1} of {latency} seconds remaining")
             time.sleep(1)
 
         if random.random() < fail_rate and "evaluator" not in self.model_name:

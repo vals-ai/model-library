@@ -184,7 +184,7 @@ class TestCLI:
         )
         captured: list[AgentConfig] = []
 
-        def fake_agent(*, llm, tools, name, logger, config):
+        def fake_agent(*, llm, tools, name, config, **kwargs):
             captured.append(config)
             agent = MagicMock()
             agent.run = AsyncMock(return_value=_make_result())
@@ -239,7 +239,7 @@ class TestCLI:
         )
         captured_inputs: list[Any] = []
 
-        async def fake_run(inputs: list[Any], *, question_id: str) -> Any:
+        async def fake_run(inputs: list[Any], *, question_id: str, **kwargs: Any) -> Any:
             captured_inputs.extend(inputs)
             return _make_result()
 

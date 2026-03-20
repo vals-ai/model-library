@@ -26,9 +26,8 @@ class KimiModel(DelegateOnly):
         provider: Literal["kimi"] = "kimi",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config, logger=logger)
+        super().__init__(model_name, provider, config=config)
 
         # https://platform.moonshot.ai/docs/guide/migrating-from-openai-to-kimi#about-api-compatibility
         self.init_delegate(

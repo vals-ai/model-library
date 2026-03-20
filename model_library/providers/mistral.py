@@ -88,9 +88,8 @@ class MistralModel(LLM):
         provider: Literal["mistral"] = "mistral",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config, logger=logger)
+        super().__init__(model_name, provider, config=config)
 
     @override
     async def parse_input(
@@ -302,7 +301,7 @@ class MistralModel(LLM):
                     out_tokens += data.usage.completion_tokens or 0
 
         except Exception as e:
-            self.logger.error(f"Error: {e}", exc_info=True)
+            query_logger.error(f"Error: {e}", exc_info=True)
             raise e
 
         no_useful_content = not text and not reasoning and not raw_tool_calls

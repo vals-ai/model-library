@@ -1,4 +1,3 @@
-import logging
 from typing import Literal
 
 from pydantic import SecretStr
@@ -30,9 +29,8 @@ class FireworksModel(DelegateOnly):
         provider: Literal["fireworks"] = "fireworks",
         *,
         config: LLMConfig | None = None,
-        logger: logging.Logger | None = None,
     ):
-        super().__init__(model_name, provider, config=config, logger=logger)
+        super().__init__(model_name, provider, config=config)
 
         if self.provider_config.serverless:
             self.model_name = "accounts/fireworks/models/" + self.model_name

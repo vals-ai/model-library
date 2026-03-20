@@ -5,8 +5,6 @@ The agent decides which tools to call and when to stop.
 """
 
 import asyncio
-import json
-import logging
 from typing import Any
 
 from model_library.agent import (
@@ -16,8 +14,6 @@ from model_library.agent import (
     AgentTurn,
     ErrorTurn,
     SerializableException,
-    Tool,
-    ToolOutput,
     TurnLimit,
     TurnResult,
 )
@@ -27,51 +23,8 @@ from model_library.base import LLM
 from model_library.base.input import TextInput
 from model_library.registry_utils import get_registry_model
 
-from .setup import console_log, setup
-
-# --- Tools ---
-
-
-class GetWeather(Tool):
-    """Returns fake weather data for a city."""
-
-    name = "get_weather"
-    description = "Get current weather for a city. Returns temperature and conditions."
-    parameters = {
-        "city": {
-            "type": "string",
-            "description": "City name, e.g. 'San Francisco'",
-        },
-    }
-
-    async def execute(
-        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
-    ) -> ToolOutput:
-        city = args.get("city", "unknown")
-        weather = {"city": city, "temperature": "18C", "conditions": "foggy"}
-        return ToolOutput(output=json.dumps(weather))
-
-
-class SaveNote(Tool):
-    """Saves a note to shared state. Demonstrates state passing between tools."""
-
-    name = "save_note"
-    description = "Save a note to the session. Other tools can read it later."
-    parameters = {
-        "key": {"type": "string", "description": "Note identifier"},
-        "content": {"type": "string", "description": "Note content"},
-    }
-
-    def __init__(self, custom_logic: str | None = None):
-        self.custom_logic = custom_logic
-
-    async def execute(
-        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
-    ) -> ToolOutput:
-        key, content = args["key"], args["content"]
-        state[key] = content
-        return ToolOutput(output=f"Saved note '{key}'.")
-
+from ..setup import console_log, setup
+from ..utils import GetWeather, SaveNote
 
 # --- Run ---
 
@@ -120,32 +73,6 @@ async def agent_with_submit_tool(model: LLM):
     )
 
     console_log(f"Final answer: {result.final_answer}")
-    console_log(f"Logs: {result.output_dir}")
-
-
-async def agent_with_web_search(model: LLM):
-    """Agent with web search: uses TavilyWebSearch to answer questions about the real world."""
-    console_log("\n--- Agent with Web Search ---\n")
-
-    from model_library.agent.tools.web_search import TavilyWebSearch
-
-    agent = Agent(
-        name="web_search",
-        llm=model,
-        tools=[TavilyWebSearch(max_end_date="2025-04-07"), SubmitTool()],
-        config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
-    )
-    result = await agent.run(
-        [
-            TextInput(
-                text="Search for the latest news about AI regulation, then submit a brief summary."
-            )
-        ],
-        question_id="question_1",
-    )
-
-    console_log(f"Answer: {result.final_answer}")
-    console_log(f"Turns: {result.total_turns}, Tool calls: {result.tool_calls_count}")
     console_log(f"Logs: {result.output_dir}")
 
 
@@ -235,7 +162,6 @@ async def main():
     # await basic_agent(model)
     # await agent_with_bash(model)
     await agent_with_submit_tool(model)
-    # await agent_with_web_search(model)
     # await agent_with_hooks(model)
 
 

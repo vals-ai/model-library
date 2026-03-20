@@ -80,7 +80,7 @@ async def main():
     args = parser.parse_args()
 
     model = get_registry_model(args.model)
-    model.logger.info(model)
+    model.instance_logger.info(model)
 
     if not model.supports_images:
         raise Exception("Model does not support images")
