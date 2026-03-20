@@ -231,9 +231,14 @@ class MistralModel(LLM):
         body: dict[str, Any] = {
             "model": self.model_name,
             "messages": messages,
-            "prompt_mode": "reasoning" if self.reasoning else None,
             "tools": tools,
         }
+
+        if self.reasoning:
+            if self.reasoning_effort is not None:
+                body["reasoning_effort"] = self.reasoning_effort
+            else:
+                body["prompt_mode"] = "reasoning"
 
         if self.max_tokens:
             body["max_tokens"] = self.max_tokens
