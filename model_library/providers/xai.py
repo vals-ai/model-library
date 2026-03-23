@@ -38,6 +38,7 @@ from model_library.base import (
 )
 from model_library.exceptions import (
     BadInputError,
+    ImmediateRetryException,
     MaxOutputTokensExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
@@ -309,8 +310,12 @@ class XAIModel(LLM):
         chat: Chat = self.get_client().chat.create(**body)
 
         latest_response: Response | None = None
-        async for response, _ in chat.stream():
-            latest_response = response
+        try:
+            async for response, _ in chat.stream():
+                latest_response = response
+        except OSError as e:
+            # Transient gRPC C-core OSError (e.g. [Errno 2]) not caught by retry logic.
+            raise ImmediateRetryException(str(e)) from e
 
         if not latest_response:
             raise ModelNoOutputError("Model failed to produce a response")
