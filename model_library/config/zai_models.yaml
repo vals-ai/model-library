@@ -28,13 +28,35 @@ glm-5-models:
         read: 0.2
     properties:
       reasoning_model: false
-      context_window: 137_215
+      context_window: 200_000
       max_tokens: 131_072
     default_parameters:
       temperature: 1
       top_p: 0.95
     alternative_keys:
       - zai/glm-5-thinking:
+          properties:
+            reasoning_model: true
+          provider_properties:
+            clear_thinking: false
+
+  zai/glm-5-turbo:
+    label: GLM 5 Turbo
+    open_source: false
+    release_date: 2026-03-15
+    costs_per_million_token:
+      input: 1.2
+      output: 4.0
+      cache:
+        read: 0.24
+    properties:
+      context_window: 200_000
+      max_tokens: 128_000
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+    alternative_keys:
+      - zai/glm-5-turbo-thinking:
           properties:
             reasoning_model: true
           provider_properties:
@@ -108,9 +130,11 @@ glm-4-models:
         read: 0.03
     alternative_keys:
       - together/zai-org/GLM-4.5-Air-FP8:
-        costs_per_million_token:
-          input: 0.22
-          output: 0.88
+          metadata:
+            deprecated: true
+          costs_per_million_token:
+            input: 0.22
+            output: 0.88
 
   zai/glm-4.6:
     label: GLM 4.6

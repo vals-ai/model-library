@@ -2,14 +2,17 @@ from typing import Protocol
 
 from pydantic import ConfigDict, SkipValidation, field_validator
 
-from model_library.base.input import InputItem, RawResponse, SystemInput, ToolDefinition
+from model_library.base.input import InputItem, RawResponse, ToolDefinition
 from model_library.utils import PrettyModel
 
 
 def truncate_oldest(history: list[InputItem]) -> list[InputItem]:
     """Remove the oldest exchange (response + following inputs) from history
 
-    Preserves SystemInput if present at position 0. Everything else is fair game.
+    Preserves SystemInput and the initial user input (everything before the
+    first RawResponse). Raises ``ValueError`` if there are no exchanges to
+    truncate.
+
     Use with before_query hook for context window management:
 
         def before_query(history, last_error):
@@ -19,19 +22,16 @@ def truncate_oldest(history: list[InputItem]) -> list[InputItem]:
                 raise last_error
             return history
     """
-    if len(history) <= 1:
-        return history
-
-    # preserve SystemInput at position 0
+    # preserve everything before the first RawResponse (system prompt + user input)
     preamble: list[InputItem] = []
-    start = 0
-    if isinstance(history[0], SystemInput):
-        preamble.append(history[0])
-        start = 1
+    i = 0
+    while i < len(history) and not isinstance(history[i], RawResponse):
+        preamble.append(history[i])
+        i += 1
 
-    rest = history[start:]
+    rest = history[i:]
     if not rest:
-        return preamble
+        raise ValueError("No prior exchange found to truncate.")
 
     # skip RawResponse items (the oldest model response block)
     i = 0

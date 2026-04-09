@@ -7,21 +7,16 @@ base-config:
     files: false
     tools: true
     temperature: true
-  metadata:
-    available_as_evaluator: false
-    available_for_everyone: true
-    ignored_for_cost: false
   properties:
     reasoning_model: false
-minimax-m2-models:
+m2-models:
   minimax/MiniMax-M2.5:
     label: MiniMax-M2.5
     release_date: 2026-02-12
     properties:
       reasoning_model: true
-      training_cutoff: null
       context_window: 196_608 # from BadRequestError
-      max_tokens: 196_608 
+      max_tokens: 196_608
     default_parameters:
       temperature: 1.0
       top_p: 0.95
@@ -44,7 +39,6 @@ minimax-m2-models:
       context_window: 204_800
       max_tokens: 131_000
       reasoning_model: true
-      training_cutoff: null
     default_parameters:
       temperature: 1.0
       top_p: 0.95
@@ -62,7 +56,6 @@ minimax-m2-models:
       context_window: 204_800
       max_tokens: 131_000
       reasoning_model: true
-      training_cutoff: null
     default_parameters:
       temperature: 1.0
       top_p: 0.95
@@ -72,4 +65,3 @@ minimax-m2-models:
       cache:
         read: 0.03
         write: 0.375
-

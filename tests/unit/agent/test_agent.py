@@ -9,9 +9,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from model_library.base.input import InputItem, RawResponse, TextInput, ToolCall
-from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
-
 from model_library.agent import (
     Agent,
     AgentConfig,
@@ -30,6 +27,8 @@ from model_library.agent import (
     TurnSummary,
     truncate_oldest,
 )
+from model_library.base.input import InputItem, RawResponse, TextInput, ToolCall
+from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
 
 
 _cfg = AgentConfig(turn_limit=None, time_limit=None)
@@ -1116,12 +1115,14 @@ class TestModels:
 
 
 class TestTruncateOldest:
-    def test_preserves_single_message(self):
+    def test_single_message_raises_when_nothing_can_be_truncated(self):
         msgs: list[InputItem] = [TextInput(text="prompt")]
-        assert truncate_oldest(msgs) == msgs
+        with pytest.raises(ValueError, match="No prior exchange found to truncate"):
+            truncate_oldest(msgs)
 
-    def test_preserves_empty(self):
-        assert truncate_oldest([]) == []
+    def test_empty_history_raises_when_nothing_can_be_truncated(self):
+        with pytest.raises(ValueError, match="No prior exchange found to truncate"):
+            truncate_oldest([])
 
     def test_removes_first_response_block(self):
         resp1 = RawResponse(response="model reply 1")
@@ -1166,6 +1167,30 @@ class TestTruncateOldest:
         result = truncate_oldest([resp1, tool1])
 
         assert result == []
+
+    def test_preserves_initial_user_input(self):
+        from model_library.base.input import SystemInput
+
+        system = SystemInput(text="you are helpful")
+        user_input = TextInput(text="solve this problem")
+        resp1 = RawResponse(response="model reply 1")
+        tool1 = TextInput(text="tool output 1")
+        resp2 = RawResponse(response="model reply 2")
+        tool2 = TextInput(text="tool output 2")
+
+        result = truncate_oldest([system, user_input, resp1, tool1, resp2, tool2])
+
+        assert result[:2] == [system, user_input]
+        assert result[2:] == [resp2, tool2]
+
+    def test_no_response_raises_when_nothing_can_be_truncated(self):
+        from model_library.base.input import SystemInput
+
+        system = SystemInput(text="you are helpful")
+        user_input = TextInput(text="very long prompt")
+
+        with pytest.raises(ValueError, match="No prior exchange found to truncate"):
+            truncate_oldest([system, user_input])
 
 
 # --- Tool definition ---

@@ -1,0 +1,12 @@
+base-config:
+  company: Meta
+  documentation_url: https://docs.llama.com
+  open_source: false
+  supports:
+    temperature: true
+    images: true
+    files: true
+    tools: true
+  metadata:
+    available_for_everyone: false
+    internal_only: true

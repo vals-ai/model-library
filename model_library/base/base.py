@@ -82,7 +82,7 @@ class LLMConfig(PrettyModel):
     top_k: int | None = None
     reasoning: bool = False
     reasoning_effort: str | bool | None = None
-    compute_effort: str | None = None
+    compute_effort: str | int | None = None
     supports_images: bool = False
     supports_files: bool = False
     supports_videos: bool = False
@@ -94,11 +94,7 @@ class LLMConfig(PrettyModel):
     provider_config: ProviderConfig | None = None
     registry_key: str | None = None
     custom_api_key: SecretStr | None = None
-
-
-class DelegateConfig(PrettyModel):
-    base_url: str
-    api_key: SecretStr
+    custom_endpoint: str | None = None
 
 
 # shared across all subclasses and instances
@@ -114,7 +110,9 @@ class LLM(ABC):
     """
 
     @abstractmethod
-    def get_client(self, api_key: str | None = None) -> Any:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> Any:
         """
         Returns the cached instance of the appropriate SDK client.
         Sublasses should implement this method and:
@@ -161,7 +159,7 @@ class LLM(ABC):
 
         self.reasoning: bool = config.reasoning
         self.reasoning_effort: str | bool | None = config.reasoning_effort
-        self.compute_effort: str | None = config.compute_effort
+        self.compute_effort: str | int | None = config.compute_effort
 
         self.supports_files: bool = config.supports_files
         self.supports_videos: bool = config.supports_videos
@@ -174,6 +172,7 @@ class LLM(ABC):
         self.native: bool = config.native
         self.delegate: "LLM | None" = None
         self.batch: LLMBatchMixin | None = None
+        self.custom_endpoint = config.custom_endpoint
 
         if config.provider_config:
             if isinstance(
@@ -196,13 +195,16 @@ class LLM(ABC):
         else:
             raw_key = self._get_default_api_key()
 
-        key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        base_url = config.custom_endpoint
+
+        hash_material = raw_key if base_url is None else raw_key + base_url
+        key_hash = hashlib.sha256(hash_material.encode()).hexdigest()
         self._client_registry_key = (self.provider, key_hash)
         self._client_registry_key_model_specific = (
             f"{self.provider}.{self.model_name}",
             key_hash,
         )
-        self.get_client(api_key=raw_key)
+        self.get_client(api_key=raw_key, base_url=base_url)
 
     def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
         attrs = vars(self).copy()

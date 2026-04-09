@@ -4,6 +4,8 @@ vals-models:
     documentation_url: ""
     supports:
       batch: true
+    metadata:
+      internal_only: true
     properties:
       context_window: 128_000
       max_tokens: 16_384
@@ -16,8 +18,6 @@ vals-models:
     release_date: null
     supports:
       images: false
-    metadata:
-      available_as_evaluator: false
     costs_per_million_token:
       input: 0.15
       output: 0.60

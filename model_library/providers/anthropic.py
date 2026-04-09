@@ -14,7 +14,6 @@ from model_library import model_library_settings
 from model_library.base import (
     LLM,
     BatchResult,
-    DelegateConfig,
     FileBase,
     FileInput,
     FileWithBase64,
@@ -41,10 +40,9 @@ from model_library.base import (
 )
 from model_library.exceptions import (
     ImmediateRetryException,
-    MaxOutputTokensExceededError,
-    ModelNoOutputError,
     NoMatchingToolCallError,
     UnexpectedSystemInputError,
+    handle_empty_response,
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.providers.openai import OpenAIModel
@@ -60,8 +58,10 @@ def map_anthropic_finish_reason(
     match stop_reason:
         case "end_turn":
             reason = FinishReason.STOP
-        case "max_tokens" | "model_context_window_exceeded":
+        case "max_tokens":
             reason = FinishReason.MAX_TOKENS
+        case "model_context_window_exceeded":
+            reason = FinishReason.CONTEXT_WINDOW_EXCEEDED
         case "stop_sequence":
             reason = FinishReason.STOP_SEQUENCE
         case "tool_use":
@@ -79,7 +79,6 @@ def map_anthropic_finish_reason(
 class AnthropicConfig(ProviderConfig):
     supports_compute_effort: bool = False
     supports_auto_thinking: bool = False
-    supports_1M_context: bool = False
 
 
 class AnthropicBatchMixin(LLMBatchMixin):
@@ -291,19 +290,17 @@ class AnthropicModel(LLM):
     provider_config = AnthropicConfig()
 
     def _get_default_api_key(self) -> str:
-        if self.delegate_config:
-            return self.delegate_config.api_key.get_secret_value()
         return model_library_settings.ANTHROPIC_API_KEY
 
     @override
-    def get_client(self, api_key: str | None = None) -> AsyncAnthropic:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> AsyncAnthropic:
         if not self.has_client():
             assert api_key
             headers: dict[str, str] = {}
             client = create_anthropic_client_with_defaults(
-                base_url=self.delegate_config.base_url
-                if self.delegate_config
-                else None,
+                base_url=base_url,
                 api_key=api_key,
                 default_headers=headers,
             )
@@ -316,32 +313,32 @@ class AnthropicModel(LLM):
         provider: str = "anthropic",
         *,
         config: LLMConfig | None = None,
-        delegate_config: DelegateConfig | None = None,
     ):
-        self.delegate_config = delegate_config
-
         super().__init__(model_name, provider, config=config)
 
         # https://docs.anthropic.com/en/api/openai-sdk
-        self.delegate = (
-            None
-            if self.native or self.delegate_config
-            else OpenAIModel(
+        if self.native:
+            self.delegate = None
+        else:
+            config = config or LLMConfig()
+            config.custom_endpoint = (
+                config.custom_endpoint or "https://api.anthropic.com/v1/"
+            )
+            config.custom_api_key = config.custom_api_key or SecretStr(
+                model_library_settings.ANTHROPIC_API_KEY
+            )
+
+            self.delegate = OpenAIModel(
                 model_name=self.model_name,
                 provider=self.provider,
                 config=config,
                 use_completions=True,
-                delegate_config=DelegateConfig(
-                    base_url="https://api.anthropic.com/v1/",
-                    api_key=SecretStr(model_library_settings.ANTHROPIC_API_KEY),
-                ),
             )
-        )
 
         # Initialize batch support if enabled
         # Disable batch when using custom_client (similar to OpenAI)
         self.supports_batch: bool = (
-            self.supports_batch and self.native and not self.delegate_config
+            self.supports_batch and self.native and not self.custom_endpoint
         )
         self.batch: LLMBatchMixin | None = (
             AnthropicBatchMixin(self) if self.supports_batch else None
@@ -662,7 +659,7 @@ class AnthropicModel(LLM):
         client = self.get_client()
 
         # only send betas for the official Anthropic endpoint
-        is_anthropic_endpoint = self.delegate_config is None
+        is_anthropic_endpoint = self.custom_endpoint is None
         if not is_anthropic_endpoint:
             client_base_url = getattr(client, "_base_url", None) or getattr(
                 client, "base_url", None
@@ -675,8 +672,6 @@ class AnthropicModel(LLM):
             betas = ["files-api-2025-04-14"]
             if not self.provider_config.supports_auto_thinking:
                 betas.extend(["interleaved-thinking-2025-05-14"])
-            if self.provider_config.supports_1M_context:
-                betas.append("context-1m-2025-08-07")
             stream_kwargs["betas"] = betas
 
         try:
@@ -706,17 +701,15 @@ class AnthropicModel(LLM):
                 )
 
         no_useful_content = not text and not reasoning and not tool_calls
+        mapped_finish_reason = map_anthropic_finish_reason(message.stop_reason)
 
         if no_useful_content:
-            log_message = str({"raw": str(message)})
-            if message.stop_reason == "max_tokens":
-                raise MaxOutputTokensExceededError(log_message)
-            raise ModelNoOutputError(log_message)
+            handle_empty_response(mapped_finish_reason, {"raw": str(message)})
 
         return QueryResult(
             output_text=text,
             reasoning=reasoning,
-            finish_reason=map_anthropic_finish_reason(message.stop_reason),
+            finish_reason=mapped_finish_reason,
             metadata=QueryResultMetadata(
                 # see _calculate_cost
                 in_tokens=message.usage.input_tokens,
@@ -754,10 +747,12 @@ class AnthropicModel(LLM):
         return RateLimit(
             unix_timestamp=timestamp,
             raw=headers,
-            request_limit=int(headers["anthropic-ratelimit-requests-limit"]),
-            request_remaining=int(headers["anthropic-ratelimit-requests-remaining"]),
+            request_limit=int(headers.get("anthropic-ratelimit-requests-limit", 0)),
+            request_remaining=int(
+                headers.get("anthropic-ratelimit-requests-remaining", 0)
+            ),
             token_limit=int(response.headers["anthropic-ratelimit-tokens-limit"]),
-            token_remaining=int(headers["anthropic-ratelimit-tokens-remaining"]),
+            token_remaining=int(headers.get("anthropic-ratelimit-tokens-remaining", 0)),
         )
 
     @override

@@ -11,6 +11,7 @@ from google.genai.types import (
     Content,
     CountTokensConfig,
     File,
+    HttpOptions,
     FinishReason,
     FunctionDeclaration,
     GenerateContentConfig,
@@ -66,6 +67,7 @@ from model_library.exceptions import (
     ModelNoOutputError,
     RetryException,
     UnexpectedSystemInputError,
+    handle_empty_response,
 )
 from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.register_models import register_provider
@@ -153,9 +155,14 @@ class GoogleModel(LLM):
         )
 
     @override
-    def get_client(self, api_key: str | None = None) -> Client:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> Client:
         if not self.has_client():
             assert api_key
+
+            http_options = HttpOptions(base_url=base_url) if base_url else None
+
             if self.provider_config.use_vertex:
                 # Gemini preview releases are only server from the global Vertex region after September 2025.
                 MODEL_REGION_OVERRIDES: dict[str, str] = {
@@ -179,9 +186,10 @@ class GoogleModel(LLM):
                         json.loads(creds["GCP_CREDS"]),
                         scopes=["https://www.googleapis.com/auth/cloud-platform"],
                     ),
+                    http_options=http_options,
                 )
             else:
-                client = Client(api_key=api_key)
+                client = Client(api_key=api_key, http_options=http_options)
             self.assign_client(client)
         return super().get_client()
 
@@ -476,14 +484,17 @@ class GoogleModel(LLM):
             query_logger.error("The function call was malformed")
             raise RetryException("The function call was malformed")
 
+        mapped_finish_reason = map_google_finish_reason(
+            finish_reason, has_tool_calls=bool(tool_calls)
+        )
         if not text and not reasoning and not tool_calls:
             query_logger.error(f"Empty response. Chunks: {chunks}")
-            raise ModelNoOutputError(str({"finish_reason": finish_reason}))
+            handle_empty_response(mapped_finish_reason, {"metadata": metadata})
 
         result = QueryResult(
             output_text=text,
             reasoning=reasoning,
-            finish_reason=map_google_finish_reason(finish_reason, bool(tool_calls)),
+            finish_reason=mapped_finish_reason,
             history=[*input, RawResponse(response=contents)],
             tool_calls=tool_calls,
         )

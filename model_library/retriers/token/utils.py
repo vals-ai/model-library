@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections.abc import Mapping
+from collections.abc import AsyncIterator, Mapping
 from typing import Any, Awaitable, Protocol, cast
 
 from pydantic import BaseModel
@@ -48,6 +48,9 @@ class AsyncRedisClient(Protocol):
     ) -> int: ...
     async def hgetall(self, name: str) -> dict[str, str]: ...
     async def keys(self, pattern: str) -> list[str]: ...
+    def scan_iter(
+        self, match: str | None = None, count: int | None = None
+    ) -> AsyncIterator[str]: ...
     async def eval(
         self, script: str, numkeys: int, *keys_and_args: str | int | float
     ) -> Any: ...
@@ -79,10 +82,15 @@ async def validate_redis_client(
             raise Exception(f"{key} not intialized. {missing_key_message}")
 
 
+async def scan_keys(pattern: str) -> list[str]:
+    """Collect keys matching pattern using SCAN (non-blocking, cursor-based)."""
+    return list({k async for k in redis_client.scan_iter(match=pattern, count=500)})
+
+
 async def get_token_keys() -> list[str]:
     """Return all valid token retry base keys"""
 
-    all_keys = await redis_client.keys(f"{KEY_PREFIX}:*:*:tokens")
+    all_keys = await scan_keys(f"{KEY_PREFIX}:*:*:tokens")
     if not all_keys:
         return []
     values = await asyncio.gather(*(redis_client.get(key) for key in all_keys))
@@ -99,7 +107,7 @@ async def get_token_keys() -> list[str]:
 async def cleanup_all_keys() -> int:
     """Delete all model_library:* keys (token retry, priority, benchmark queue)"""
 
-    to_delete = await redis_client.keys(f"{KEY_PREFIX}:*")
+    to_delete = await scan_keys(f"{KEY_PREFIX}:*")
     if not to_delete:
         return 0
     return await redis_client.delete(*to_delete)
@@ -344,7 +352,7 @@ async def _get_status_for_token_key(
         redis_client.smembers(f"{token_key}:active_runs"),
         redis_client.exists(f"{token_key}:task:refill"),
         redis_client.exists(f"{token_key}:task:correction"),
-        redis_client.keys(f"{token_key}:dynamic_estimate:*"),
+        scan_keys(f"{token_key}:dynamic_estimate:*"),
     )
 
     tokens_remaining = int(tokens_raw) if tokens_raw else 0
@@ -541,7 +549,7 @@ async def _get_queue_status(
     queued_by_run: dict[str, dict[str, int]],
     token_base_keys: list[str] | None = None,
 ) -> list[QueueStatus]:
-    queue_keys = sorted(await redis_client.keys(f"{KEY_PREFIX}:*:benchmark:queue"))
+    queue_keys = sorted(await scan_keys(f"{KEY_PREFIX}:*:benchmark:queue"))
 
     seen_base_keys: set[str] = set()
 
@@ -600,7 +608,7 @@ async def _get_queue_status(
     # parallel: scan metadata keys for all benchmark bases
     sorted_bases = sorted(all_benchmark_bases)
     run_meta_keys_per_base = (
-        await asyncio.gather(*(redis_client.keys(f"{bb}:run:*") for bb in sorted_bases))
+        await asyncio.gather(*(scan_keys(f"{bb}:run:*") for bb in sorted_bases))
         if sorted_bases
         else []
     )

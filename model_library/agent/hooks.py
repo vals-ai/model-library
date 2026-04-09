@@ -39,7 +39,11 @@ class BeforeQueryHook(Protocol):
     Default: re-raises errors, passes history through unchanged.
 
     When handling errors, check the error type and only handle what you expect.
-    Re-raise unhandled errors to stop the agent. Example:
+    Re-raise unhandled errors to stop the agent. Note: truncate_oldest raises
+    ``ValueError`` when there are no exchanges to remove,
+    which usually means the initial input itself exceeds context window.
+
+    Example:
 
         def before_query(history, last_error):
             if isinstance(last_error, MaxContextWindowExceededError):

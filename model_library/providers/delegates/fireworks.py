@@ -5,7 +5,6 @@ from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
-    DelegateConfig,
     DelegateOnly,
     LLMConfig,
     ProviderConfig,
@@ -38,14 +37,18 @@ class FireworksModel(DelegateOnly):
             self.model_name = "accounts/rayan-936e28/deployedModels/" + self.model_name
 
         # https://docs.fireworks.ai/tools-sdks/openai-compatibility
+        config = config or LLMConfig()
+        config.custom_endpoint = (
+            config.custom_endpoint or "https://api.fireworks.ai/inference/v1"
+        )
+        config.custom_api_key = config.custom_api_key or SecretStr(
+            model_library_settings.FIREWORKS_API_KEY
+        )
+
         self.init_delegate(
             config=config,
-            delegate_config=DelegateConfig(
-                base_url="https://api.fireworks.ai/inference/v1",
-                api_key=SecretStr(model_library_settings.FIREWORKS_API_KEY),
-            ),
-            use_completions=True,
             delegate_provider="openai",
+            use_completions=True,
         )
 
     @override

@@ -1,0 +1,31 @@
+base-config:
+  company: Alibaba
+  open_source: false
+  supports:
+    temperature: true
+  metadata:
+    available_for_everyone: false
+  default_parameters:
+    temperature: 0.7
+  properties:
+    reasoning_model: false
+
+
+deprecated:
+  base-config:
+    supports:
+      images: true
+    metadata:
+      deprecated: true
+
+  alibaba/qwen3-vl-plus-2025-09-23:
+    label: Qwen 3 VL Plus
+    open_source: true
+    release_date: 2025-09-23
+    properties:
+      context_window: 262_144
+      max_tokens: 32_768
+      training_cutoff: ""
+    costs_per_million_token:
+      input: 0.2
+      output: 1.6

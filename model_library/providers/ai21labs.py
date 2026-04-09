@@ -29,9 +29,9 @@ from model_library.base import (
 )
 from model_library.exceptions import (
     BadInputError,
-    MaxOutputTokensExceededError,
     ModelNoOutputError,
     UnexpectedSystemInputError,
+    handle_empty_response,
 )
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
@@ -61,14 +61,26 @@ class AI21LabsModel(LLM):
         return model_library_settings.AI21LABS_API_KEY
 
     @override
-    def get_client(self, api_key: str | None = None) -> AsyncAI21Client:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> AsyncAI21Client:
         if not self.has_client():
             assert api_key
-            client = AsyncAI21Client(
-                api_key=api_key,
-                http_client=default_httpx_client(),
-                num_retries=3,
-            )
+
+            if base_url:
+                client = AsyncAI21Client(
+                    api_key=api_key,
+                    http_client=default_httpx_client(),
+                    num_retries=3,
+                    api_host=base_url,
+                )
+            else:
+                client = AsyncAI21Client(
+                    api_key=api_key,
+                    http_client=default_httpx_client(),
+                    num_retries=3,
+                )
+
             self.assign_client(client)
         return super().get_client()
 
@@ -214,16 +226,6 @@ class AI21LabsModel(LLM):
 
         choice = response.choices[0]
 
-        no_useful_content = (
-            not response.choices[0].message.content
-            and not response.choices[0].message.tool_calls
-        )
-        if no_useful_content:
-            log_message = str({"raw": str(response)})
-            if choice.finish_reason == "length":
-                raise MaxOutputTokensExceededError(log_message)
-            raise ModelNoOutputError(log_message)
-
         tool_calls: list[ToolCall] = []
         for tool_call in choice.message.tool_calls or []:
             tool_calls.append(
@@ -234,11 +236,16 @@ class AI21LabsModel(LLM):
                 )
             )
 
+        no_useful_content = not choice.message.content and not tool_calls
+        mapped_finish_reason = map_ai21_finish_reason(
+            choice.finish_reason, has_tool_calls=bool(tool_calls)
+        )
+        if no_useful_content:
+            handle_empty_response(mapped_finish_reason, {"raw": str(response)})
+
         output = QueryResult(
             output_text=choice.message.content,
-            finish_reason=map_ai21_finish_reason(
-                choice.finish_reason, bool(tool_calls)
-            ),
+            finish_reason=mapped_finish_reason,
             history=[*input, RawResponse(response=choice.message)],
             metadata=QueryResultMetadata(
                 in_tokens=response.usage.prompt_tokens,

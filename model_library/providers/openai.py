@@ -33,7 +33,6 @@ from model_library.base import (
     LLM,
     BatchResult,
     Citation,
-    DelegateConfig,
     FileBase,
     FileInput,
     FileWithBase64,
@@ -62,10 +61,11 @@ from model_library.base import (
 )
 from model_library.exceptions import (
     ImmediateRetryException,
-    MaxOutputTokensExceededError,
+    MaxContextWindowExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
     UnexpectedSystemInputError,
+    handle_empty_response,
 )
 from model_library.model_utils import get_reasoning_in_tag
 from model_library.register_models import register_provider
@@ -94,7 +94,7 @@ def map_openai_completions_finish_reason(
 def map_openai_responses_finish_reason(
     status: str | None,
     incomplete_reason: str | None,
-    has_tool_calls: bool,
+    has_tool_calls: bool = False,
 ) -> FinishReasonInfo:
     match status:
         case "completed":
@@ -293,6 +293,7 @@ class OpenAIBatchMixin(LLMBatchMixin):
 class OpenAIConfig(ProviderConfig):
     deep_research: bool = False
     verbosity: Literal["low", "medium", "high"] | None = None
+    prompt_cache_retention: Literal["24h", "in_memory"] | None = None
 
 
 @register_provider("openai")
@@ -301,18 +302,16 @@ class OpenAIModel(LLM):
 
     @override
     def _get_default_api_key(self) -> str:
-        if self.delegate_config:
-            return self.delegate_config.api_key.get_secret_value()
         return model_library_settings.OPENAI_API_KEY
 
     @override
-    def get_client(self, api_key: str | None = None) -> AsyncOpenAI:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> AsyncOpenAI:
         if not self.has_client():
             assert api_key
             client = create_openai_client_with_defaults(
-                base_url=self.delegate_config.base_url
-                if self.delegate_config
-                else None,
+                base_url=base_url,
                 api_key=api_key,
             )
             self.assign_client(client)
@@ -325,20 +324,19 @@ class OpenAIModel(LLM):
         *,
         config: LLMConfig | None = None,
         use_completions: bool = False,
-        delegate_config: DelegateConfig | None = None,
     ):
         self.use_completions: bool = (
             use_completions  # TODO: do completions in a separate file
         )
-        self.delegate_config = delegate_config
 
         super().__init__(model_name, provider, config=config)
 
         self.deep_research = self.provider_config.deep_research
         self.verbosity = self.provider_config.verbosity
+        self.prompt_cache_retention = self.provider_config.prompt_cache_retention
 
         # batch client
-        self.supports_batch: bool = self.supports_batch and not self.delegate_config
+        self.supports_batch: bool = self.supports_batch and not self.custom_endpoint
         self.batch: LLMBatchMixin | None = (
             OpenAIBatchMixin(self) if self.supports_batch else None
         )
@@ -610,7 +608,8 @@ class OpenAIModel(LLM):
             if parsed_tools:
                 body["tools"] = parsed_tools
 
-        if self.reasoning and self.max_tokens:
+        # DeepSeek documents max_tokens for thinking mode, not max_completion_tokens
+        if self.reasoning and self.max_tokens and self.provider not in {"deepseek"}:
             del body["max_tokens"]
             body["max_completion_tokens"] = self.max_tokens
 
@@ -618,6 +617,9 @@ class OpenAIModel(LLM):
         # require explicitly setting reasoning effort to disable thinking
         if self.reasoning_effort is not None:
             body["reasoning_effort"] = self.reasoning_effort
+
+        if self.prompt_cache_retention is not None:
+            body["prompt_cache_retention"] = self.prompt_cache_retention
 
         if self.supports_temperature:
             if self.temperature is not None:
@@ -634,6 +636,7 @@ class OpenAIModel(LLM):
         input: Sequence[InputItem],
         *,
         tools: list[ToolDefinition],
+        query_logger: logging.Logger,
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
@@ -658,92 +661,99 @@ class OpenAIModel(LLM):
             stream=True,
         )
 
-        async for chunk in stream:
-            if chunk.choices:
-                choice = chunk.choices[0]
+        try:
+            completion_id: str | None = None
+            async for chunk in stream:
+                if not completion_id:
+                    completion_id = chunk.id
+                    query_logger.debug(f"Completion created: {completion_id}")
 
-                if choice.finish_reason:
-                    finish_reason = choice.finish_reason
+                if chunk.choices:
+                    choice = chunk.choices[0]
 
-                if choice.delta and choice.delta.content:
-                    output_text += choice.delta.content
+                    if choice.finish_reason:
+                        finish_reason = choice.finish_reason
 
-                if (
-                    hasattr(choice.delta, "reasoning_content")
-                    and choice.delta.reasoning_content  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
-                ):
-                    reasoning_text += cast(str, choice.delta.reasoning_content)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
-                elif (
-                    hasattr(choice.delta, "reasoning") and choice.delta.reasoning  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
-                ):
-                    reasoning_text += cast(str, choice.delta.reasoning)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                    if choice.delta and choice.delta.content:
+                        output_text += choice.delta.content
 
-                if choice.delta and choice.delta.tool_calls:
-                    for tool_call_chunk in choice.delta.tool_calls:
-                        func = tool_call_chunk.function
-                        # start of new tool call
-                        if tool_call_chunk.id and (
-                            not raw_tool_calls
-                            or raw_tool_calls[-1].id != tool_call_chunk.id
-                            or (
-                                raw_tool_calls[-1].id == tool_call_chunk.id
-                                and self.provider == "deepseek"
-                                and func
-                                and func.name
-                            )  # TODO: remove hotfix once deepseek fixes their stuff
-                        ):
-                            raw_tool_calls.append(
-                                ChatCompletionMessageToolCall(
-                                    id=tool_call_chunk.id,
-                                    type="function",
-                                    function=Function(
-                                        name=func.name if func and func.name else "",
-                                        arguments=func.arguments
-                                        if func and func.arguments
-                                        else "",
-                                    ),
+                    if (
+                        hasattr(choice.delta, "reasoning_content")
+                        and choice.delta.reasoning_content  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                    ):
+                        reasoning_text += cast(str, choice.delta.reasoning_content)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                    elif (
+                        hasattr(choice.delta, "reasoning") and choice.delta.reasoning  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                    ):
+                        reasoning_text += cast(str, choice.delta.reasoning)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+
+                    if choice.delta and choice.delta.tool_calls:
+                        for tool_call_chunk in choice.delta.tool_calls:
+                            func = tool_call_chunk.function
+                            # start of new tool call
+                            if tool_call_chunk.id and (
+                                not raw_tool_calls
+                                or raw_tool_calls[-1].id != tool_call_chunk.id
+                                or (
+                                    raw_tool_calls[-1].id == tool_call_chunk.id
+                                    and self.provider == "deepseek"
+                                    and func
+                                    and func.name
+                                )  # TODO: remove hotfix once deepseek fixes their stuff
+                            ):
+                                raw_tool_calls.append(
+                                    ChatCompletionMessageToolCall(
+                                        id=tool_call_chunk.id,
+                                        type="function",
+                                        function=Function(
+                                            name=func.name
+                                            if func and func.name
+                                            else "",
+                                            arguments=func.arguments
+                                            if func and func.arguments
+                                            else "",
+                                        ),
+                                    )
                                 )
-                            )
-                        # accumulate delta
-                        elif func and raw_tool_calls:
-                            if func.name:
-                                raw_tool_calls[-1].function.name = func.name
-                            if func.arguments:
-                                raw_tool_calls[-1].function.arguments += func.arguments
+                            # accumulate delta
+                            elif func and raw_tool_calls:
+                                if func.name:
+                                    raw_tool_calls[-1].function.name = func.name
+                                if func.arguments:
+                                    raw_tool_calls[
+                                        -1
+                                    ].function.arguments += func.arguments
+                if chunk.usage:
+                    # NOTE: see _calculate_cost
+                    reasoning_tokens = (
+                        chunk.usage.completion_tokens_details.reasoning_tokens or 0
+                        if chunk.usage.completion_tokens_details
+                        else 0
+                    )
+                    cache_read_tokens = (
+                        chunk.usage.prompt_tokens_details.cached_tokens or 0
+                        if chunk.usage.prompt_tokens_details
+                        else getattr(chunk.usage, "cached_tokens", 0)  # for kimi
+                    )
+                    metadata = QueryResultMetadata(
+                        in_tokens=chunk.usage.prompt_tokens - cache_read_tokens,
+                        out_tokens=chunk.usage.completion_tokens - reasoning_tokens,
+                        reasoning_tokens=reasoning_tokens,
+                        cache_read_tokens=cache_read_tokens,
+                    )
 
-            if chunk.usage:
-                # NOTE: see _calculate_cost
-                reasoning_tokens = (
-                    chunk.usage.completion_tokens_details.reasoning_tokens or 0
-                    if chunk.usage.completion_tokens_details
-                    else 0
-                )
-                cache_read_tokens = (
-                    chunk.usage.prompt_tokens_details.cached_tokens or 0
-                    if chunk.usage.prompt_tokens_details
-                    else getattr(chunk.usage, "cached_tokens", 0)  # for kimi
-                )
-                metadata = QueryResultMetadata(
-                    in_tokens=chunk.usage.prompt_tokens - cache_read_tokens,
-                    out_tokens=chunk.usage.completion_tokens - reasoning_tokens,
-                    reasoning_tokens=reasoning_tokens,
-                    cache_read_tokens=cache_read_tokens,
-                )
+        except Exception as e:  # TODO: patch
+            if "ZeusGodOfThunder" in str(e):
+                raise MaxContextWindowExceededError(str(e))
+            raise e
 
         no_useful_content = (
             not output_text and not reasoning_text and not raw_tool_calls
         )
+        mapped_finish_reason = map_openai_completions_finish_reason(finish_reason)
 
         if no_useful_content:
-            log_message = str(
-                {
-                    "finish_reason": finish_reason,
-                    "metadata": metadata,
-                }
-            )
-            if finish_reason == "length":
-                raise MaxOutputTokensExceededError(log_message)
-            raise ModelNoOutputError(log_message)
+            handle_empty_response(mapped_finish_reason, {"metadata": metadata})
 
         tool_calls: list[ToolCall] = []
         for raw_tool_call in raw_tool_calls:
@@ -777,7 +787,7 @@ class OpenAIModel(LLM):
         return QueryResult(
             output_text=output_text,
             reasoning=reasoning_text,
-            finish_reason=map_openai_completions_finish_reason(finish_reason),
+            finish_reason=mapped_finish_reason,
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=final_message)],
             metadata=metadata,
@@ -854,6 +864,9 @@ class OpenAIModel(LLM):
         if self.verbosity is not None:
             body["text"] = {"format": {"type": "text"}, "verbosity": self.verbosity}
 
+        if self.prompt_cache_retention is not None:
+            body["prompt_cache_retention"] = self.prompt_cache_retention
+
         if output_schema is not None:
             schema = (
                 output_schema
@@ -897,7 +910,11 @@ class OpenAIModel(LLM):
             if self.deep_research:
                 raise Exception("Use responses endpoint for deep research models")
             return await self._query_completions(
-                input, tools=tools, output_schema=output_schema, **kwargs
+                input,
+                tools=tools,
+                query_logger=query_logger,
+                output_schema=output_schema,
+                **kwargs,
             )
 
         body = await self.build_body(
@@ -952,20 +969,6 @@ class OpenAIModel(LLM):
             else response.incomplete_details.reason
         )
 
-        if no_useful_content:
-            log_message = str(
-                {
-                    "status": response.status,
-                    "response_id": response.id,
-                    "finish_reason": response.incomplete_details,
-                }
-            )
-
-            if finish_reason == "max_output_tokens":
-                raise MaxOutputTokensExceededError(log_message)
-
-            raise ModelNoOutputError(log_message)
-
         tool_calls: list[ToolCall] = []
         citations: list[Citation] = []
         reasoning = None
@@ -994,12 +997,23 @@ class OpenAIModel(LLM):
                 )
             )
 
+        mapped_finish_reason = map_openai_responses_finish_reason(
+            response.status, finish_reason, has_tool_calls=bool(tool_calls)
+        )
+        if no_useful_content:
+            handle_empty_response(
+                mapped_finish_reason,
+                {
+                    "status": response.status,
+                    "response_id": response.id,
+                    "incomplete_details": response.incomplete_details,
+                },
+            )
+
         result = QueryResult(
             output_text=response.output_text,
             reasoning=reasoning,
-            finish_reason=map_openai_responses_finish_reason(
-                response.status, finish_reason, bool(tool_calls)
-            ),
+            finish_reason=mapped_finish_reason,
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=response.output)],
             extras=QueryResultExtras(citations=citations),
@@ -1065,10 +1079,14 @@ class OpenAIModel(LLM):
             return RateLimit(
                 raw=headers,
                 unix_timestamp=timestamp,
-                request_limit=headers.get("x-ratelimit-limit-requests", None)
-                or headers.get("x-ratelimit-limit", None),
-                request_remaining=headers.get("x-ratelimit-remaining-requests", None)
-                or headers.get("x-ratelimit-remaining"),
+                request_limit=int(
+                    headers.get("x-ratelimit-limit-requests", 0)
+                    or headers.get("x-ratelimit-limit", 0)
+                ),
+                request_remaining=int(
+                    headers.get("x-ratelimit-remaining-requests", 0)
+                    or headers.get("x-ratelimit-remaining", 0)
+                ),
                 token_limit=int(headers["x-ratelimit-limit-tokens"]),
                 token_remaining=int(headers["x-ratelimit-remaining-tokens"]),
             )

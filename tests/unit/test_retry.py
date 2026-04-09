@@ -10,6 +10,8 @@ import httpx
 import pytest
 
 from model_library.base import LLM, QueryResult
+from model_library.base import FinishReason
+from model_library.base.output import FinishReasonInfo
 from model_library.exceptions import (
     BackoffRetryException,
     BadInputError,
@@ -21,6 +23,7 @@ from model_library.exceptions import (
     RetryException,
     ToolCallingNotSupportedError,
     is_retriable_error,
+    handle_empty_response,
 )
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, retry_decorator
@@ -317,3 +320,23 @@ async def test_context_window_error_gives_up(mock_llm: LLM):
             await mock_llm.query("Mock Input")
 
         assert exc_info.value.args[0] == exception_message
+
+
+@pytest.mark.parametrize(
+    "finish_reason,expected_exception",
+    [
+        (FinishReason.CONTEXT_WINDOW_EXCEEDED, MaxContextWindowExceededError),
+        (FinishReason.MAX_TOKENS, MaxOutputTokensExceededError),
+        (FinishReason.STOP, ModelNoOutputError),
+        (FinishReason.UNKNOWN, ModelNoOutputError),
+    ],
+)
+async def test_handle_empty_response(
+    finish_reason: FinishReason,
+    expected_exception: type[Exception],
+):
+    """
+    Test that handle_empty_response raises the correct exception for each finish reason
+    """
+    with pytest.raises(expected_exception):
+        handle_empty_response(FinishReasonInfo(reason=finish_reason, raw=str(finish_reason.value)))

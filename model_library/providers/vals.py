@@ -162,7 +162,14 @@ class DummyAIModel(LLM):
     def _get_default_api_key(self) -> str:
         return model_library_settings.REDIS_URL
 
-    def get_client(self, api_key: str | None = None) -> Redis:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> Redis:
+        if base_url:
+            self.instance_logger.warning(
+                "custom_endpoint is not supported by this provider and will be ignored"
+            )
+
         if not self.has_client():
             assert api_key
             client = redis.from_url(  # pyright: ignore[reportUnknownMemberType]

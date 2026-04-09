@@ -8,10 +8,8 @@ class ModelLibrarySettings:
     def __init__(self):
         self._key_overrides = {}
 
-    def set(self, **keys: str):
-        self._key_overrides.update(
-            {provider.upper(): key for provider, key in keys.items()}
-        )
+    def set(self, **keys: str | bool):
+        self._key_overrides.update({k.upper(): str(v) for k, v in keys.items()})
 
     def reset(self):
         self._key_overrides = {}

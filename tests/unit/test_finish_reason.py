@@ -46,7 +46,7 @@ async def test_anthropic_finish_reason_all_values():
     info = map_anthropic_finish_reason("model_context_window_exceeded")
     _assert_finish_reason_info(
         info,
-        expected_reason=FinishReason.MAX_TOKENS,
+        expected_reason=FinishReason.CONTEXT_WINDOW_EXCEEDED,
         expected_raw="model_context_window_exceeded",
     )
 
@@ -113,28 +113,28 @@ async def test_openai_responses_finish_reason_all_values():
                     ("content_filter", FinishReason.CONTENT_FILTER),
                 ):
                     info = map_openai_responses_finish_reason(
-                        status, incomplete_reason, False
+                        status, incomplete_reason
                     )
                     _assert_finish_reason_info(
                         info,
                         expected_reason=expected_reason,
                         expected_raw=f"incomplete:{incomplete_reason}",
                     )
-                info = map_openai_responses_finish_reason(status, None, False)
+                info = map_openai_responses_finish_reason(status, None)
                 _assert_finish_reason_info(
                     info,
                     expected_reason=FinishReason.UNKNOWN,
                     expected_raw="incomplete",
                 )
             case "failed":
-                info = map_openai_responses_finish_reason(status, None, False)
+                info = map_openai_responses_finish_reason(status, None)
                 _assert_finish_reason_info(
                     info,
                     expected_reason=FinishReason.ERROR,
                     expected_raw=status,
                 )
             case "in_progress" | "cancelled" | "queued":
-                info = map_openai_responses_finish_reason(status, None, False)
+                info = map_openai_responses_finish_reason(status, None)
                 _assert_finish_reason_info(
                     info,
                     expected_reason=FinishReason.UNKNOWN,
@@ -171,7 +171,7 @@ async def test_google_finish_reason_all_values():
     assert set(GoogleFinishReason) == set(handled) | unknown
 
     for finish_reason in handled:
-        info = map_google_finish_reason(finish_reason, False)
+        info = map_google_finish_reason(finish_reason)
         _assert_finish_reason_info(
             info,
             expected_reason=handled[finish_reason],
@@ -179,14 +179,14 @@ async def test_google_finish_reason_all_values():
         )
 
     for finish_reason in unknown:
-        info = map_google_finish_reason(finish_reason, False)
+        info = map_google_finish_reason(finish_reason)
         _assert_finish_reason_info(
             info,
             expected_reason=FinishReason.UNKNOWN,
             expected_raw=finish_reason.name,
         )
 
-    info = map_google_finish_reason(None, False)
+    info = map_google_finish_reason(None)
     _assert_finish_reason_info(
         info,
         expected_reason=FinishReason.UNKNOWN,
@@ -240,7 +240,7 @@ async def test_xai_finish_reason_all_values():
 
     handled: dict[str, FinishReason] = {
         "REASON_MAX_LEN": FinishReason.MAX_TOKENS,
-        "REASON_MAX_CONTEXT": FinishReason.MAX_TOKENS,
+        "REASON_MAX_CONTEXT": FinishReason.CONTEXT_WINDOW_EXCEEDED,
         "REASON_STOP": FinishReason.STOP,
         "REASON_TOOL_CALLS": FinishReason.TOOL_CALLS,
         "REASON_TIME_LIMIT": FinishReason.MAX_TOKENS,
@@ -315,3 +315,4 @@ async def test_ai21_finish_reason_all_values():
         expected_reason=FinishReason.TOOL_CALLS,
         expected_raw="stop",
     )
+

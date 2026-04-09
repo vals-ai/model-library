@@ -108,6 +108,8 @@ from model_library import model_library_settings
 model_library_settings.set(MY_KEY="my-key")
 ```
 
+See [docs/config.md](docs/config.md) for all settings and YAML config structure.
+
 
 ### System Prompt
 
@@ -213,6 +215,12 @@ You can run `make examples` (default models) or `make example <model>` to run al
 
 `python -m examples.advanced.deep_research`
 
+
+## Docs
+
+- [Model Configuration](docs/config.md) — YAML config structure, inheritance, deprecation, settings
+- [Agent](docs/agent.md) — tool-augmented conversation loop
+- [Token Retry & Benchmark Queue](docs/token-retry.md) — rate-limit-aware scheduling via Redis
 
 ## Architecture
 

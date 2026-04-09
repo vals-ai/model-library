@@ -1,0 +1,28 @@
+base-config:
+  company: Arcee AI
+  documentation_url: https://docs.arcee.ai/api-reference/your-first-api-call
+  open_source: true
+  supports:
+    temperature: true
+    images: false
+    files: false
+    tools: true
+
+trinity-models:
+  arcee-ai/trinity-large-thinking:
+    label: Trinity Large Thinking
+    release_date: 2026-04-01
+    properties:
+      reasoning_model: true
+      context_window: 262_144
+      max_tokens: 80_000
+    costs_per_million_token:
+      input: 0.25
+      output: 0.90
+      cache:
+        read: 0.06
+    default_parameters:
+      temperature: 0.3
+      top_p: 0.95
+    alternative_keys:
+      - openrouter/arcee-ai/trinity-large-thinking

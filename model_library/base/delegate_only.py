@@ -14,7 +14,6 @@ from model_library.base import (
     QueryResult,
     ToolDefinition,
 )
-from model_library.base.base import DelegateConfig
 
 
 class DelegateOnlyException(Exception):
@@ -34,14 +33,15 @@ class DelegateOnly(LLM):
         raise DelegateOnlyException()
 
     @override
-    def get_client(self, api_key: str | None = None) -> None:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> None:
         assert self.delegate
         return self.delegate.get_client()
 
     def init_delegate(
         self,
         config: LLMConfig | None,
-        delegate_config: DelegateConfig,
         delegate_provider: Literal["openai", "anthropic"],
         use_completions: bool = True,
     ) -> None:
@@ -55,14 +55,12 @@ class DelegateOnly(LLM):
                     provider=self.provider,
                     config=config,
                     use_completions=use_completions,
-                    delegate_config=delegate_config,
                 )
             case "anthropic":
                 self.delegate = AnthropicModel(
                     model_name=self.model_name,
                     provider=self.provider,
                     config=config,
-                    delegate_config=delegate_config,
                 )
         self._client_registry_key_model_specific = (
             self.delegate._client_registry_key_model_specific

@@ -8,7 +8,7 @@ from typing import Literal
 import pytest
 
 from model_library.base import LLM
-from model_library.providers.fireworks import FireworksModel
+from model_library.providers.delegates.fireworks import FireworksModel
 from model_library.providers.google import GoogleModel
 from model_library.register_models import (
     ModelRegistry,

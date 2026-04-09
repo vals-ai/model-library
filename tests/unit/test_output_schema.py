@@ -100,20 +100,20 @@ class TestAnthropicBuildBodyOutputSchema:
 UNSUPPORTED_PROVIDER_MODELS = [
     "fireworks/deepseek-v3p2",
     "perplexity/sonar-pro",
-    "together/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo",
+    "together/zai-org/GLM-4.5-Air-FP8",
     "cohere/command-a-03-2025",
     "deepseek/deepseek-chat",
     "mistralai/mistral-large-2512",
     "ai21labs/jamba-large-1.7",
     "amazon/amazon.nova-pro-v1:0",
-    "grok/grok-3-mini",
+    "grok/grok-3",
 ]
 
 UNSUPPORTED_BIG_THREE_MODELS = [
     "anthropic/claude-sonnet-4-20250514",
-    "anthropic/claude-3-5-sonnet-20241022",
-    "openai/gpt-4-turbo",
-    "google/gemma-3-27b-it",
+    "anthropic/claude-opus-4-20250514",
+    "openai/gpt-4o-2024-05-13",
+    "openai/o3-deep-research",
 ]
 
 

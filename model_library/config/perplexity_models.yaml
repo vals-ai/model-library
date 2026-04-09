@@ -8,25 +8,17 @@ base-config:
     batch: false
     temperature: true
     tools: false
-  metadata:
-    available_for_everyone: true
-    available_as_evaluator: false
-    ignored_for_cost: false
   properties:
     context_window: 128000
     max_tokens: 0
     training_cutoff: null
+    reasoning_model: false
 
-perplexity-models:
-  base-config:
-    properties:
-      reasoning_model: false
+sonar-models:
 
   perplexity/sonar:
     label: Sonar
     documentation_url: https://docs.perplexity.ai/models/models/sonar
-    properties:
-      context_window: 128000
     costs_per_million_token:
       input: 1.0
       output: 1.0
@@ -40,23 +32,10 @@ perplexity-models:
       input: 3.0
       output: 15.0
 
-  perplexity/sonar-reasoning:
-    label: Sonar Reasoning
-    documentation_url: https://docs.perplexity.ai/models/models/sonar-reasoning
-    metadata:
-      deprecated: true
-    properties:
-      context_window: 128000
-      reasoning_model: true
-    costs_per_million_token:
-      input: 1.0
-      output: 5.0
-
   perplexity/sonar-reasoning-pro:
     label: Sonar Reasoning Pro
     documentation_url: https://docs.perplexity.ai/models/models/sonar-reasoning-pro
     properties:
-      context_window: 128000
       reasoning_model: true
     costs_per_million_token:
       input: 2.0
@@ -66,7 +45,6 @@ perplexity-models:
     label: Sonar Deep Research
     documentation_url: https://docs.perplexity.ai/models/models/sonar-deep-research
     properties:
-      context_window: 128000
       reasoning_model: true
     costs_per_million_token:
       input: 2.0

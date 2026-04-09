@@ -6,14 +6,10 @@ base-config:
     images: true
     files: false
     tools: true
-  metadata:
-    available_as_evaluator: false
-    available_for_everyone: true
-    ignored_for_cost: false
   properties:
     reasoning_model: false
 
-xai-models:
+grok-4.20-models:
   base-config:
     supports:
       temperature: true
@@ -27,13 +23,12 @@ xai-models:
   grok/grok-4.20-0309-reasoning:
     label: Grok 4.20 (Reasoning)
     release_date: 2026-03-09
-    open_source: false
+    documentation_url: ""
     properties:
       context_window: 2_000_000
       max_tokens: 2_000_000
       training_cutoff: null
       reasoning_model: true
-    documentation_url: ""
     costs_per_million_token:
       input: 2.00
       output: 6.00
@@ -49,7 +44,6 @@ xai-models:
   grok/grok-4.20-multi-agent-0309:
     label: Grok 4.20 (Multi-Agent)
     release_date: 2026-03-09
-    open_source: false
     properties:
       context_window: 2_000_000
       max_tokens: 2_000_000
@@ -66,38 +60,52 @@ xai-models:
         output: 12.00
         cache:
           read: 0.40
-  grok/grok-code-fast-1:
-    label: Grok Code Fast
-    release_date: 2025-08-25
+grok-4-models:
+  base-config:
+    supports:
+      temperature: true
+    costs_per_million_token:
+      cache:
+        read_discount: 0.1
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.95
+
+  grok/grok-4-0709:
+    label: Grok 4
+    release_date: 2025-07-09
+    documentation_url: https://docs.x.ai/docs/models/grok-4-0709
+    supports:
+      files: true
     properties:
       context_window: 256_000
-      max_tokens: 40_000
+      max_tokens: 128_000
+      training_cutoff: null
       reasoning_model: true
-    supports:
-      images: false
     costs_per_million_token:
-      input: 0.20
-      output: 1.50
+      input: 3.00
+      output: 15.00
       cache:
-        read: 0.02
-    documentation_url: https://docs.x.ai/docs/models/grok-code-fast-1
+        read: 0.75
+      context:
+        threshold: 128_000
+        input: 6.00
+        output: 30.00
     alternative_keys:
-      - grok/grok-code-fast
-      - grok/grok-code-fast-1-0825
+      - grok/grok-4
+      - grok/grok-4-latest
 
   grok/grok-4-fast-reasoning:
     label: Grok 4 Fast (Reasoning)
     release_date: 2025-09-19
-    open_source: false
+    documentation_url: https://docs.x.ai/docs/models/grok-4-fast-reasoning
     supports:
-      images: true
       files: true
     properties:
       context_window: 2_000_000
       max_tokens: 2_000_000
       training_cutoff: null
       reasoning_model: true
-    documentation_url: https://docs.x.ai/docs/models/grok-4-fast-reasoning
     costs_per_million_token:
       input: 0.20
       output: 0.5
@@ -114,16 +122,12 @@ xai-models:
   grok/grok-4-1-fast-reasoning:
     label: Grok 4.1 Fast (Reasoning)
     release_date: 2025-11-19
-    open_source: false
-    supports:
-      images: true
-      files: false
+    documentation_url: ""
     properties:
       context_window: 2_000_000
       max_tokens: 2_000_000 # from openrouter
       training_cutoff: null
       reasoning_model: true
-    documentation_url: ""
     costs_per_million_token:
       input: 0.20
       output: 0.5
@@ -137,16 +141,11 @@ xai-models:
   grok/grok-4-1-fast-non-reasoning:
     label: Grok 4.1 Fast Non-Reasoning
     release_date: 2025-11-19
-    open_source: false
-    supports:
-      images: true
-      files: false
+    documentation_url: ""
     properties:
       context_window: 2_000_000
       max_tokens: 2_000_000 # from openrouter
       training_cutoff: null
-      reasoning_model: false
-    documentation_url: ""
     costs_per_million_token:
       input: 0.20
       output: 0.5
@@ -160,16 +159,13 @@ xai-models:
   grok/grok-4-fast-non-reasoning:
     label: Grok 4 Fast (Non-Reasoning)
     release_date: 2025-09-19
-    open_source: false
+    documentation_url: https://docs.x.ai/docs/models/grok-4-fast-non-reasoning
     supports:
-      images: true
       files: true
     properties:
       context_window: 2_000_000
       max_tokens: 2_000_000
       training_cutoff: null
-      reasoning_model: false
-    documentation_url: https://docs.x.ai/docs/models/grok-4-fast-non-reasoning
     costs_per_million_token:
       input: 0.20
       output: 0.5
@@ -182,148 +178,63 @@ xai-models:
     alternative_keys:
       - grok/grok-4-fast-non-reasoning-latest
 
-  grok/grok-4-0709:
-    label: Grok 4
-    release_date: 2025-07-09
+grok-code-models:
+  base-config:
     supports:
-      images: true
-      files: true
-      tools: true
-    properties:
-      context_window: 256_000
-      max_tokens: 128_000
-      training_cutoff: null
-      reasoning_model: true
-    documentation_url: https://docs.x.ai/docs/models/grok-4-0709
+      temperature: true
     costs_per_million_token:
-      input: 3.00
-      output: 15.00
       cache:
-        read: 0.75
-      context:
-        threshold: 128_000
-        input: 6.00
-        output: 30.00
-    alternative_keys:
-      - grok/grok-4
-      - grok/grok-4-latest
-
-  grok/grok-3-mini:
-    label: Grok 3 Mini Reasoning
-    release_date: 2025-04-09
-    properties:
-      context_window: 131_072
-      max_tokens: null
-      training_cutoff: null
-      reasoning_model: true
-      max_tokens: 0
-    metadata:
-      deprecated: true
-    costs_per_million_token:
-      input: 0.30
-      output: 0.50
-      cache:
-        read: 0.075
-    documentation_url: https://docs.x.ai/docs/models/grok-3-mini
+        read_discount: 0.1
     default_parameters:
       temperature: 0.7
+      top_p: 0.95
+
+  grok/grok-code-fast-1:
+    label: Grok Code Fast
+    release_date: 2025-08-25
+    documentation_url: https://docs.x.ai/docs/models/grok-code-fast-1
+    supports:
+      images: false
+    properties:
+      context_window: 256_000
+      max_tokens: 40_000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.20
+      output: 1.50
+      cache:
+        read: 0.02
     alternative_keys:
-      - grok/grok-3-mini-latest
-      - grok/grok-3-mini-beta
-      - grok/grok-3-mini-fast
-      - grok/grok-3-mini-fast-latest
-      - grok/grok-3-mini-fast-beta
-      - grok/grok-3-mini-high-reasoning:
-          default_parameters:
-            reasoning_effort: "high"
-      - grok/grok-3-mini-low-reasoning:
-          default_parameters:
-            reasoning_effort: "low"
-      - grok/grok-3-mini-fast-high-reasoning:
-          default_parameters:
-            reasoning_effort: "high"
-      - grok/grok-3-mini-fast-low-reasoning:
-          default_parameters:
-            reasoning_effort: "low"
+      - grok/grok-code-fast
+      - grok/grok-code-fast-1-0825
+
+grok-3-models:
+  base-config:
+    supports:
+      temperature: true
+    costs_per_million_token:
+      cache:
+        read_discount: 0.1
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.95
 
   grok/grok-3:
     label: Grok 3
     release_date: 2025-04-09
+    documentation_url: https://docs.x.ai/docs/models/grok-3
     properties:
       context_window: 131_072
-      max_tokens: null
-      training_cutoff: null
       max_tokens: 0
+      training_cutoff: null
     costs_per_million_token:
       input: 3.00
       output: 15.00
       cache:
         read: 0.75
-    documentation_url: https://docs.x.ai/docs/models/grok-3
-    default_parameters:
-      temperature: 0.7
     alternative_keys:
       - grok/grok-3-latest
       - grok/grok-3-beta
       - grok/grok-3-fast
       - grok/grok-3-fast-latest
       - grok/grok-3-fast-beta
-
-  grok/grok-2-vision-1212:
-    label: Grok 2 Vision
-    release_date: 2024-12-12
-    properties:
-      context_window: 8_192
-      max_tokens: 0
-      training_cutoff: null
-    metadata:
-      deprecated: true
-    supports:
-      images: true
-    costs_per_million_token:
-      input: 2.00
-      output: 10.00
-    alternative_keys:
-      - grok/grok-2-vision
-      - grok/grok-2-vision-latest
-
-  grok/grok-2-1212:
-    label: Grok 2
-    release_date: 2024-12-11
-    properties:
-      context_window: 131_072
-      max_tokens: 0
-      training_cutoff: null
-    metadata:
-      deprecated: true
-    costs_per_million_token:
-      input: 2.00
-      output: 10.00
-
-  grok/grok-vision-beta:
-    label: Grok Vision Beta
-    release_date: 2024-12-12
-    properties:
-      context_window: 8_192
-      max_tokens: 0
-      training_cutoff: null
-    supports:
-      images: true
-    metadata:
-      deprecated: true
-    costs_per_million_token:
-      input: 5.00
-      output: 15.00
-
-  grok/grok-beta:
-    label: Grok Beta
-    release_date: 2024-12-11
-    properties:
-      context_window: 131_072
-      max_tokens: 0
-      training_cutoff: null
-    metadata:
-      deprecated: true
-    costs_per_million_token:
-      input: 5.00
-      output: 15.00

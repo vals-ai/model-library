@@ -40,9 +40,8 @@ from model_library.base import (
 )
 from model_library.exceptions import (
     BadInputError,
-    MaxOutputTokensExceededError,
-    ModelNoOutputError,
     UnexpectedSystemInputError,
+    handle_empty_response,
 )
 from model_library.file_utils import trim_images
 from model_library.register_models import register_provider
@@ -74,13 +73,24 @@ class MistralModel(LLM):
         return model_library_settings.MISTRAL_API_KEY
 
     @override
-    def get_client(self, api_key: str | None = None) -> Mistral:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> Mistral:
         if not self.has_client():
             assert api_key
-            client = Mistral(
-                api_key=api_key,
-                async_client=default_httpx_client(),
-            )
+
+            if base_url:
+                client = Mistral(
+                    api_key=api_key,
+                    async_client=default_httpx_client(),
+                    server_url=base_url,
+                )
+            else:
+                client = Mistral(
+                    api_key=api_key,
+                    async_client=default_httpx_client(),
+                )
+
             self.assign_client(client)
         return super().get_client()
 
@@ -313,11 +323,15 @@ class MistralModel(LLM):
             raise e
 
         no_useful_content = not text and not reasoning and not raw_tool_calls
+        mapped_finish_reason = map_mistral_finish_reason(finish_reason)
         if no_useful_content:
-            log_message = str({"finish_reason": finish_reason})
-            if finish_reason == "length":
-                raise MaxOutputTokensExceededError(log_message)
-            raise ModelNoOutputError(log_message)
+            handle_empty_response(
+                mapped_finish_reason,
+                {
+                    "in_tokens": in_tokens,
+                    "out_tokens": out_tokens,
+                },
+            )
 
         tool_calls: list[ToolCall] = []
 
@@ -357,7 +371,7 @@ class MistralModel(LLM):
         return QueryResult(
             output_text=text,
             reasoning=reasoning or None,
-            finish_reason=map_mistral_finish_reason(finish_reason),
+            finish_reason=mapped_finish_reason,
             history=[*input, RawResponse(response=message)],
             tool_calls=tool_calls,
             metadata=QueryResultMetadata(

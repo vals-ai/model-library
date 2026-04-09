@@ -5,7 +5,6 @@ from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
-    DelegateConfig,
     DelegateOnly,
     InputItem,
     LLMConfig,
@@ -25,12 +24,16 @@ class MinimaxModel(DelegateOnly):
     ):
         super().__init__(model_name, provider, config=config)
 
+        config = config or LLMConfig()
+        config.custom_endpoint = (
+            config.custom_endpoint or "https://api.minimax.io/anthropic"
+        )
+        config.custom_api_key = config.custom_api_key or SecretStr(
+            model_library_settings.MINIMAX_API_KEY
+        )
+
         self.init_delegate(
             config=config,
-            delegate_config=DelegateConfig(
-                base_url="https://api.minimax.io/anthropic",
-                api_key=SecretStr(model_library_settings.MINIMAX_API_KEY),
-            ),
             delegate_provider="anthropic",
         )
 

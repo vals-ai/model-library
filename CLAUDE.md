@@ -18,7 +18,17 @@ make test             # Run unit tests
 make style            # Format (ruff format) and lint (ruff check --fix)
 make typecheck        # Run basedpyright (strict mode)
 make config           # Regenerate all_models.json from YAML configs
+make deprecate model=provider/model-key  # Move a model to deprecated
 ```
+
+## Model config structure
+
+- Active configs: `model_library/config/*.yaml` (one per provider)
+- Deprecated configs: `model_library/config/deprecated/*.yaml` (not loaded by default)
+- Generated: `model_library/config/all_models.json` (do not edit)
+- YAML uses 3-level inheritance: provider base-config → block base-config → model entry
+- `MODEL_LIBRARY_INCLUDE_DEPRECATED=True` to load deprecated models
+- See `docs/config.md` for details
 
 ## Code standards
 

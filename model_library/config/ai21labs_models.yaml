@@ -5,16 +5,14 @@ base-config:
     images: false
     files: false
   metadata:
-    available_as_evaluator: false
     available_for_everyone: false
-    ignored_for_cost: false
   properties:
     context_window: 0
     max_tokens: 4096
     training_cutoff: null
     reasoning_model: false
 
-ai21labs-models:
+jamba-models:
   base-config:
     open_source: true
     supports:
@@ -31,67 +29,3 @@ ai21labs-models:
     costs_per_million_token:
       input: 2.00
       output: 8.00
-
-  ai21labs/jamba-mini-1.7:
-    label: Jamba 1.7 Mini
-    release_date: 2025-07-03
-    metadata:
-      deprecated: true
-    properties:
-      context_window: 256_000
-      training_cutoff: "2024-08"
-    costs_per_million_token:
-      input: 0.2
-      output: 0.4
-
-  ai21labs/jamba-large-1.6:
-    label: Jamba 1.6 Large
-    release_date: 2025-03-06
-    metadata:
-      deprecated: true
-    properties:
-      context_window: 256_000
-    costs_per_million_token:
-      input: 2.00
-      output: 8.00
-    alternative_keys:
-      - ai21labs/jamba-1.6-large
-
-  ai21labs/jamba-mini-1.6:
-    label: Jamba 1.6 Mini
-    release_date: 2025-03-06
-    metadata:
-      deprecated: true
-    properties:
-      context_window: 256_000
-    costs_per_million_token:
-      input: 0.2
-      output: 0.4
-    alternative_keys:
-      - ai21labs/jamba-1.6-mini
-
-  ai21labs/jamba-large-1.5:
-    label: Jamba 1.5 Large
-    release_date: 2024-08-22
-    properties:
-      context_window: 256_000
-    metadata:
-      deprecated: true
-    costs_per_million_token:
-      input: 2.00
-      output: 8.00
-    alternative_keys:
-      - ai21labs/jamba-1.5-large
-
-  ai21labs/jamba-mini-1.5:
-    label: Jamba 1.5 Mini
-    release_date: 2024-08-22
-    properties:
-      context_window: 256_000
-    metadata:
-      deprecated: true
-    costs_per_million_token:
-      input: 0.2
-      output: 0.4
-    alternative_keys:
-      - ai21labs/jamba-1.5-mini

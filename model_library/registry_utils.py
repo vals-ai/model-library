@@ -39,20 +39,13 @@ def create_config(
         config["reasoning"] = properties.reasoning_model
 
     if supports:
-        if supports.images is not None:
-            config["supports_images"] = supports.images
-        if supports.files is not None:
-            config["supports_files"] = supports.files
-        if supports.videos is not None:
-            config["supports_videos"] = supports.videos
-        if supports.batch is not None:
-            config["supports_batch"] = supports.batch
-        if supports.temperature is not None:
-            config["supports_temperature"] = supports.temperature
-        if supports.tools is not None:
-            config["supports_tools"] = supports.tools
-        if supports.output_schema is not None:
-            config["supports_output_schema"] = supports.output_schema
+        config["supports_images"] = supports.images
+        config["supports_files"] = supports.files
+        config["supports_videos"] = supports.videos
+        config["supports_batch"] = supports.batch
+        config["supports_temperature"] = supports.temperature
+        config["supports_tools"] = supports.tools
+        config["supports_output_schema"] = supports.output_schema
     else:
         raise Exception(f"{registry_config.label} has no supports")
 
@@ -78,7 +71,7 @@ def create_config(
         loaded_config = loaded_config.model_copy(
             update=override_config.model_dump(exclude_unset=True)
         )
-        # copy provider config with correct type
+        # copy provider_config with correct type (model_dump flattens to dict)
         if override_config.provider_config:
             loaded_config.provider_config = override_config.provider_config
 
@@ -158,7 +151,7 @@ def get_model_input_context_window(model_name: str) -> int:
 
     context_window = model.properties.context_window
     match model.provider_name:
-        case "openai":
+        case "openai" | "meta":
             context_window -= model.properties.max_tokens
         case _:
             pass

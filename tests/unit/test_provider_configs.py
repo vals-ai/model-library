@@ -11,7 +11,7 @@ from model_library.base.input import TextInput
 from model_library.providers.anthropic import AnthropicConfig, AnthropicModel
 from model_library.providers.google.google import GoogleConfig, GoogleModel
 from model_library.providers.openai import OpenAIConfig, OpenAIModel
-from model_library.providers.zai import ZAIConfig, ZAIModel
+from model_library.providers.delegates.zai import ZAIConfig, ZAIModel
 from model_library.registry_utils import get_registry_model
 
 _INPUT = [TextInput(text="")]
@@ -102,25 +102,6 @@ class TestAnthropicConfig:
 
         assert "output_config" not in body
 
-    async def test_registry_sonnet_4_5_has_1M_context(self):
-        model = get_registry_model("anthropic/claude-sonnet-4-5-20250929")
-        assert isinstance(model, AnthropicModel)
-        assert model.provider_config.supports_1M_context is True
-
-    async def test_registry_sonnet_4_has_1M_context(self):
-        model = get_registry_model("anthropic/claude-sonnet-4-20250514")
-        assert isinstance(model, AnthropicModel)
-        assert model.provider_config.supports_1M_context is True
-
-    async def test_registry_opus_4_6_no_1M_context(self):
-        model = get_registry_model("anthropic/claude-opus-4-6")
-        assert isinstance(model, AnthropicModel)
-        assert model.provider_config.supports_1M_context is False
-
-    async def test_registry_haiku_no_1M_context(self):
-        model = get_registry_model("anthropic/claude-haiku-4-5-20251001")
-        assert isinstance(model, AnthropicModel)
-        assert model.provider_config.supports_1M_context is False
 
 
 class TestRegistryProviderConfigs:

@@ -8,10 +8,6 @@ base-config:
     batch: true
     temperature: true
     output_schema: true
-  metadata:
-    available_as_evaluator: false
-    available_for_everyone: true
-    ignored_for_cost: false
   properties:
     reasoning_model: false
   costs_per_million_token:
@@ -26,14 +22,11 @@ gpt-5-models:
     supports:
       images: true
       files: true
-      tools: true
       temperature: false
     metadata:
       available_for_everyone: false
     properties:
-      context_window: 400_000
       max_tokens: 128_000
-      training_cutoff: "2024-09"
       reasoning_model: true
 
   openai/gpt-5.4-nano-2026-03-17:
@@ -41,14 +34,12 @@ gpt-5-models:
     release_date: 2026-03-17
     documentation_url: ""
     properties:
-      context_window: 400_000 
-      max_tokens: 128_000
+      context_window: 400_000
       training_cutoff: "2025-08" # TODO: check this
-      reasoning_model: true 
     metadata:
       available_for_everyone: true
     costs_per_million_token:
-      input: 0.20 
+      input: 0.20
       output: 1.25
       cache:
         read: 0.02
@@ -61,11 +52,7 @@ gpt-5-models:
     documentation_url: "https://developers.openai.com/api/docs/models/gpt-5.4"
     properties:
       context_window: 1_050_000
-      max_tokens: 128_000
       training_cutoff: "2025-08"
-      reasoning_model: true
-    metadata:
-      available_for_everyone: false
     costs_per_million_token:
       input: 30
       output: 180
@@ -81,10 +68,8 @@ gpt-5-models:
     release_date: 2026-03-17
     documentation_url: ""
     properties:
-      context_window: 272_000 
-      max_tokens: 128_000
+      context_window: 400_000
       training_cutoff: "2025-08"
-      reasoning_model: true 
     metadata:
       available_for_everyone: true
     costs_per_million_token:
@@ -94,6 +79,8 @@ gpt-5-models:
         read: 0.075
     default_parameters:
       reasoning_effort: "xhigh"
+    alternative_keys:
+      - openai/gpt-5.4-mini
 
   openai/gpt-5.4-2026-03-05:
     label: GPT 5.4
@@ -101,9 +88,7 @@ gpt-5-models:
     documentation_url: "https://developers.openai.com/api/docs/models/gpt-5.4"
     properties:
       context_window: 1_050_000
-      max_tokens: 128_000
       training_cutoff: "2024-09"
-      reasoning_model: true
     costs_per_million_token:
       input: 2.5
       output: 15
@@ -130,8 +115,7 @@ gpt-5-models:
     release_date: 2026-02-24
     properties:
       context_window: 400_000
-    metadata:
-      available_for_everyone: false
+      training_cutoff: "2024-09"
     default_parameters:
       reasoning_effort: "xhigh"
     costs_per_million_token:
@@ -147,6 +131,7 @@ gpt-5-models:
     release_date: 2025-12-11
     properties:
       context_window: 400_000
+      training_cutoff: "2024-09"
     costs_per_million_token:
       input: 1.75
       output: 14
@@ -159,6 +144,7 @@ gpt-5-models:
     release_date: 2025-12-11
     properties:
       context_window: 400_000
+      training_cutoff: "2024-09"
     metadata:
       available_as_evaluator: true
     costs_per_million_token:
@@ -177,6 +163,7 @@ gpt-5-models:
     release_date: 2025-12-11
     properties:
       context_window: 400_000
+      training_cutoff: "2024-09"
     costs_per_million_token:
       input: 21
       output: 168
@@ -186,6 +173,9 @@ gpt-5-models:
   openai/gpt-5.1-codex-max:
     label: GPT 5.1 Codex Max
     release_date: 2025-12-04
+    properties:
+      context_window: 400_000
+      training_cutoff: "2024-09"
     costs_per_million_token:
       input: 1.25
       output: 10.0
@@ -195,6 +185,9 @@ gpt-5-models:
     label: GPT 5.1 Codex
     documentation_url: https://platform.openai.com/docs/models/gpt-5.1-codex
     release_date: 2025-11-13
+    properties:
+      context_window: 400_000
+      training_cutoff: "2024-09"
     costs_per_million_token:
       input: 1.25
       output: 10.0
@@ -205,6 +198,9 @@ gpt-5-models:
     label: GPT 5.1 Codex Mini
     documentation_url: https://platform.openai.com/docs/models/gpt-5.1-codex-mini
     release_date: 2025-11-13
+    properties:
+      context_window: 400_000
+      training_cutoff: "2024-09"
     costs_per_million_token:
       input: 0.25
       output: 2.00
@@ -215,6 +211,9 @@ gpt-5-models:
     label: GPT 5 Codex
     documentation_url: https://platform.openai.com/docs/models/gpt-5-codex
     release_date: 2025-09-23
+    properties:
+      context_window: 400_000
+      training_cutoff: "2024-09"
     costs_per_million_token:
       input: 1.25
       output: 10.0
@@ -225,6 +224,9 @@ gpt-5-models:
     label: GPT 5.1
     documentation_url: https://platform.openai.com/docs/models/gpt-5.1
     release_date: 2025-11-13
+    properties:
+      context_window: 400_000
+      training_cutoff: "2024-09"
     metadata:
       available_as_evaluator: true
     costs_per_million_token:
@@ -243,9 +245,8 @@ gpt-5-models:
       cache:
         read: 0.125
     properties:
+      context_window: 400_000
       training_cutoff: "2025-07"
-    supports:
-      images: true
     metadata:
       available_as_evaluator: true
     alternative_keys:
@@ -261,6 +262,7 @@ gpt-5-models:
       cache:
         read: 0.025
     properties:
+      context_window: 400_000
       training_cutoff: "2024-05"
     alternative_keys:
       - azure/gpt-5-mini-2025-08-07
@@ -269,6 +271,9 @@ gpt-5-models:
     label: GPT 5 Nano
     documentation_url: https://platform.openai.com/docs/models/gpt-5-nano
     release_date: 2025-08-07
+    properties:
+      context_window: 400_000
+      training_cutoff: "2024-09"
     costs_per_million_token:
       input: 0.05
       output: 0.4
@@ -277,47 +282,12 @@ gpt-5-models:
     alternative_keys:
       - azure/gpt-5-nano-2025-08-07
 
-o4-models:
-  base-config:
-    documentation_url: https://platform.openai.com/docs/models#o4
-    supports:
-      tools: true
-      temperature: false
-    metadata:
-      deprecated: true
-    properties:
-      reasoning_model: true
-
-  openai/o4-mini-2025-04-16:
-    label: o4 Mini
-    documentation_url: https://platform.openai.com/docs/models/o4-mini
-    release_date: 2025-04-16
-    properties:
-      context_window: 200_000
-      max_tokens: 100_000
-      training_cutoff: "2024-05-31"
-      reasoning_model: true
-    supports:
-      images: true
-      temperature: false
-    metadata:
-      available_for_everyone: true
-      deprecated: false
-    costs_per_million_token:
-      input: 1.1
-      output: 4.4
-      cache:
-        read: 0.275
-    alternative_keys:
-      - azure/o4-mini-2025-04-16
-
 gpt-4.1-models:
   base-config:
     documentation_url: https://platform.openai.com/docs/models/gpt-4.1
     release_date: 2025-04-14
     supports:
       images: true
-      temperature: true
     properties:
       context_window: 1_047_576
       max_tokens: 32_768
@@ -332,9 +302,6 @@ gpt-4.1-models:
       output: 8.0
       cache:
         read: 0.5
-    documentation_url: https://platform.openai.com/docs/models/gpt-4.1
-    supports:
-      images: true
     alternative_keys:
       - azure/gpt-4.1-2025-04-14
 
@@ -346,8 +313,6 @@ gpt-4.1-models:
       cache:
         read: 0.1
     documentation_url: https://platform.openai.com/docs/models/gpt-4.1-mini
-    supports:
-      images: true
     alternative_keys:
       - azure/gpt-4.1-mini-2025-04-14
 
@@ -359,122 +324,8 @@ gpt-4.1-models:
       cache:
         read: 0.025
     documentation_url: https://platform.openai.com/docs/models/gpt-4.1-nano
-    supports:
-      images: true
     alternative_keys:
       - azure/gpt-4.1-nano-2025-04-14
-
-gpt-4.5-models:
-  base-config:
-    documentation_url: https://platform.openai.com/docs/models#gpt-4-5
-    supports:
-      images: true
-    metadata:
-      deprecated: true
-
-  openai/gpt-4.5-preview-2025-02-27:
-    label: GPT 4.5 Preview
-    release_date: 2025-02-27
-    properties:
-      context_window: 128_000
-      max_tokens: 16_384
-      training_cutoff: "2023-10"
-    costs_per_million_token:
-      input: 75
-      output: 150
-      cache:
-        read: 37.5
-    documentation_url: https://platform.openai.com/docs/models/gpt-4.5-preview
-    supports:
-      images: true
-
-o3-models:
-  base-config:
-    documentation_url: https://platform.openai.com/docs/models#o3-mini
-    supports:
-      tools: true
-    properties:
-      reasoning_model: true
-
-  openai/o3-2025-04-16:
-    label: o3
-    documentation_url: https://platform.openai.com/docs/models/o3
-    release_date: 2025-04-16
-    properties:
-      context_window: 200_000
-      max_tokens: 100_000
-      training_cutoff: "2024-05-31"
-      reasoning_model: true
-    supports:
-      images: true
-      temperature: false
-    metadata:
-      available_for_everyone: true
-    costs_per_million_token:
-      input: 2
-      output: 8
-      cache:
-        read: 0.5
-    alternative_keys:
-      - azure/o3-2025-04-16
-
-  openai/o3-mini:
-    label: o3 Mini
-    release_date: 2025-01-31
-    properties:
-      context_window: 200_000
-      max_tokens: 100_000
-      training_cutoff: "2023-10"
-      reasoning_model: true
-    costs_per_million_token:
-      input: 1.1
-      output: 4.4
-      cache:
-        read: 0.55
-    metadata:
-      available_for_everyone: false
-    documentation_url: https://platform.openai.com/docs/models/o3-mini
-
-  openai/o3-mini-2025-01-31:
-    label: o3 Mini
-    release_date: 2025-01-31
-    properties:
-      context_window: 200_000
-      max_tokens: 100_000
-      training_cutoff: "2023-10"
-      reasoning_model: true
-    costs_per_million_token:
-      input: 1.1
-      output: 4.4
-      cache:
-        read: 0.55
-    supports:
-      temperature: false
-    metadata:
-      available_for_everyone: false
-    documentation_url: https://platform.openai.com/docs/models/o3-mini
-    alternative_keys:
-      - azure/o3-mini-2025-01-31
-
-  openai/o3-pro-2025-06-10:
-    label: o3 Pro
-    release_date: 2025-06-10
-    properties:
-      context_window: 200_000
-      max_tokens: 100_000
-      training_cutoff: "2024-05-31"
-      reasoning_model: true
-    costs_per_million_token:
-      input: 20
-      output: 80
-      cache:
-        read_discount: 1
-    supports:
-      images: true
-      temperature: false
-    metadata:
-      available_for_everyone: false
-    documentation_url: https://platform.openai.com/docs/models/o3-pro
 
 deep-research-models:
   base-config:
@@ -482,7 +333,6 @@ deep-research-models:
     supports:
       images: true
       files: true
-      tools: true
       temperature: false
       output_schema: false
     properties:
@@ -501,8 +351,6 @@ deep-research-models:
       output: 40
       cache:
         read: 2.5
-    supports:
-      images: true
     metadata:
       available_for_everyone: true
     documentation_url: https://platform.openai.com/docs/models/o3-deep-research
@@ -515,8 +363,6 @@ deep-research-models:
       output: 40
       cache:
         read: 2.5
-    supports:
-      images: true
     metadata:
       available_for_everyone: true
     documentation_url: https://platform.openai.com/docs/models/o3-deep-research
@@ -529,8 +375,6 @@ deep-research-models:
       output: 8
       cache:
         read: 0.5
-    supports:
-      images: true
     metadata:
       available_for_everyone: true
     documentation_url: https://platform.openai.com/docs/models/o4-mini-deep-research
@@ -543,21 +387,109 @@ deep-research-models:
       output: 8
       cache:
         read: 0.5
-    supports:
-      images: true
     metadata:
       available_for_everyone: true
     documentation_url: https://platform.openai.com/docs/models/o4-mini-deep-research
 
-o1-models:
+o-series-models:
   base-config:
-    documentation_url: https://platform.openai.com/docs/models#o1
+    supports:
+      tools: true
+    properties:
+      reasoning_model: true
+
+  openai/o4-mini-2025-04-16:
+    label: o4 Mini
+    documentation_url: https://platform.openai.com/docs/models/o4-mini
+    release_date: 2025-04-16
+    properties:
+      context_window: 200_000
+      max_tokens: 100_000
+      training_cutoff: "2024-05-31"
+    supports:
+      images: true
+      temperature: false
+    costs_per_million_token:
+      input: 1.1
+      output: 4.4
+      cache:
+        read: 0.275
+    alternative_keys:
+      - azure/o4-mini-2025-04-16
+
+  openai/o3-2025-04-16:
+    label: o3
+    documentation_url: https://platform.openai.com/docs/models/o3
+    release_date: 2025-04-16
+    properties:
+      context_window: 200_000
+      max_tokens: 100_000
+      training_cutoff: "2024-05-31"
+    supports:
+      images: true
+      temperature: false
+    costs_per_million_token:
+      input: 2
+      output: 8
+      cache:
+        read: 0.5
+    alternative_keys:
+      - azure/o3-2025-04-16
+
+  openai/o3-pro-2025-06-10:
+    label: o3 Pro
+    release_date: 2025-06-10
+    properties:
+      context_window: 200_000
+      max_tokens: 100_000
+      training_cutoff: "2024-05-31"
+    costs_per_million_token:
+      input: 20
+      output: 80
+      cache:
+        read_discount: 1
+    supports:
+      images: true
+      temperature: false
+    metadata:
+      available_for_everyone: false
+    documentation_url: https://platform.openai.com/docs/models/o3-pro
+
+  openai/o3-mini:
+    label: o3 Mini
+    release_date: 2025-01-31
+    properties:
+      context_window: 200_000
+      max_tokens: 100_000
+      training_cutoff: "2023-10"
+    costs_per_million_token:
+      input: 1.1
+      output: 4.4
+      cache:
+        read: 0.55
+    metadata:
+      available_for_everyone: false
+    documentation_url: https://platform.openai.com/docs/models/o3-mini
+
+  openai/o3-mini-2025-01-31:
+    label: o3 Mini
+    release_date: 2025-01-31
+    properties:
+      context_window: 200_000
+      max_tokens: 100_000
+      training_cutoff: "2023-10"
+    costs_per_million_token:
+      input: 1.1
+      output: 4.4
+      cache:
+        read: 0.55
     supports:
       temperature: false
     metadata:
-      deprecated: true
-    properties:
-      reasoning_model: true
+      available_for_everyone: false
+    documentation_url: https://platform.openai.com/docs/models/o3-mini
+    alternative_keys:
+      - azure/o3-mini-2025-01-31
 
   openai/o1-2024-12-17:
     label: o1
@@ -566,7 +498,6 @@ o1-models:
       context_window: 200_000
       max_tokens: 100_000
       training_cutoff: "2023-10"
-      reasoning_model: true
     costs_per_million_token:
       input: 15.0
       output: 60.0
@@ -574,78 +505,17 @@ o1-models:
         read: 7.5
     supports:
       images: true
+      temperature: false
     metadata:
       available_for_everyone: false
-      deprecated: false
     documentation_url: https://platform.openai.com/docs/models/o1
     alternative_keys:
       - openai/o1
       - azure/o1-2024-12-17
 
-  openai/o1-preview:
-    label: o1 Preview
-    release_date: 2024-09-12
-    properties:
-      context_window: 128_000
-      max_tokens: 32_768
-      training_cutoff: "2023-10"
-      reasoning_model: true
-    costs_per_million_token:
-      input: 15.0
-      output: 60.0
-      cache:
-        read: 7.5
-    supports:
-      temperature: false
-    metadata:
-      available_for_everyone: false
-    documentation_url: https://platform.openai.com/docs/models/o1-preview
-
-  openai/o1-preview-2024-09-12:
-    label: o1 Preview
-    release_date: 2024-09-12
-    properties:
-      context_window: 128_000
-      max_tokens: 32_768
-      training_cutoff: "2023-10"
-      reasoning_model: true
-    costs_per_million_token:
-      input: 15.0
-      output: 60.0
-      cache:
-        read: 7.5
-    metadata:
-      available_for_everyone: false
-    documentation_url: https://platform.openai.com/docs/models/o1-preview
-    alternative_keys:
-      - openai/gpt-o1-preview
-
-  openai/o1-mini-2024-09-12:
-    label: o1 Mini
-    release_date: 2024-09-12
-    properties:
-      context_window: 128_000
-      max_tokens: 65_536
-      training_cutoff: "2023-10"
-      reasoning_model: true
-    costs_per_million_token:
-      input: 1.1
-      output: 4.4
-      cache:
-        read: 0.55
-    metadata:
-      available_for_everyone: true
-      deprecated: true
-    documentation_url: https://platform.openai.com/docs/models/o1-mini
-    alternative_keys:
-      - openai/o1-mini
-      - azure/o1-mini-2024-09-12
-
 gpt-4o-models:
   base-config:
     documentation_url: https://platform.openai.com/docs/models#gpt-4o
-    supports:
-      temperature: true
     properties:
       context_window: 128_000
       max_tokens: 16_384
@@ -672,7 +542,6 @@ gpt-4o-models:
     release_date: 2024-11-20
     supports:
       images: true
-      batch: true
     metadata:
       available_as_evaluator: true
       available_for_everyone: false
@@ -718,8 +587,6 @@ gpt-4o-models:
 gpt-4o-mini-models:
   base-config:
     documentation_url: https://platform.openai.com/docs/models#gpt-4o-mini
-    supports:
-      temperature: true
     properties:
       context_window: 128_000
       max_tokens: 16_384
@@ -757,159 +624,3 @@ gpt-4o-mini-models:
     documentation_url: https://platform.openai.com/docs/models/gpt-4o-mini
     alternative_keys:
       - azure/gpt-4o-mini-2024-07-18
-
-gpt-4-models:
-  base-config:
-    documentation_url: https://platform.openai.com/docs/models#gpt-4-turbo-and-gpt-4
-    supports:
-      temperature: true
-      output_schema: false
-    metadata:
-      available_for_everyone: false
-      deprecated: true
-    properties:
-      context_window: 128_000
-      max_tokens: 4_096
-      training_cutoff: "2023-12"
-    default_parameters:
-      temperature: 1
-
-  openai/gpt-4-turbo:
-    label: GPT 4 Turbo
-    release_date: 2024-04-09
-    supports:
-      images: true
-    metadata:
-      available_as_evaluator: true
-      available_for_everyone: false
-      deprecated: true
-    costs_per_million_token:
-      input: 10
-      output: 30
-    documentation_url: https://platform.openai.com/docs/models/gpt-4-turbo
-    alternative_keys:
-      - openai/gpt-4
-
-  openai/gpt-4-turbo-2024-04-09:
-    label: GPT 4 Turbo (2024-04-09)
-    release_date: 2024-04-09
-    costs_per_million_token:
-      input: 10
-      output: 30
-    documentation_url: https://platform.openai.com/docs/models/gpt-4-turbo
-    supports:
-      images: true
-    alternative_keys:
-      - azure/gpt-4-turbo-2024-04-09
-
-  openai/gpt-4-turbo-preview:
-    label: GPT 4 Turbo Preview
-    release_date: 2024-01-25
-    costs_per_million_token:
-      input: 10
-      output: 30
-    documentation_url: https://platform.openai.com/docs/models/gpt-4-turbo-preview
-
-  openai/gpt-4-0125-preview:
-    label: GPT 4 Preview
-    release_date: 2024-01-25
-    costs_per_million_token:
-      input: 10
-      output: 30
-
-  openai/gpt-4-1106-preview:
-    label: GPT 4 Preview (2023-11-06)
-    release_date: 2024-11-06
-    properties:
-      training_cutoff: "2023-04"
-    costs_per_million_token:
-      input: 10
-      output: 30
-
-  openai/gpt-4:
-    label: GPT 4
-    release_date: 2023-06-13
-    metadata:
-      deprecated: true
-    properties:
-      context_window: 8_192
-      max_tokens: 8_192
-      training_cutoff: "2021-09"
-    costs_per_million_token:
-      input: 30
-      output: 60
-    documentation_url: https://platform.openai.com/docs/models/gpt-4
-
-  openai/gpt-4-0613:
-    label: GPT 4 (2023-06-13)
-    properties:
-      context_window: 8_192
-      max_tokens: 8_192
-      training_cutoff: "2021-09"
-    costs_per_million_token:
-      input: 30
-      output: 60
-
-  openai/gpt-4-0314:
-    label: GPT 4 (2023-03-14)
-    release_date: 2023-03-14
-    properties:
-      context_window: 8_192
-      max_tokens: 8_192
-      training_cutoff: "2021-09"
-    costs_per_million_token:
-      input: 30
-      output: 60
-
-gpt-3.5-models:
-  base-config:
-    documentation_url: https://platform.openai.com/docs/models#gpt-3-5-turbo
-    supports:
-      temperature: true
-      output_schema: false
-    metadata:
-      available_for_everyone: false
-      deprecated: true
-    properties:
-      context_window: 16_385
-      max_tokens: 4_096
-      training_cutoff: "2021-09"
-    default_parameters:
-      temperature: 1
-
-  openai/gpt-3.5-turbo:
-    label: GPT 3.5
-    release_date: 2023-01-25
-    metadata:
-      available_for_everyone: true
-    costs_per_million_token:
-      input: 0.5
-      output: 1.5
-    documentation_url: https://platform.openai.com/docs/models/gpt-3.5-turbo
-    alternative_keys:
-      - openai/gpt-3.5
-
-  openai/gpt-3.5-turbo-0125:
-    label: GPT 3.5 (2023-01-25)
-    release_date: 2023-01-25
-    costs_per_million_token:
-      input: 0.5
-      output: 1.5
-
-  openai/gpt-3.5-turbo-1106:
-    label: GPT 3.5 Turbo (2022-11-06)
-    release_date: 2022-11-06
-    costs_per_million_token:
-      input: 1.0
-      output: 2.0
-
-  openai/gpt-3.5-turbo-instruct:
-    label: GPT 3.5 Turbo Instruct
-    release_date: 2022-11-06
-    properties:
-      context_window: 4_096
-      max_tokens: 4_096
-    costs_per_million_token:
-      input: 1.5
-      output: 2.0
-    documentation_url: https://platform.openai.com/docs/models/gpt-3.5-turbo-instruct

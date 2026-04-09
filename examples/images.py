@@ -21,49 +21,58 @@ red_image_content = red_image()
 async def image_base64(model: LLM):
     console_log("\n--- Image Base64 ---\n")
 
-    await model.query(
-        [
-            TextInput(text="What color is the image?"),
-            FileWithBase64(
-                type="image",
-                name="red_image.png",
-                mime=mime,
-                base64=base64.b64encode(red_image_content).decode("utf-8"),
-            ),
-        ]
-    )
+    try:
+        await model.query(
+            [
+                TextInput(text="What color is the image?"),
+                FileWithBase64(
+                    type="image",
+                    name="red_image.png",
+                    mime=mime,
+                    base64=base64.b64encode(red_image_content).decode("utf-8"),
+                ),
+            ]
+        )
+    except Exception as e:
+        console_log(f"Error: {e}")
 
 
 async def image_id(model: LLM):
     console_log("\n--- File Id (Upload Bytes) ---\n")
 
-    uploaded_file: FileWithId = await model.upload_file(
-        "image_id.png", mime, BytesIO(red_image_content), type="image"
-    )
-    console_log(f"Uploaded File ID: {uploaded_file.file_id}")
+    try:
+        uploaded_file: FileWithId = await model.upload_file(
+            "image_id.png", mime, BytesIO(red_image_content), type="image"
+        )
+        console_log(f"Uploaded File ID: {uploaded_file.file_id}")
 
-    await model.query(
-        [
-            TextInput(text="What color is the image?"),
-            uploaded_file,
-        ],
-    )
+        await model.query(
+            [
+                TextInput(text="What color is the image?"),
+                uploaded_file,
+            ],
+        )
+    except Exception as e:
+        console_log(f"Error: {e}")
 
 
 async def image_url(model: LLM):
     console_log("\n--- File URL ---\n")
 
-    await model.query(
-        [
-            TextInput(text="What is in this image?"),
-            FileWithUrl(
-                type="image",
-                name="image.png",
-                mime=mime,
-                url="https://pyxis.nymag.com/v1/imgs/424/858/e6c66c3a1992e711bca0137b754fea749f-cat-law.rsquare.w400.jpg",
-            ),
-        ],
-    )
+    try:
+        await model.query(
+            [
+                TextInput(text="What is in this image?"),
+                FileWithUrl(
+                    type="image",
+                    name="image.png",
+                    mime=mime,
+                    url="https://pyxis.nymag.com/v1/imgs/424/858/e6c66c3a1992e711bca0137b754fea749f-cat-law.rsquare.w400.jpg",
+                ),
+            ],
+        )
+    except Exception as e:
+        console_log(f"Error: {e}")
 
 
 async def main():

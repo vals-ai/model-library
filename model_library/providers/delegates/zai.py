@@ -5,7 +5,6 @@ from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
-    DelegateConfig,
     DelegateOnly,
     LLMConfig,
     ProviderConfig,
@@ -43,14 +42,18 @@ class ZAIModel(DelegateOnly):
         self.clear_thinking = self.provider_config.clear_thinking
 
         # https://docs.z.ai/guides/develop/openai/python
+        config = config or LLMConfig()
+        config.custom_endpoint = (
+            config.custom_endpoint or "https://open.bigmodel.cn/api/paas/v4/"
+        )
+        config.custom_api_key = config.custom_api_key or SecretStr(
+            model_library_settings.ZAI_API_KEY
+        )
+
         self.init_delegate(
             config=config,
-            delegate_config=DelegateConfig(
-                base_url="https://open.bigmodel.cn/api/paas/v4/",
-                api_key=SecretStr(model_library_settings.ZAI_API_KEY),
-            ),
-            use_completions=True,
             delegate_provider="openai",
+            use_completions=True,
         )
 
     @override

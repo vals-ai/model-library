@@ -3,7 +3,7 @@
 import pytest
 
 from model_library.base import RawResponse
-from model_library.providers.alibaba import AlibabaModel
+from model_library.providers.delegates.alibaba import AlibabaModel
 from openai.types.chat import ChatCompletionMessage, ChatCompletionMessageToolCall
 from openai.types.chat.chat_completion_message_tool_call import Function
 

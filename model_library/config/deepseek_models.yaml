@@ -5,18 +5,12 @@ base-config:
   supports:
     images: false
     files: false
-  metadata:
-    available_as_evaluator: false
-    available_for_everyone: true
-    ignored_for_cost: false
   properties:
     reasoning_model: false
 
-deepseek-endpoints:
+core-models:
   base-config:
     supports:
-      images: false
-      files: false
       tools: true
       batch: false
       temperature: true
@@ -29,22 +23,23 @@ deepseek-endpoints:
     properties:
       context_window: 128_000
       max_tokens: 8_000
-      reasoning_model: false
     costs_per_million_token:
-      input: 0.27
-      output: 1.10
+      input: 0.28
+      output: 0.42
       cache:
-        read: 0.07
+        read: 0.028
 
   deepseek/deepseek-reasoner:
     label: DeepSeek Reasoner
     release_date: 2025-09-29
+    supports:
+      temperature: false
     properties:
       context_window: 128_000
       max_tokens: 64_000
       reasoning_model: true
     costs_per_million_token:
-      input: 0.55
-      output: 2.19
+      input: 0.28
+      output: 0.42
       cache:
-        read: 0.14
+        read: 0.028

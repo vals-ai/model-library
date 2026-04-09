@@ -36,9 +36,9 @@ from model_library.base import (
 )
 from model_library.exceptions import (
     BadInputError,
-    MaxOutputTokensExceededError,
     NoMatchingToolCallError,
     UnexpectedSystemInputError,
+    handle_empty_response,
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.register_models import register_provider
@@ -82,7 +82,14 @@ class AmazonModel(LLM):
         return "using-environment"
 
     @override
-    def get_client(self, api_key: str | None = None) -> BaseClient:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> BaseClient:
+        if base_url:
+            self.instance_logger.warning(
+                "custom_endpoint is not supported by this provider and will be ignored"
+            )
+
         if not self.has_client():
             assert api_key
             if api_key != "using-environment":
@@ -456,9 +463,6 @@ class AmazonModel(LLM):
         tool_calls: list[ToolCall] = []
         if stop_reason:
             match stop_reason:
-                case "max_tokens":
-                    if not text and not reasoning:
-                        raise MaxOutputTokensExceededError()
                 case "tool_use":
                     _tool_calls = [
                         i["toolUse"] for i in messages["content"] if "toolUse" in i
@@ -472,10 +476,15 @@ class AmazonModel(LLM):
                             )
                         )
 
+        no_useful_content = not text and not reasoning and not tool_calls
+        mapped_finish_reason = map_amazon_finish_reason(stop_reason)
+        if no_useful_content:
+            handle_empty_response(mapped_finish_reason, {"metadata": metadata})
+
         return QueryResult(
             output_text=text,
             reasoning=reasoning,
-            finish_reason=map_amazon_finish_reason(stop_reason),
+            finish_reason=mapped_finish_reason,
             metadata=metadata,
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=messages)],

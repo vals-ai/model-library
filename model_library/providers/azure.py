@@ -28,13 +28,15 @@ class AzureOpenAIModel(OpenAIModel):
         )
 
     @override
-    def get_client(self, api_key: str | None = None) -> AsyncAzureOpenAI:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> AsyncAzureOpenAI:
         if not self.has_client():
             assert api_key
             creds = json.loads(api_key)
             client = AsyncAzureOpenAI(
                 api_key=creds["AZURE_API_KEY"],
-                azure_endpoint=creds["AZURE_ENDPOINT"],
+                azure_endpoint=base_url or creds["AZURE_ENDPOINT"],
                 api_version=creds["AZURE_API_VERSION"],
                 http_client=default_httpx_client(),
                 max_retries=3,

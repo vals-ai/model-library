@@ -24,7 +24,7 @@ async def file_base64(model: LLM):
     try:
         await model.query(
             [
-                TextInput(text="What is the secret?"),
+                TextInput(text="What is the secret"),
                 FileWithBase64(
                     type="file",
                     name="file_base64.pdf",
@@ -40,15 +40,15 @@ async def file_base64(model: LLM):
 async def file_id(model: LLM):
     console_log("\n--- File Id (Upload Bytes) ---\n")
 
-    uploaded_file: FileWithId = await model.upload_file(
-        "file_id.pdf", mime, BytesIO(secret_file_content)
-    )
-    console_log(f"Uploaded File ID: {uploaded_file.file_id}")
-
     try:
+        uploaded_file: FileWithId = await model.upload_file(
+            "file_id.pdf", mime, BytesIO(secret_file_content)
+        )
+        console_log(f"Uploaded File ID: {uploaded_file.file_id}")
+
         await model.query(
             [
-                TextInput(text="What is the secret?"),
+                TextInput(text="What is the secret"),
                 uploaded_file,
             ],
         )

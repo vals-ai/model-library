@@ -6,7 +6,6 @@ from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
-    DelegateConfig,
     DelegateOnly,
     InputItem,
     LLMConfig,
@@ -29,14 +28,19 @@ class AlibabaModel(DelegateOnly):
         super().__init__(model_name, provider, config=config)
 
         # https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen
+        config = config or LLMConfig()
+        config.custom_endpoint = (
+            config.custom_endpoint
+            or "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+        )
+        config.custom_api_key = config.custom_api_key or SecretStr(
+            model_library_settings.DASHSCOPE_API_KEY
+        )
+
         self.init_delegate(
             config=config,
-            delegate_config=DelegateConfig(
-                base_url="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
-                api_key=SecretStr(model_library_settings.DASHSCOPE_API_KEY),
-            ),
-            use_completions=True,
             delegate_provider="openai",
+            use_completions=True,
         )
 
     def _fix_content_null_in_messages(self, messages: list[Any]) -> list[Any]:

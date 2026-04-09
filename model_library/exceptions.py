@@ -1,5 +1,10 @@
+from __future__ import annotations
+
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any, NoReturn
+
+if TYPE_CHECKING:
+    from model_library.base.output import FinishReasonInfo
 
 from ai21 import TooManyRequestsError as AI21RateLimitError
 from anthropic import InternalServerError
@@ -104,6 +109,21 @@ class ModelNoOutputError(ImmediateRetryException):
 
     def __init__(self, message: str | None = None):
         super().__init__(message or ModelNoOutputError.DEFAULT_MESSAGE)
+
+
+def handle_empty_response(
+    finish_reason: FinishReasonInfo,
+    context: dict[str, Any] | None = None,
+) -> NoReturn:
+    """Raise the appropriate error when a model produces no output."""
+    from model_library.base.output import FinishReason as _FinishReason
+
+    log_message = str({"finish_reason": finish_reason.raw, **(context or {})})
+    if finish_reason.reason == _FinishReason.CONTEXT_WINDOW_EXCEEDED:
+        raise MaxContextWindowExceededError(log_message)
+    if finish_reason.reason == _FinishReason.MAX_TOKENS:
+        raise MaxOutputTokensExceededError(log_message)
+    raise ModelNoOutputError(log_message)
 
 
 class InvalidStructuredOutputError(ImmediateRetryException):

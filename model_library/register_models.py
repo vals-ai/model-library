@@ -11,8 +11,8 @@ from pydantic import ConfigDict, create_model, model_validator
 from pydantic.fields import Field
 from pydantic.main import BaseModel
 
-from model_library import providers
-from model_library.base import LLM, ProviderConfig
+from model_library import model_library_settings, providers
+from model_library.base import LLM, LLMConfig, ProviderConfig
 from model_library.utils import get_logger
 
 T = TypeVar("T", bound=LLM)
@@ -37,6 +37,21 @@ class Supports(BaseModel):
     temperature: bool | None = None
     tools: bool | None = None
     output_schema: bool | None = None
+
+    def resolve(self) -> "Supports":
+        """Fill in None fields with LLMConfig defaults."""
+        fields = Supports.model_fields
+        defaults = {
+            name: LLMConfig.model_fields[f"supports_{name}"].default for name in fields
+        }
+        return Supports(
+            **{
+                name: val
+                if (val := getattr(self, name)) is not None
+                else defaults[name]
+                for name in fields
+            }
+        )
 
 
 class Metadata(BaseModel):
@@ -185,7 +200,7 @@ class DefaultParameters(BaseModel):
     top_p: float | None = None
     top_k: int | None = None
     reasoning_effort: str | bool | None = None
-    compute_effort: str | bool | None = None
+    compute_effort: str | int | bool | None = None
 
 
 class RawModelConfig(BaseModel):
@@ -251,8 +266,16 @@ def _register_models() -> ModelRegistry:
     ProviderProperties = get_dynamic_provider_properties_model()
 
     # load each provider YAML
-    sections = Path(path_library).glob("*.yaml")
-    sections = sorted(sections, key=lambda x: "openai" in x.name.lower())
+    yaml_files = list(Path(path_library).glob("*.yaml"))
+
+    # include deprecated model configs (default: not included)
+    include_deprecated = model_library_settings.get("MODEL_LIBRARY_INCLUDE_DEPRECATED")
+    if isinstance(include_deprecated, str) and include_deprecated.lower() == "true":
+        deprecated_dir = Path(path_library) / "deprecated"
+        if deprecated_dir.exists():
+            yaml_files.extend(deprecated_dir.glob("*.yaml"))
+
+    sections = sorted(yaml_files, key=lambda x: "openai" in x.name.lower())
     for section in sections:
         with open(section, "r") as file:
             try:
@@ -294,6 +317,7 @@ def _register_models() -> ModelRegistry:
                     raw_model_obj: RawModelConfig = RawModelConfig.model_validate(
                         current_model_config
                     )
+                    raw_model_obj.supports = raw_model_obj.supports.resolve()
 
                     provider_endpoint = (
                         raw_model_obj.provider_endpoint or model_name.split("/", 1)[1]

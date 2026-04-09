@@ -6,12 +6,8 @@ base-config:
     images: false
     tools: true
     files: false
-  metadata:
-    available_as_evaluator: false
-    available_for_everyone: true
-    ignored_for_cost: false
 
-kimi-k2.5-models:
+kimi-models:
 
   kimi/kimi-k2.5:
     label: Kimi K2.5
@@ -19,7 +15,6 @@ kimi-k2.5-models:
     supports:
       images: true
       temperature: false
-      files: false
     properties:
       reasoning_model: false
       context_window: 262_144
@@ -39,7 +34,6 @@ kimi-k2.5-models:
           default_parameters:
             temperature: 1.0
 
-kimi-k2-models:
   kimi/kimi-k2-thinking:
     label: Kimi K2 Thinking
     release_date: 2025-11-06

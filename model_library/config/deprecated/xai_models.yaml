@@ -1,0 +1,104 @@
+base-config:
+  company: xAI
+  documentation_url: https://docs.x.ai/docs#models
+  open_source: false
+  supports:
+    images: true
+    files: false
+    tools: true
+  properties:
+    reasoning_model: false
+
+
+deprecated:
+  base-config:
+    supports:
+      temperature: true
+    costs_per_million_token:
+      cache:
+        read_discount: 0.1
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.95
+    metadata:
+      deprecated: true
+
+  grok/grok-3-mini:
+    label: Grok 3 Mini Reasoning
+    release_date: 2025-04-09
+    documentation_url: https://docs.x.ai/docs/models/grok-3-mini
+    properties:
+      context_window: 131_072
+      max_tokens: 0
+      training_cutoff: null
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.30
+      output: 0.50
+      cache:
+        read: 0.075
+    alternative_keys:
+      - grok/grok-3-mini-latest
+      - grok/grok-3-mini-beta
+      - grok/grok-3-mini-fast
+      - grok/grok-3-mini-fast-latest
+      - grok/grok-3-mini-fast-beta
+      - grok/grok-3-mini-high-reasoning:
+          default_parameters:
+            reasoning_effort: "high"
+      - grok/grok-3-mini-low-reasoning:
+          default_parameters:
+            reasoning_effort: "low"
+      - grok/grok-3-mini-fast-high-reasoning:
+          default_parameters:
+            reasoning_effort: "high"
+      - grok/grok-3-mini-fast-low-reasoning:
+          default_parameters:
+            reasoning_effort: "low"
+
+  grok/grok-2-vision-1212:
+    label: Grok 2 Vision
+    release_date: 2024-12-12
+    properties:
+      context_window: 8_192
+      max_tokens: 0
+      training_cutoff: null
+    costs_per_million_token:
+      input: 2.00
+      output: 10.00
+    alternative_keys:
+      - grok/grok-2-vision
+      - grok/grok-2-vision-latest
+
+  grok/grok-2-1212:
+    label: Grok 2
+    release_date: 2024-12-11
+    properties:
+      context_window: 131_072
+      max_tokens: 0
+      training_cutoff: null
+    costs_per_million_token:
+      input: 2.00
+      output: 10.00
+
+  grok/grok-vision-beta:
+    label: Grok Vision Beta
+    release_date: 2024-12-12
+    properties:
+      context_window: 8_192
+      max_tokens: 0
+      training_cutoff: null
+    costs_per_million_token:
+      input: 5.00
+      output: 15.00
+
+  grok/grok-beta:
+    label: Grok Beta
+    release_date: 2024-12-11
+    properties:
+      context_window: 131_072
+      max_tokens: 0
+      training_cutoff: null
+    costs_per_million_token:
+      input: 5.00
+      output: 15.00

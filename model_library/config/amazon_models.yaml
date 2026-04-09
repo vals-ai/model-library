@@ -6,10 +6,6 @@ base-config:
     files: false
     tools: true
     temperature: true
-  metadata:
-    available_as_evaluator: false
-    available_for_everyone: true
-    ignored_for_cost: false
   properties:
     reasoning_model: false
 
@@ -20,42 +16,43 @@ nova-models:
   amazon/amazon.nova-pro-v1:0:
     label: Nova Pro
     release_date: 2024-12-03
+    documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    supports:
+      images: true
+      videos: true
+      files: true
     properties:
       context_window: 300_000
       max_tokens: 10_000
       training_cutoff: null
-    supports:
-      images: true
-      files: true
-      videos: true
     costs_per_million_token:
       input: 0.8
       output: 3.2
       cache:
         read: 0.2
-    documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
 
   amazon/amazon.nova-lite-v1:0:
     label: Nova Lite
     release_date: 2024-12-03
+    documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
+    supports:
+      images: true
+      videos: true
+      files: true
     properties:
       context_window: 300_000
       max_tokens: 0
       training_cutoff: null
-    supports:
-      images: true
-      files: true
-      videos: true
     costs_per_million_token:
       input: 0.06
       output: 0.24
       cache:
         read: 0.015
-    documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
 
   amazon/amazon.nova-micro-v1:0:
     label: Nova Micro
     release_date: 2024-12-03
+    documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
     properties:
       context_window: 128_000
       max_tokens: 0
@@ -65,53 +62,12 @@ nova-models:
       output: 0.14
       cache:
         read: 0.00875
-    documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
 
 claude-models:
   base-config:
     documentation_url: https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet
-    supports:
-      temperature: true
     default_parameters:
       temperature: 1
-
-  bedrock/claude-3-5-sonnet-20240620-v2:
-    label: Claude 3.5 Sonnet (Bedrock)
-    release_date: 2024-10-22
-    properties:
-      context_window: 100_000
-      max_tokens: 0
-      training_cutoff: null
-    supports:
-      images: false
-    metadata:
-      available_as_evaluator: true
-      available_for_everyone: false
-    costs_per_million_token:
-      input: 3.0
-      output: 15.0
-    provider_endpoint: us.anthropic.claude-3-5-sonnet-20241022-v2:0
-
-  bedrock/claude-3-7-sonnet-20250219-v1:
-    label: Claude 3.7 Sonnet (Bedrock)
-    release_date: 2025-02-19
-    properties:
-      context_window: 200_000
-      max_tokens: 0
-      training_cutoff: null
-    supports:
-      images: true
-    metadata:
-      deprecated: true
-      available_as_evaluator: true
-      available_for_everyone: false
-    costs_per_million_token:
-      input: 3.0
-      output: 15.0
-      cache:
-        read: 0.3
-        write: 3.75
-    provider_endpoint: us.anthropic.claude-3-7-sonnet-20250219-v1:0
 
   bedrock/claude-sonnet-4-20250514-v1:
     label: Claude Sonnet 4 (Nonthinking)
@@ -121,10 +77,8 @@ claude-models:
       context_window: 200_000
       max_tokens: 64_000
       training_cutoff: 2025-03
-      reasoning_model: false
     metadata:
       available_as_evaluator: true
-      available_for_everyone: true
     costs_per_million_token:
       input: 3.0
       output: 15.0
@@ -151,9 +105,6 @@ claude-models:
       context_window: 200_000
       max_tokens: 32_000
       training_cutoff: 2025-03
-      reasoning_model: false
-    supports:
-      tools: true
     metadata:
       available_for_everyone: false
     costs_per_million_token:
@@ -175,8 +126,6 @@ claude-models:
       context_window: 200_000
       max_tokens: 32_000
       training_cutoff: 2025-03
-    supports:
-      tools: true
     metadata:
       available_for_everyone: false
     costs_per_million_token:
@@ -195,8 +144,6 @@ claude-models:
       context_window: 200_000
       max_tokens: 0
       training_cutoff: null
-    supports:
-      images: false
     metadata:
       available_for_everyone: false
     costs_per_million_token:
@@ -207,36 +154,9 @@ claude-models:
         write: 1
     provider_endpoint: us.anthropic.claude-3-5-haiku-20241022-v1:0
 
-deepseek_models:
-  base-config:
-    documentation_url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-deepseek.html
-    supports:
-      temperature: true
-    default_parameters:
-      temperature: 1
-
-  bedrock/deepseek-r1-v1:
-    label: DeepSeek R1 (Bedrock)
-    release_date: 2025-03-03
-    properties:
-      context_window: 128_000
-      max_tokens: 0
-      training_cutoff: null
-    supports:
-      images: false
-    metadata:
-      deprecated: true
-      available_for_everyone: false
-    costs_per_million_token:
-      input: 1.35
-      output: 5.4
-    provider_endpoint: us.deepseek.r1-v1:0
-
-llama_models:
+llama-models:
   base-config:
     documentation_url: https://aws.amazon.com/bedrock/meta/
-    supports:
-      temperature: true
   bedrock/llama3-3-70b-instruct-v1:
     label: Llama 3.3 70B Instruct (Bedrock)
     release_date: 2024-12-18
@@ -244,8 +164,6 @@ llama_models:
       context_window: 128_000
       max_tokens: 0
       training_cutoff: null
-    supports:
-      images: false
     metadata:
       available_as_evaluator: true
       available_for_everyone: false

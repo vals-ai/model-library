@@ -164,7 +164,15 @@ async def process_model(model_str: str, provider_name: str):
         running_models[provider_name].pop(model_str, None)
 
 
-MODEL_OVERRIDES = ["dumbmar", "bedrock", "ai21labs", "o1", "o3-mini", "sonnet-4-6"]
+MODEL_OVERRIDES = [
+    "dumbmar",
+    "bedrock",
+    "ai21labs",
+    "o1",
+    "o3-mini",
+    "sonnet-4-6",
+    "flashx",
+]
 ERROR_OVERRIDES = [
     "overloaded",
     "rate limit",

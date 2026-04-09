@@ -5,6 +5,8 @@ These assert that models which support tools include the tool specs in their
 request bodies without making any network calls.
 """
 
+import logging
+
 import pytest
 
 from model_library.base import TextInput, ToolBody, ToolDefinition
@@ -205,7 +207,9 @@ class TestStreamingToolCallAccumulation:
             with patch.object(
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
-                return await model._query_completions([], tools=[])
+                return await model._query_completions(
+                    [], tools=[], query_logger=logging.getLogger("test")
+                )
 
     async def test_openai_multiple_tool_calls_different_ids(self):
         """OpenAI: different IDs should create separate tool calls."""

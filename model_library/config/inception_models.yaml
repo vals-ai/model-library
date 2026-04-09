@@ -6,12 +6,8 @@ base-config:
     images: false
     tools: true
     files: false
-  metadata:
-    available_as_evaluator: false
-    available_for_everyone: true
-    ignored_for_cost: false
 
-inception-models:
+mercury-models:
   inception/mercury:
     label: Mercury
     release_date: 2025-11-06

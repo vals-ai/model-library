@@ -1,0 +1,82 @@
+base-config:
+  company: Amazon
+  open_source: false
+  supports:
+    images: false
+    files: false
+    tools: true
+    temperature: true
+  properties:
+    reasoning_model: false
+
+
+deprecated:
+  base-config:
+    metadata:
+      deprecated: true
+
+  bedrock/claude-3-5-sonnet-20240620-v2:
+    company: Amazon
+    label: Claude 3.5 Sonnet (Bedrock)
+    release_date: 2024-10-22
+    open_source: false
+    documentation_url: https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet
+    properties:
+      context_window: 100000
+      max_tokens: 0
+      reasoning_model: false
+    supports:
+      images: false
+      files: false
+      temperature: true
+      tools: true
+    metadata:
+      available_for_everyone: false
+      internal_only: false
+      available_as_evaluator: true
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+    provider_endpoint: us.anthropic.claude-3-5-sonnet-20241022-v2:0
+    default_parameters:
+      temperature: 1
+
+  bedrock/claude-3-7-sonnet-20250219-v1:
+    label: Claude 3.7 Sonnet (Bedrock)
+    release_date: 2025-02-19
+    documentation_url: https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet
+    supports:
+      images: true
+    properties:
+      context_window: 200_000
+      max_tokens: 0
+      training_cutoff: null
+    metadata:
+      available_as_evaluator: true
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache:
+        read: 0.3
+        write: 3.75
+    provider_endpoint: us.anthropic.claude-3-7-sonnet-20250219-v1:0
+
+  bedrock/deepseek-r1-v1:
+    label: DeepSeek R1 (Bedrock)
+    release_date: 2025-03-03
+    documentation_url: https://docs.aws.amazon.com/bedrock/latest/userguide/model-parameters-deepseek.html
+    properties:
+      context_window: 128_000
+      max_tokens: 0
+      training_cutoff: null
+    metadata:
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 1.35
+      output: 5.4
+    provider_endpoint: us.deepseek.r1-v1:0

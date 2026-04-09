@@ -4,6 +4,8 @@ from typing import Any
 from rich.console import Console
 from rich.logging import RichHandler
 
+from model_library import set_logging
+
 # console logger (if you want to print specific colors)
 console_logger = logging.getLogger("console")
 console_logger.setLevel(logging.INFO)
@@ -24,6 +26,5 @@ def console_log(output: Any, level: int = logging.INFO, color: str = "red"):
 
 
 def setup(disable_logging: bool = False, load_gcp: bool = True):
-    # if disable_logging:
-    #     llm_logger = logging.getLogger("llm")
-    #     llm_logger.setLevel(logging.ERROR)
+    if disable_logging:
+        set_logging(level=logging.ERROR)

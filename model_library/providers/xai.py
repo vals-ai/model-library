@@ -15,7 +15,6 @@ from xai_sdk.proto.v6.chat_pb2 import Message, Tool
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
-    DelegateConfig,
     FileBase,
     FileInput,
     FileWithBase64,
@@ -39,9 +38,9 @@ from model_library.base import (
 from model_library.exceptions import (
     BadInputError,
     ImmediateRetryException,
-    MaxOutputTokensExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
+    handle_empty_response,
     UnexpectedSystemInputError,
 )
 from model_library.providers.openai import OpenAIModel
@@ -54,8 +53,10 @@ def map_xai_finish_reason(
     match finish_reason:
         case "REASON_STOP":
             reason = FinishReason.STOP
-        case "REASON_MAX_LEN" | "REASON_MAX_CONTEXT":
+        case "REASON_MAX_LEN":
             reason = FinishReason.MAX_TOKENS
+        case "REASON_MAX_CONTEXT":
+            reason = FinishReason.CONTEXT_WINDOW_EXCEEDED
         case "REASON_TOOL_CALLS":
             reason = FinishReason.TOOL_CALLS
         case "REASON_TIME_LIMIT":
@@ -73,12 +74,20 @@ class XAIModel(LLM):
         return model_library_settings.XAI_API_KEY
 
     @override
-    def get_client(self, api_key: str | None = None) -> AsyncClient:
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> AsyncClient:
         if not self.has_client():
             assert api_key
-            client = AsyncClient(
-                api_key=api_key,
-            )
+
+            if base_url:
+                client = AsyncClient(
+                    api_key=api_key,
+                    api_host=base_url,
+                )
+            else:
+                client = AsyncClient(api_key=api_key)
+
             self.assign_client(client)
         return super().get_client()
 
@@ -93,24 +102,27 @@ class XAIModel(LLM):
         super().__init__(model_name, provider, config=config)
 
         # https://docs.x.ai/docs/guides/migration
-        self.delegate = (
-            None
-            if self.native
-            else OpenAIModel(
+        if self.native:
+            self.delegate = None
+        else:
+            default_base_url = (
+                "https://us-west-1.api.x.ai/v1"
+                if "grok-3-mini-reasoning" in self.model_name
+                else "https://api.x.ai/v1"
+            )
+
+            config = config or LLMConfig()
+            config.custom_endpoint = config.custom_endpoint or default_base_url
+            config.custom_api_key = config.custom_api_key or SecretStr(
+                model_library_settings.XAI_API_KEY
+            )
+
+            self.delegate = OpenAIModel(
                 model_name=self.model_name,
                 provider=provider,
                 config=config,
-                delegate_config=DelegateConfig(
-                    base_url=(
-                        "https://us-west-1.api.x.ai/v1"
-                        if "grok-3-mini-reasoning" in self.model_name
-                        else "https://api.x.ai/v1"
-                    ),
-                    api_key=SecretStr(model_library_settings.XAI_API_KEY),
-                ),
                 use_completions=True,
             )
-        )
 
     async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
         raw_responses = [x for x in input if isinstance(x, RawResponse)]
@@ -335,16 +347,14 @@ class XAIModel(LLM):
         finish_reason = latest_response.finish_reason
 
         no_useful_content = not content and not reasoning and not tool_calls
+        mapped_finish_reason = map_xai_finish_reason(finish_reason)
         if no_useful_content:
-            log_message = str({"raw": latest_response})
-            if finish_reason == "REASON_MAX_LEN":
-                raise MaxOutputTokensExceededError(log_message)
-            raise ModelNoOutputError(log_message)
+            handle_empty_response(mapped_finish_reason, {"raw": latest_response})
 
         return QueryResult(
             output_text=content,
             reasoning=reasoning,
-            finish_reason=map_xai_finish_reason(finish_reason),
+            finish_reason=mapped_finish_reason,
             metadata=QueryResultMetadata(
                 # see _calculate_cost
                 # proto3 scalar ints default to 0; CopyFrom on partial
