@@ -196,6 +196,7 @@ def get_dynamic_provider_properties_model() -> type[BaseProviderProperties]:
 class DefaultParameters(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    max_tokens: int | None = None
     temperature: float | None = None
     top_p: float | None = None
     top_k: int | None = None
@@ -227,6 +228,12 @@ class RawModelConfig(BaseModel):
         # explicitly dump dynamic ProviderProperties instance
         data["provider_properties"] = self.provider_properties.model_dump(
             *args, **kwargs
+        )
+
+        default_kwargs = dict(kwargs)
+        default_kwargs["exclude_unset"] = True
+        data["default_parameters"] = self.default_parameters.model_dump(
+            *args, **default_kwargs
         )
         return data
 

@@ -13,6 +13,7 @@ HOURS_24 = 86400
 
 HEARTBEAT_INTERVAL = 5
 HEARTBEAT_TTL = 300  # 5 minutes
+EARLY_RELEASE_GRACE_PERIOD = 1  # seconds to wait after all dispatched before releasing
 
 
 async def _blpop_long(keys: list[str]) -> list[str] | None:
@@ -166,22 +167,25 @@ async def benchmark_queue(
         if heartbeat_task:
             heartbeat_task.cancel()
 
-        # remove ourselves from queue (idempotent if heartbeat already early-released)
-        await utils.redis_client.lrem(run_queue_key, 1, run_id)
+        async def _cleanup() -> None:
+            # remove ourselves from queue (idempotent if heartbeat already early-released)
+            await utils.redis_client.lrem(run_queue_key, 1, run_id)
 
-        await utils.redis_client.delete(alive_key)
-        # mark completed and keep metadata alive for popped run visibility
-        now = time.time()
-        run_meta = f"{key}:run:{run_id}"
-        fields: dict[str, float] = {"completed_at": now}
-        # set popped_at if not already set by early release in heartbeat
-        if not await utils.redis_client.hexists(run_meta, "popped_at"):
-            fields["popped_at"] = now
-        await utils.redis_client.hset(run_meta, mapping=fields)
-        await utils.redis_client.expire(run_meta, HOURS_24)
-        await utils.redis_client.expire(f"{run_meta}:dispatched", HOURS_24)
+            await utils.redis_client.delete(alive_key)
+            # mark completed and keep metadata alive for popped run visibility
+            now = time.time()
+            run_meta = f"{key}:run:{run_id}"
+            fields: dict[str, float] = {"completed_at": now}
+            # set popped_at if not already set by early release in heartbeat
+            if not await utils.redis_client.hexists(run_meta, "popped_at"):
+                fields["popped_at"] = now
+            await utils.redis_client.hset(run_meta, mapping=fields)
+            await utils.redis_client.expire(run_meta, HOURS_24)
+            await utils.redis_client.expire(f"{run_meta}:dispatched", HOURS_24)
 
-        await _notify_next(utils.redis_client, run_queue_key, key)
+            await _notify_next(utils.redis_client, run_queue_key, key)
+
+        await asyncio.shield(_cleanup())
 
         logger.info(f"Benchmark queue: {run_id} released slot")
 
@@ -201,7 +205,10 @@ async def _heartbeat(
     - keeps the heartbeat alive
     - removes queue head if their heartbeat expires
     - if total_requests is set, releases queue slot when all requests are dispatched
+      (after EARLY_RELEASE_GRACE_PERIOD expires)
     """
+
+    grace_deadline: float | None = None
 
     while True:
         await asyncio.sleep(HEARTBEAT_INTERVAL)
@@ -219,17 +226,25 @@ async def _heartbeat(
             ):
                 count = await redis_client.scard(dispatched_key)
                 if count >= total_requests:
-                    logger.info(
-                        f"Benchmark queue: all {total_requests} dispatched, "
-                        f"early releasing {run_id}"
-                    )
-                    run_meta_key = f"{base_key}:run:{run_id}"
-                    await redis_client.hset(
-                        run_meta_key, mapping={"popped_at": time.time()}
-                    )
-                    await redis_client.lrem(run_queue_key, 1, run_id)
-                    await _notify_next(redis_client, run_queue_key, base_key)
-                    dispatched_key = None  # stop checking
+                    if grace_deadline is None:
+                        grace_deadline = time.monotonic() + EARLY_RELEASE_GRACE_PERIOD
+                        logger.info(
+                            f"Benchmark queue: all {total_requests} dispatched, "
+                            f"grace period {EARLY_RELEASE_GRACE_PERIOD}s for {run_id}"
+                        )
+
+                    if time.monotonic() >= grace_deadline:
+                        logger.info(
+                            f"Benchmark queue: grace period expired, "
+                            f"early releasing {run_id}"
+                        )
+                        run_meta_key = f"{base_key}:run:{run_id}"
+                        await redis_client.hset(
+                            run_meta_key, mapping={"popped_at": time.time()}
+                        )
+                        await redis_client.lrem(run_queue_key, 1, run_id)
+                        await _notify_next(redis_client, run_queue_key, base_key)
+                        dispatched_key = None  # stop checking
 
             # self-promote: if we're at head but missed notification (previous
             # head crashed between lrem and _notify_next), notify ourselves

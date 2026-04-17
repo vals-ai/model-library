@@ -11,7 +11,7 @@ help:
 	@echo "  make style-check      Check style"
 	@echo "  make typecheck        Typecheck"
 	@echo "  make config           Generate all_models.json"
-	@echo "  make deprecate model=provider/model-key  Move a model to deprecated"
+	@echo "  make deprecate        Deprecate a model"
 	@echo "  make run-models       Run all models"
 	@echo "  make browse_models    Interactively browse models and their configurations"
 
@@ -19,7 +19,7 @@ PYTHON_VERSION ?= 3.11
 
 install:
 	uv venv --python $(PYTHON_VERSION)
-	uv sync --dev
+	uv sync --dev --extra docent
 	@echo "🎉 Done! Run 'source .venv/bin/activate' to activate the environment locally."
 
 venv_check:

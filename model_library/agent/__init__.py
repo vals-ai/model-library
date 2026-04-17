@@ -29,9 +29,11 @@ from model_library.agent.metadata import (
     TurnSummary,
 )
 from model_library.agent.tool import Tool, ToolOutput
+from model_library.atif import ATIFTrajectory
 
 __all__ = [
     "Agent",
+    "ATIFTrajectory",
     "AgentConfig",
     "AgentResult",
     "AgentStopReason",

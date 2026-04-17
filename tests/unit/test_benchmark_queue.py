@@ -449,6 +449,7 @@ async def test_get_queue_status_all_queues(redis):
 # ── Early release / dispatch tracking ────────────────────────────────
 
 
+@patch.object(bq_module, "EARLY_RELEASE_GRACE_PERIOD", 0)
 @patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)
 async def test_early_release_when_all_dispatched(redis):
     """Heartbeat releases slot early when dispatched count reaches total_requests."""
@@ -477,6 +478,46 @@ async def test_early_release_when_all_dispatched(redis):
 
     assert "run-2" in order
     assert "run-1-end" not in order  # run-1 still running
+
+    task1.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task1
+
+
+@patch.object(bq_module, "EARLY_RELEASE_GRACE_PERIOD", 0.3)
+@patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)
+async def test_early_release_grace_period(redis):
+    """Early release waits for grace period after all requests are dispatched."""
+    total = 3
+    order = []
+
+    async def run1():
+        async with benchmark_queue(MODEL_KEY, "run-1", logger, total_requests=total):
+            order.append("run-1-start")
+            for i in range(total):
+                await redis.sadd(_run_dispatched_key("run-1"), f"req-{i}")
+            # grace period is 0.3s — run-2 should NOT start immediately
+            await asyncio.sleep(0.1)
+            order.append("run-1-after-dispatch")
+            await asyncio.sleep(10)
+            order.append("run-1-end")
+
+    async def run2():
+        async with benchmark_queue(MODEL_KEY, "run-2", logger):
+            order.append("run-2")
+
+    task1 = asyncio.create_task(run1())
+    task2 = asyncio.create_task(run2())
+
+    # wait a bit — less than grace period
+    await asyncio.sleep(0.15)
+    assert "run-2" not in order, "run-2 started before grace period expired"
+
+    # now wait for run-2 to proceed (after grace period expires)
+    await asyncio.wait_for(task2, timeout=5.0)
+    assert "run-2" in order
+    assert "run-1-after-dispatch" in order
+    assert "run-1-end" not in order
 
     task1.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -529,6 +570,7 @@ async def test_no_early_release_when_disabled(redis):
     assert order == ["run-1-start", "run-1-end", "run-2"]
 
 
+@patch.object(bq_module, "EARLY_RELEASE_GRACE_PERIOD", 0)
 @patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)
 async def test_early_release_notifies_next_run(redis):
     """After early release, the next queued run starts while the first is still executing."""
@@ -549,6 +591,7 @@ async def test_early_release_notifies_next_run(redis):
     await asyncio.gather(run1(), run2())
 
 
+@patch.object(bq_module, "EARLY_RELEASE_GRACE_PERIOD", 0)
 @patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)
 async def test_waiting_run_not_released_before_slot_acquired(redis):
     """A waiting run must not early-release before acquiring the slot.

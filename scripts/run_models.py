@@ -172,6 +172,7 @@ MODEL_OVERRIDES = [
     "o3-mini",
     "sonnet-4-6",
     "flashx",
+    "o3-pro",
 ]
 ERROR_OVERRIDES = [
     "overloaded",

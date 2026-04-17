@@ -15,6 +15,7 @@ from model_library.base.output import FinishReasonInfo
 from model_library.exceptions import (
     BackoffRetryException,
     BadInputError,
+    ContentFilterError,
     ImmediateRetryException,
     MaxContextWindowExceededError,
     MaxOutputTokensExceededError,
@@ -133,6 +134,7 @@ async def test_retry_success_after_failures():
         (RateLimitException, True),
         (MaxOutputTokensExceededError, False),
         (MaxContextWindowExceededError, False),
+        (ContentFilterError, False),
         (ModelNoOutputError, True),
         (ToolCallingNotSupportedError, False),
         (BadInputError, False),
@@ -294,6 +296,7 @@ async def test_context_window_error_gives_up(mock_llm: LLM):
 
     # List that was generated directly from model providers' error messages
     exception_messages = [
+        "The input token count exceeds the maximum number of tokens allowed.",
         "This model's maximum context length is 262144 tokens. However, your request has 1000010 input tokens. Please reduce the length of the input messages. None",
         "Range of input length should be [1, 258048]",
         "Input Tokens Exceeded: Number of input tokens exceeds maximum length. Please update the input to try again.",
@@ -340,3 +343,16 @@ async def test_handle_empty_response(
     """
     with pytest.raises(expected_exception):
         handle_empty_response(FinishReasonInfo(reason=finish_reason, raw=str(finish_reason.value)))
+
+
+async def test_no_retry_exception_not_retried_despite_retriable_message():
+    """
+    NoRetryException subclasses should never be retried, even if their
+    message contains strings that match RETRIABLE_EXCEPTION_CODES (e.g. "500"
+    appearing in a base64 blob or raw API response dump).
+    """
+    # Message contains multiple retriable code substrings
+    poison_message = "Error 500 with timeout and retry and server_error"
+    assert is_retriable_error(MaxOutputTokensExceededError(poison_message)) is False
+    assert is_retriable_error(MaxContextWindowExceededError(poison_message)) is False
+    assert is_retriable_error(ContentFilterError(poison_message)) is False

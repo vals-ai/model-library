@@ -190,6 +190,6 @@ def deprecate(model_key: str) -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
-        print("usage: uv run python scripts/deprecate_model.py <model_key>")
+        print("usage: uv run python scripts/deprecate_model.py model=<model_key>")
         sys.exit(1)
     deprecate(sys.argv[1])

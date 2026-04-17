@@ -3,7 +3,7 @@ import logging
 import time
 import uuid
 from collections.abc import Generator, Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -197,6 +197,8 @@ class Agent:
         run_id: str | None = None,
         state: dict[str, Any] | None = None,
         logger: logging.Logger | None = None,
+        docent_ingest: bool = False,
+        atif_export: bool = False,
     ) -> AgentResult:
         """Run the agent loop
 
@@ -237,6 +239,8 @@ class Agent:
                 run_id=run_id,
                 output_dir=output_dir,
                 logger=question_logger,
+                docent_ingest=docent_ingest,
+                atif_export=atif_export,
             )
 
     def _write_init_dir(
@@ -318,6 +322,8 @@ class Agent:
         state: dict[str, Any] | None = None,
         output_dir: Path,
         logger: logging.Logger,
+        docent_ingest: bool = False,
+        atif_export: bool = False,
     ) -> AgentResult:
         if state is None:
             state = {}
@@ -435,6 +441,7 @@ class Agent:
                     logger.warning(f"Query failed: {query_error}", exc_info=True)
                     turn_duration = time.monotonic() - turn_start
                     error_turn = ErrorTurn(
+                        timestamp=datetime.now(timezone.utc).isoformat(),
                         error=SerializableException.from_exception(query_error),
                         duration_seconds=turn_duration,
                     )
@@ -471,6 +478,7 @@ class Agent:
                     )
 
                 turn = AgentTurn(
+                    timestamp=datetime.now(timezone.utc).isoformat(),
                     query_result=response,
                     tool_call_records=tool_call_records,
                     duration_seconds=turn_duration,
@@ -516,6 +524,83 @@ class Agent:
         # determine final answer (hooks get raw turns)
         elapsed = time.monotonic() - start_time
         answer = self._hooks.determine_answer(state, raw_turns, final_error)
+
+        if docent_ingest:
+            if not run_id:
+                logger.warning("Docent ingestion skipped: run_id not provided")
+            else:
+                try:
+                    from model_library.docent import (
+                        agent_turns_to_docent_agent_run,
+                        ingest,
+                    )
+
+                    ingest(
+                        run_id,
+                        agent_turns_to_docent_agent_run(
+                            raw_turns,
+                            question_id,
+                            answer,
+                        ),
+                    )
+                except Exception:
+                    logger.warning("Docent ingestion failed", exc_info=True)
+
+        if atif_export:
+            try:
+                from model_library.atif import ATIFTrajectory
+
+                # Build tool definitions (OpenAI function calling format)
+                _tool_defs: list[dict[str, Any]] | None = [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": t.definition.body.name,
+                            "description": t.definition.body.description,
+                            "parameters": {
+                                "type": "object",
+                                "properties": t.definition.body.properties,
+                                "required": t.definition.body.required,
+                            },
+                        },
+                    }
+                    for t in self._tools.values()
+                ] or None
+
+                # Coerce bool reasoning_effort to float
+                _reasoning_effort: str | float | None = self._llm.reasoning_effort
+                if isinstance(_reasoning_effort, bool):
+                    _reasoning_effort = 1.0 if _reasoning_effort else 0.0
+
+                # LLM inference params for agent.extra (non-None only)
+                _agent_extra: dict[str, Any] | None = {
+                    k: v
+                    for k, v in {
+                        "max_tokens": self._llm.max_tokens,
+                        "temperature": self._llm.temperature,
+                        "top_p": self._llm.top_p,
+                        "top_k": self._llm.top_k,
+                        "reasoning": self._llm.reasoning or None,
+                        "compute_effort": self._llm.compute_effort,
+                        "reasoning_effort": self._llm.reasoning_effort,
+                    }.items()
+                    if v is not None
+                } or None
+
+                trajectory = ATIFTrajectory.from_agent_result(
+                    turns=raw_turns,
+                    agent_name=self._name,
+                    model_name=self._llm.model_name,
+                    tool_definitions=_tool_defs,
+                    reasoning_effort=_reasoning_effort,
+                    agent_extra=_agent_extra,
+                )
+                trajectory_path = output_dir / "trajectory_atif.json"
+                trajectory_path.write_text(
+                    json.dumps(trajectory.to_json_dict(), indent=2, default=str)
+                )
+            except Exception:
+                logger.warning("ATIF export failed", exc_info=True)
 
         result = AgentResult(
             final_answer=answer,

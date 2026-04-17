@@ -21,6 +21,42 @@ deprecated:
     metadata:
       deprecated: true
 
+  fireworks/kimi-k2-instruct-0905:
+    company: Kimi
+    label: Kimi K2 Instruct 0905
+    release_date: '2025-09-04'
+    open_source: true
+    documentation_url: https://www.kimi.com/
+    properties:
+      context_window: 256000
+      max_tokens: 256000
+      reasoning_model: false
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.6
+      output: 2.5
+      cache:
+        read_discount: 1.0
+        write_markup: 1.0
+      batch:
+        input_discount: 0.5
+        output_discount: 0.5
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: kimi-k2-instruct-0905
+
   fireworks/qwen3-235b-a22b:
     label: Qwen 3 (235B)
     company: Alibaba

@@ -1,7 +1,8 @@
 import traceback
+from datetime import datetime, timezone
 from typing import Any
 
-from pydantic import computed_field, field_validator
+from pydantic import Field, computed_field, field_validator
 
 from model_library.agent.tool import ToolOutput
 from model_library.base.input import ToolCall
@@ -86,6 +87,9 @@ class ErrorTurn(PrettyModel):
     - duration_seconds: wall clock for the turn (hooks + failed query including retries)
     """
 
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     error: SerializableException
     duration_seconds: float
 
@@ -127,6 +131,9 @@ class AgentTurn(PrettyModel):
     - tool_call_records[i].duration_seconds: individual tool execution time
     """
 
+    timestamp: str = Field(
+        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+    )
     query_result: QueryResult
     tool_call_records: list[ToolCallRecord] = []
     duration_seconds: float

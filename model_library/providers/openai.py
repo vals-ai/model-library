@@ -613,9 +613,21 @@ class OpenAIModel(LLM):
             del body["max_tokens"]
             body["max_completion_tokens"] = self.max_tokens
 
-        # some model endpoints (like `fireworks/deepseek-v3p2`)
-        # require explicitly setting reasoning effort to disable thinking
-        if self.reasoning_effort is not None:
+        if self.provider == "google":
+            if self.reasoning:
+                # Google's OpenAI-compat endpoint uses a nested extra_body.google.thinking_config
+                # to return visible thinking tokens. reasoning_effort conflicts with thinking_config
+                # so only one can be used; map reasoning_effort → thinking_level inside thinking_config.
+                thinking_config: dict[str, Any] = {"include_thoughts": True}
+                if isinstance(self.reasoning_effort, str):
+                    thinking_config["thinking_level"] = self.reasoning_effort
+                google_extra = cast(dict[str, Any], body.setdefault("extra_body", {}))
+                nested = cast(dict[str, Any], google_extra.setdefault("extra_body", {}))
+                google_section = cast(dict[str, Any], nested.setdefault("google", {}))
+                google_section["thinking_config"] = thinking_config
+        elif self.reasoning_effort is not None:
+            # some model endpoints (like `fireworks/deepseek-v3p2`)
+            # require explicitly setting reasoning effort to disable thinking
             body["reasoning_effort"] = self.reasoning_effort
 
         if self.prompt_cache_retention is not None:
@@ -626,6 +638,27 @@ class OpenAIModel(LLM):
                 body["temperature"] = self.temperature
             if self.top_p is not None:
                 body["top_p"] = self.top_p
+            # top_k isn't a standard chat-completions field; forward it via
+            # extra_body so non-OpenAI backends (e.g. Gemini OpenAI-compat)
+            # receive it while the OpenAI SDK doesn't reject it client-side.
+            if self.top_k is not None:
+                extra_body = cast(dict[str, Any], body.setdefault("extra_body", {}))
+                extra_body.setdefault("top_k", self.top_k)
+
+        if output_schema is not None:
+            schema = (
+                output_schema
+                if isinstance(output_schema, dict)
+                else to_strict_json_schema(output_schema)
+            )
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "structured_output",
+                    "schema": schema,
+                    "strict": True,
+                },
+            }
 
         body.update(kwargs)
 
@@ -701,6 +734,17 @@ class OpenAIModel(LLM):
                                     and func.name
                                 )  # TODO: remove hotfix once deepseek fixes their stuff
                             ):
+                                # Gemini's OpenAI-compat endpoint emits
+                                # extra_content.google.thought_signature on the
+                                # first chunk of each tool call which must be included
+                                # on subsequent turns
+                                extras: dict[str, Any] = {}
+                                if self.provider == "google":
+                                    extra_content = (
+                                        tool_call_chunk.model_extra or {}
+                                    ).get("extra_content")
+                                    if extra_content is not None:
+                                        extras["extra_content"] = extra_content
                                 raw_tool_calls.append(
                                     ChatCompletionMessageToolCall(
                                         id=tool_call_chunk.id,
@@ -713,6 +757,7 @@ class OpenAIModel(LLM):
                                             if func and func.arguments
                                             else "",
                                         ),
+                                        **extras,
                                     )
                                 )
                             # accumulate delta

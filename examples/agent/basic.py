@@ -14,13 +14,14 @@ from model_library.agent import (
     AgentTurn,
     ErrorTurn,
     SerializableException,
+    TimeLimit,
     TurnLimit,
     TurnResult,
 )
 from model_library.agent.hooks import default_determine_answer
 from model_library.agent.tools.submit import SubmitTool
 from model_library.base import LLM
-from model_library.base.input import TextInput
+from model_library.base.input import InputItem, TextInput
 from model_library.registry_utils import get_registry_model
 
 from ..setup import console_log, setup
@@ -102,9 +103,28 @@ async def agent_with_bash(model: LLM):
     console_log(f"Logs: {result.output_dir}")
 
 
-async def agent_with_hooks(model: LLM):
-    """Agent with lifecycle hooks: should_stop and determine_answer."""
-    console_log("\n--- Agent with Hooks ---\n")
+def _turn_message(turn_number: int, max_turns: int) -> InputItem | None:
+    remaining = max_turns - turn_number
+
+    if remaining <= 3:
+        return TextInput(
+            text=f"[Turn {turn_number}/{max_turns} — {remaining} remaining. Wrap up soon.]"
+        )
+
+    return TextInput(text=f"[Turn {turn_number}/{max_turns}]")
+
+
+def _time_message(elapsed_seconds: float, max_seconds: float) -> InputItem | None:
+    remaining = max_seconds - elapsed_seconds
+
+    if remaining < 30:
+        return TextInput(text=f"[{remaining:.0f}s remaining — submit now.]")
+
+    return None
+
+
+def _build_hooks_agent(model: LLM) -> tuple[Agent, dict[str, Any]]:
+    """Build an agent with all hook types for reuse across examples."""
 
     def stop_after_turns(turn_result: TurnResult) -> bool:
         if turn_result.turn_number >= 4:
@@ -121,18 +141,35 @@ async def agent_with_hooks(model: LLM):
             return f"From state: {state['tokyo_weather']}"
         return default_determine_answer(state, turns, final_error)
 
+    state: dict[str, Any] = {}
     agent = Agent(
         name="hooks",
         llm=model,
-        tools=[GetWeather(), SaveNote()],
-        config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
+        tools=[GetWeather(), SaveNote(), SubmitTool()],
+        config=AgentConfig(
+            turn_limit=TurnLimit(
+                max_turns=10,
+                turn_message=_turn_message,
+            ),
+            time_limit=TimeLimit(
+                max_seconds=120,
+                time_message=_time_message,
+            ),
+        ),
         hooks=AgentHooks(
             should_stop=stop_after_turns,
             determine_answer=answer_from_state,
         ),
     )
 
-    state: dict[str, Any] = {}
+    return agent, state
+
+
+async def agent_with_hooks(model: LLM):
+    """Agent with lifecycle hooks: should_stop, determine_answer, turn_message, time_message."""
+    console_log("\n--- Agent with Hooks ---\n")
+
+    agent, state = _build_hooks_agent(model)
     result = await agent.run(
         [TextInput(text="Get the weather in Tokyo and save it as 'tokyo_weather'.")],
         question_id="question_1",

@@ -20,7 +20,7 @@ For multi-process benchmarks where each question spawns a separate process (new 
 
 ```
 App calls model.init_token_retry(params)
-  → spawns refill loop + correction loop
+  → spawns background_loops (refill + correction + cleanup + heartbeat + watchdog)
 
 App calls model.query(input, run_id=..., question_id=...)
   → run_id / question_id auto-generated if not provided
@@ -43,7 +43,8 @@ Benchmark runs wrap all of the above:
 
 | File | Role |
 |------|------|
-| `retriers/token/token.py` | TokenRetrier, init_remaining_tokens, background loops, Lua scripts |
+| `retriers/token/token.py` | TokenRetrier, init_remaining_tokens, Lua scripts |
+| `retriers/token/background.py` | Background loops (refill, correction, cleanup/reaper, heartbeat, watchdog), standby/takeover |
 | `retriers/token/benchmark_queue.py` | FIFO queue, heartbeat, early release |
 | `retriers/token/utils.py` | Redis key schema, status models, `get_status()` |
 | `base/base.py` | `LLM.query()` integration, `TokenRetryParams` |
@@ -58,19 +59,22 @@ Benchmark runs wrap all of the above:
 `LLM.init_token_retry(params)` → `TokenRetrier.init_remaining_tokens(...)`:
 
 1. Sets token count in Redis via `INIT_TOKENS_LUA` (only resets if limit changed or key missing)
-2. Writes a new version UUID — old background loops detect the mismatch and exit
-3. Stores config hash (limit, tokens_per_second, version, initialized_at)
-4. Spawns two background tasks:
-   - **Refill loop** — every 1s, adds `limit / limit_refresh_seconds` tokens (capped at limit)
+2. Stores config hash (limit, tokens_per_second, burst_limit, initialized_at)
+3. Checks `task:active` key — if an active loop exists with the same config, starts in standby; if config changed or no active loop, starts active
+4. Spawns one `background_loops` coroutine (in `background.py`) managing a TaskGroup with:
+   - **Refill loop** — every 1s, adds `limit / limit_refresh_seconds` tokens (capped at limit), resets burst counter
    - **Correction loop** — every 20s, reads provider rate-limit headers and corrects token count down if it's too high
+   - **Cleanup/reaper loop** — every 30s, reaps stale entries and checks idle shutdown
+   - **Heartbeat** — refreshes `task:active` key and per-worker alive markers
+   - **Watchdog** — detects if another loop took the active key, raises `_Demoted`
 
-Both loops exit on:
-- **Version mismatch** — another `init_remaining_tokens` call wrote a new UUID
-- **Idle shutdown** — tokens at limit with no active runs for 300s (`FULL_TOKENS_SHUTDOWN`)
+**Standby/takeover**: No loop ever dies permanently. On `_Demoted` (watchdog or idle shutdown), loops go to standby. Standby polls every 10s (`LOOP_POLL_INTERVAL`) for `task:active` key expiry. On takeover, re-reads config from Redis.
 
-The refill loop also reaps stale entries every 30s:
+The cleanup loop reaps stale entries every 30s:
 - Per-run inflight entries older than 2h (`INFLIGHT_MAX_AGE`), cleaning up associated metadata hashes; empty per-run ZSETs removed from active_runs
 - Priority entries older than 5m (`PRIORITY_STALE_AGE`)
+
+**Idle shutdown** is checked by the cleanup loop: tokens at limit with no active runs for 300s (`FULL_TOKENS_SHUTDOWN`) → raises `_Demoted` to kill the TaskGroup, loop enters standby.
 
 ### Priority Queue
 
@@ -87,20 +91,22 @@ On each retry, priority increments by 1 (toward MIN). A request waits if any low
 ### Request Lifecycle (_pre_function → execute → _post_function)
 
 **_pre_function** (token deduction):
-1. Lazy queue check: `lpos(queue_key, run_id)` on first call, cached as `_is_queued`
-2. If queued and straggler (run_id != queue head via `lindex`), set priority to MAX_PRIORITY
-3. Register in priority ZSET at current level, store initial per-question metadata hash
-4. Loop until tokens deducted:
+1. Lazy burst limit read from config hash (once per instance)
+2. Lazy queue check: `lpos(queue_key, run_id)` on first call, cached as `_is_queued`
+3. If queued and straggler (run_id != queue head via `lindex`), set priority to MAX_PRIORITY
+4. Remove from dispatched SET (`srem`) — agentic benchmarks re-enter `_pre_function` for each turn, so dispatched count reflects questions with current turn inflight
+5. Register in priority ZSET at current level, store initial per-question metadata hash
+6. Loop until tokens deducted (jittered wait: `uniform(TOKEN_WAIT_TIME * 0.5, TOKEN_WAIT_TIME * 1.5)`):
    - Check for lower-priority waiters → if found, sleep and retry
-   - Attempt atomic deduction via `DEDUCT_TOKENS_LUA`
-   - On success: add to per-run inflight ZSET, register run in active_runs SET, add `question_id` to per-run dispatched SET (queued only), store per-question metadata hash
-5. Finally: remove from priority ZSET; if no deduction occurred, delete metadata hash
+   - Attempt atomic deduction via `DEDUCT_TOKENS_LUA` (checks both token count and burst limit)
+   - On success: add to per-run inflight ZSET, register run in active_runs SET, add `question_id` to per-run dispatched SET, store per-question metadata hash
+7. Finally (shielded): remove from priority ZSET; if no deduction occurred, delete metadata hash
 
 **execute** (wraps the actual API call):
 - On success → `_post_function`
 - On `RetryException` → increment priority, wait, re-enter `_pre_function`
 - On `ImmediateRetryException` → retry immediately (no priority change)
-- Finally: remove from per-run inflight ZSET; if empty, remove run from active_runs; delete per-question metadata hash
+- Finally (shielded): remove from per-run inflight ZSET; if empty, remove run from active_runs; delete per-question metadata hash
 
 **_post_function** (token adjustment):
 1. Compute actual tokens: `total_input + total_output - cache_read`
@@ -123,8 +129,8 @@ For agentic runs where one question makes multiple sequential `model.query()` ca
 
 - `LLM.query()` accepts an optional `question_id` param (auto-generated 14-char hex UUID if not provided)
 - `Agent.run()` accepts `question_id` and passes it to all turns
-- `TokenRetrier` uses `question_id` (not `request_id`) for the per-run dispatched SET → `sadd` is idempotent across turns
-- Result: dispatched count reflects unique questions started, not total queries made
+- `TokenRetrier` uses `question_id` (not `request_id`) for the per-run dispatched SET
+- Agentic dispatched cycling: `srem` at start of `_pre_function`, `sadd` after deduction — dispatched count reflects questions with current turn inflight, not total queries made
 
 ---
 
@@ -145,7 +151,7 @@ benchmark_queue(model_key, run_id, total_requests=N, early_release=True):
   5. On notification:
      - yield (app dispatches requests, passing run_id to query()/agent.run())
      - TokenRetrier detects queue membership via lpos on first _pre_function call
-  6. Finally:
+  6. Finally (shielded):
      - Cancel heartbeat task
      - Remove from queue, delete alive key
      - Set popped_at if not already set (early release sets it earlier)
@@ -174,6 +180,7 @@ This gives stragglers highest priority so they finish quickly.
 
 `benchmark_queue(..., early_release=True)` (default):
 - Heartbeat checks dispatched count and releases slot early
+- After all requests are dispatched, waits `EARLY_RELEASE_GRACE_PERIOD` (10s) before releasing — gives fast-failing requests time to retry at normal priority instead of becoming stragglers
 
 `benchmark_queue(..., early_release=False)`:
 - Slot held until the context manager exits (all work done)
@@ -191,10 +198,12 @@ Prefix: `model_library` (`KEY_PREFIX`). Identifiers: `{P}` = provider.model_name
 |-----|------|-----|---------|
 | `{P}:{K}:tokens` | STRING | — | Remaining token count |
 | `{P}:{K}:tokens:limit` | STRING | — | Token limit |
-| `{P}:{K}:tokens:version` | STRING | — | Loop version UUID |
-| `{P}:{K}:tokens:config` | HASH | — | Init config (limit, tokens_per_second, version, initialized_at) |
+| `{P}:{K}:tokens:burst` | STRING | — | Burst counter (reset every 1s by refill loop) |
+| `{P}:{K}:tokens:config` | HASH | — | Init config (limit, tokens_per_second, burst_limit, initialized_at) |
+| `{P}:{K}:tokens:task:active` | STRING | 30s | Active loop owner (loop_id UUID), refreshed by heartbeat |
 | `{P}:{K}:tokens:task:refill` | STRING | 30s | Refill loop alive marker |
 | `{P}:{K}:tokens:task:correction` | STRING | 30s | Correction loop alive marker |
+| `{P}:{K}:tokens:task:reaper` | STRING | 30s | Cleanup/reaper loop alive marker |
 | `{P}:{K}:tokens:dynamic_estimate:{RUN}` | STRING | 24h | EMA ratio for dynamic estimation |
 
 ### Inflight Tracking
@@ -230,12 +239,12 @@ All scripts run atomically in Redis (no interleaving with other commands).
 
 | Script | Keys | Args | Returns | Purpose |
 |--------|------|------|---------|---------|
-| `DEDUCT_TOKENS_LUA` | token_key | required_tokens | 1/0 | Check-and-deduct tokens |
+| `DEDUCT_TOKENS_LUA` | token_key, burst_key | required_tokens, burst_limit | 1/0 | Check-and-deduct tokens with burst cap |
 | `REFILL_TOKENS_LUA` | token_key | amount, cap | new_count | Refill with cap |
 | `CORRECT_TOKENS_LUA` | token_key | adjusted | [corrected, current, adjusted] | Correct down from headers |
 | `ADJUST_RATIO_LUA` | ratio_key | observed, alpha | [old, new] | EMA ratio update |
 | `HAS_LOWER_PRIORITY_LUA` | — | base, current_p, min_p | 1/0 | Check for lower-priority waiters |
-| `INIT_TOKENS_LUA` | token, limit, version | new_limit, new_version | 1/0 | Init tokens + version |
+| `INIT_TOKENS_LUA` | token_key, limit_key | new_limit | 1/0 | Init tokens (no version) |
 
 ---
 
@@ -255,15 +264,22 @@ All scripts run atomically in Redis (no interleaving with other commands).
 
 | Constant | Value | Purpose |
 |----------|-------|---------|
-| `TOKEN_WAIT_TIME` | 10.0s | Sleep between token deduction attempts (jittered) |
+| `TOKEN_WAIT_TIME` | 10.0s | Sleep between token deduction attempts (jittered ±50%) |
 | `RETRY_WAIT_TIME` | 30.0s | Sleep between actual retries (jittered) |
 | `MAX_RETRIES` | 10 | Max retry attempts |
-| `REFILL_TASK_TTL` | 30s | Background loop alive marker TTL |
-| `FULL_TOKENS_SHUTDOWN` | 300s | Idle shutdown threshold |
+| `BURST_FRACTION` | 0.2 | Max 20% of token limit per second |
 | `PRIORITY_STALE_AGE` | 300s | Reap priority entries after this |
 | `INFLIGHT_MAX_AGE` | 7200s | Reap stale inflight entries after this |
-| `REAP_INTERVAL` | 30s | How often reaper runs |
+| `REAP_INTERVAL` | 30s | How often cleanup/reaper loop runs |
 | `DYNAMIC_ESTIMATE_TTL` | 86400s | Expire dynamic estimate ratios for inactive runs |
+
+### Constants (background.py)
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `FULL_TOKENS_SHUTDOWN` | 300s | Idle shutdown threshold (checked by cleanup loop) |
+| `REFILL_TASK_TTL` | 30s | Background loop alive marker / active key TTL |
+| `LOOP_POLL_INTERVAL` | 10.0s | Heartbeat, watchdog, and standby poll interval |
 
 ### Constants (benchmark_queue.py)
 
@@ -271,6 +287,7 @@ All scripts run atomically in Redis (no interleaving with other commands).
 |----------|-------|---------|
 | `HEARTBEAT_INTERVAL` | 5s | Heartbeat check frequency |
 | `HEARTBEAT_TTL` | 300s | Alive key expiry |
+| `EARLY_RELEASE_GRACE_PERIOD` | 10s | Wait after all dispatched before releasing slot |
 | `HOURS_24` | 86400s | TTL for queue and metadata keys |
 
 ---
@@ -331,7 +348,8 @@ response = await self._llm.query(
 - If crash between lrem and notify: self-promotion in heartbeat detects we're at head
 
 ### Server restart
-- `init_remaining_tokens` writes new version UUID → old loops exit
+- `init_remaining_tokens` checks `task:active` — if config unchanged, new loops start in standby; if config changed, new loops take over immediately
+- Old loops detect new `task:active` owner via watchdog → go to standby
 - Token count preserved in Redis (not reset unless limit changed)
 - Queue entries idempotent (lpos check before rpush)
 

@@ -256,6 +256,7 @@ class LLM(ABC):
         run_id: str | None = None,
         question_id: str | None = None,
         in_agent: bool = False,
+        docent_ingest: bool = False,
         **kwargs: object,
     ) -> QueryResult:
         """
@@ -269,18 +270,21 @@ class LLM(ABC):
             raise Exception(f"{model_name} does not support structured outputs")
 
         # represents a run
+        run_id_provided = bool(run_id)
+
         if not run_id:
             run_id = uuid.uuid4().hex[:8]
+
         # represents a question (can have multiple queries if agentic)
         if not question_id:
             question_id = uuid.uuid4().hex[:14]
+
         # represents a query
         query_id = uuid.uuid4().hex[:14]
 
         _base_logger = logger or self.instance_logger.getChild(f"<run={run_id}>")
-        # verbose on debug
-        verbose = _base_logger.isEnabledFor(logging.DEBUG)
 
+        # verbose on debug
         child_name = (
             f"<query={query_id}>"
             if in_agent
@@ -289,6 +293,12 @@ class LLM(ABC):
         query_logger = _base_logger.getChild(child_name)
         if in_agent:
             query_logger.setLevel(logging.WARNING)
+
+        if docent_ingest and not run_id_provided:
+            query_logger.warning("docent_ingest=True but no run_id provided")
+
+        info_enabled = query_logger.isEnabledFor(logging.INFO)
+        debug_enabled = query_logger.isEnabledFor(logging.DEBUG)
 
         # format str input
         if isinstance(input, str):
@@ -299,27 +309,31 @@ class LLM(ABC):
         if system_prompt_kwarg is not None:
             input = [SystemInput(text=str(system_prompt_kwarg)), *input]
 
-        # format input info
-        item_info = (
-            f"--- input ({len(input)}): {get_pretty_input_types(input, verbose)}\n"
-        )
-        if history:
-            logged_history = history if verbose else history[-MAX_LOG_HISTORY:]
-            item_info += f"--- history({len(history)}): {get_pretty_input_types(logged_history, verbose)}\n"
+        item_info = ""
+        tool_info = ""
+        short_kwargs = ""
+        if info_enabled:
+            # format input info
+            item_info = f"--- input ({len(input)}): {get_pretty_input_types(input, debug_enabled)}\n"
+            if history:
+                logged_history = (
+                    history if debug_enabled else history[-MAX_LOG_HISTORY:]
+                )
+                item_info += f"--- history({len(history)}): {get_pretty_input_types(logged_history, debug_enabled)}\n"
 
-        # format tool info
-        tool_results = [t for t in input if isinstance(t, ToolResult)]
-        tool_names = [tool.name for tool in tools or []]
+            # format tool info
+            tool_results = [t for t in input if isinstance(t, ToolResult)]
+            tool_names = [tool.name for tool in tools or []]
 
-        tool_info = (
-            f"--- tools ({len(tools)}): {tool_names}\n"
-            + f"--- tool results ({len(tool_results)}): "
-            + f"{[{tool.tool_call.name: truncate_str(str(tool.result))} for tool in tool_results]}\n"
-            if tools
-            else ""
-        )
+            tool_info = (
+                f"--- tools ({len(tools)}): {tool_names}\n"
+                + f"--- tool results ({len(tool_results)}): "
+                + f"{[{tool.tool_call.name: truncate_str(str(tool.result))} for tool in tool_results]}\n"
+                if tools
+                else ""
+            )
 
-        short_kwargs = {k: truncate_str(repr(v)) for k, v in kwargs.items()}
+            short_kwargs = {k: truncate_str(repr(v)) for k, v in kwargs.items()}
 
         # join input with history
         input = [*history, *input]
@@ -333,10 +347,14 @@ class LLM(ABC):
         if system_inputs and system_inputs[0] != 0:
             raise ValueError("SystemInput must be the first item in the input sequence")
 
-        query_logger.info(
-            "Query started:\n" + item_info + tool_info + f"--- kwargs: {short_kwargs}\n"
-        )
-        query_logger.debug([repr(item) for item in input])
+        if info_enabled:
+            query_logger.info(
+                "Query started:\n"
+                + item_info
+                + tool_info
+                + f"--- kwargs: {short_kwargs}\n"
+            )
+            query_logger.debug([repr(item) for item in input])
 
         async def query_func() -> QueryResult:
             return await self._query_impl(
@@ -394,11 +412,33 @@ class LLM(ABC):
                     output.output_text
                 )
 
-        max_string = None if verbose else 400
-        query_logger.info(
-            f"Query completed: {pretty_repr(output, max_string=max_string)}"
-        )
-        query_logger.debug(repr(output))
+        if info_enabled:
+            max_string = None if debug_enabled else 400
+            query_logger.info(
+                f"Query completed: {pretty_repr(output, max_string=max_string)}"
+            )
+        if debug_enabled:
+            query_logger.debug(repr(output))
+
+        # Skip ingestion when in_agent — the Agent handles its own ingestion
+        # after the full loop so that all turns are in one Docent agent run.
+        if docent_ingest and not in_agent and run_id_provided:
+            try:
+                from model_library.docent import (
+                    ingest,
+                    query_result_to_docent_agent_run,
+                )
+
+                ingest(
+                    run_id,
+                    query_result_to_docent_agent_run(
+                        input,
+                        output,
+                        question_id,
+                    ),
+                )
+            except Exception:
+                query_logger.warning("Docent ingestion failed", exc_info=True)
 
         return output
 

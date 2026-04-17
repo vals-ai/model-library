@@ -32,6 +32,10 @@ class ImmediateRetryException(RetryException): ...
 class BackoffRetryException(RetryException): ...
 
 
+# Base class for a non-retryable exception
+class NoRetryException(Exception): ...
+
+
 class RateLimitException(BackoffRetryException):
     """Raised when the rate limit is exceeded"""
 
@@ -41,7 +45,7 @@ class RateLimitException(BackoffRetryException):
         super().__init__(message or RateLimitException.DEFAULT_MESSAGE)
 
 
-class MaxOutputTokensExceededError(Exception):
+class MaxOutputTokensExceededError(NoRetryException):
     """
     Raised when the output exceeds the allowed max output tokens limit
     AND the output (including reasoning) was empty
@@ -55,7 +59,7 @@ class MaxOutputTokensExceededError(Exception):
         super().__init__(message or MaxOutputTokensExceededError.DEFAULT_MESSAGE)
 
 
-class MaxContextWindowExceededError(Exception):
+class MaxContextWindowExceededError(NoRetryException):
     """
     Raised when the context window exceeds the allowed max context window limit
     """
@@ -69,12 +73,24 @@ class MaxContextWindowExceededError(Exception):
         super().__init__(message or MaxContextWindowExceededError.DEFAULT_MESSAGE)
 
 
+class ContentFilterError(NoRetryException):
+    """
+    Raised when the model's content filter is triggered
+    """
+
+    DEFAULT_MESSAGE: str = "Model's content filter triggered"
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or ContentFilterError.DEFAULT_MESSAGE)
+
+
 # List of regex patterns to match context window exceeded errors
 # This was made after forcing context window errors on a model from each provider
 CONTEXT_WINDOW_PATTERN = re.compile(
     r"maximum context length is \d+ tokens|"
     r"context length is \d+ tokens|"
     r"exceed.* context (limit|window|length)|"
+    r"input token count exceeds the maximum number of tokens allowed|"
     r"context window exceeds|"
     r"exceeds maximum length|"
     r"too long.*tokens.*maximum|"
@@ -123,6 +139,12 @@ def handle_empty_response(
         raise MaxContextWindowExceededError(log_message)
     if finish_reason.reason == _FinishReason.MAX_TOKENS:
         raise MaxOutputTokensExceededError(log_message)
+    if (
+        finish_reason.reason == _FinishReason.CONTENT_FILTER
+        or finish_reason.reason == _FinishReason.GUARDRAIL
+    ):
+        raise ContentFilterError(log_message)
+
     raise ModelNoOutputError(log_message)
 
 
@@ -232,6 +254,9 @@ RETRIABLE_EXCEPTION_CODES = [
 
 
 def is_retriable_error(e: Exception) -> bool:
+    if isinstance(e, NoRetryException):
+        return False
+
     if isinstance(e, RetryException):
         return True
 

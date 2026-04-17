@@ -81,7 +81,6 @@ def _make_retrier(
     estimate_input_tokens: int = 100,
     estimate_output_tokens: int = 50,
     use_dynamic_estimate: bool = False,
-    token_wait_time: float = 1.0,
 ) -> TokenRetrier:
     return TokenRetrier(
         logger=logging.getLogger("test"),
@@ -91,7 +90,6 @@ def _make_retrier(
         estimate_input_tokens=estimate_input_tokens,
         estimate_output_tokens=estimate_output_tokens,
         use_dynamic_estimate=use_dynamic_estimate,
-        token_wait_time=token_wait_time,
     )
 
 
@@ -317,7 +315,7 @@ async def test_different_run_ids_different_inflight_keys():
 
 async def test_question_meta_key_scoped_to_question_id():
     retrier = _make_retrier(question_id="q-special")
-    assert retrier._question_meta_key == f"{TOKEN_KEY}:inflight:q-special"
+    assert retrier._question_meta_key == f"{TOKEN_KEY}:inflight:test-run:q-special"
 
 
 async def test_dynamic_estimate_keyed_by_run_id():
@@ -344,7 +342,7 @@ async def test_same_question_id_across_turns_overwrites_inflight(redis):
     inflight_key = f"{TOKEN_KEY}:run:run-agent:inflight"
     members = await redis.zrangebyscore(inflight_key, "-inf", "+inf")
     assert len(members) == 1
-    assert members[0] == "q-agentic"
+    assert members[0] == "run-agent:q-agentic"
 
 
 async def test_different_question_ids_same_run_create_separate_entries(redis):
@@ -357,7 +355,7 @@ async def test_different_question_ids_same_run_create_separate_entries(redis):
     inflight_key = f"{TOKEN_KEY}:run:run-multi:inflight"
     members = await redis.zrangebyscore(inflight_key, "-inf", "+inf")
     assert len(members) == 3
-    assert set(members) == {"q-0", "q-1", "q-2"}
+    assert set(members) == {"run-multi:q-0", "run-multi:q-1", "run-multi:q-2"}
     assert await redis.sismember(f"{TOKEN_KEY}:active_runs", "run-multi")
 
 
@@ -379,29 +377,30 @@ async def test_execute_cleanup_removes_only_own_question(redis):
     await retrier.execute(AsyncMock(return_value=(mock_qr, 0.5)))
 
     members = await redis.zrangebyscore(inflight_key, "-inf", "+inf")
-    assert "my-q" not in members
+    assert "run-shared:my-q" not in members
     assert "other-q" in members
     assert await redis.sismember(f"{TOKEN_KEY}:active_runs", "run-shared")
 
 
 async def test_metadata_cleaned_on_pre_function_failure(redis):
     await _init_tokens(redis, value=0)
+    await redis.hset(f"{TOKEN_KEY}:config", mapping={"burst_limit": "200"})
 
     retrier = _make_retrier(run_id="run-fail", question_id="q-fail")
 
     original_eval = redis.eval
 
-    async def cancel_eval(script, numkeys, *args):
-        if numkeys == 1 and args and args[0] == TOKEN_KEY:
+    async def cancel_eval(script, numkeys, *args):  # noqa: S307
+        if numkeys == 2 and args and args[0] == TOKEN_KEY:
             raise asyncio.CancelledError()
-        return await original_eval(script, numkeys, *args)
+        return await original_eval(script, numkeys, *args)  # noqa: S307
 
     redis.eval = cancel_eval
 
     with pytest.raises(asyncio.CancelledError):
         await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
-    assert not await redis.exists(f"{TOKEN_KEY}:inflight:q-fail")
+    assert not await redis.exists(f"{TOKEN_KEY}:inflight:run-fail:q-fail")
 
 
 # ── TokenRetrier queued behavior ──────────────────────────────────────
@@ -417,18 +416,18 @@ async def test_queued_retrier_tracks_dispatched(redis):
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     dispatched_key = f"{KEY_PREFIX}:provider:model:benchmark:run:bench-run:dispatched"
-    assert await redis.sismember(dispatched_key, "q-bench")
+    assert await redis.sismember(dispatched_key, "bench-run:q-bench")
 
 
-async def test_non_queued_retrier_skips_dispatched(redis):
-    """Run not in the benchmark queue does not create a dispatched entry."""
+async def test_non_queued_retrier_tracks_dispatched(redis):
+    """Run not in the benchmark queue still gets a dispatched entry (all runs track dispatched)."""
     await _init_tokens(redis, value=1000)
 
     retrier = _make_retrier(run_id="normal-run", question_id="q-normal")
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     keys = await redis.keys(f"{KEY_PREFIX}:*:benchmark:run:*:dispatched")
-    assert keys == []
+    assert len(keys) == 1
 
 
 async def test_straggler_gets_max_priority(redis):

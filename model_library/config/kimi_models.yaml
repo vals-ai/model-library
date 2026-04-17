@@ -48,8 +48,3 @@ kimi-models:
       output: 2.5
       cache:
         read: 0.15
-    alternative_keys:
-      - fireworks/kimi-k2-thinking:
-          costs_per_million_token:
-            input: 0.6
-            output: 2.5

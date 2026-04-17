@@ -1,3 +1,4 @@
+import base64
 import io
 import logging
 from typing import Any, Literal, Sequence
@@ -19,6 +20,7 @@ from model_library.base import (
     FileInput,
     FileWithBase64,
     FileWithId,
+    FileWithUrl,
     FinishReason,
     FinishReasonInfo,
     InputItem,
@@ -36,7 +38,6 @@ from model_library.base import (
     ToolResult,
 )
 from model_library.exceptions import (
-    BadInputError,
     ImmediateRetryException,
     ModelNoOutputError,
     NoMatchingToolCallError,
@@ -84,9 +85,10 @@ class XAIModel(LLM):
                 client = AsyncClient(
                     api_key=api_key,
                     api_host=base_url,
+                    timeout=60 * 60 * 24,
                 )
             else:
-                client = AsyncClient(api_key=api_key)
+                client = AsyncClient(api_key=api_key, timeout=60 * 60 * 24)
 
             self.assign_client(client)
         return super().get_client()
@@ -207,8 +209,10 @@ class XAIModel(LLM):
             case FileWithBase64():
                 image_url = f"data:image/{image.mime};base64,{image.base64}"
                 return xai_image(image_url=image_url, detail="high")
-            case _:
-                raise BadInputError("Unsupported image type")
+            case FileWithUrl():
+                return xai_image(image_url=image.url, detail="high")
+            case FileWithId():
+                return xai_file(file_id=image.file_id)
 
     @override
     async def parse_file(
@@ -218,8 +222,14 @@ class XAIModel(LLM):
         match file:
             case FileWithId():
                 return xai_file(file_id=file.file_id)
-            case _:
-                raise BadInputError("Unsupported file type")
+            case FileWithUrl():
+                return xai_file(url=file.url, filename=file.name, mime_type=file.mime)
+            case FileWithBase64():
+                return xai_file(
+                    data=base64.b64decode(file.base64),
+                    filename=file.name,
+                    mime_type=file.mime,
+                )
 
     @override
     async def parse_tools(

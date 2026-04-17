@@ -1,14 +1,17 @@
 import logging
+import socket
 from collections.abc import Generator, Iterator
-from typing import Any
 from contextlib import contextmanager
 from pathlib import Path
-from rich.pretty import pretty_repr
+from typing import Any
 
+import aiohttp
 import httpx
 from anthropic import AsyncAnthropic
+from httpx_aiohttp import AiohttpTransport
 from openai import AsyncOpenAI
 from pydantic.main import BaseModel
+from rich.pretty import pretty_repr
 
 MAX_LLM_LOG_LENGTH = 100
 MAX_LOG_HISTORY = 20  # number of history items to log
@@ -126,12 +129,30 @@ def get_logger(name: str | None = None):
     return logging.getLogger(f"{logger.name}.{name}")
 
 
-def default_httpx_client():
+def make_aiohttp_session() -> aiohttp.ClientSession:
+    """Create an aiohttp session with optimized connection pooling."""
+    connector = aiohttp.TCPConnector(
+        limit=1000,
+        ttl_dns_cache=300,
+        keepalive_timeout=60,
+        family=socket.AF_INET,  # force IPv4, skip Happy Eyeballs dual-stack
+    )
+    return aiohttp.ClientSession(connector=connector)
+
+
+def default_aiohttp_httpx_client() -> httpx.AsyncClient:
+    """Create an httpx AsyncClient backed by aiohttp with optimized pooling."""
+    return httpx.AsyncClient(
+        transport=AiohttpTransport(client=make_aiohttp_session),
+        timeout=httpx.Timeout(None),
+    )
+
+
+def default_httpx_client() -> httpx.AsyncClient:
+    """Fallback httpx client without aiohttp (used when aiohttp is not available)."""
     return httpx.AsyncClient(
         timeout=httpx.Timeout(None),
-        limits=httpx.Limits(
-            max_connections=2000, max_keepalive_connections=300
-        ),  # TODO: increase, but make sure prod enough sockets to not hit file descriptor limit
+        limits=httpx.Limits(max_connections=2000, max_keepalive_connections=300),
     )
 
 
@@ -147,7 +168,7 @@ def create_openai_client_with_defaults(
     return AsyncOpenAI(
         api_key=api_key,
         base_url=base_url,
-        http_client=default_httpx_client(),
+        http_client=default_aiohttp_httpx_client(),
         max_retries=3,
     )
 
@@ -159,7 +180,7 @@ def create_anthropic_client_with_defaults(
         base_url=base_url,
         api_key=api_key,
         default_headers=default_headers,
-        http_client=default_httpx_client(),
+        http_client=default_aiohttp_httpx_client(),
         max_retries=3,
     )
 

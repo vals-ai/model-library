@@ -46,3 +46,17 @@ async def test_deepseek_reasoning_keeps_max_tokens():
     body = await model.build_body(_INPUT, tools=[])
     assert body.get("max_tokens") == 8192
     assert "max_completion_tokens" not in body
+
+
+async def test_google_delegate_thinking_config():
+    model = OpenAIModel(
+        "gemini-3.1-pro-preview",
+        provider="google",
+        config=LLMConfig(reasoning=True, reasoning_effort="low"),
+        use_completions=True,
+    )
+    body = await model.build_body(_INPUT, tools=[])
+    thinking_config = body["extra_body"]["extra_body"]["google"]["thinking_config"]
+    assert thinking_config["include_thoughts"] is True
+    assert thinking_config["thinking_level"] == "low"
+    assert "reasoning_effort" not in body

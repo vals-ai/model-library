@@ -1,7 +1,7 @@
 import asyncio
 import logging
+import random
 import time
-import uuid
 from math import ceil, floor
 from typing import Any, Callable, Coroutine
 
@@ -12,6 +12,13 @@ from model_library.retriers.token import utils
 from model_library.retriers.token.utils import KEY_PREFIX
 from model_library.retriers.utils import jitter
 
+# background loop settings
+PRIORITY_STALE_AGE: int = (
+    300  # 5 minutes — reap priority entries with no refresh (matches heartbeat TTL)
+)
+INFLIGHT_MAX_AGE: int = 7200  # 2 hours — reap stale inflight entries (this doesn't actually kill the task, just the entry)
+REAP_INTERVAL: int = 30  # seconds between stale entry reap checks
+
 RETRY_WAIT_TIME: float = 30.0
 TOKEN_WAIT_TIME: float = 10.0
 
@@ -21,30 +28,24 @@ MIN_PRIORITY: int = 5
 
 MAX_RETRIES: int = 10
 
-PRIORITY_STALE_AGE: int = (
-    300  # 5 minutes — reap priority entries with no refresh (matches heartbeat TTL)
-)
-INFLIGHT_MAX_AGE: int = 7200  # 2 hours — reap stale inflight entries (this doesn't actually kill the task, just the entry)
-REAP_INTERVAL: int = 30  # seconds between stale entry reap checks
 DYNAMIC_ESTIMATE_TTL: int = (
     86400  # 24 hours — expire dynamic estimate ratios for inactive runs
 )
 
-FULL_TOKENS_SHUTDOWN: int = (
-    300  # 5 minutes, stop background loops after tokens sit at limit
-)
+BURST_FRACTION: float = 0.2  # max 20% of token limit per second
 
-REFILL_TASK_TTL: int = 30  # seconds — refill task keys expire if loop dies
-
-# Lua: atomic check-and-deduct. Returns 1 if deducted, 0 if insufficient.
-# KEYS[1] = token key, ARGV[1] = required tokens
+# Lua: atomic check-and-deduct with burst cap.
+# KEYS[1] = token key, KEYS[2] = burst key
+# ARGV[1] = required tokens, ARGV[2] = burst limit
 DEDUCT_TOKENS_LUA = """
+local required = tonumber(ARGV[1])
 local remaining = tonumber(redis.call('GET', KEYS[1]))
-if remaining >= tonumber(ARGV[1]) then
-    redis.call('DECRBY', KEYS[1], ARGV[1])
-    return 1
-end
-return 0
+if remaining < required then return 0 end
+local burst = tonumber(redis.call('GET', KEYS[2]) or '0')
+if burst > 0 and burst + required > tonumber(ARGV[2]) then return 0 end
+redis.call('DECRBY', KEYS[1], required)
+redis.call('INCRBY', KEYS[2], required)
+return 1
 """
 
 # Lua: atomic refill with cap. Returns new token count.
@@ -105,7 +106,6 @@ return 0
 
 INIT_TOKENS_LUA = """
 local old_limit = tonumber(redis.call('GET', KEYS[2]) or 0)
-redis.call('SET', KEYS[3], ARGV[2])
 if old_limit ~= tonumber(ARGV[1]) or redis.call('EXISTS', KEYS[1]) == 0 then
     redis.call('SET', KEYS[1], ARGV[1])
     redis.call('SET', KEYS[2], ARGV[1])
@@ -113,9 +113,6 @@ if old_limit ~= tonumber(ARGV[1]) or redis.call('EXISTS', KEYS[1]) == 0 then
 end
 return 0
 """
-
-# for tests
-refill_tasks: dict[str, tuple[dict[str, int | Any], asyncio.Task[None]]] = {}
 
 
 class TokenRetrier(BaseRetrier):
@@ -147,256 +144,48 @@ class TokenRetrier(BaseRetrier):
         Initialize remaining tokens in storage and start background refill process
         """
 
-        async def _should_stop_loop(
-            key: str, version: str, last_not_full: float, loop_name: str
-        ) -> tuple[bool, float]:
-            """Check if a background loop should exit. Returns (should_stop, updated last_not_full).
-
-            Exit conditions:
-            1. Version mismatch — another call to init_remaining_tokens wrote a new
-               version UUID to Redis, meaning fresh loops have been spawned and this
-               one is stale.
-            2. Idle shutdown — tokens have been at the limit for FULL_TOKENS_SHUTDOWN
-               seconds AND no requests are currently inflight. If inflight requests
-               exist, the timer resets to avoid killing the loop while work is active.
-            """
-            current_version = await utils.redis_client.get(f"{key}:version")
-            if current_version != version:
-                logger.debug(
-                    f"version changed ({current_version} != {version}), exiting {loop_name} for {key}"
-                )
-                return True, last_not_full
-
-            if time.time() - last_not_full >= FULL_TOKENS_SHUTDOWN:
-                active_runs = await utils.redis_client.scard(f"{key}:active_runs")
-                if active_runs > 0:
-                    logger.debug(
-                        f"tokens at full for {FULL_TOKENS_SHUTDOWN}s but {active_runs} active runs, continuing {loop_name} for {key}"
-                    )
-                    return False, time.time()
-                logger.debug(
-                    f"tokens at full for {FULL_TOKENS_SHUTDOWN}s, exiting {loop_name} for {key}"
-                )
-                return True, last_not_full
-
-            return False, last_not_full
-
-        async def _header_correction_loop(
-            key: str,
-            limit: int,
-            tokens_per_second: int,
-            get_rate_limit_func: Callable[[], Coroutine[Any, Any, RateLimit | None]],
-            version: str,
-        ) -> None:
-            """
-            Background loop that correct tokens based on provider headers
-            Every 20.0 seconds
-            """
-            interval = 20.0
-            last_not_full = time.time()
-
-            while True:
-                await asyncio.sleep(interval)
-
-                try:
-                    await utils.redis_client.set(
-                        f"{key}:task:correction", "1", ex=REFILL_TASK_TTL
-                    )
-
-                    rate_limit = await get_rate_limit_func()
-                    if rate_limit is None:
-                        logger.debug(
-                            f"no rate limit headers, exiting _header_correction_loop for {key}"
-                        )
-                        return
-
-                    tokens_remaining = rate_limit.token_remaining_total
-
-                    # atomic correct-down via Lua
-                    elapsed = time.time() - rate_limit.unix_timestamp
-                    adjusted = min(
-                        limit, floor(tokens_remaining + (tokens_per_second * elapsed))
-                    )
-                    result = await utils.redis_client.eval(
-                        CORRECT_TOKENS_LUA, 1, key, adjusted
-                    )
-                    corrected, current, adj = (
-                        int(result[0]),
-                        int(result[1]),
-                        int(result[2]),
-                    )
-                    if corrected:
-                        last_not_full = time.time()
-                        logger.info(
-                            f"Corrected {key} from {current} to {adj} based on headers ({elapsed:.1f}s old)"
-                        )
-                    else:
-                        if current < limit:
-                            last_not_full = time.time()
-                        logger.debug(
-                            f"Not correcting {key} from {current} to {adj} based on headers ({elapsed:.1f}s old) (higher value)"
-                        )
-
-                    stop, last_not_full = await _should_stop_loop(
-                        key, version, last_not_full, "_header_correction_loop"
-                    )
-                    if stop:
-                        return
-                except Exception:
-                    logger.warning(
-                        f"[Token Correction] {key} | error in correction loop, retrying",
-                        exc_info=True,
-                    )
-
-        async def _token_refill_loop(
-            key: str,
-            limit: int,
-            tokens_per_second: int,
-            version: str,
-        ) -> None:
-            """
-            Background loop that refills tokens
-            Every 1.0 second
-            """
-            interval: float = 1.0
-            last_reap: float = 0.0
-            last_not_full: float = time.time()
-            last_refill: float = time.monotonic()
-
-            while True:
-                await asyncio.sleep(interval)
-
-                try:
-                    await utils.redis_client.set(
-                        f"{key}:task:refill", "1", ex=REFILL_TASK_TTL
-                    )
-
-                    # scale refill by actual elapsed time to compensate for loop drift
-                    mono_now = time.monotonic()
-                    refill_amount = max(
-                        0, floor(tokens_per_second * (mono_now - last_refill))
-                    )
-                    last_refill = mono_now
-
-                    # atomic refill with cap via Lua
-                    current = int(
-                        await utils.redis_client.eval(
-                            REFILL_TOKENS_LUA, 1, key, refill_amount, limit
-                        )
-                    )
-                    logger.debug(
-                        f"[Token Refill] | {key} | Amount: {refill_amount} | Current: {current}"
-                    )
-                    if current == limit:
-                        logger.debug(f"[Token Cap] | {key} | Limit: {limit}")
-                    else:
-                        last_not_full = time.time()
-
-                    # periodically reap stale inflight and priority entries
-                    now = time.time()
-                    if now - last_reap >= REAP_INTERVAL:
-                        last_reap = now
-
-                        active_runs_key = f"{key}:active_runs"
-                        active_run_ids = await utils.redis_client.smembers(
-                            active_runs_key
-                        )
-                        for rid in active_run_ids:
-                            run_inflight_key = f"{key}:run:{rid}:inflight"
-                            stale = await utils.redis_client.zrangebyscore(
-                                run_inflight_key, "-inf", now - INFLIGHT_MAX_AGE
-                            )
-                            if stale:
-                                await utils.redis_client.zrem(run_inflight_key, *stale)
-                                # clean up metadata hashes
-                                for qid in stale:
-                                    await utils.redis_client.delete(
-                                        f"{key}:inflight:{qid}"
-                                    )
-                                logger.info(
-                                    f"[Reap] {run_inflight_key} | Removed {len(stale)} stale inflight entries"
-                                )
-                            # if run's inflight ZSET is now empty, remove from active_runs
-                            if await utils.redis_client.zcard(run_inflight_key) == 0:
-                                await utils.redis_client.srem(active_runs_key, rid)
-
-                        base = key.removesuffix(":tokens")
-                        for p in range(MAX_PRIORITY, MIN_PRIORITY + 1):
-                            pkey = f"{base}:priority:{p}"
-                            stale = await utils.redis_client.zrangebyscore(
-                                pkey, "-inf", now - PRIORITY_STALE_AGE
-                            )
-                            if stale:
-                                await utils.redis_client.zrem(pkey, *stale)
-                                logger.info(
-                                    f"[Reap] {pkey} | Removed {len(stale)} stale priority entries"
-                                )
-
-                    stop, last_not_full = await _should_stop_loop(
-                        key, version, last_not_full, "_token_refill_loop"
-                    )
-                    if stop:
-                        return
-                except Exception:
-                    logger.warning(
-                        f"[Token Refill] {key} | error in refill loop, retrying",
-                        exc_info=True,
-                    )
+        from model_library.retriers.token.background import LoopConfig, background_loops
 
         await utils.validate_redis_client()
 
         key = TokenRetrier.get_token_key(client_registry_key)
 
-        # limit_key is only used to check if the limit has changed
         limit_key = f"{key}:limit"
-
-        # Versioning: each call generates a UUID stored in Redis ("version:<key>").
-        # Background loops compare their birth version against Redis each iteration.
-        # When init_remaining_tokens is called again (e.g. server restart, config
-        # change), the new UUID overwrites the old one, causing stale loops to
-        # detect the mismatch and exit — only the latest loops survive.
-        version = str(uuid.uuid4())
-        version_key = f"{key}:version"
-        await utils.redis_client.eval(
-            INIT_TOKENS_LUA, 3, key, limit_key, version_key, limit, version
-        )
+        await utils.redis_client.eval(INIT_TOKENS_LUA, 2, key, limit_key, limit)
 
         tokens_per_second = floor(limit / limit_refresh_seconds)
+        burst_limit = floor(limit * BURST_FRACTION)
+
+        # if an active loop exists with the same config, start in standby
+        # if config changed or no active loop, start active (take over immediately)
+        active = await utils.redis_client.get(f"{key}:task:active")
+        config_changed = False
+        if active:
+            existing = await utils.redis_client.hgetall(f"{key}:config")
+            config_changed = (
+                int(existing.get("limit", 0)) != limit
+                or int(existing.get("tokens_per_second", 0)) != tokens_per_second
+            )
+
         await utils.redis_client.hset(
             f"{key}:config",
             mapping={
                 "limit": limit,
                 "limit_refresh_seconds": limit_refresh_seconds,
                 "tokens_per_second": tokens_per_second,
-                "version": version,
+                "burst_limit": burst_limit,
                 "initialized_at": time.time(),
             },
         )
 
-        refill_task = asyncio.create_task(
-            _token_refill_loop(key, limit, tokens_per_second, version)
-        )
-        correction_task = asyncio.create_task(
-            _header_correction_loop(
-                key, limit, tokens_per_second, get_rate_limit_func, version
+        cfg = LoopConfig(key, limit, tokens_per_second)
+        asyncio.create_task(
+            background_loops(
+                cfg,
+                get_rate_limit_func,
+                logger,
+                standby=active is not None and not config_changed,
             )
-        )
-
-        # for tests
-        refill_tasks["refill:" + key] = (
-            {
-                "limit": limit,
-                "limit_refresh_seconds": limit_refresh_seconds,
-            },
-            refill_task,
-        )
-        refill_tasks["correction:" + key] = (
-            {
-                "limit": limit,
-                "limit_refresh_seconds": limit_refresh_seconds,
-                "get_rate_limit_func": get_rate_limit_func,
-            },
-            correction_task,
         )
 
     def __init__(
@@ -413,8 +202,6 @@ class TokenRetrier(BaseRetrier):
         estimate_input_tokens: int,
         estimate_output_tokens: int,
         use_dynamic_estimate: bool = True,
-        retry_wait_time: float = RETRY_WAIT_TIME,
-        token_wait_time: float = TOKEN_WAIT_TIME,
     ):
         super().__init__(
             strategy="token",
@@ -433,9 +220,6 @@ class TokenRetrier(BaseRetrier):
             self.estimate_total_tokens
         )  # when multiplying base estimate_total_tokens by ratio
 
-        self.retry_wait_time = retry_wait_time
-        self.token_wait_time = token_wait_time
-
         self.priority = INITIAL_PRIORITY
 
         self._base_key = (
@@ -443,8 +227,11 @@ class TokenRetrier(BaseRetrier):
         )
         self.token_key = TokenRetrier.get_token_key(client_registry_key)
         self._run_id = run_id
-        self._question_id = question_id
+        self._question_id = f"{run_id}:{question_id}"
         self._is_queued: bool | None = None  # lazy: set on first _pre_function call
+        self._burst_limit: int | None = (
+            None  # lazy: read from config on first _pre_function call
+        )
 
         # per-run inflight tracking
         self._active_runs_key = f"{self.token_key}:active_runs"
@@ -467,7 +254,7 @@ class TokenRetrier(BaseRetrier):
         self, attempt: int, exception: Exception | None = None
     ) -> float:
         """Wait time between retries"""
-        return jitter(self.retry_wait_time)
+        return jitter(RETRY_WAIT_TIME)
 
     async def _on_retry(
         self, exception: Exception | None, elapsed: float, wait_time: float
@@ -501,6 +288,14 @@ class TokenRetrier(BaseRetrier):
         Logs token waits but does not count as retry attempts.
         """
 
+        # lazy: read burst limit once from config
+        if self._burst_limit is None:
+            config = await utils.redis_client.hgetall(f"{self.token_key}:config")
+            bl = config.get("burst_limit")
+            self._burst_limit = (
+                int(bl) if bl else floor(self.estimate_total_tokens * 10)
+            )
+
         # lazy: check once if this run_id is in the benchmark queue
         if self._is_queued is None:
             pos = await utils.redis_client.lpos(self._queue_key, self._run_id)
@@ -511,6 +306,12 @@ class TokenRetrier(BaseRetrier):
             head = await utils.redis_client.lindex(self._queue_key, 0)
             if head != self._run_id:
                 self.priority = MAX_PRIORITY
+
+        # remove from dispatched so early release knows we're waiting again
+        # (agentic benchmarks re-enter _pre_function for each turn)
+        await utils.redis_client.srem(
+            f"{self._run_meta_key}:dispatched", self._question_id
+        )
 
         priority_key = TokenRetrier.get_priority_key(
             self.client_registry_key, self.priority
@@ -528,7 +329,7 @@ class TokenRetrier(BaseRetrier):
         _deducted = False
         try:
             while True:
-                wait_time = jitter(self.token_wait_time)
+                wait_time = random.uniform(TOKEN_WAIT_TIME * 0.5, TOKEN_WAIT_TIME * 1.5)
 
                 # refresh timestamp so reaper knows we're alive
                 await utils.redis_client.zadd(
@@ -559,41 +360,38 @@ class TokenRetrier(BaseRetrier):
                     # atomic check-and-deduct via Lua (no lock needed)
                     deducted = await utils.redis_client.eval(
                         DEDUCT_TOKENS_LUA,
-                        1,
+                        2,
                         self.token_key,
+                        f"{self.token_key}:burst",
                         self.actual_estimate_total_tokens,
+                        self._burst_limit,
                     )
                     if deducted:
                         _deducted = True
-                        # per-run inflight tracking
-                        await utils.redis_client.zadd(
-                            self._run_inflight_key,
-                            {self._question_id: time.time()},
-                        )
-                        await utils.redis_client.sadd(
-                            self._active_runs_key, self._run_id
-                        )
-                        await utils.redis_client.hset(
-                            self._question_meta_key,
-                            mapping={
-                                "estimate_input": self.estimate_input_tokens,
-                                "estimate_output": self.estimate_output_tokens,
-                                "estimate_total": self.actual_estimate_total_tokens,
-                                "priority": self.priority,
-                                "attempts": self.attempts,
-                                "run_id": self._run_id,
-                                "dispatched_at": time.time(),
-                            },
-                        )
-                        await utils.redis_client.expire(
-                            self._question_meta_key, INFLIGHT_MAX_AGE
-                        )
-                        # per-run dispatched counter (queued runs only, idempotent via sadd)
-                        if self._is_queued:
-                            await utils.redis_client.sadd(
-                                f"{self._run_meta_key}:dispatched",
-                                self._question_id,
+                        # per-run inflight tracking (pipelined — single round-trip)
+                        now = time.time()
+                        dispatched_key = f"{self._run_meta_key}:dispatched"
+                        async with utils.redis_client.pipeline(
+                            transaction=False
+                        ) as pipe:
+                            pipe.zadd(self._run_inflight_key, {self._question_id: now})
+                            pipe.sadd(self._active_runs_key, self._run_id)
+                            pipe.hset(  # pyright: ignore[reportUnknownMemberType]
+                                self._question_meta_key,
+                                mapping={
+                                    "estimate_input": self.estimate_input_tokens,
+                                    "estimate_output": self.estimate_output_tokens,
+                                    "estimate_total": self.actual_estimate_total_tokens,
+                                    "priority": self.priority,
+                                    "attempts": self.attempts,
+                                    "run_id": self._run_id,
+                                    "dispatched_at": now,
+                                },
                             )
+                            pipe.expire(self._question_meta_key, INFLIGHT_MAX_AGE)
+                            pipe.sadd(dispatched_key, self._question_id)
+                            pipe.expire(dispatched_key, INFLIGHT_MAX_AGE)
+                            await pipe.execute()
                         self.logger.debug(
                             f"Deducted {self.actual_estimate_total_tokens} tokens from {self.token_key}"
                         )
@@ -609,10 +407,14 @@ class TokenRetrier(BaseRetrier):
                 self.logger.debug(f"Sleeping for {wait_time:.1f}s")
                 await asyncio.sleep(wait_time)
         finally:
-            # let storage know we are done waiting at this priority
-            await utils.redis_client.zrem(priority_key, self._question_id)
-            if not _deducted:
-                await utils.redis_client.delete(self._question_meta_key)
+
+            async def _pre_cleanup() -> None:
+                # let storage know we are done waiting at this priority
+                await utils.redis_client.zrem(priority_key, self._question_id)
+                if not _deducted:
+                    await utils.redis_client.delete(self._question_meta_key)
+
+            await asyncio.shield(_pre_cleanup())
 
     async def _adjust_dynamic_estimate_ratio(self, actual_tokens: int) -> None:
         if not self.dynamic_estimate_key:
@@ -679,11 +481,15 @@ class TokenRetrier(BaseRetrier):
         try:
             return await super().execute(func, *args, **kwargs)
         finally:
-            # remove from per-run inflight ZSET; if now empty, remove run from active_runs
-            await utils.redis_client.zrem(self._run_inflight_key, self._question_id)
-            if await utils.redis_client.zcard(self._run_inflight_key) == 0:
-                await utils.redis_client.srem(self._active_runs_key, self._run_id)
-            await utils.redis_client.delete(self._question_meta_key)
+
+            async def _exec_cleanup() -> None:
+                # remove from per-run inflight ZSET; if now empty, remove run from active_runs
+                await utils.redis_client.zrem(self._run_inflight_key, self._question_id)
+                if await utils.redis_client.zcard(self._run_inflight_key) == 0:
+                    await utils.redis_client.srem(self._active_runs_key, self._run_id)
+                await utils.redis_client.delete(self._question_meta_key)
+
+            await asyncio.shield(_exec_cleanup())
 
     async def validate(self) -> None:
         await utils.validate_redis_client(

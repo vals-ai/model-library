@@ -11,7 +11,6 @@ from google.genai.types import (
     Content,
     CountTokensConfig,
     File,
-    HttpOptions,
     FinishReason,
     FunctionDeclaration,
     GenerateContentConfig,
@@ -19,6 +18,7 @@ from google.genai.types import (
     GenerateContentResponseUsageMetadata,
     HarmBlockThreshold,
     HarmCategory,
+    HttpOptions,
     Part,
     SafetySetting,
     ThinkingConfig,
@@ -28,7 +28,7 @@ from google.genai.types import (
     UploadFileConfig,
 )
 from google.oauth2 import service_account
-from pydantic import BaseModel
+from pydantic import BaseModel, SecretStr
 from typing_extensions import deprecated, override
 
 from model_library import model_library_settings
@@ -70,7 +70,9 @@ from model_library.exceptions import (
     handle_empty_response,
 )
 from model_library.providers.google.batch import GoogleBatchMixin
+from model_library.providers.openai import OpenAIModel
 from model_library.register_models import register_provider
+from model_library.utils import make_aiohttp_session
 
 
 def map_google_finish_reason(
@@ -161,7 +163,20 @@ class GoogleModel(LLM):
         if not self.has_client():
             assert api_key
 
-            http_options = HttpOptions(base_url=base_url) if base_url else None
+            try:
+                aiohttp_session = make_aiohttp_session()
+            except RuntimeError:
+                aiohttp_session = (
+                    None  # no event loop — SDK will create its own session
+                )
+
+            http_options = (
+                HttpOptions(base_url=base_url, aiohttp_client=aiohttp_session)
+                if base_url
+                else HttpOptions(aiohttp_client=aiohttp_session)
+                if aiohttp_session
+                else (HttpOptions(base_url=base_url) if base_url else None)
+            )
 
             if self.provider_config.use_vertex:
                 # Gemini preview releases are only server from the global Vertex region after September 2025.
@@ -209,6 +224,33 @@ class GoogleModel(LLM):
             self.supports_batch = False
             self.instance_logger.warning("GCP_CREDS not set, disabling batching")
 
+        # https://ai.google.dev/gemini-api/docs/openai
+        if self.native:
+            self.delegate = None
+        else:
+            config = config or LLMConfig()
+            config.custom_endpoint = (
+                config.custom_endpoint
+                or "https://generativelanguage.googleapis.com/v1beta/openai/"
+            )
+            config.custom_api_key = config.custom_api_key or SecretStr(
+                model_library_settings.GOOGLE_API_KEY
+            )
+
+            # flip native back on for the delegate so it initializes its own
+            # client registry; the outer model stays non-native.
+            config.native = True
+            self.delegate = OpenAIModel(
+                model_name=self.model_name,
+                provider=self.provider,
+                config=config,
+                use_completions=True,
+            )
+            config.native = False
+
+        self.supports_batch = (
+            self.supports_batch and self.native and not self.custom_endpoint
+        )
         self.batch: LLMBatchMixin | None = (
             GoogleBatchMixin(self) if self.supports_batch else None
         )
@@ -365,6 +407,8 @@ class GoogleModel(LLM):
                 generation_config.temperature = self.temperature
             if self.top_p is not None:
                 generation_config.top_p = self.top_p
+            if self.top_k is not None:
+                generation_config.top_k = self.top_k
 
         generation_config.safety_settings = self.SAFETY_CONFIG
 
@@ -413,6 +457,15 @@ class GoogleModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
+        if self.delegate:
+            return await self.delegate_query(
+                input,
+                tools=tools,
+                query_logger=query_logger,
+                output_schema=output_schema,
+                **kwargs,
+            )
+
         body: dict[str, Any] = await self.build_body(
             input, tools=tools, output_schema=output_schema, **kwargs
         )

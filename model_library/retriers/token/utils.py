@@ -7,6 +7,7 @@ from typing import Any, Awaitable, Protocol, cast
 
 from pydantic import BaseModel
 from redis.asyncio import Redis
+from redis.asyncio.client import Pipeline
 from redis.asyncio.lock import Lock
 
 
@@ -55,6 +56,7 @@ class AsyncRedisClient(Protocol):
         self, script: str, numkeys: int, *keys_and_args: str | int | float
     ) -> Any: ...
     def lock(self, name: str, timeout: float | None = None) -> Lock: ...
+    def pipeline(self, transaction: bool = True) -> Pipeline: ...
 
 
 KEY_PREFIX = "model_library"
@@ -412,7 +414,7 @@ async def _get_status_for_token_key(
         run_id_val = meta.get("run_id", "")
         inflight.append(
             InflightRequest(
-                question_id=member,
+                question_id=member.partition(":")[2] or member,
                 elapsed_seconds=round(now - float(score), 1),
                 estimate_input=int(meta["estimate_input"])
                 if "estimate_input" in meta
