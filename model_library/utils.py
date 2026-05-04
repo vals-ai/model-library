@@ -22,10 +22,20 @@ class PrettyModel(BaseModel):
     """BaseModel with pretty __repr__ and __str__"""
 
     def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
+        repr_fields = {
+            name
+            for name, field in self.__class__.model_fields.items()
+            if field.repr is not False
+        }
+        repr_fields.update(self.__class__.model_computed_fields)
+
         attrs = vars(self).copy()
         for name in self.__class__.model_computed_fields:
             attrs[name] = getattr(self, name)
-        yield from attrs.items()
+
+        for name, value in attrs.items():
+            if name in repr_fields:
+                yield name, value
 
     def __repr__(self) -> str:
         return pretty_repr(self)
@@ -129,21 +139,52 @@ def get_logger(name: str | None = None):
     return logging.getLogger(f"{logger.name}.{name}")
 
 
-def make_aiohttp_session() -> aiohttp.ClientSession:
+class StaticResolver(aiohttp.DefaultResolver):  # pyright: ignore[reportUntypedBaseClass, reportGeneralTypeIssues]
+    """Resolver that pins specific hostnames to IPs, falling back to default DNS."""
+
+    def __init__(self, mappings: dict[str, str]):
+        super().__init__()  # pyright: ignore[reportUnknownMemberType]
+        self._mappings = mappings
+
+    async def resolve(
+        self, host: str, port: int = 0, family: int = socket.AF_INET
+    ) -> list[dict[str, Any]]:
+        if host in self._mappings:
+            return [
+                {
+                    "hostname": host,
+                    "host": self._mappings[host],
+                    "port": port,
+                    "family": family,
+                    "proto": 0,
+                    "flags": socket.AI_NUMERICHOST,
+                }
+            ]
+        return await super().resolve(host, port, family)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+
+
+def make_aiohttp_session(
+    dns_resolve: dict[str, str] | None = None,
+) -> aiohttp.ClientSession:
     """Create an aiohttp session with optimized connection pooling."""
     connector = aiohttp.TCPConnector(
         limit=1000,
         ttl_dns_cache=300,
         keepalive_timeout=60,
         family=socket.AF_INET,  # force IPv4, skip Happy Eyeballs dual-stack
+        resolver=StaticResolver(dns_resolve) if dns_resolve else None,
     )
     return aiohttp.ClientSession(connector=connector)
 
 
-def default_aiohttp_httpx_client() -> httpx.AsyncClient:
+def default_aiohttp_httpx_client(
+    dns_resolve: dict[str, str] | None = None,
+) -> httpx.AsyncClient:
     """Create an httpx AsyncClient backed by aiohttp with optimized pooling."""
     return httpx.AsyncClient(
-        transport=AiohttpTransport(client=make_aiohttp_session),
+        transport=AiohttpTransport(
+            client=lambda: make_aiohttp_session(dns_resolve=dns_resolve)
+        ),
         timeout=httpx.Timeout(None),
     )
 
@@ -157,7 +198,9 @@ def default_httpx_client() -> httpx.AsyncClient:
 
 
 def create_openai_client_with_defaults(
-    api_key: str, base_url: str | None = None
+    api_key: str,
+    base_url: str | None = None,
+    dns_resolve: dict[str, str] | None = None,
 ) -> AsyncOpenAI:
     """
     OpenAI defaults:
@@ -168,7 +211,7 @@ def create_openai_client_with_defaults(
     return AsyncOpenAI(
         api_key=api_key,
         base_url=base_url,
-        http_client=default_aiohttp_httpx_client(),
+        http_client=default_aiohttp_httpx_client(dns_resolve=dns_resolve),
         max_retries=3,
     )
 

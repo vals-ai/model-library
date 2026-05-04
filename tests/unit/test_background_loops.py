@@ -9,7 +9,7 @@ import asyncio
 import importlib
 import logging
 import time as real_time_module
-from math import floor
+
 from types import ModuleType
 from unittest.mock import AsyncMock, patch
 
@@ -122,7 +122,7 @@ async def _init_redis(redis, limit: int = 10_000, tps: int = 100) -> None:
             "limit": limit,
             "tokens_per_second": tps,
             "limit_refresh_seconds": limit // tps if tps > 0 else 0,
-            "burst_limit": floor(limit * 0.2),
+            "burst_limit": int(limit * 0.8),
             "initialized_at": 0,
         },
     )
@@ -211,32 +211,6 @@ async def test_refill_caps_at_limit(redis, clock):
             p.stop()
 
 
-async def test_refill_resets_burst_counter(redis, clock):
-    """Burst counter is reset to 0 every refill tick."""
-    await _init_redis(redis)
-    await redis.set(f"{TOKEN_KEY}:burst", 500)
-    cfg = _cfg()
-
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
-    for p in patches:
-        p.start()
-    try:
-        task = asyncio.create_task(
-            background_loops(cfg, AsyncMock(return_value=None), logger)
-        )
-        await _yield(20)
-
-        burst = int(await redis.get(f"{TOKEN_KEY}:burst"))
-        assert burst == 0
-
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-    finally:
-        for p in reversed(patches):
-            p.stop()
-
-
 # -- Correction loop ---------------------------------------------------------
 
 
@@ -252,6 +226,7 @@ async def test_correction_corrects_down(redis, clock):
     async def get_rate_limit():
         # always return a fresh timestamp so elapsed is ~0
         return RateLimit(
+            token_limit=limit,
             token_remaining=header_remaining,
             unix_timestamp=clock.now,
             raw={},
@@ -277,6 +252,78 @@ async def test_correction_corrects_down(redis, clock):
             p.stop()
 
 
+async def test_correction_skips_when_header_limit_too_low(redis, clock):
+    """When the header reports a token_limit < 80% of configured, correction is skipped."""
+    limit = 10_000
+    await _init_redis(redis, limit=limit, tps=0)
+    await redis.set(TOKEN_KEY, limit)
+    cfg = _cfg(limit=limit, tps=0)
+
+    async def get_rate_limit():
+        return RateLimit(
+            token_limit=1_000,
+            token_remaining=500,
+            unix_timestamp=clock.now,
+            raw={},
+        )
+
+    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    for p in patches:
+        p.start()
+    try:
+        task = asyncio.create_task(
+            background_loops(cfg, get_rate_limit, logger)
+        )
+        await _yield(80)
+
+        tokens = int(await redis.get(TOKEN_KEY))
+        assert tokens == limit, f"expected tokens == {limit}, got {tokens}"
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    finally:
+        for p in reversed(patches):
+            p.stop()
+
+
+async def test_correction_skips_when_header_limit_too_high(redis, clock):
+    """When the header reports a token_limit > 120% of configured, correction is skipped."""
+    limit = 10_000
+    await _init_redis(redis, limit=limit, tps=0)
+    await redis.set(TOKEN_KEY, limit)
+    cfg = _cfg(limit=limit, tps=0)
+
+    async def get_rate_limit():
+        return RateLimit(
+            token_limit=50_000,
+            token_remaining=40_000,
+            unix_timestamp=clock.now,
+            raw={},
+        )
+
+    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    for p in patches:
+        p.start()
+    try:
+        task = asyncio.create_task(
+            background_loops(cfg, get_rate_limit, logger)
+        )
+        await _yield(80)
+
+        tokens = int(await redis.get(TOKEN_KEY))
+        assert tokens == limit, f"expected tokens == {limit}, got {tokens}"
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    finally:
+        for p in reversed(patches):
+            p.stop()
+
+
+@pytest.mark.unit
+@pytest.mark.asyncio
 async def test_correction_does_not_correct_up(redis, clock):
     """Correction only adjusts tokens downward, never upward."""
     limit = 10_000
@@ -287,6 +334,7 @@ async def test_correction_does_not_correct_up(redis, clock):
     async def get_rate_limit():
         # 8000 > 2000 current -> should NOT correct up
         return RateLimit(
+            token_limit=limit,
             token_remaining=8000,
             unix_timestamp=clock.now,
             raw={},

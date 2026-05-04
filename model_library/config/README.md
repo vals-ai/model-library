@@ -59,7 +59,7 @@ metadata:
 
 #### Other Sections
 
-- `costs_per_million_token`: Pricing information (input, output, cache, batch, context)
+- `costs_per_million_token`: Pricing information (input, output, cache, batch, context). Set to `null` for models without known pricing
 - `default_parameters`: Default parameter values (temperature, top_p, reasoning_effort)
 - `provider_properties`: Provider-specific configuration options
 - `alternative_keys`: Alternative model identifiers/aliases

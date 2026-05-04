@@ -117,3 +117,23 @@ async def test_manual_and_registry_instantiation():
     assert isinstance(model1, FireworksModel)
     assert isinstance(model2, GoogleModel)
     assert isinstance(model3, FireworksModel)
+
+
+async def test_none_costs():
+    """Models without costs should have costs_per_million_token=None and return None cost."""
+    from model_library.base import QueryResultMetadata
+    from model_library.registry_utils import get_model_cost, get_registry_config
+
+    # meta/muse_spark has no costs defined in its YAML config
+    config = get_registry_config("meta/muse_spark")
+    assert config is not None
+    assert config.costs_per_million_token is None
+
+    cost = get_model_cost("meta/muse_spark")
+    assert cost is None
+
+    # _calculate_cost should return None when costs are missing
+    model = get_registry_model("meta/muse_spark")
+    metadata = QueryResultMetadata(in_tokens=100, out_tokens=50)
+    result = await model._calculate_cost(metadata)
+    assert result is None

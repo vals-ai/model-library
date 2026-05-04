@@ -1,4 +1,546 @@
 {
+    "grok/grok-4.3": {
+        "company": "xAI",
+        "label": "Grok 4.3",
+        "release_date": "2026-04-30",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 1000000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.25,
+            "output": 2.5,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 2.5,
+                "output": 5.0,
+                "cache": {
+                    "read": 0.4,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "grok-4.3",
+        "provider_name": "grok",
+        "full_key": "grok/grok-4.3",
+        "slug": "grok_grok-4.3"
+    },
+    "mistralai/mistral-medium-3.5": {
+        "company": "Mistral",
+        "label": "Mistral Medium 3.5",
+        "release_date": "2026-04-29",
+        "open_source": true,
+        "documentation_url": "https://docs.mistral.ai/models/model-cards/mistral-medium-3-5-26-04",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 80000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.5,
+            "output": 7.5
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "mistral-medium-3.5",
+        "provider_name": "mistralai",
+        "full_key": "mistralai/mistral-medium-3.5",
+        "slug": "mistralai_mistral-medium-3.5"
+    },
+    "deepseek/deepseek-v4-pro-nonthinking": {
+        "company": "DeepSeek",
+        "label": "DeepSeek V4",
+        "release_date": "2026-04-23",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.74,
+            "output": 3.48,
+            "cache": {
+                "read": 0.145,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "deepseek-v4-pro",
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4-pro-nonthinking",
+        "slug": "deepseek_deepseek-v4-pro-nonthinking"
+    },
+    "deepseek/deepseek-v4-pro": {
+        "company": "DeepSeek",
+        "label": "DeepSeek V4",
+        "release_date": "2026-04-23",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.74,
+            "output": 3.48,
+            "cache": {
+                "read": 0.145,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [
+            {
+                "deepseek/deepseek-v4-pro-nonthinking": {
+                    "supports": {
+                        "temperature": true
+                    },
+                    "properties": {
+                        "reasoning_model": false
+                    },
+                    "default_parameters": {
+                        "temperature": 1,
+                        "top_p": 0.95
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "deepseek-v4-pro",
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4-pro",
+        "slug": "deepseek_deepseek-v4-pro"
+    },
+    "deepseek/deepseek-v4-flash-nonthinking": {
+        "company": "DeepSeek",
+        "label": "DeepSeek V4 Flash",
+        "release_date": "2026-04-23",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.14,
+            "output": 0.28,
+            "cache": {
+                "read": 0.028,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "deepseek-v4-flash",
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4-flash-nonthinking",
+        "slug": "deepseek_deepseek-v4-flash-nonthinking"
+    },
+    "deepseek/deepseek-v4-flash": {
+        "company": "DeepSeek",
+        "label": "DeepSeek V4 Flash",
+        "release_date": "2026-04-23",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.14,
+            "output": 0.28,
+            "cache": {
+                "read": 0.028,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [
+            {
+                "deepseek/deepseek-v4-flash-nonthinking": {
+                    "supports": {
+                        "temperature": true
+                    },
+                    "properties": {
+                        "reasoning_model": false
+                    },
+                    "default_parameters": {
+                        "temperature": 1,
+                        "top_p": 0.95
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "deepseek-v4-flash",
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4-flash",
+        "slug": "deepseek_deepseek-v4-flash"
+    },
+    "alibaba/qwen3.6-27b": {
+        "company": "Alibaba",
+        "label": "Qwen 3.6 27B",
+        "release_date": "2026-04-22",
+        "open_source": true,
+        "documentation_url": "https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=doc#/doc/?type=model&url=2840914_2&modelId=qwen3.6-27b&serviceSite=international",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "preserve_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 0.6,
+            "output": 3.6
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "top_k": 20
+        },
+        "provider_endpoint": "qwen3.6-27b",
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3.6-27b",
+        "slug": "alibaba_qwen3.6-27b"
+    },
+    "kimi/kimi-k2.6-thinking": {
+        "company": "Moonshot AI",
+        "label": "Kimi K2.6",
+        "release_date": "2026-04-20",
+        "open_source": true,
+        "documentation_url": "https://platform.moonshot.ai/docs",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 256000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.95,
+            "output": 4.0,
+            "cache": {
+                "read": 0.16,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "kimi-k2.6",
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k2.6-thinking",
+        "slug": "kimi_kimi-k2.6-thinking"
+    },
+    "kimi/kimi-k2.6": {
+        "company": "Moonshot AI",
+        "label": "Kimi K2.6",
+        "release_date": "2026-04-20",
+        "open_source": true,
+        "documentation_url": "https://platform.moonshot.ai/docs",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 256000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.95,
+            "output": 4.0,
+            "cache": {
+                "read": 0.16,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [
+            {
+                "kimi/kimi-k2.6-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    },
+                    "default_parameters": {
+                        "temperature": 1.0
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 0.6,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "kimi-k2.6",
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k2.6",
+        "slug": "kimi_kimi-k2.6"
+    },
+    "alibaba/qwen3.6-max-preview": {
+        "company": "Alibaba",
+        "label": "Qwen 3.6 Max Preview",
+        "release_date": "2026-04-20",
+        "open_source": false,
+        "documentation_url": "https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=doc#/doc/?type=model&url=2840914_2&modelId=qwen3.6-max-preview&serviceSite=international",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.3,
+            "output": 7.8,
+            "cache": {
+                "read": 0.13,
+                "write": 1.625,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 128000.0,
+                "input": 2.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 0.2,
+                    "write": 2.5,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7
+        },
+        "provider_endpoint": "qwen3.6-max-preview",
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3.6-max-preview",
+        "slug": "alibaba_qwen3.6-max-preview"
+    },
     "anthropic/claude-opus-4-7-high": {
         "company": "Anthropic",
         "label": "Claude Opus 4.7 (High Effort)",
@@ -1265,7 +1807,7 @@
         "company": "Alibaba",
         "label": "Qwen 3.5 Plus",
         "release_date": "2026-02-16",
-        "open_source": true,
+        "open_source": false,
         "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/getting-started/models",
         "properties": {
             "context_window": 991000,
@@ -1324,7 +1866,7 @@
         "company": "Alibaba",
         "label": "Qwen 3.5 Plus",
         "release_date": "2026-02-16",
-        "open_source": true,
+        "open_source": false,
         "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/getting-started/models",
         "properties": {
             "context_window": 991000,

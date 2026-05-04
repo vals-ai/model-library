@@ -20,7 +20,11 @@ async def main():
 
     model = get_registry_model(args.model)
 
-    key_hash = model._client_registry_key[1]  # pyright: ignore[reportPrivateUsage]
+    key_hash = (
+        model.delegate._client_registry_key[1]  # pyright: ignore[reportPrivateUsage]
+        if model.delegate
+        else model._client_registry_key[1]  # pyright: ignore[reportPrivateUsage]
+    )
     console_log(f"Key hash: {key_hash}")
 
     rate_limit = await model.get_rate_limit()

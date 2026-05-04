@@ -22,7 +22,12 @@ from model_library.agent.metadata import (
 )
 from model_library.agent.tool import Tool, ToolOutput
 from model_library.base.base import LLM
-from model_library.base.input import InputItem, ToolCall, ToolResult
+from model_library.base.input import (
+    InputItem,
+    ToolCall,
+    ToolDefinition,
+    ToolResult,
+)
 from model_library.base.output import QueryResultMetadata
 from model_library.utils import PrettyModel, run_logging
 
@@ -55,6 +60,7 @@ class AgentResult(PrettyModel):
 
     final_answer: str
     final_error: SerializableException | None = None
+    final_history: list[InputItem] = Field(exclude=True, repr=False)
     turns: list[TurnSummary | ErrorTurn]
     final_duration_seconds: float  # wall clock, rounded to ms
     output_dir: Path = Field(exclude=True)
@@ -188,6 +194,22 @@ class Agent:
         timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         short_id = uuid.uuid4().hex[:6]
         return base / name / model_name.replace("/", "_") / f"{timestamp}_{short_id}"
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def model_name(self) -> str:
+        return self._llm.model_name
+
+    @property
+    def config(self) -> AgentConfig:
+        return self._config
+
+    @property
+    def tool_definitions(self) -> list[ToolDefinition]:
+        return self._tool_defs
 
     async def run(
         self,
@@ -328,8 +350,8 @@ class Agent:
         if state is None:
             state = {}
 
-        # track history so we can modify it
-        history = list(input)
+        # track history as a local variable — Agent is stateless across run() calls
+        history: list[InputItem] = list(input)
 
         # write init/ directory
         self._write_init_dir(output_dir, input, state, logger)
@@ -456,7 +478,7 @@ class Agent:
                     last_query_error = query_error
                     continue
 
-                history: list[InputItem] = list(response.history)
+                history = list(response.history)
 
                 # process tool calls
                 tool_call_records = await self._execute_tool_calls(
@@ -605,6 +627,7 @@ class Agent:
         result = AgentResult(
             final_answer=answer,
             final_error=final_error,
+            final_history=history,
             turns=turns,
             final_duration_seconds=elapsed,
             output_dir=output_dir,

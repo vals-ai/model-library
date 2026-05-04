@@ -10,6 +10,8 @@ from redis.asyncio import Redis
 from redis.asyncio.client import Pipeline
 from redis.asyncio.lock import Lock
 
+from model_library.base.output import RateLimit
+
 
 class AsyncRedisClient(Protocol):
     """Typed protocol for the subset of async Redis commands we use."""
@@ -154,6 +156,7 @@ class TokenRetryStatus(BaseModel):
     correction_alive: bool
     active_benchmark_run: str | None
     dynamic_estimates: list[DynamicEstimate]
+    last_header: RateLimit | None = None
 
 
 class QueueEntry(BaseModel):
@@ -339,11 +342,18 @@ async def _get_status_for_token_key(
     base = token_key.removesuffix(":tokens")
 
     # parallel: base data (split for typed gather overloads)
-    tokens_raw, limit_raw, config_raw, active_benchmark_run = await asyncio.gather(
+    (
+        tokens_raw,
+        limit_raw,
+        config_raw,
+        active_benchmark_run,
+        last_header_raw,
+    ) = await asyncio.gather(
         redis_client.get(token_key),
         redis_client.get(limit_key),
         redis_client.hgetall(f"{token_key}:config"),
         redis_client.lindex(f"{base}:benchmark:queue", 0),
+        redis_client.hgetall(f"{token_key}:last_header"),
     )
     (
         active_run_ids,
@@ -490,6 +500,36 @@ async def _get_status_for_token_key(
         if ratio_raw
     ]
 
+    # reconstruct RateLimit from last_header hash
+    last_header: RateLimit | None = None
+    if last_header_raw:
+
+        def _parse_optional_int(v: str | None) -> int | None:
+            return int(v) if v is not None and v != "None" else None
+
+        last_header = RateLimit(
+            request_limit=_parse_optional_int(last_header_raw.get("request_limit")),
+            request_remaining=_parse_optional_int(
+                last_header_raw.get("request_remaining")
+            ),
+            token_limit=_parse_optional_int(last_header_raw.get("token_limit")),
+            token_limit_input=_parse_optional_int(
+                last_header_raw.get("token_limit_input")
+            ),
+            token_limit_output=_parse_optional_int(
+                last_header_raw.get("token_limit_output")
+            ),
+            token_remaining=_parse_optional_int(last_header_raw.get("token_remaining")),
+            token_remaining_input=_parse_optional_int(
+                last_header_raw.get("token_remaining_input")
+            ),
+            token_remaining_output=_parse_optional_int(
+                last_header_raw.get("token_remaining_output")
+            ),
+            unix_timestamp=float(last_header_raw["unix_timestamp"]),
+            raw=None,
+        )
+
     return TokenRetryStatus(
         token_key=token_key,
         tokens_remaining=tokens_remaining,
@@ -501,6 +541,7 @@ async def _get_status_for_token_key(
         correction_alive=correction_alive,
         active_benchmark_run=active_benchmark_run,
         dynamic_estimates=dynamic_estimates,
+        last_header=last_header,
     ), queued_by_run
 
 

@@ -1,4 +1,11 @@
 from model_library.agent.agent import Agent, AgentResult, AgentStopReason
+from model_library.agent.conductor import (
+    ConductorAgent,
+    ConductorConfig,
+    ConductorResult,
+    ConductorStopReason,
+    ConversationMessage,
+)
 from model_library.agent.config import (
     AgentConfig,
     TimeLimit,
@@ -35,6 +42,11 @@ __all__ = [
     "Agent",
     "ATIFTrajectory",
     "AgentConfig",
+    "ConductorAgent",
+    "ConductorConfig",
+    "ConductorResult",
+    "ConductorStopReason",
+    "ConversationMessage",
     "AgentResult",
     "AgentStopReason",
     "AgentHooks",

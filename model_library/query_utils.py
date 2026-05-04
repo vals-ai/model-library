@@ -20,6 +20,7 @@ async def query_with_truncation_retry(
     *,
     question_id: str | None = None,
     run_id: str | None = None,
+    docent_ingest: bool = False,
 ) -> tuple[QueryResult, dict[str, int]]:
     """Query an LLM with automatic document truncation on context window errors.
 
@@ -55,7 +56,12 @@ async def query_with_truncation_retry(
     # retry until query succeeds
     while True:
         try:
-            result = await llm.query(prompt, question_id=question_id, run_id=run_id)
+            result = await llm.query(
+                prompt,
+                question_id=question_id,
+                run_id=run_id,
+                docent_ingest=docent_ingest,
+            )
 
             if result.finish_reason.reason == FinishReason.MAX_TOKENS:
                 raise MaxOutputTokensExceededError(

@@ -310,6 +310,7 @@ async def test_context_window_error_gives_up(mock_llm: LLM):
         "Sent message larger than max (50000056 vs. 20971520)",
         "too many tokens: size limit exceeded by 713295 tokens. Try using shorter or fewer inputs. The limit for this model is 288000 tokens.",
         "input length and max_tokens exceed context limit: 200043 + 32000 > 204658, decrease input length or max_tokens and try again",
+        "Invalid request: Your request exceeded model token limit: 262144 (requested: 263162)",  # kimi
         "Payload Too Large",
         "invalid params, context window exceeds limit (2013)",  # minimax
     ]

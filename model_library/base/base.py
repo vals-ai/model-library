@@ -109,6 +109,36 @@ class LLM(ABC):
     LLM call errors should be raised as exceptions
     """
 
+    @property
+    def _client_registry_key(self) -> tuple[str, str]:
+        if self._own_registry_key is not None:
+            return self._own_registry_key
+        if self.delegate is not None:
+            return self.delegate._client_registry_key
+        raise AttributeError(
+            f"'{type(self).__name__}' has no _client_registry_key "
+            "(non-native model without delegate)"
+        )
+
+    @_client_registry_key.setter
+    def _client_registry_key(self, value: tuple[str, str]) -> None:
+        self._own_registry_key = value
+
+    @property
+    def _client_registry_key_model_specific(self) -> tuple[str, str]:
+        if self._own_registry_key_model_specific is not None:
+            return self._own_registry_key_model_specific
+        if self.delegate is not None:
+            return self.delegate._client_registry_key_model_specific
+        raise AttributeError(
+            f"'{type(self).__name__}' has no _client_registry_key_model_specific "
+            "(non-native model without delegate)"
+        )
+
+    @_client_registry_key_model_specific.setter
+    def _client_registry_key_model_specific(self, value: tuple[str, str]) -> None:
+        self._own_registry_key_model_specific = value
+
     @abstractmethod
     def get_client(
         self, api_key: str | None = None, base_url: str | None = None
@@ -186,6 +216,8 @@ class LLM(ABC):
         self.custom_retrier: RetrierType | None = None
 
         self.token_retry_params = None
+        self._own_registry_key: tuple[str, str] | None = None
+        self._own_registry_key_model_specific: tuple[str, str] | None = None
         # set _client_registry_key after initializing delegate
         if not self.native:
             return

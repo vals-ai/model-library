@@ -4,3 +4,4 @@ model_library.egg-info
 /build/lib/model_library
 **/.DS_Store
 /logs/**
+.scratch/

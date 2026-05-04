@@ -62,7 +62,7 @@ Benchmark runs wrap all of the above:
 2. Stores config hash (limit, tokens_per_second, burst_limit, initialized_at)
 3. Checks `task:active` key — if an active loop exists with the same config, starts in standby; if config changed or no active loop, starts active
 4. Spawns one `background_loops` coroutine (in `background.py`) managing a TaskGroup with:
-   - **Refill loop** — every 1s, adds `limit / limit_refresh_seconds` tokens (capped at limit), resets burst counter
+   - **Refill loop** — every 1s, adds `limit / limit_refresh_seconds` tokens (capped at limit)
    - **Correction loop** — every 20s, reads provider rate-limit headers and corrects token count down if it's too high
    - **Cleanup/reaper loop** — every 30s, reaps stale entries and checks idle shutdown
    - **Heartbeat** — refreshes `task:active` key and per-worker alive markers
@@ -198,7 +198,7 @@ Prefix: `model_library` (`KEY_PREFIX`). Identifiers: `{P}` = provider.model_name
 |-----|------|-----|---------|
 | `{P}:{K}:tokens` | STRING | — | Remaining token count |
 | `{P}:{K}:tokens:limit` | STRING | — | Token limit |
-| `{P}:{K}:tokens:burst` | STRING | — | Burst counter (reset every 1s by refill loop) |
+| `{P}:{K}:tokens:burst` | STRING | 1s TTL | Per-second burst counter (auto-expires) |
 | `{P}:{K}:tokens:config` | HASH | — | Init config (limit, tokens_per_second, burst_limit, initialized_at) |
 | `{P}:{K}:tokens:task:active` | STRING | 30s | Active loop owner (loop_id UUID), refreshed by heartbeat |
 | `{P}:{K}:tokens:task:refill` | STRING | 30s | Refill loop alive marker |
@@ -239,7 +239,7 @@ All scripts run atomically in Redis (no interleaving with other commands).
 
 | Script | Keys | Args | Returns | Purpose |
 |--------|------|------|---------|---------|
-| `DEDUCT_TOKENS_LUA` | token_key, burst_key | required_tokens, burst_limit | 1/0 | Check-and-deduct tokens with burst cap |
+| `DEDUCT_TOKENS_LUA` | token_key, burst_key | required_tokens, burst_limit | 1/0 | Check-and-deduct tokens with per-second burst cap |
 | `REFILL_TOKENS_LUA` | token_key | amount, cap | new_count | Refill with cap |
 | `CORRECT_TOKENS_LUA` | token_key | adjusted | [corrected, current, adjusted] | Correct down from headers |
 | `ADJUST_RATIO_LUA` | ratio_key | observed, alpha | [old, new] | EMA ratio update |
@@ -267,7 +267,7 @@ All scripts run atomically in Redis (no interleaving with other commands).
 | `TOKEN_WAIT_TIME` | 10.0s | Sleep between token deduction attempts (jittered ±50%) |
 | `RETRY_WAIT_TIME` | 30.0s | Sleep between actual retries (jittered) |
 | `MAX_RETRIES` | 10 | Max retry attempts |
-| `BURST_FRACTION` | 0.2 | Max 20% of token limit per second |
+| `BURST_FRACTION` | 0.8 | Max 80% of token limit deducted per second (auto-expiring 1s window) |
 | `PRIORITY_STALE_AGE` | 300s | Reap priority entries after this |
 | `INFLIGHT_MAX_AGE` | 7200s | Reap stale inflight entries after this |
 | `REAP_INTERVAL` | 30s | How often cleanup/reaper loop runs |

@@ -5,17 +5,72 @@ base-config:
   supports:
     images: false
     files: false
+    tools: true
+    batch: false
+    temperature: true
   properties:
     reasoning_model: false
-
-core-models:
+  default_parameters:
+    temperature: 1
+v4-models:
   base-config:
+    open_source: true
     supports:
-      tools: true
-      batch: false
-      temperature: true
+      temperature: false
+
+  deepseek/deepseek-v4-pro:
+    label: DeepSeek V4
+    release_date: 2026-04-23
+    properties:
+      context_window: 1_000_000
+      max_tokens: 384_000
+      reasoning_model: true
     default_parameters:
-      temperature: 1
+      reasoning_effort: "max"
+      max_tokens: 384_000
+    costs_per_million_token:
+      input: 1.74
+      output: 3.48
+      cache:
+        read: 0.145
+    alternative_keys:
+      - deepseek/deepseek-v4-pro-nonthinking:
+          supports:
+            temperature: true
+          properties:
+            reasoning_model: false
+          default_parameters:
+            reasoning_effort: null
+            temperature: 1
+            top_p: 0.95
+
+  deepseek/deepseek-v4-flash:
+    label: DeepSeek V4 Flash
+    release_date: 2026-04-23
+    properties:
+      context_window: 1_000_000
+      max_tokens: 384_000
+      reasoning_model: true
+    default_parameters:
+      reasoning_effort: "high"
+      max_tokens: 384_000
+    costs_per_million_token:
+      input: 0.14
+      output: 0.28
+      cache:
+        read: 0.028
+    alternative_keys:
+      - deepseek/deepseek-v4-flash-nonthinking:
+          supports:
+            temperature: true
+          properties:
+            reasoning_model: false
+          default_parameters:
+            reasoning_effort: null
+            temperature: 1
+            top_p: 0.95
+
+public-models:
 
   deepseek/deepseek-chat:
     label: DeepSeek Chat

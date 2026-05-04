@@ -384,7 +384,7 @@ async def test_execute_cleanup_removes_only_own_question(redis):
 
 async def test_metadata_cleaned_on_pre_function_failure(redis):
     await _init_tokens(redis, value=0)
-    await redis.hset(f"{TOKEN_KEY}:config", mapping={"burst_limit": "200"})
+    await redis.hset(f"{TOKEN_KEY}:config", mapping={"burst_limit": "160"})
 
     retrier = _make_retrier(run_id="run-fail", question_id="q-fail")
 

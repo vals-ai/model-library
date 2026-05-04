@@ -328,12 +328,16 @@ class AnthropicModel(LLM):
                 model_library_settings.ANTHROPIC_API_KEY
             )
 
+            # flip native back on for the delegate so it initializes its own
+            # client registry; the outer model stays non-native.
+            config.native = True
             self.delegate = OpenAIModel(
                 model_name=self.model_name,
                 provider=self.provider,
                 config=config,
                 use_completions=True,
             )
+            config.native = False
 
         # Initialize batch support if enabled
         # Disable batch when using custom_client (similar to OpenAI)

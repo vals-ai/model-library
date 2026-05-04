@@ -28,6 +28,7 @@ Returns lean summaries in memory — full raw data is written to disk per-turn.
 |-------|------|-------------|
 | `final_answer` | `str` | From `determine_answer` hook, done tool, or LLM text |
 | `final_error` | `SerializableException \| None` | Set on max turns/time, unhandled exceptions |
+| `final_history` | `list[InputItem]` | Conversation history after the run (excluded from JSON/repr). Use this to continue a conversation across multiple `run()` calls. |
 | `turns` | `list[TurnSummary \| ErrorTurn]` | Per-turn summaries |
 | `output_dir` | `Path` | Question-level output directory (excluded from JSON) |
 | `success` | `bool` | `final_error is None` |
@@ -172,4 +173,5 @@ If the logger (or a parent, excluding root) already has a FileHandler, the agent
 | `agent/hooks.py` | `AgentHooks` dataclass and hook protocols |
 | `agent/metadata.py` | `AgentTurn`, `ErrorTurn`, `ToolCallRecord`, `TurnSummary`, `ToolCallSummary` |
 | `agent/tool.py` | `Tool` base class, `ToolOutput` |
+| `agent/conductor/` | `ConductorAgent` — orchestrates multi-turn conversations between agents |
 | `utils.py` | `create_file_logger`, `run_logging` |

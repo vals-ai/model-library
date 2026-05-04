@@ -229,6 +229,9 @@ def check_pricing(console: Console) -> PricingResults:
             "pay_as_you_go"
         ]
         our_costs = model_config.costs_per_million_token
+        if our_costs is None:
+            results.skip()
+            continue
 
         # Check input price
         check_price_category(

@@ -32,19 +32,25 @@ DYNAMIC_ESTIMATE_TTL: int = (
     86400  # 24 hours — expire dynamic estimate ratios for inactive runs
 )
 
-BURST_FRACTION: float = 0.2  # max 20% of token limit per second
+BURST_FRACTION: float = 0.8  # max 80% of token limit deducted per second
 
-# Lua: atomic check-and-deduct with burst cap.
+# Lua: atomic check-and-deduct with per-second burst cap.
 # KEYS[1] = token key, KEYS[2] = burst key
 # ARGV[1] = required tokens, ARGV[2] = burst limit
 DEDUCT_TOKENS_LUA = """
 local required = tonumber(ARGV[1])
 local remaining = tonumber(redis.call('GET', KEYS[1]))
 if remaining < required then return 0 end
-local burst = tonumber(redis.call('GET', KEYS[2]) or '0')
-if burst > 0 and burst + required > tonumber(ARGV[2]) then return 0 end
+
+local burst_limit = tonumber(ARGV[2])
+local used = tonumber(redis.call('GET', KEYS[2]) or '0')
+if used + required > burst_limit then return 0 end
+
 redis.call('DECRBY', KEYS[1], required)
 redis.call('INCRBY', KEYS[2], required)
+if redis.call('TTL', KEYS[2]) == -1 then
+    redis.call('PEXPIRE', KEYS[2], 1000)
+end
 return 1
 """
 
@@ -229,9 +235,7 @@ class TokenRetrier(BaseRetrier):
         self._run_id = run_id
         self._question_id = f"{run_id}:{question_id}"
         self._is_queued: bool | None = None  # lazy: set on first _pre_function call
-        self._burst_limit: int | None = (
-            None  # lazy: read from config on first _pre_function call
-        )
+        self._burst_limit: int | None = None  # lazy: read from config
 
         # per-run inflight tracking
         self._active_runs_key = f"{self.token_key}:active_runs"

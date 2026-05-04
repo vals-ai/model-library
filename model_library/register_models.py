@@ -218,7 +218,7 @@ class RawModelConfig(BaseModel):
     provider_properties: BaseProviderProperties = Field(
         default_factory=BaseProviderProperties
     )
-    costs_per_million_token: CostProperties
+    costs_per_million_token: CostProperties | None
     alternative_keys: list[str | dict[str, Any]] = Field(default_factory=list)
     default_parameters: DefaultParameters = Field(default_factory=DefaultParameters)
     provider_endpoint: str | None = None

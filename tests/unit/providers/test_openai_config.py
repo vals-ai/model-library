@@ -1,8 +1,22 @@
+import logging
 from typing import Literal
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from openai.types.chat import (
+    ChatCompletion,
+    ChatCompletionMessage,
+    ChatCompletionMessageToolCall,
+)
+from openai.types.chat.chat_completion import Choice
+from openai.types.chat.chat_completion_message_tool_call import Function
+from openai.types.completion_usage import (
+    CompletionTokensDetails,
+    CompletionUsage,
+    PromptTokensDetails,
+)
 
-from model_library.base import LLMConfig
+from model_library.base import FinishReason, LLMConfig
 from model_library.base.input import TextInput
 from model_library.providers.openai import OpenAIConfig, OpenAIModel
 
@@ -60,3 +74,73 @@ async def test_google_delegate_thinking_config():
     assert thinking_config["include_thoughts"] is True
     assert thinking_config["thinking_level"] == "low"
     assert "reasoning_effort" not in body
+
+
+async def test_completions_stream_options_omitted_when_non_streaming():
+    model = OpenAIModel(
+        "gpt-4o-mini",
+        config=LLMConfig(provider_config=OpenAIConfig(stream_completions=False)),
+        use_completions=True,
+    )
+
+    body = await model.build_body(_INPUT, tools=[])
+
+    assert "stream_options" not in body
+
+
+async def test_non_streaming_completions_query_parses_response():
+    model = OpenAIModel(
+        "gpt-4o-mini",
+        config=LLMConfig(provider_config=OpenAIConfig(stream_completions=False)),
+        use_completions=True,
+    )
+    response = ChatCompletion(
+        id="cmpl_123",
+        created=0,
+        model="gpt-4o-mini",
+        object="chat.completion",
+        choices=[
+            Choice(
+                finish_reason="tool_calls",
+                index=0,
+                message=ChatCompletionMessage(
+                    role="assistant",
+                    content="hello",
+                    tool_calls=[
+                        ChatCompletionMessageToolCall(
+                            id="call_1",
+                            type="function",
+                            function=Function(name="lookup", arguments='{"q":"x"}'),
+                        )
+                    ],
+                ),
+            )
+        ],
+        usage=CompletionUsage(
+            completion_tokens=5,
+            prompt_tokens=10,
+            total_tokens=15,
+            completion_tokens_details=CompletionTokensDetails(reasoning_tokens=1),
+            prompt_tokens_details=PromptTokensDetails(cached_tokens=2),
+        ),
+    )
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=response)
+
+    with patch.object(model, "get_client", return_value=mock_client):
+        with patch.object(model, "build_body", new_callable=AsyncMock, return_value={}):
+            result = await model._query_completions(
+                _INPUT, tools=[], query_logger=logging.getLogger("test")
+            )
+
+    mock_client.chat.completions.create.assert_awaited_once_with(stream=False)
+    assert result.output_text == "hello"
+    assert result.finish_reason.reason == FinishReason.TOOL_CALLS
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].id == "call_1"
+    assert result.tool_calls[0].name == "lookup"
+    assert result.tool_calls[0].args == '{"q":"x"}'
+    assert result.metadata.in_tokens == 8
+    assert result.metadata.out_tokens == 4
+    assert result.metadata.reasoning_tokens == 1
+    assert result.metadata.cache_read_tokens == 2

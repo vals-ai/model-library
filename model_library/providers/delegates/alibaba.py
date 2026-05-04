@@ -1,3 +1,4 @@
+import re
 from typing import Any, Literal, Sequence
 
 from openai.types.chat import ChatCompletionMessage
@@ -9,6 +10,7 @@ from model_library.base import (
     DelegateOnly,
     InputItem,
     LLMConfig,
+    ProviderConfig,
     QueryResultCost,
     QueryResultMetadata,
     ToolDefinition,
@@ -16,8 +18,24 @@ from model_library.base import (
 from model_library.register_models import register_provider
 
 
+class AlibabaConfig(ProviderConfig):
+    """Configuration for Alibaba (Qwen) models.
+
+    Attributes:
+        preserve_thinking: When enabled on Qwen 3.6+ reasoning models, previous
+            reasoning content is preserved in context across turns instead of
+            being stripped and re-serialized. This improves KV cache utilization
+            and decision consistency in agentic workflows.
+            See: https://qwen.ai/blog?id=qwen3.6-27b
+    """
+
+    preserve_thinking: bool = False
+
+
 @register_provider("alibaba")
 class AlibabaModel(DelegateOnly):
+    provider_config = AlibabaConfig()
+
     def __init__(
         self,
         model_name: str,
@@ -26,6 +44,10 @@ class AlibabaModel(DelegateOnly):
         config: LLMConfig | None = None,
     ):
         super().__init__(model_name, provider, config=config)
+
+        self.preserve_thinking = (
+            self.provider_config.preserve_thinking and self._is_qwen_36_or_later()
+        )
 
         # https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen
         config = config or LLMConfig()
@@ -69,6 +91,13 @@ class AlibabaModel(DelegateOnly):
             body["messages"] = self._fix_content_null_in_messages(body["messages"])
         return body
 
+    def _is_qwen_36_or_later(self) -> bool:
+        """Check if the model is Qwen 3.6 or later based on the model name."""
+        match = re.search(r"qwen(\d+(?:\.\d+)?)", self.model_name)
+        if not match:
+            return False
+        return float(match.group(1)) >= 3.6
+
     @override
     def _get_extra_body(self) -> dict[str, Any]:
         """Build extra body parameters for Qwen-specific features."""
@@ -77,6 +106,8 @@ class AlibabaModel(DelegateOnly):
         # https://www.alibabacloud.com/help/en/model-studio/use-qwen-by-calling-api
         if self.reasoning:
             extra["enable_thinking"] = True
+            if self.preserve_thinking:
+                extra["preserve_thinking"] = True
         return extra
 
     @override

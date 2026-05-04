@@ -803,7 +803,7 @@ async def test_init_with_changed_config_starts_active(redis):
         await redis.set(f"{key}:task:active", "some-task-id")
         await redis.hset(
             f"{key}:config",
-            mapping={"limit": "3000", "tokens_per_second": "50", "burst_limit": "600"},
+            mapping={"limit": "3000", "tokens_per_second": "50", "burst_limit": "2400"},
         )
 
         # second init with a DIFFERENT limit
@@ -844,7 +844,7 @@ async def test_init_with_same_config_starts_standby(redis):
         await redis.set(f"{key}:task:active", "some-task-id")
         await redis.hset(
             f"{key}:config",
-            mapping={"limit": "3000", "tokens_per_second": "50", "burst_limit": "600"},
+            mapping={"limit": "3000", "tokens_per_second": "50", "burst_limit": "2400"},
         )
 
         # second init with SAME limit
@@ -862,61 +862,100 @@ async def test_init_with_same_config_starts_standby(redis):
     assert second_kwargs["standby"] is True
 
 
-# ── Burst limit ─────────────────────────────────────────────────────
-
-
 BURST_KEY = f"{TOKEN_KEY}:burst"
 CONFIG_KEY = f"{TOKEN_KEY}:config"
 
 
-async def test_burst_limit_blocks_when_exceeded(redis):
-    """Deduction fails when burst + required > burst_limit, even if tokens are available."""
+# ── Burst limit ─────────────────────────────────────────────────────
+
+
+async def test_burst_blocks_when_exceeded(redis):
+    """Deduction fails when per-second burst usage + required > burst_limit."""
     from model_library.retriers.token.token import DEDUCT_TOKENS_LUA
 
     await _init_tokens(redis, value=1000, limit=1000)
-
-    burst_limit = 200  # floor(1000 * 0.2)
-    # burst counter at 180 -- adding 150 would give 330 > 200
-    await redis.set(BURST_KEY, "180")
-
-    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit)  # noqa: S307
-    assert result == 0  # blocked by burst cap
-
-    # tokens unchanged
-    assert int(await redis.get(TOKEN_KEY)) == 1000
-    # burst counter unchanged
-    assert int(await redis.get(BURST_KEY)) == 180
-
-
-async def test_burst_limit_allows_when_within_cap(redis):
-    """Deduction succeeds when burst + required <= burst_limit and tokens are available."""
-    from model_library.retriers.token.token import DEDUCT_TOKENS_LUA
-
-    await _init_tokens(redis, value=1000, limit=1000)
-
     burst_limit = 200
-    # burst at 40 -- adding 150 gives 190 <= 200
-    await redis.set(BURST_KEY, "40")
 
+    # first deduction: 150 tokens, within limit
     result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit)  # noqa: S307
     assert result == 1
+    assert int(await redis.get(TOKEN_KEY)) == 850
 
-    assert int(await redis.get(TOKEN_KEY)) == 850  # 1000 - 150
-    assert int(await redis.get(BURST_KEY)) == 190  # 40 + 150
+    # second deduction: 150 more would put burst at 300 > 200
+    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit)  # noqa: S307
+    assert result == 0
+    assert int(await redis.get(TOKEN_KEY)) == 850  # unchanged
+
+
+async def test_burst_allows_within_cap(redis):
+    """Deduction succeeds when per-second burst usage + required <= burst_limit."""
+    from model_library.retriers.token.token import DEDUCT_TOKENS_LUA
+
+    await _init_tokens(redis, value=1000, limit=1000)
+    burst_limit = 200
+
+    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit)  # noqa: S307
+    assert result == 1
+    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit)  # noqa: S307
+    assert result == 1
+
+    assert int(await redis.get(TOKEN_KEY)) == 800
+    assert int(await redis.get(BURST_KEY)) == 200
+
+
+async def test_burst_resets_after_ttl(redis):
+    """Burst counter resets after 1-second TTL expires."""
+    from model_library.retriers.token.token import DEDUCT_TOKENS_LUA
+
+    await _init_tokens(redis, value=1000, limit=1000)
+    burst_limit = 200
+
+    # fill burst
+    await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 200, burst_limit)  # noqa: S307
+    assert int(await redis.get(BURST_KEY)) == 200
+
+    # verify TTL was set
+    ttl = await redis.pttl(BURST_KEY)
+    assert 0 < ttl <= 1000
+
+    # simulate expiry
+    await redis.delete(BURST_KEY)
+
+    # fresh window — should pass
+    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit)  # noqa: S307
+    assert result == 1
+    assert int(await redis.get(BURST_KEY)) == 150
+
+
+async def test_burst_ttl_not_extended(redis):
+    """Subsequent deductions don't extend the burst window TTL."""
+    from model_library.retriers.token.token import DEDUCT_TOKENS_LUA
+
+    await _init_tokens(redis, value=1000, limit=1000)
+    burst_limit = 500
+
+    # first deduction sets TTL
+    await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit)  # noqa: S307
+    ttl1 = await redis.pttl(BURST_KEY)
+
+    # second deduction should not reset TTL (TTL > 0, not -1)
+    await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit)  # noqa: S307
+    ttl2 = await redis.pttl(BURST_KEY)
+
+    assert ttl2 <= ttl1  # TTL only decreases, never extended
 
 
 async def test_burst_limit_reads_from_config(redis):
     """_burst_limit is lazily read from the config hash on first _pre_function call."""
     await _init_tokens(redis, value=1000, limit=1000)
-    await redis.hset(CONFIG_KEY, mapping={"burst_limit": "200"})
-    await redis.set(BURST_KEY, "0")
+    await redis.hset(CONFIG_KEY, mapping={"burst_limit": "800"})
 
     retrier = _make_retrier()
     assert retrier._burst_limit is None  # pyright: ignore[reportPrivateUsage]
 
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
-    assert retrier._burst_limit == 200  # pyright: ignore[reportPrivateUsage]
+    assert retrier._burst_limit == 800  # pyright: ignore[reportPrivateUsage]
 
 
 # ── Dispatched cycling (agentic multi-turn) ─────────────────────────
@@ -994,9 +1033,6 @@ async def test_dispatched_cycling_across_turns(redis):
 async def test_pre_function_shield_completes_on_cancel(redis):
     """Cancelling during _pre_function still cleans up priority entry via shield."""
     await _init_tokens(redis, value=1000)
-    await redis.hset(CONFIG_KEY, mapping={"burst_limit": "200"})
-    await redis.set(BURST_KEY, "0")
-
     retrier = _make_retrier()
     priority_key = TokenRetrier.get_priority_key(CLIENT_KEY, 0)
 
@@ -1028,9 +1064,6 @@ async def test_pre_function_shield_completes_on_cancel(redis):
 async def test_execute_shield_completes_on_cancel(redis):
     """Cancelling during execute still cleans up inflight tracking via shield."""
     await _init_tokens(redis, value=1000)
-    await redis.hset(CONFIG_KEY, mapping={"burst_limit": "200"})
-    await redis.set(BURST_KEY, "0")
-
     retrier = _make_retrier()
     inflight_key = f"{TOKEN_KEY}:run:test-instance:inflight"
     active_runs_key = f"{TOKEN_KEY}:active_runs"

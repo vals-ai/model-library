@@ -63,6 +63,24 @@ async def background_loops(
                     )
                     return
 
+                # store last header to Redis for status visibility
+                header_data = rate_limit.model_dump(exclude={"raw"})
+                redis_mapping = {k: str(v) for k, v in header_data.items()}
+                header_redis_key = f"{cfg.key}:last_header"
+                async with utils.redis_client.pipeline(transaction=True) as pipe:
+                    pipe.hset(  # pyright: ignore[reportUnknownMemberType]
+                        header_redis_key, mapping=redis_mapping
+                    )
+                    pipe.expire(header_redis_key, 60)
+                    await pipe.execute()
+
+                header_limit = rate_limit.token_limit_total
+                if not (0.8 * cfg.limit <= header_limit <= 1.2 * cfg.limit):
+                    logger.debug(
+                        f"header token limit ({header_limit}) outside 80-120% of configured limit ({cfg.limit}), exiting correction for {cfg.key}"
+                    )
+                    return
+
                 tokens_remaining = rate_limit.token_remaining_total
 
                 # atomic correct-down via Lua
@@ -111,9 +129,6 @@ async def background_loops(
                     0, floor(cfg.tokens_per_second * (mono_now - last_refill))
                 )
                 last_refill = mono_now
-
-                # reset burst counter
-                await utils.redis_client.set(f"{cfg.key}:burst", 0)
 
                 # atomic refill with cap via Lua
                 current = int(

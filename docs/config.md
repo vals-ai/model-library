@@ -30,19 +30,19 @@ Three levels, each merged via `deep_update()`:
 3. **Model config** — individual model entry, merged on top of block config
 
 ```yaml
-base-config:                          # level 1: provider
+base-config: # level 1: provider
   company: Anthropic
   supports:
     images: true
   properties:
     reasoning_model: false
 
-claude-sonnet-models:                 # named block
-  base-config:                        # level 2: block
+claude-sonnet-models: # named block
+  base-config: # level 2: block
     supports:
       batch: true
 
-  anthropic/claude-sonnet-4-6:        # level 3: model
+  anthropic/claude-sonnet-4-6: # level 3: model
     label: Claude Sonnet 4.6
     properties:
       context_window: 200_000
@@ -50,6 +50,10 @@ claude-sonnet-models:                 # named block
 ```
 
 Result: `claude-sonnet-4-6` gets `company: Anthropic`, `images: true`, `batch: true`, `reasoning_model: false`, plus its own `context_window` and `max_tokens`.
+
+## Provider Properties
+
+Provider-specific `provider_properties` are validated by each provider. OpenAI-compatible completions support `stream_completions` (default: `true`); set it to `false` to use non-streaming chat completions.
 
 ## Deprecating Models
 
@@ -60,6 +64,7 @@ make deprecate model=openai/gpt-4o-2024-05-13
 ```
 
 This will:
+
 1. Resolve the full model config from the registry (all inheritance applied)
 2. Insert a self-contained entry at the top of `config/deprecated/<provider>_models.yaml`
 3. Remove the entry from the active config file
@@ -87,14 +92,14 @@ MODEL_LIBRARY_INCLUDE_DEPRECATED=True
 
 ## Settings
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MODEL_LIBRARY_INCLUDE_DEPRECATED` | `False` | Load deprecated model configs from `config/deprecated/` |
-| `MODEL_LIBRARY_CUSTOM_CONFIG` | — | Path or URL to additional YAML config to merge into registry |
-| `OPENAI_API_KEY` | — | OpenAI API key |
-| `ANTHROPIC_API_KEY` | — | Anthropic API key |
-| `GOOGLE_API_KEY` | — | Google API key |
-| `ARCEE_API_KEY` | — | Arcee AI API key |
+| Variable                           | Default | Description                                                  |
+| ---------------------------------- | ------- | ------------------------------------------------------------ |
+| `MODEL_LIBRARY_INCLUDE_DEPRECATED` | `False` | Load deprecated model configs from `config/deprecated/`      |
+| `MODEL_LIBRARY_CUSTOM_CONFIG`      | —       | Path or URL to additional YAML config to merge into registry |
+| `OPENAI_API_KEY`                   | —       | OpenAI API key                                               |
+| `ANTHROPIC_API_KEY`                | —       | Anthropic API key                                            |
+| `GOOGLE_API_KEY`                   | —       | Google API key                                               |
+| `ARCEE_API_KEY`                    | —       | Arcee AI API key                                             |
 
 Settings can be set via environment variables or programmatically:
 

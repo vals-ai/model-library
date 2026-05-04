@@ -96,6 +96,7 @@ Docent failures never block the LLM query or agent run. All ingestion code is wr
 | `docent.py` | Converters (`InputItem` → `ChatMessage`, `QueryResult` → `AssistantMessage`) and ingestion |
 | `base/base.py` | `docent_ingest` flag on `LLM.query` |
 | `agent/agent.py` | `docent_ingest` flag on `Agent.run` |
+| `query_utils.py` | `docent_ingest` flag on `query_with_truncation_retry` (forwarded to inner `LLM.query`) |
 
 ## Example
 

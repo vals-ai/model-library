@@ -24,7 +24,7 @@ deprecated:
   fireworks/kimi-k2-instruct-0905:
     company: Kimi
     label: Kimi K2 Instruct 0905
-    release_date: '2025-09-04'
+    release_date: 2025-09-04
     open_source: true
     documentation_url: https://www.kimi.com/
     properties:

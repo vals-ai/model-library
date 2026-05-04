@@ -86,6 +86,25 @@ mistral-models:
     default_parameters:
       temperature: 0.065
 
+  mistralai/mistral-medium-3.5:
+    label: Mistral Medium 3.5
+    open_source: true
+    release_date: 2026-04-29
+    documentation_url: https://docs.mistral.ai/models/model-cards/mistral-medium-3-5-26-04
+    supports:
+      images: true
+    properties:
+      context_window: 262_144
+      max_tokens: 80_000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.5
+      output: 7.5
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.95
+      reasoning_effort: "high"
+
   mistralai/mistral-medium-2505:
     label: Mistral Medium 3.1 (05/2025)
     release_date: 2025-05-07

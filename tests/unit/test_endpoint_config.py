@@ -52,6 +52,7 @@ class TestCustomEndpoint:
                 mock_create.assert_called_once_with(
                     base_url="https://my-proxy.com/v1",
                     api_key="proxy-key",
+                    dns_resolve=None,
                 )
         finally:
             OpenAIModel.get_client = _original_get_client  # type: ignore[method-assign]
@@ -105,6 +106,7 @@ class TestCustomEndpoint:
                 mock_create.assert_called_once_with(
                     base_url=None,
                     api_key="my-key",
+                    dns_resolve=None,
                 )
         finally:
             OpenAIModel.get_client = _original_get_client  # type: ignore[method-assign]

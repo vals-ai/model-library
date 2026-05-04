@@ -3,11 +3,13 @@ See deepseek data retention policy
 https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html
 """
 
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import SecretStr
+from typing_extensions import override
 
 from model_library import model_library_settings
+
 from model_library.base import (
     DelegateOnly,
     LLMConfig,
@@ -28,7 +30,8 @@ class DeepSeekModel(DelegateOnly):
 
         # https://api-docs.deepseek.com/
         config = config or LLMConfig()
-        config.custom_endpoint = config.custom_endpoint or "https://api.deepseek.com/v1"
+
+        config.custom_endpoint = config.custom_endpoint or "https://api.deepseek.com"
         config.custom_api_key = config.custom_api_key or SecretStr(
             model_library_settings.DEEPSEEK_API_KEY
         )
@@ -38,3 +41,10 @@ class DeepSeekModel(DelegateOnly):
             delegate_provider="openai",
             use_completions=True,
         )
+
+    @override
+    def _get_extra_body(self) -> dict[str, Any]:
+        if self.model_name in ("deepseek-v4-pro", "deepseek-v4-flash"):
+            mode = "enabled" if self.reasoning else "disabled"
+            return {"thinking": {"type": mode}}
+        return {}

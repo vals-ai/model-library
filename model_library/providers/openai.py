@@ -5,17 +5,20 @@ import io
 import json
 import logging
 import time
-from typing import Any, Literal, Sequence, cast
+from typing import Any, AsyncIterator, Literal, Sequence, cast
 
 from openai import APIConnectionError, AsyncOpenAI
 from openai.lib._pydantic import to_strict_json_schema
 from openai.types.chat import (
+    ChatCompletion,
+    ChatCompletionChunk,
     ChatCompletionMessage,
     ChatCompletionMessageToolCall,
     ChatCompletionMessageToolCallUnion,
 )
 from openai.types.chat.chat_completion_message_tool_call import Function
 from openai.types.chat.chat_completion_tool_param import ChatCompletionToolParam
+from openai.types.completion_usage import CompletionUsage
 from openai.types.create_embedding_response import CreateEmbeddingResponse
 from openai.types.moderation_create_response import ModerationCreateResponse
 from openai.types.responses import (
@@ -61,7 +64,6 @@ from model_library.base import (
 )
 from model_library.exceptions import (
     ImmediateRetryException,
-    MaxContextWindowExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
     UnexpectedSystemInputError,
@@ -294,6 +296,8 @@ class OpenAIConfig(ProviderConfig):
     deep_research: bool = False
     verbosity: Literal["low", "medium", "high"] | None = None
     prompt_cache_retention: Literal["24h", "in_memory"] | None = None
+    # TODO: move to LLMConfig so OpenAI-compatible delegate providers can configure it.
+    stream_completions: bool = True
 
 
 @register_provider("openai")
@@ -310,9 +314,11 @@ class OpenAIModel(LLM):
     ) -> AsyncOpenAI:
         if not self.has_client():
             assert api_key
+            dns_resolve: dict[str, str] | None = None
             client = create_openai_client_with_defaults(
                 base_url=base_url,
                 api_key=api_key,
+                dns_resolve=dns_resolve,
             )
             self.assign_client(client)
         return super().get_client()
@@ -334,6 +340,7 @@ class OpenAIModel(LLM):
         self.deep_research = self.provider_config.deep_research
         self.verbosity = self.provider_config.verbosity
         self.prompt_cache_retention = self.provider_config.prompt_cache_retention
+        self.stream_completions = self.provider_config.stream_completions
 
         # batch client
         self.supports_batch: bool = self.supports_batch and not self.custom_endpoint
@@ -596,9 +603,10 @@ class OpenAIModel(LLM):
         body: dict[str, Any] = {
             "model": self.model_name,
             "messages": await self.parse_input(input),
-            # enable usage data in streaming responses
-            "stream_options": {"include_usage": True},
         }
+        if self.stream_completions:
+            # enable usage data in streaming responses
+            body["stream_options"] = {"include_usage": True}
 
         if self.max_tokens:
             body["max_tokens"] = self.max_tokens
@@ -689,13 +697,54 @@ class OpenAIModel(LLM):
         finish_reason: str | None = None
         metadata: QueryResultMetadata = QueryResultMetadata()
 
-        stream = await self.get_client().chat.completions.create(
+        def metadata_from_usage(usage: CompletionUsage) -> QueryResultMetadata:
+            reasoning_tokens = (
+                usage.completion_tokens_details.reasoning_tokens or 0
+                if usage.completion_tokens_details
+                else 0
+            )
+            cache_read_tokens = (
+                usage.prompt_tokens_details.cached_tokens or 0
+                if usage.prompt_tokens_details
+                else getattr(usage, "cached_tokens", 0)  # for kimi
+            )
+            return QueryResultMetadata(
+                in_tokens=usage.prompt_tokens - cache_read_tokens,
+                out_tokens=usage.completion_tokens - reasoning_tokens,
+                reasoning_tokens=reasoning_tokens,
+                cache_read_tokens=cache_read_tokens,
+            )
+
+        completion = await self.get_client().chat.completions.create(
             **body,  # pyright: ignore[reportAny]
-            stream=True,
+            stream=self.stream_completions,
         )
 
-        try:
-            completion_id: str | None = None
+        completion_id: str | None = None
+        if not self.stream_completions:
+            completion = cast(ChatCompletion, completion)
+            query_logger.debug(f"Completion created: {completion.id}")
+            if completion.choices:
+                choice = completion.choices[0]
+                finish_reason = choice.finish_reason
+                message = choice.message
+                if message.content:
+                    output_text = message.content
+                if (
+                    hasattr(message, "reasoning_content") and message.reasoning_content  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                ):
+                    reasoning_text = cast(str, message.reasoning_content)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                elif (
+                    hasattr(message, "reasoning") and message.reasoning  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                ):
+                    reasoning_text = cast(str, message.reasoning)  # pyright: ignore[reportUnknownMemberType, reportAttributeAccessIssue]
+                raw_tool_calls = cast(
+                    list[ChatCompletionMessageToolCall], message.tool_calls or []
+                )
+            if completion.usage:
+                metadata = metadata_from_usage(completion.usage)
+        else:
+            stream = cast(AsyncIterator[ChatCompletionChunk], completion)
             async for chunk in stream:
                 if not completion_id:
                     completion_id = chunk.id
@@ -770,27 +819,7 @@ class OpenAIModel(LLM):
                                     ].function.arguments += func.arguments
                 if chunk.usage:
                     # NOTE: see _calculate_cost
-                    reasoning_tokens = (
-                        chunk.usage.completion_tokens_details.reasoning_tokens or 0
-                        if chunk.usage.completion_tokens_details
-                        else 0
-                    )
-                    cache_read_tokens = (
-                        chunk.usage.prompt_tokens_details.cached_tokens or 0
-                        if chunk.usage.prompt_tokens_details
-                        else getattr(chunk.usage, "cached_tokens", 0)  # for kimi
-                    )
-                    metadata = QueryResultMetadata(
-                        in_tokens=chunk.usage.prompt_tokens - cache_read_tokens,
-                        out_tokens=chunk.usage.completion_tokens - reasoning_tokens,
-                        reasoning_tokens=reasoning_tokens,
-                        cache_read_tokens=cache_read_tokens,
-                    )
-
-        except Exception as e:  # TODO: patch
-            if "ZeusGodOfThunder" in str(e):
-                raise MaxContextWindowExceededError(str(e))
-            raise e
+                    metadata = metadata_from_usage(chunk.usage)
 
         no_useful_content = (
             not output_text and not reasoning_text and not raw_tool_calls
@@ -898,10 +927,9 @@ class OpenAIModel(LLM):
 
         if parsed_tools:
             body["tools"] = parsed_tools
-        else:
-            body["tool_choice"] = "none"
 
         if self.reasoning:
+            body["include"] = ["reasoning.encrypted_content"]
             body["reasoning"] = {"summary": "auto"}
             if self.reasoning_effort is not None:
                 body["reasoning"]["effort"] = self.reasoning_effort  # type: ignore[reportArgumentType]

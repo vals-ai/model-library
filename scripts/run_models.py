@@ -164,16 +164,7 @@ async def process_model(model_str: str, provider_name: str):
         running_models[provider_name].pop(model_str, None)
 
 
-MODEL_OVERRIDES = [
-    "dumbmar",
-    "bedrock",
-    "ai21labs",
-    "o1",
-    "o3-mini",
-    "sonnet-4-6",
-    "flashx",
-    "o3-pro",
-]
+MODEL_OVERRIDES: list[str] = []
 ERROR_OVERRIDES = [
     "overloaded",
     "rate limit",
@@ -200,6 +191,8 @@ async def main():
         if "research" in key and not args.research:
             continue
         if getattr(config.provider_properties, "serverless", True) is False:
+            continue
+        if config.metadata.internal_only:
             continue
         if key in IGNORED_MODELS:
             continue

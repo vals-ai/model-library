@@ -305,12 +305,14 @@ class MistralModel(LLM):
                                 for text_chunk in content_item.thinking:
                                     if isinstance(text_chunk, TextChunk):
                                         reasoning += text_chunk.text
+                            elif isinstance(content_item, TextChunk):
+                                text += content_item.text
 
-                    else:
-                        if isinstance(delta.content, str):
-                            text += delta.content
-                        if delta.tool_calls:
-                            raw_tool_calls.extend(delta.tool_calls)
+                    elif isinstance(delta.content, str):
+                        text += delta.content
+
+                    if delta.tool_calls:
+                        raw_tool_calls.extend(delta.tool_calls)
                     if choice.finish_reason:
                         finish_reason = choice.finish_reason
 
