@@ -9,12 +9,15 @@ from unittest.mock import AsyncMock, patch
 
 import fakeredis.aioredis
 import pytest
-
-bq_module = importlib.import_module("model_library.retriers.token.benchmark_queue")
 from model_library.retriers.token.benchmark_queue import (
+    BENCHMARK_NOTIFY_CANCELLED,
+    BENCHMARK_NOTIFY_PROCEED,
+    BenchmarkQueueCancelled,
     benchmark_queue,
 )
 from model_library.retriers.token.utils import KEY_PREFIX, get_status, set_redis_client
+
+bq_module = importlib.import_module("model_library.retriers.token.benchmark_queue")
 
 MODEL_KEY = ("openai.gpt-4", "abc123")
 
@@ -36,8 +39,14 @@ def _alive_key(run_id: str):
     return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:alive:{run_id}"
 
 
+def _notify_key(run_id: str):
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:notify:{run_id}"
+
+
 def _run_dispatched_key(run_id: str):
-    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:run:{run_id}:dispatched"
+    return (
+        f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:run:{run_id}:dispatched"
+    )
 
 
 async def _simulate_process_death(redis, run_id: str):
@@ -185,6 +194,234 @@ async def test_cancel_during_wait_propagates(redis):
         await waiter_task
 
     await holder_task
+
+
+async def test_cancel_check_exits_after_clearing_stale_notification(redis):
+    """A pre-entry cancel check prevents deleting a valid cancellation and then blocking."""
+    executed = False
+
+    async def is_cancelled():
+        return True
+
+    await redis.rpush(_notify_key("run-1"), BENCHMARK_NOTIFY_CANCELLED)
+
+    with pytest.raises(BenchmarkQueueCancelled):
+        async with benchmark_queue(
+            MODEL_KEY, "run-1", logger, is_cancelled=is_cancelled
+        ):
+            executed = True
+
+    assert not executed
+    assert await redis.llen(_queue_key()) == 0
+
+
+async def test_stale_cancelled_notification_is_cleared_when_not_cancelled(redis):
+    """A stale cancellation sentinel from a prior attempt does not block a resumed run."""
+    executed = False
+
+    async def is_cancelled():
+        return False
+
+    await redis.rpush(_notify_key("run-1"), BENCHMARK_NOTIFY_CANCELLED)
+
+    async with benchmark_queue(MODEL_KEY, "run-1", logger, is_cancelled=is_cancelled):
+        executed = True
+
+    assert executed
+    assert await redis.llen(_queue_key()) == 0
+
+
+async def test_cancel_check_exits_after_valid_proceed_before_yield(redis):
+    """Cancellation after proceed but before yield does not let the body run."""
+    cancel_now = False
+    delete_count = 0
+    executed = False
+    original_delete = redis.delete
+
+    async def is_cancelled():
+        return cancel_now
+
+    async def delete_and_cancel(*keys):
+        nonlocal cancel_now, delete_count
+        if _notify_key("run-1") in keys:
+            delete_count += 1
+            if delete_count == 2:
+                cancel_now = True
+        return await original_delete(*keys)
+
+    redis.delete = delete_and_cancel
+
+    with pytest.raises(BenchmarkQueueCancelled):
+        async with benchmark_queue(
+            MODEL_KEY, "run-1", logger, is_cancelled=is_cancelled
+        ):
+            executed = True
+
+    assert not executed
+    assert await redis.llen(_queue_key()) == 0
+
+
+@patch.object(bq_module, "BLPOP_POLL_INTERVAL", 0.01)
+async def test_cancel_check_exits_waiter_without_notification(redis):
+    """A queued run exits on cancellation even if cleanup never pushes a sentinel."""
+    holder_entered = asyncio.Event()
+    cancel_now = False
+    executed = False
+
+    async def is_cancelled():
+        return cancel_now
+
+    async def holder():
+        async with benchmark_queue(MODEL_KEY, "run-1", logger):
+            holder_entered.set()
+            await asyncio.sleep(0.1)
+
+    async def waiter():
+        nonlocal executed
+        with pytest.raises(BenchmarkQueueCancelled):
+            async with benchmark_queue(
+                MODEL_KEY, "run-2", logger, is_cancelled=is_cancelled
+            ):
+                executed = True
+
+    holder_task = asyncio.create_task(holder())
+    await holder_entered.wait()
+
+    waiter_task = asyncio.create_task(waiter())
+    while await redis.lpos(_queue_key(), "run-2") is None:
+        await asyncio.sleep(0.01)
+
+    cancel_now = True
+
+    await asyncio.wait_for(waiter_task, timeout=2.0)
+    await holder_task
+
+    assert not executed
+    assert await redis.lpos(_queue_key(), "run-2") is None
+
+
+async def test_cancelled_notification_exits_waiter(redis):
+    """A queued run can be woken with a cancellation sentinel without running the body."""
+    holder_entered = asyncio.Event()
+    executed = False
+
+    async def holder():
+        async with benchmark_queue(MODEL_KEY, "run-1", logger):
+            holder_entered.set()
+            await asyncio.sleep(0.1)
+
+    async def waiter():
+        nonlocal executed
+        with pytest.raises(BenchmarkQueueCancelled):
+            async with benchmark_queue(MODEL_KEY, "run-2", logger):
+                executed = True
+
+    holder_task = asyncio.create_task(holder())
+    await holder_entered.wait()
+
+    waiter_task = asyncio.create_task(waiter())
+    while await redis.lpos(_queue_key(), "run-2") is None:
+        await asyncio.sleep(0.01)
+
+    await redis.rpush(_notify_key("run-2"), BENCHMARK_NOTIFY_CANCELLED)
+
+    await asyncio.wait_for(waiter_task, timeout=2.0)
+    await holder_task
+
+    assert not executed
+    assert await redis.lpos(_queue_key(), "run-2") is None
+
+
+async def test_stale_proceed_notification_for_non_head_is_ignored(redis):
+    """A stale proceed token must not let a non-head run acquire the queue slot."""
+    holder_entered = asyncio.Event()
+    executed = False
+
+    async def holder():
+        async with benchmark_queue(MODEL_KEY, "run-1", logger):
+            holder_entered.set()
+            await asyncio.sleep(0.1)
+
+    async def waiter():
+        nonlocal executed
+        with pytest.raises(BenchmarkQueueCancelled):
+            async with benchmark_queue(MODEL_KEY, "run-2", logger):
+                executed = True
+
+    holder_task = asyncio.create_task(holder())
+    await holder_entered.wait()
+
+    waiter_task = asyncio.create_task(waiter())
+    while await redis.lpos(_queue_key(), "run-2") is None:
+        await asyncio.sleep(0.01)
+
+    await redis.rpush(_notify_key("run-2"), BENCHMARK_NOTIFY_PROCEED)
+    await asyncio.sleep(0.05)
+    assert not executed
+
+    await redis.rpush(_notify_key("run-2"), BENCHMARK_NOTIFY_CANCELLED)
+    await asyncio.wait_for(waiter_task, timeout=2.0)
+    await holder_task
+
+    assert not executed
+
+
+async def test_cancelled_notification_survives_stale_proceed_race(redis):
+    """A cancel wake pushed after a stale proceed pop must not be deleted before it is read."""
+    holder_entered = asyncio.Event()
+    executed = False
+    simulate_cleanup_race = False
+    original_lindex = redis.lindex
+
+    async def racing_lindex(name, index):
+        nonlocal simulate_cleanup_race
+        if simulate_cleanup_race and name == _queue_key() and index == 0:
+            simulate_cleanup_race = False
+            await redis.lrem(_queue_key(), 1, "run-2")
+            await redis.rpush(_notify_key("run-2"), BENCHMARK_NOTIFY_CANCELLED)
+        return await original_lindex(name, index)
+
+    redis.lindex = racing_lindex
+
+    async def holder():
+        async with benchmark_queue(MODEL_KEY, "run-1", logger):
+            holder_entered.set()
+            await asyncio.sleep(0.1)
+
+    async def waiter():
+        nonlocal executed
+        with pytest.raises(BenchmarkQueueCancelled):
+            async with benchmark_queue(MODEL_KEY, "run-2", logger):
+                executed = True
+
+    holder_task = asyncio.create_task(holder())
+    await holder_entered.wait()
+
+    waiter_task = asyncio.create_task(waiter())
+    while await redis.lpos(_queue_key(), "run-2") is None:
+        await asyncio.sleep(0.01)
+
+    simulate_cleanup_race = True
+    await redis.rpush(_notify_key("run-2"), BENCHMARK_NOTIFY_PROCEED)
+
+    await asyncio.wait_for(waiter_task, timeout=2.0)
+    await holder_task
+
+    assert not executed
+
+
+async def test_cancelled_cleanup_does_not_immediately_notify_next(redis):
+    """A cancelled head run leaves the next waiter blocked until heartbeat self-promotion."""
+    cancel_now = False
+
+    async def is_cancelled():
+        return cancel_now
+
+    async with benchmark_queue(MODEL_KEY, "run-1", logger, is_cancelled=is_cancelled):
+        await redis.rpush(_queue_key(), "run-2")
+        cancel_now = True
+
+    assert await redis.llen(_notify_key("run-2")) == 0
 
 
 async def test_cancel_during_execution_notifies_next(redis):
@@ -553,7 +790,9 @@ async def test_no_early_release_when_disabled(redis):
     order = []
 
     async def run1():
-        async with benchmark_queue(MODEL_KEY, "run-1", logger, total_requests=total, early_release=False):
+        async with benchmark_queue(
+            MODEL_KEY, "run-1", logger, total_requests=total, early_release=False
+        ):
             order.append("run-1-start")
             for i in range(total):
                 await redis.sadd(_run_dispatched_key("run-1"), f"req-{i}")
@@ -589,6 +828,49 @@ async def test_early_release_notifies_next_run(redis):
             run2_started.set()
 
     await asyncio.gather(run1(), run2())
+
+
+@patch.object(bq_module, "EARLY_RELEASE_GRACE_PERIOD", 0)
+@patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)
+async def test_cancelled_run_does_not_early_release_to_next_waiter(redis):
+    """Early release does not notify the next waiter once the active run is cancelled."""
+    total = 2
+    cancel_now = False
+    run2_started = False
+
+    async def is_cancelled():
+        return cancel_now
+
+    async def run1():
+        async with benchmark_queue(
+            MODEL_KEY, "run-1", logger, total_requests=total, is_cancelled=is_cancelled
+        ):
+            for i in range(total):
+                await redis.sadd(_run_dispatched_key("run-1"), f"req-{i}")
+            await asyncio.sleep(0.2)
+
+    async def run2():
+        nonlocal run2_started
+        async with benchmark_queue(MODEL_KEY, "run-2", logger):
+            run2_started = True
+
+    task1 = asyncio.create_task(run1())
+    task2 = asyncio.create_task(run2())
+
+    while await redis.lpos(_queue_key(), "run-2") is None:
+        await asyncio.sleep(0.01)
+    cancel_now = True
+    await asyncio.sleep(0.15)
+
+    assert not run2_started
+    assert await redis.llen(_notify_key("run-2")) == 0
+
+    task1.cancel()
+    task2.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task1
+    with pytest.raises(asyncio.CancelledError):
+        await task2
 
 
 @patch.object(bq_module, "EARLY_RELEASE_GRACE_PERIOD", 0)
@@ -634,9 +916,7 @@ async def test_redis_keys_use_colon_separated_format(redis):
     async with benchmark_queue(MODEL_KEY, "run-1", logger):
         keys = await redis.keys("*benchmark*")
         for key in keys:
-            assert "(" not in key and ")" not in key, (
-                f"key uses tuple repr: {key}"
-            )
+            assert "(" not in key and ")" not in key, f"key uses tuple repr: {key}"
 
 
 # ── Cleanup safety ───────────────────────────────────────────────────
@@ -680,5 +960,3 @@ async def test_self_promote_when_head_crashes_between_lrem_and_notify(redis):
     task1.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task1
-
-

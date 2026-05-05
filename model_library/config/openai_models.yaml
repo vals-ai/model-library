@@ -29,6 +29,52 @@ gpt-5-models:
       max_tokens: 128_000
       reasoning_model: true
 
+  openai/gpt-5.5-pro:
+    label: GPT 5.5 Pro
+    release_date: 2026-04-23
+    properties:
+      context_window: 400_000
+    costs_per_million_token: # TODO: get real pricing
+      input: 30
+      output: 180
+      cache:
+        read_discount: 1
+      context:
+        threshold: 272_000
+        input: 60
+        output: 270
+    provider_properties:
+      verbosity: "medium"
+      prompt_cache_retention: "24h"
+    default_parameters:
+      reasoning_effort: "xhigh"
+
+  openai/gpt-5.5:
+    label: GPT 5.5
+    release_date: 2026-04-23
+    properties:
+      context_window: 1_050_000
+    costs_per_million_token: # TODO: get real pricing
+      input: 5
+      output: 30
+      cache:
+        read: 0.5
+      context:
+        threshold: 272_000
+        input: 10
+        output: 45
+        cache:
+          read: 1
+    provider_properties:
+      verbosity: "medium"
+      prompt_cache_retention: "24h"
+    default_parameters:
+      reasoning_effort: "xhigh"
+    alternative_keys:
+      - openai/gpt-5.5-high:
+          default_parameters:
+            reasoning_effort: "high"
+
   openai/gpt-5.4-nano-2026-03-17:
     label: GPT 5.4 Nano
     release_date: 2026-03-17

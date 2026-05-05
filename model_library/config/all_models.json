@@ -101,6 +101,200 @@
         "full_key": "mistralai/mistral-medium-3.5",
         "slug": "mistralai_mistral-medium-3.5"
     },
+    "openai/gpt-5.5-pro": {
+        "company": "OpenAI",
+        "label": "GPT 5.5 Pro",
+        "release_date": "2026-04-23",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 400000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "prompt_cache_retention": "24h"
+        },
+        "costs_per_million_token": {
+            "input": 30.0,
+            "output": 180.0,
+            "cache": {
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 60.0,
+                "output": 270.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-5.5-pro",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.5-pro",
+        "slug": "openai_gpt-5.5-pro"
+    },
+    "openai/gpt-5.5-high": {
+        "company": "OpenAI",
+        "label": "GPT 5.5",
+        "release_date": "2026-04-23",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "prompt_cache_retention": "24h"
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 30.0,
+            "cache": {
+                "read": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 10.0,
+                "output": 45.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-5.5",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.5-high",
+        "slug": "openai_gpt-5.5-high"
+    },
+    "openai/gpt-5.5": {
+        "company": "OpenAI",
+        "label": "GPT 5.5",
+        "release_date": "2026-04-23",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "prompt_cache_retention": "24h"
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 30.0,
+            "cache": {
+                "read": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 10.0,
+                "output": 45.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-5.5-high": {
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-5.5",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.5",
+        "slug": "openai_gpt-5.5"
+    },
     "deepseek/deepseek-v4-pro-nonthinking": {
         "company": "DeepSeek",
         "label": "DeepSeek V4",
