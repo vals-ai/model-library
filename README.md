@@ -215,10 +215,23 @@ You can run `make examples` (default models) or `make example <model>` to run al
 
 `python -m examples.advanced.deep_research`
 
+### Chat web app
+
+Run a local browser chat app backed by the model registry:
+
+```bash
+make chat
+```
+
+Then open `http://127.0.0.1:8000`, pick a model, and send messages. The app
+uses the same provider API keys as the Python library (for example
+`OPENAI_API_KEY`).
+
 
 ## Docs
 
 - [Model Configuration](docs/config.md) — YAML config structure, inheritance, deprecation, settings
+- [Chat Web App](docs/chat.md) — local model picker and browser chat UI
 - [Agent](docs/agent.md) — tool-augmented conversation loop
 - [Token Retry & Benchmark Queue](docs/token-retry.md) — rate-limit-aware scheduling via Redis
 
@@ -257,6 +270,7 @@ make style-check      Check style"
 make typecheck        Typecheck"
 make config           Generate all_models.json"
 make run-models       Run all models"
+make chat             Run the browser chat UI"
 make examples         Run all examples"
 make examples <model> Run all examples with specified model"
 make browse-models    Browse all models"

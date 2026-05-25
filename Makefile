@@ -1,4 +1,4 @@
-.PHONY: help install test test-integration test-all style style-check typecheck config deprecate run-models browse_models
+.PHONY: help install test test-integration test-all style style-check typecheck config deprecate run-models browse_models chat
 
 help:
 	@echo "Makefile for model-library"
@@ -14,6 +14,7 @@ help:
 	@echo "  make deprecate        Deprecate a model"
 	@echo "  make run-models       Run all models"
 	@echo "  make browse_models    Interactively browse models and their configurations"
+	@echo "  make chat             Run the browser chat UI"
 
 PYTHON_VERSION ?= 3.11
 
@@ -61,3 +62,5 @@ run-models: venv_check
 browse_models: venv_check
 	@uv run python -m scripts.browse_models
 
+chat: venv_check
+	@uv run python -m model_library.web

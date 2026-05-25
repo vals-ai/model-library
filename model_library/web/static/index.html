@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Model Library Chat</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="sidebar">
+        <div>
+          <p class="eyebrow">Vals AI</p>
+          <h1>Model Library Chat</h1>
+          <p class="description">
+            Pick any registry model and keep a browser conversation using the
+            same model-library query interface.
+          </p>
+        </div>
+
+        <label class="field">
+          <span>Model</span>
+          <input
+            id="model-search"
+            type="search"
+            placeholder="Search models..."
+            autocomplete="off"
+          />
+          <select id="model-select" size="10"></select>
+        </label>
+
+        <div id="model-details" class="model-details"></div>
+
+        <button id="clear-chat" type="button" class="secondary">New chat</button>
+      </section>
+
+      <section class="chat-panel">
+        <div id="messages" class="messages" aria-live="polite"></div>
+
+        <form id="chat-form" class="composer">
+          <textarea
+            id="message-input"
+            rows="3"
+            placeholder="Ask the selected model anything..."
+            required
+          ></textarea>
+          <div class="composer-actions">
+            <span id="status" class="status">Loading models...</span>
+            <button id="send-button" type="submit">Send</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

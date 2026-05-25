@@ -29,10 +29,14 @@ dependencies = [
   "boto3>=1.38.27,<2.0",
   "google-genai[aiohttp]>=1.67.0,<2.0",
   "google-cloud-storage>=3.9.0,<4.0",
+  # chat web app
+  "starlette>=1.0.0,<2.0",
+  "uvicorn>=0.44.0,<1.0",
 ]
 
 [project.scripts]
 model-agent = "model_library.agent.cli:main"
+model-chat = "model_library.web.__main__:main"
 
 [project.optional-dependencies]
 docent = [
@@ -61,10 +65,22 @@ requires = ["setuptools>=64", "setuptools-scm>=8"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["model_library"]
+packages = [
+  "model_library",
+  "model_library.agent",
+  "model_library.agent.conductor",
+  "model_library.agent.tools",
+  "model_library.base",
+  "model_library.providers",
+  "model_library.providers.delegates",
+  "model_library.providers.google",
+  "model_library.retriers",
+  "model_library.retriers.token",
+  "model_library.web",
+]
 
 [tool.setuptools.package-data]
-"model_library" = ["py.typed", "config/*.yaml", "config/defaults/*.yaml", "config/defaults/*.json", "config/all_models.json"]
+"model_library" = ["py.typed", "config/*.yaml", "config/defaults/*.yaml", "config/defaults/*.json", "config/all_models.json", "web/static/*"]
 
 [tool.setuptools_scm]
 version_scheme = "guess-next-dev"
