@@ -1,6 +1,7 @@
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import SecretStr
+from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -35,3 +36,9 @@ class CohereModel(DelegateOnly):
             delegate_provider="openai",
             use_completions=True,
         )
+
+    @override
+    def _get_extra_body(self) -> dict[str, Any]:
+        if self.reasoning:
+            return {"thinking": {"type": "enabled"}}
+        return {}

@@ -1,12 +1,19 @@
+import logging
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from model_library.agent.config import HistoryCompaction
+from model_library.agent.history_compaction import (
+    CompactionHook,
+    llm_summary_compactor,
+)
 from model_library.agent.metadata import (
     AgentTurn,
     ErrorTurn,
     SerializableException,
     ToolCallRecord,
 )
+from model_library.base.base import LLM
 from model_library.base.input import InputItem, ToolCall
 
 
@@ -137,6 +144,27 @@ def default_determine_answer(
     return last_turn.query_result.output_text or ""
 
 
+def default_compaction_hook(
+    llm: LLM, history_compaction: HistoryCompaction | None
+) -> CompactionHook | None:
+    """Build the default LLM-summary compaction hook.
+
+    Returns ``None`` (and logs a warning) when ``history_compaction`` is set but
+    the LLM is not registry-backed — without a context window we can't size the
+    threshold, so compaction is silently disabled.
+    """
+    if history_compaction is None:
+        return None
+    hook = llm_summary_compactor(llm, history_compaction)
+    if hook is None:
+        logging.getLogger(__name__).warning(
+            "Disabling history compaction: %s/%s is not registry-backed.",
+            llm.provider,
+            llm.model_name,
+        )
+    return hook
+
+
 @dataclass
 class AgentHooks:
     """Lifecycle hooks for customizing agent behavior"""
@@ -145,3 +173,4 @@ class AgentHooks:
     should_stop: ShouldStopHook = default_should_stop
     on_tool_result: OnToolResultHook = default_on_tool_result
     determine_answer: DetermineAnswerHook = default_determine_answer
+    compaction: CompactionHook | None = None

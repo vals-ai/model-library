@@ -6,10 +6,25 @@ request bodies without making any network calls.
 """
 
 import logging
+from typing import cast
 
 import pytest
+from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
+from anthropic.types.beta.beta_usage import BetaUsage
+from anthropic.types.beta.parsed_beta_message import (
+    ParsedBetaContentBlock,
+    ParsedBetaMessage,
+)
 
-from model_library.base import TextInput, ToolBody, ToolDefinition
+from model_library.base import (
+    FileWithUrl,
+    RawResponse,
+    TextInput,
+    ToolBody,
+    ToolCall,
+    ToolDefinition,
+    ToolResult,
+)
 from model_library.providers.amazon import AmazonModel
 from model_library.providers.anthropic import AnthropicModel
 from model_library.providers.google import GoogleModel
@@ -117,7 +132,6 @@ async def test_parse_tools_shapes_for_all():
 async def test_google_tool_result_roundtrip_no_storage_import(model_class, model_name):
     # Ensure that creating a GoogleModel and building a body with a ToolResult
     # does not require the storage client (batch-only) and shapes content as expected.
-    from model_library.base import ToolCall, ToolResult
 
     m = model_class(model_name)
     tr = ToolResult(
@@ -129,10 +143,13 @@ async def test_google_tool_result_roundtrip_no_storage_import(model_class, model
     roles = [getattr(c, "role", None) for c in contents]
     assert "user" in roles
 
+    function_response = contents[0].parts[0].function_response
+    assert function_response is not None
+    assert function_response.id == "abc123"
+
 
 async def test_anthropic_rejects_invalid_tool_result():
     """Verify that providing a ToolResult without a matching tool call raises an exception."""
-    from model_library.base import ToolCall, ToolResult
 
     model = AnthropicModel("claude-3-7-sonnet-latest")
     orphaned_result = ToolResult(
@@ -144,6 +161,110 @@ async def test_anthropic_rejects_invalid_tool_result():
         Exception, match="Tool call result provided with no matching tool call"
     ):
         await model.parse_input([TextInput(text="Hello"), orphaned_result])
+
+
+def _anthropic_response_with_two_tool_uses(tool_calls: list[ToolCall]):
+    return ParsedBetaMessage(
+        id="msg_test",
+        content=[
+            cast(
+                ParsedBetaContentBlock,
+                BetaToolUseBlock(
+                    id=tool_calls[0].id,
+                    input={"command": "echo a"},
+                    name=tool_calls[0].name,
+                    type="tool_use",
+                ),
+            ),
+            cast(
+                ParsedBetaContentBlock,
+                BetaToolUseBlock(
+                    id=tool_calls[1].id,
+                    input={"command": "echo b"},
+                    name=tool_calls[1].name,
+                    type="tool_use",
+                ),
+            ),
+        ],
+        model="claude-3-7-sonnet-latest",
+        role="assistant",
+        stop_reason="tool_use",
+        stop_sequence=None,
+        type="message",
+        usage=BetaUsage(input_tokens=1, output_tokens=1),
+    )
+
+
+async def test_anthropic_groups_parallel_tool_results_in_one_user_message():
+    model = AnthropicModel("claude-3-7-sonnet-latest")
+    tool_calls = [
+        ToolCall(id="toolu_a", name="bash", args={"command": "echo a"}),
+        ToolCall(id="toolu_b", name="bash", args={"command": "echo b"}),
+    ]
+
+    parsed = await model.parse_input(
+        [
+            RawResponse(response=_anthropic_response_with_two_tool_uses(tool_calls)),
+            ToolResult(tool_call=tool_calls[0], result="A"),
+            ToolResult(tool_call=tool_calls[1], result="B"),
+        ]
+    )
+
+    assert [message["role"] for message in parsed] == ["assistant", "user"]
+    tool_result_blocks = parsed[1]["content"]
+    assert [block["type"] for block in tool_result_blocks] == [
+        "tool_result",
+        "tool_result",
+    ]
+    assert [block["tool_use_id"] for block in tool_result_blocks] == [
+        "toolu_a",
+        "toolu_b",
+    ]
+
+
+@pytest.mark.parametrize(
+    "interleaved_item,expected_type",
+    [
+        (TextInput(text="note"), "text"),
+        (
+            FileWithUrl(
+                type="file",
+                name="note.txt",
+                mime="text/plain",
+                url="https://example.com/note.txt",
+            ),
+            "document",
+        ),
+    ],
+)
+async def test_anthropic_keeps_interleaved_tool_results_in_separate_user_messages(
+    interleaved_item,
+    expected_type,
+):
+    model = AnthropicModel("claude-3-7-sonnet-latest")
+    tool_calls = [
+        ToolCall(id="toolu_a", name="bash", args={"command": "echo a"}),
+        ToolCall(id="toolu_b", name="bash", args={"command": "echo b"}),
+    ]
+
+    parsed = await model.parse_input(
+        [
+            RawResponse(response=_anthropic_response_with_two_tool_uses(tool_calls)),
+            ToolResult(tool_call=tool_calls[0], result="A"),
+            interleaved_item,
+            ToolResult(tool_call=tool_calls[1], result="B"),
+        ]
+    )
+
+    assert [message["role"] for message in parsed] == [
+        "assistant",
+        "user",
+        "user",
+        "user",
+    ]
+    assert [block["type"] for block in parsed[1]["content"]] == ["tool_result"]
+    assert [block["type"] for block in parsed[2]["content"]] == [expected_type]
+    assert [block["type"] for block in parsed[3]["content"]] == ["tool_result"]
 
 
 class TestStreamingToolCallAccumulation:
@@ -236,5 +357,23 @@ class TestStreamingToolCallAccumulation:
         result = await self._run_query(model, chunks)
 
         assert len(result.tool_calls) == 1  # should be 1, not 2
+        assert result.tool_calls[0].name == "get_weather"
+        assert result.tool_calls[0].args == '{"location": "SF"}'
+
+    async def test_poolside_same_index_different_ids_accumulates(self):
+        """Poolside may stream one tool call under different IDs but the same index."""
+        model = OpenAIModel(
+            "poolside/laguna-xs.2", provider="poolside", use_completions=True
+        )
+        chunks = [
+            self._make_chunk("call_name", "get_weather", ""),
+            self._make_chunk("call_args", None, '{"location":'),
+            self._make_chunk("call_args", None, ' "SF"}'),
+        ]
+
+        result = await self._run_query(model, chunks)
+
+        assert len(result.tool_calls) == 1
+        assert result.tool_calls[0].id == "call_name"
         assert result.tool_calls[0].name == "get_weather"
         assert result.tool_calls[0].args == '{"location": "SF"}'

@@ -20,7 +20,6 @@ base-config:
   default_parameters:
     temperature: 1
 claude-opus-4-7-models:
-
   anthropic/claude-opus-4-7:
     label: Claude Opus 4.7
     release_date: 2026-04-16
@@ -45,18 +44,16 @@ claude-opus-4-7-models:
           default_parameters:
             compute_effort: "high"
 
-
 claude-opus-models:
   base-config:
     supports:
       batch: true
 
-
   anthropic/claude-opus-4-6:
     label: Claude Opus 4.6 (Nonthinking)
     release_date: 2026-02-05
     properties:
-      context_window: 200_000
+      context_window: 1_000_000
       max_tokens: 128_000
     default_parameters:
       compute_effort: "max"
@@ -119,40 +116,16 @@ claude-opus-models:
           properties:
             reasoning_model: true
 
-  anthropic/claude-opus-4-20250514:
-    label: Claude Opus 4 (Nonthinking)
-    release_date: 2025-05-22
-    supports:
-      output_schema: false
-    properties:
-      context_window: 200_000
-      max_tokens: 32_000
-      training_cutoff: "2025-03"
-    metadata:
-      available_for_everyone: false
-    costs_per_million_token:
-      input: 15.0
-      output: 75.0
-      cache:
-        read: 1.5
-        write: 18.75
-    alternative_keys:
-      - anthropic/claude-opus-4-20250514-thinking:
-          properties:
-            reasoning_model: true
-
-
 claude-sonnet-models:
   base-config:
     supports:
       batch: true
 
-
   anthropic/claude-sonnet-4-6:
     label: Claude Sonnet 4.6
     release_date: 2026-02-17
     properties:
-      context_window: 200_000
+      context_window: 1_000_000
       max_tokens: 128_000
       reasoning_model: true
     costs_per_million_token:
@@ -196,41 +169,10 @@ claude-sonnet-models:
           properties:
             reasoning_model: true
 
-  anthropic/claude-sonnet-4-20250514:
-    label: Claude Sonnet 4 (Nonthinking)
-    release_date: 2025-05-22
-    supports:
-      output_schema: false
-    properties:
-      context_window: 200_000
-      max_tokens: 64_000
-      training_cutoff: "2025-03"
-    costs_per_million_token:
-      input: 3.0
-      output: 15.0
-      cache:
-        read: 0.3
-        write: 3.75
-      context:
-        threshold: 200_000
-        input: 6.00
-        output: 22.5
-        cache:
-          read: 0.6
-          write: 7.50
-    alternative_keys:
-      - anthropic/claude-sonnet-4-20250514-thinking:
-          properties:
-            reasoning_model: true
-          supports:
-            temperature: false
-
-
 claude-haiku-models:
   base-config:
     supports:
       batch: true
-
 
   anthropic/claude-haiku-4-5-20251001:
     label: Claude Haiku 4.5 (Nonthinking)

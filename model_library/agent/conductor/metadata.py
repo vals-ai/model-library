@@ -2,11 +2,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, computed_field, field_validator
+from pydantic import Field, computed_field
 
 from model_library.agent.agent import AgentResult
 from model_library.base.output import QueryResultMetadata
-from model_library.utils import PrettyModel
+from model_library.utils import SecondsMetric, ValsModel
 
 
 class ConductorStopReason(StrEnum):
@@ -16,21 +16,16 @@ class ConductorStopReason(StrEnum):
     ERROR = "error"
 
 
-class ConversationMessage(PrettyModel):
+class ConversationMessage(ValsModel):
     role: Literal["auditor", "target"]
     result: AgentResult
 
 
-class ConductorResult(PrettyModel):
+class ConductorResult(ValsModel):
     messages: list[ConversationMessage]
     stop_reason: ConductorStopReason
-    total_duration_seconds: float
+    total_duration_seconds: SecondsMetric
     output_dir: Path = Field(exclude=True)
-
-    @field_validator("total_duration_seconds", mode="before")
-    @classmethod
-    def _round_duration(cls, v: float) -> float:
-        return round(v, 3)
 
     @computed_field
     @property

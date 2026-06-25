@@ -2,6 +2,7 @@ import json
 from datetime import date
 from typing import Any, cast
 
+from model_library import model_library_settings
 from model_library.register_models import get_model_registry
 
 PATH = "./model_library/config/all_models.json"
@@ -23,6 +24,9 @@ def remove_none(d: Any | dict[str, Any]) -> Any | dict[str, Any]:
         return d
 
 
+# all_models.json is the package's bundled local registry snapshot. Generate it
+# from local YAMLs even when the developer shell has gateway client env vars set.
+model_library_settings.unset("MODEL_GATEWAY_URL")
 model_registry = get_model_registry()
 model_registry = dict(
     sorted(

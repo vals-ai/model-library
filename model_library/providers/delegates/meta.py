@@ -10,13 +10,20 @@ from model_library.base import (
     DelegateOnly,
     FileWithId,
     LLMConfig,
+    ProviderConfig,
 )
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
 
 
+class MetaConfig(ProviderConfig):
+    use_responses: bool = False
+
+
 @register_provider("meta")
 class MetaModel(DelegateOnly):
+    provider_config = MetaConfig()
+
     def __init__(
         self,
         model_name: str,
@@ -29,15 +36,18 @@ class MetaModel(DelegateOnly):
         base_url = "https://api.llama.com/v1"
         # https://docs.llama.com
         config = config or LLMConfig()
-        config.custom_endpoint = config.custom_endpoint or base_url
-        config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.META_API_KEY
+        delegate_config = config.model_copy(
+            update={
+                "custom_endpoint": config.custom_endpoint or base_url,
+                "custom_api_key": config.custom_api_key
+                or SecretStr(model_library_settings.META_API_KEY),
+            }
         )
 
         self.init_delegate(
-            config=config,
+            config=delegate_config,
             delegate_provider="openai",
-            use_completions=True,
+            use_completions=not self.provider_config.use_responses,
         )
 
     @override

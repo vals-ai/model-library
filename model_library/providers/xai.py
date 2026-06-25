@@ -27,6 +27,7 @@ from model_library.base import (
     LLMConfig,
     QueryResult,
     QueryResultCost,
+    QueryResultExtras,
     QueryResultMetadata,
     RawInput,
     RawResponse,
@@ -382,6 +383,7 @@ class XAIModel(LLM):
                 reasoning_tokens=latest_response.usage.reasoning_tokens,
                 cache_read_tokens=latest_response.usage.cached_prompt_text_tokens,
             ),
+            extras=QueryResultExtras(response_id=latest_response.id),
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=latest_response)],
         )

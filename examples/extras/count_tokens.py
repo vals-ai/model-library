@@ -1,0 +1,95 @@
+# ruff: noqa: E402
+# Allow path execution (`uv run python examples/...`) from a source checkout.
+from pathlib import Path as _Path
+import sys as _sys
+
+if __package__ in {None, ""}:
+    _sys.path.insert(0, str(_Path(__file__).resolve().parents[2]))
+
+import asyncio
+import logging
+
+from model_library import set_logging
+from model_library.base import (
+    LLM,
+    QueryResult,
+    SystemInput,
+    TextInput,
+    ToolBody,
+    ToolDefinition,
+)
+from model_library.registry_utils import get_registry_model
+
+from examples.setup import console_log, setup
+from examples.utils import GetWeather
+
+
+async def count_tokens(model: LLM):
+    console_log("\n--- Count Tokens ---\n")
+
+    tools = [
+        GetWeather().definition,
+        ToolDefinition(
+            name="get_danger",
+            body=ToolBody(
+                name="get_danger",
+                description="Get current danger in a given location",
+                properties={
+                    "location": {
+                        "type": "string",
+                        "description": "City and country e.g. Bogotá, Colombia",
+                    },
+                },
+                required=["location"],
+            ),
+        ),
+    ]
+
+    input = [
+        SystemInput(
+            text="You must make exactly 0 or 1 tool calls per answer. You must not make more than 1 tool call per answer."
+        ),
+        TextInput(text="What is the weather in San Francisco right now?"),
+    ]
+
+    predicted_tokens = await model.count_tokens(
+        input,
+        tools=tools,
+    )
+
+    response: QueryResult = await model.query(
+        input,
+        tools=tools,
+    )
+    metadata = response.metadata
+
+    actual_tokens = metadata.total_input_tokens
+
+    console_log(f"Predicted Token Count: {predicted_tokens}")
+    console_log(f"Actual Token Count: {actual_tokens}")
+
+
+async def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Example of counting tokens")
+    parser.add_argument(
+        "model",
+        nargs="?",
+        default="google/gemini-2.5-flash",
+        type=str,
+        help="Model endpoint (default: google/gemini-2.5-flash)",
+    )
+    args = parser.parse_args()
+
+    model = get_registry_model(args.model)
+    model.instance_logger.info(model)
+
+    set_logging(enable=True, level=logging.INFO)
+
+    await count_tokens(model)
+
+
+if __name__ == "__main__":
+    setup()
+    asyncio.run(main())

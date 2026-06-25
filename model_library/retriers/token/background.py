@@ -2,7 +2,7 @@ import asyncio
 import logging
 import time
 import uuid
-from math import floor
+from math import exp, floor
 from typing import Any, Callable, Coroutine
 
 from model_library.base.base import RateLimit
@@ -23,6 +23,23 @@ FULL_TOKENS_SHUTDOWN: int = (
 REFILL_TASK_TTL: int = 30  # seconds — task keys expire if loop dies
 
 LOOP_POLL_INTERVAL: float = 10.0  # seconds — poll interval
+REQUIRED_ACTIVE_WORKERS = ("refill", "reaper")
+
+COMPARE_DELETE_LUA = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('DEL', KEYS[1])
+end
+return 0
+"""
+
+REFRESH_ACTIVE_LUA = """
+local owner = redis.call('GET', KEYS[1])
+if not owner or owner == ARGV[1] then
+  redis.call('SET', KEYS[1], ARGV[1], 'EX', ARGV[2])
+  return 1
+end
+return 0
+"""
 
 
 class _Demoted(Exception):
@@ -38,6 +55,20 @@ class LoopConfig:
         self.tokens_per_second = tokens_per_second
 
 
+async def _delete_active_key_if_owned(active_key: str, loop_id: str) -> bool:
+    deleted = await utils.redis_client.eval(COMPARE_DELETE_LUA, 1, active_key, loop_id)
+    return int(deleted) == 1
+
+
+async def _refresh_active_key_if_unowned_or_owned(
+    active_key: str, loop_id: str, ttl: int
+) -> bool:
+    refreshed = await utils.redis_client.eval(
+        REFRESH_ACTIVE_LUA, 1, active_key, loop_id, ttl
+    )
+    return int(refreshed) == 1
+
+
 async def background_loops(
     cfg: LoopConfig,
     get_rate_limit_func: Callable[[], Coroutine[Any, Any, RateLimit | None]],
@@ -45,6 +76,44 @@ async def background_loops(
     standby: bool = False,
 ) -> None:
     """Manages all background loops with shared watchdog"""
+
+    async def _update_remaining_ratio_ewma(current: int) -> None:
+        """Update remaining-token ratio EWMAs for queue admission control."""
+        if cfg.limit <= 0:
+            return
+
+        now = time.time()
+        ratio = current / cfg.limit
+        ewma_2m_key = f"{cfg.key}:remaining_ratio_ewma_2m"
+        ewma_15s_key = f"{cfg.key}:remaining_ratio_ewma_15s"
+        updated_key = f"{cfg.key}:remaining_ratio_ewma_updated_at"
+        async with utils.redis_client.pipeline(transaction=False) as pipe:
+            pipe.get(ewma_2m_key)
+            pipe.get(ewma_15s_key)
+            pipe.get(updated_key)
+            (
+                previous_2m_raw,
+                previous_15s_raw,
+                previous_updated_raw,
+            ) = await pipe.execute()
+
+        if not previous_updated_raw:
+            ewma_2m = ratio
+            ewma_15s = ratio
+        else:
+            elapsed = max(0.0, now - float(previous_updated_raw))
+            alpha_2m = 1 - exp(-elapsed / 120.0)
+            alpha_15s = 1 - exp(-elapsed / 15.0)
+            previous_2m = float(previous_2m_raw) if previous_2m_raw else ratio
+            previous_15s = float(previous_15s_raw) if previous_15s_raw else ratio
+            ewma_2m = previous_2m + (alpha_2m * (ratio - previous_2m))
+            ewma_15s = previous_15s + (alpha_15s * (ratio - previous_15s))
+
+        async with utils.redis_client.pipeline(transaction=False) as pipe:
+            pipe.set(ewma_2m_key, ewma_2m, ex=300)
+            pipe.set(ewma_15s_key, ewma_15s, ex=300)
+            pipe.set(updated_key, now, ex=300)
+            await pipe.execute()
 
     async def _header_correction_loop() -> None:
         """
@@ -136,6 +205,7 @@ async def background_loops(
                         REFILL_TOKENS_LUA, 1, cfg.key, refill_amount, cfg.limit
                     )
                 )
+                await _update_remaining_ratio_ewma(current)
                 logger.debug(
                     f"[Token Refill] | {cfg.key} | Amount: {refill_amount} | Current: {current}"
                 )
@@ -211,10 +281,14 @@ async def background_loops(
 
     active_key = f"{cfg.key}:task:active"
     loop_id = str(uuid.uuid4())
-    is_active = not standby
+    is_active = False
     worker_tasks: dict[str, asyncio.Task[None]] = {}
+    demotion_requested = asyncio.Event()
+    required_workers_seen = False
 
     async def _heartbeat() -> None:
+        nonlocal required_workers_seen
+
         while True:
             # always write task keys for alive workers
             for name, task in list(worker_tasks.items()):
@@ -222,19 +296,45 @@ async def background_loops(
                     await utils.redis_client.set(
                         f"{cfg.key}:task:{name}", "1", ex=REFILL_TASK_TTL
                     )
-            # only write active key when we own the active slot
-            if is_active:
-                await utils.redis_client.set(active_key, loop_id, ex=REFILL_TASK_TTL)
+
+            # Only refresh active ownership if nobody else has taken over and
+            # required active workers are alive.
+            if is_active and not demotion_requested.is_set():
+                missing_required = [
+                    name for name in REQUIRED_ACTIVE_WORKERS if name not in worker_tasks
+                ]
+                dead_required = [
+                    name
+                    for name in REQUIRED_ACTIVE_WORKERS
+                    if name in worker_tasks and worker_tasks[name].done()
+                ]
+                required_workers_ready = not missing_required
+                required_workers_seen = required_workers_seen or required_workers_ready
+                current_owner = await utils.redis_client.get(active_key)
+                if current_owner and current_owner != loop_id:
+                    demotion_requested.set()
+                elif required_workers_seen and dead_required:
+                    logger.warning(
+                        f"[Background] {cfg.key} | active loop has dead required workers: {dead_required}; demoting"
+                    )
+                    demotion_requested.set()
+                elif not required_workers_seen or required_workers_ready:
+                    await _refresh_active_key_if_unowned_or_owned(
+                        active_key, loop_id, REFILL_TASK_TTL
+                    )
+
             await asyncio.sleep(LOOP_POLL_INTERVAL)
 
     heartbeat_task = asyncio.create_task(_heartbeat())
 
-    async def _standby() -> None:
-        # standby: wait for active key to expire, then take over
+    async def _standby(takeover_loop_id: str) -> None:
+        # standby: wait until active ownership can be claimed atomically, then take over
         while True:
             await asyncio.sleep(LOOP_POLL_INTERVAL)
-            active = await utils.redis_client.get(active_key)
-            if not active:
+            claimed = await _refresh_active_key_if_unowned_or_owned(
+                active_key, takeover_loop_id, REFILL_TASK_TTL
+            )
+            if claimed:
                 logger.info(f"[Background] {cfg.key} | standby taking over")
                 config = await utils.redis_client.hgetall(f"{cfg.key}:config")
                 cfg.limit = int(config["limit"])
@@ -243,19 +343,40 @@ async def background_loops(
 
     try:
         while True:
-            if standby:
-                await _standby()
-
             loop_id = str(uuid.uuid4())
-            is_active = True
+            if standby:
+                await _standby(loop_id)
+            else:
+                claimed = await _refresh_active_key_if_unowned_or_owned(
+                    active_key, loop_id, REFILL_TASK_TTL
+                )
+                if not claimed:
+                    standby = True
+                    continue
 
-            # watchdog raises _Demoted if another loop takes the active key
+            is_active = True
+            demotion_requested = asyncio.Event()
+            required_workers_seen = False
+
+            # watchdog raises _Demoted if another loop takes the active key or a
+            # required worker task dies. The outer loop then releases active ownership
+            # and restarts from standby instead of trying to restart one child task.
             async def _watchdog() -> None:
                 while True:
                     await asyncio.sleep(LOOP_POLL_INTERVAL)
+                    if demotion_requested.is_set():
+                        raise _Demoted()
                     val = await utils.redis_client.get(active_key)
                     if val and val != loop_id:
                         raise _Demoted()
+
+                    for name in REQUIRED_ACTIVE_WORKERS:
+                        task = worker_tasks.get(name)
+                        if task is not None and task.done():
+                            logger.warning(
+                                f"[Background] {cfg.key} | active loop required worker died: {name}; demoting"
+                            )
+                            raise _Demoted()
 
             try:
                 async with asyncio.TaskGroup() as tg:
@@ -266,13 +387,14 @@ async def background_loops(
                     )
                     worker_tasks["reaper"] = tg.create_task(_cleanup_loop())
             except* _Demoted:
-                pass
+                is_active = False
             except* Exception:
                 logger.warning(
                     f"[Background] {cfg.key} | loop group error", exc_info=True
                 )
 
             is_active = False
+            await _delete_active_key_if_owned(active_key, loop_id)
             worker_tasks.clear()
             standby = True
     finally:

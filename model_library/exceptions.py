@@ -36,6 +36,21 @@ class BackoffRetryException(RetryException): ...
 class NoRetryException(Exception): ...
 
 
+class ImmediateRetryExhaustedError(NoRetryException):
+    """
+    Raised after immediate retries are exhausted. Non-retriable so the outer
+    backoff retrier does not re-attempt the same query.
+    """
+
+    def __init__(self, retries: int, max_retries: int, original: Exception):
+        self.retries = retries
+        self.max_retries = max_retries
+        self.original = original
+        super().__init__(
+            f"[Immediate Retry Max] | {retries}/{max_retries} | Exception {exception_message(original)}"
+        )
+
+
 class RateLimitException(BackoffRetryException):
     """Raised when the rate limit is exceeded"""
 
@@ -106,7 +121,8 @@ CONTEXT_WINDOW_PATTERN = re.compile(
     r"(messages?|total length).*too long|"
     r"payload.*too large|"
     r"string too long|"
-    r"input exceeded the context window"
+    r"input exceeded the context window|"
+    r"input length \d+ exceeds the maximum allowed input length"  # poolside
 )
 
 
@@ -152,13 +168,22 @@ def handle_empty_response(
 class InvalidStructuredOutputError(ImmediateRetryException):
     """
     Raised when the model produces an invalid structured output.
-    We assume this is a transient model error and retry
+    We assume this is a transient model error and retry.
+
+    Do not include raw model output or parser details in the exception message:
+    gateway logs and Sentry capture exception strings and chained causes.
     """
 
     DEFAULT_MESSAGE: str = "Model produced invalid structured output"
 
-    def __init__(self, message: str | None = None):
-        super().__init__(message or InvalidStructuredOutputError.DEFAULT_MESSAGE)
+    def __init__(
+        self,
+        message: str | None = None,
+        *,
+        parser_error_type: str | None = None,
+    ):
+        self.parser_error_type = parser_error_type
+        super().__init__(InvalidStructuredOutputError.DEFAULT_MESSAGE)
 
 
 class ToolCallingNotSupportedError(Exception):
@@ -193,6 +218,37 @@ class UnexpectedSystemInputError(Exception):
     """
 
     ...
+
+
+class GatewayMethodNotSupported(Exception):
+    """
+    Raised when a provider-specific method is called on GatewayLLM.
+    """
+
+    DEFAULT_MESSAGE: str = "This method is not available on GatewayLLM — queries are routed through the gateway server."
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or GatewayMethodNotSupported.DEFAULT_MESSAGE)
+
+
+class GatewayProviderError(NoRetryException):
+    """Raised when the gateway returns a provider-error envelope."""
+
+    def __init__(
+        self,
+        *,
+        error_type: str,
+        code: str,
+        message: str,
+        provider: str | None,
+        raw_error: object,
+    ):
+        self.error_type = error_type
+        self.code = code
+        self.message = message
+        self.provider = provider
+        self.raw_error = raw_error
+        super().__init__(f"{error_type} ({code}): {message}")
 
 
 class NoMatchingToolCallError(Exception):
@@ -251,6 +307,8 @@ RETRIABLE_EXCEPTION_CODES = [
     "statuscode.unknown",  # gRPC UNKNOWN errors (e.g. "Stream removed")
     "stream removed",  # gRPC stream dropped by peer
     "rst_stream",  # gRPC RST_STREAM errors
+    "unknown error, 999",
+    "multimodal data is corrupted",  # transient 400 from some OpenAI-compatible endpoints on image payloads
 ]
 
 

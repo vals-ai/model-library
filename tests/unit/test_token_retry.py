@@ -5,6 +5,8 @@ Unit tests for TokenRetrier logic.
 import asyncio
 import logging
 import time
+from collections.abc import Callable, Coroutine
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import fakeredis.aioredis
@@ -14,6 +16,7 @@ from model_library.base.output import QueryResult, QueryResultMetadata
 from model_library.exceptions import ImmediateRetryException, RetryException
 from model_library.retriers.base import BaseRetrier
 from model_library.retriers.token import TokenRetrier, set_redis_client
+from model_library.retriers.token import token as token_module
 from model_library.retriers.token.utils import KEY_PREFIX, get_status
 
 CLIENT_KEY = ("provider", "model")
@@ -29,8 +32,47 @@ def mock_asyncio_sleep():
 
 @pytest.fixture(autouse=True)
 def mock_background_loops():
-    with patch("model_library.retriers.token.background.background_loops", new_callable=AsyncMock):
+    with patch(
+        "model_library.retriers.token.background.background_loops",
+        new_callable=AsyncMock,
+    ):
         yield
+
+
+@pytest.fixture(autouse=True)
+def clear_background_loop_registry():
+    token_module._BACKGROUND_LOOP_TASKS.clear()  # pyright: ignore[reportPrivateUsage]
+    yield
+    token_module._BACKGROUND_LOOP_TASKS.clear()  # pyright: ignore[reportPrivateUsage]
+
+
+class _FakeTask:
+    def __init__(self) -> None:
+        self.callbacks: list[Callable[["_FakeTask"], None]] = []
+        self._done = False
+
+    def done(self) -> bool:
+        return self._done
+
+    def add_done_callback(self, callback: Callable[["_FakeTask"], None]) -> None:
+        self.callbacks.append(callback)
+
+    def finish(self) -> None:
+        self._done = True
+        for callback in self.callbacks:
+            callback(self)
+
+
+def _fake_create_task_factory(
+    tasks: list[_FakeTask],
+) -> Callable[[Coroutine[Any, Any, object]], _FakeTask]:
+    task_iter = iter(tasks)
+
+    def _fake_create_task(coro: Coroutine[Any, Any, object]) -> _FakeTask:
+        coro.close()
+        return next(task_iter)
+
+    return _fake_create_task
 
 
 class _FakeLock:
@@ -43,10 +85,15 @@ class _FakeLock:
         pass
 
 
+def _close_created_task(coro):
+    """Consume a coroutine passed to mocked create_task."""
+    coro.close()
+
+
 @pytest.fixture
 def redis():
     client = fakeredis.aioredis.FakeRedis(decode_responses=True)
-    client.lock = lambda *args, **kwargs: _FakeLock()
+    client.lock = lambda *args, **kwargs: _FakeLock()  # pyright: ignore[reportAttributeAccessIssue]
     set_redis_client(client)
     return client
 
@@ -87,7 +134,9 @@ async def test_token_retrier_initialization(redis):
     """Test that init_remaining_tokens sets keys and starts tasks."""
     key_tuple = ("p", "m")
 
-    with patch("asyncio.create_task") as mock_create_task:
+    with patch(
+        "asyncio.create_task", side_effect=_fake_create_task_factory([_FakeTask()])
+    ) as mock_create_task:
         await TokenRetrier.init_remaining_tokens(
             client_registry_key=key_tuple,
             limit=3000,
@@ -250,9 +299,7 @@ async def test_pre_function_token_debt_and_recovery(redis, token_retrier: TokenR
     async def simulate_refill(*args, **kwargs):
         await redis.set(TOKEN_KEY, next(values))
 
-    with patch(
-        "asyncio.sleep", new_callable=AsyncMock, side_effect=simulate_refill
-    ) as mock_sleep:
+    with patch("asyncio.sleep", new_callable=AsyncMock, side_effect=simulate_refill):
         await token_retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     # 200 - 150 = 50
@@ -458,8 +505,14 @@ async def test_get_status_single(redis):
 async def test_get_status_with_waiters(redis):
     """Status reflects waiting requests at each priority level."""
     await _init_tokens(redis, value=500)
-    await redis.zadd(f"{PRIORITY_KEY_PREFIX}:1", {"r1": 1.0, "r2": 2.0, "r3": 3.0})
-    await redis.zadd(f"{PRIORITY_KEY_PREFIX}:3", {"r4": 1.0})
+    now = time.time()
+    await redis.zadd(f"{PRIORITY_KEY_PREFIX}:1", {"r1": now, "r2": now, "r3": now})
+    await redis.zadd(f"{PRIORITY_KEY_PREFIX}:3", {"r4": now})
+    for request_id in ["r1", "r2", "r3", "r4"]:
+        await redis.hset(
+            f"{TOKEN_KEY}:inflight:{request_id}",
+            mapping={"run_id": f"run-{request_id}"},
+        )
 
     status = await get_status()
 
@@ -481,7 +534,10 @@ async def test_get_status_multiple_models(redis):
 
     assert len(status.models) == 2
     keys = {m.token.token_key for m in status.models if m.token}
-    assert keys == {f"{KEY_PREFIX}:anthropic:key2:tokens", f"{KEY_PREFIX}:openai:key1:tokens"}
+    assert keys == {
+        f"{KEY_PREFIX}:anthropic:key2:tokens",
+        f"{KEY_PREFIX}:openai:key1:tokens",
+    }
 
 
 # ── Constructor & identity ───────────────────────────────────────────
@@ -525,12 +581,15 @@ async def test_dynamic_estimate_key_uses_run_id():
 
 
 async def test_straggler_detected_in_pre_function(redis):
-    """Queued retrier gets MAX_PRIORITY when another run is queue head."""
+    """Queued retrier gets MAX_PRIORITY when its run is not an active head."""
     await _init_tokens(redis, value=1000)
 
     queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
-    await redis.rpush(queue_key, "run-2")  # another run is at head
-    await redis.rpush(queue_key, "run-1")  # our run is behind
+    await redis.rpush(queue_key, "run-2")
+    await redis.rpush(queue_key, "run-1")
+    await redis.zadd(
+        f"{KEY_PREFIX}:provider:model:benchmark:active_heads", {"run-2": 1}
+    )
 
     retrier = _make_retrier(run_id="run-1", question_id="q1")
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
@@ -538,12 +597,14 @@ async def test_straggler_detected_in_pre_function(redis):
     assert retrier.priority == -5  # MAX_PRIORITY
 
 
-async def test_not_straggler_when_queue_head(redis):
-    """Queued retrier keeps normal priority when it's the queue head."""
+async def test_not_straggler_when_active_head(redis):
+    """Queued retrier keeps normal priority when its run is an active head."""
     await _init_tokens(redis, value=1000)
 
     queue_key = f"{KEY_PREFIX}:provider:model:benchmark:queue"
-    await redis.rpush(queue_key, "run-1")  # our run is at head
+    active_heads_key = f"{KEY_PREFIX}:provider:model:benchmark:active_heads"
+    await redis.rpush(queue_key, "run-2", "run-1")
+    await redis.zadd(active_heads_key, {"run-2": 1, "run-1": 2})
 
     retrier = _make_retrier(run_id="run-1", question_id="q1")
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
@@ -586,6 +647,30 @@ async def test_metadata_hash_has_ttl(redis):
     assert ttl > 0  # has a TTL
 
 
+async def test_waiting_metadata_hash_has_ttl(redis):
+    """Queued metadata hash gets a TTL even before token deduction succeeds."""
+    await _init_tokens(redis, value=0)
+    retrier = _make_retrier(question_id="q-waiting")
+    meta_key = f"{TOKEN_KEY}:inflight:test-instance:q-waiting"
+    sleeping = asyncio.Event()
+    blocker = asyncio.Event()
+
+    async def block_sleep(*_args, **_kwargs):
+        sleeping.set()
+        await blocker.wait()
+
+    with patch("asyncio.sleep", new_callable=AsyncMock, side_effect=block_sleep):
+        task = asyncio.create_task(retrier._pre_function())  # pyright: ignore[reportPrivateUsage]
+        await asyncio.wait_for(sleeping.wait(), timeout=1.0)
+
+        assert await redis.ttl(meta_key) > 0
+
+        task.cancel()
+        blocker.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+
 # ── Per-run dispatched counter ────────────────────────────────────────
 
 
@@ -604,7 +689,9 @@ async def test_dispatched_counter_incremented(redis):
     assert count == 1
 
 
-async def test_dispatched_counter_incremented_for_non_queued(redis, token_retrier: TokenRetrier):
+async def test_dispatched_counter_incremented_for_non_queued(
+    redis, token_retrier: TokenRetrier
+):
     """Per-run dispatched counter is incremented for all runs, including non-queued."""
     await _init_tokens(redis, value=1000)
 
@@ -627,7 +714,9 @@ async def test_question_id_in_dispatched_set(redis):
     retrier = _make_retrier(run_id="run-qid", question_id="question-1")
     await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
-    dispatched_key = f"{KEY_PREFIX}:{CLIENT_KEY[0]}:{CLIENT_KEY[1]}:benchmark:run:run-qid:dispatched"
+    dispatched_key = (
+        f"{KEY_PREFIX}:{CLIENT_KEY[0]}:{CLIENT_KEY[1]}:benchmark:run:run-qid:dispatched"
+    )
     assert await redis.sismember(dispatched_key, "run-qid:question-1")
 
 
@@ -786,10 +875,17 @@ async def test_init_with_changed_config_starts_active(redis):
     """When config changes between init calls, background_loops starts with standby=False."""
     key_tuple = ("p", "m")
     key = f"{KEY_PREFIX}:p:m:tokens"
+    fake_tasks = [_FakeTask(), _FakeTask()]
 
-    with patch(
-        "model_library.retriers.token.background.background_loops", new_callable=AsyncMock
-    ) as mock_bg, patch("asyncio.create_task") as mock_create_task:
+    with (
+        patch(
+            "model_library.retriers.token.background.background_loops",
+            new_callable=AsyncMock,
+        ) as mock_bg,
+        patch(
+            "asyncio.create_task", side_effect=_fake_create_task_factory(fake_tasks)
+        ) as mock_create_task,
+    ):
         # first init: establishes config in redis
         await TokenRetrier.init_remaining_tokens(
             client_registry_key=key_tuple,
@@ -823,14 +919,21 @@ async def test_init_with_changed_config_starts_active(redis):
     assert second_kwargs["standby"] is False
 
 
-async def test_init_with_same_config_starts_standby(redis):
-    """When config is unchanged between init calls, background_loops starts with standby=True."""
+async def test_init_with_same_config_reuses_existing_background_loop(redis):
+    """When config is unchanged between init calls, reuse the in-process background loop."""
     key_tuple = ("p", "m")
     key = f"{KEY_PREFIX}:p:m:tokens"
+    fake_task = _FakeTask()
 
-    with patch(
-        "model_library.retriers.token.background.background_loops", new_callable=AsyncMock
-    ) as mock_bg, patch("asyncio.create_task") as mock_create_task:
+    with (
+        patch(
+            "model_library.retriers.token.background.background_loops",
+            new_callable=AsyncMock,
+        ) as mock_bg,
+        patch(
+            "asyncio.create_task", side_effect=_fake_create_task_factory([fake_task])
+        ) as mock_create_task,
+    ):
         # first init
         await TokenRetrier.init_remaining_tokens(
             client_registry_key=key_tuple,
@@ -856,10 +959,44 @@ async def test_init_with_same_config_starts_standby(redis):
             get_rate_limit_func=AsyncMock(),
         )
 
+    assert mock_create_task.call_count == 1
+    assert mock_bg.call_count == 1
+
+
+async def test_init_starts_new_background_loop_after_existing_task_finishes(redis):
+    """A completed registered background task does not block a later init."""
+    key_tuple = ("p", "m")
+    fake_tasks = [_FakeTask(), _FakeTask()]
+
+    with (
+        patch(
+            "model_library.retriers.token.background.background_loops",
+            new_callable=AsyncMock,
+        ) as mock_bg,
+        patch(
+            "asyncio.create_task", side_effect=_fake_create_task_factory(fake_tasks)
+        ) as mock_create_task,
+    ):
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=key_tuple,
+            limit=3000,
+            limit_refresh_seconds=60,
+            logger=logging.getLogger("test"),
+            get_rate_limit_func=AsyncMock(),
+        )
+
+        fake_tasks[0].finish()
+
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=key_tuple,
+            limit=3000,
+            limit_refresh_seconds=60,
+            logger=logging.getLogger("test"),
+            get_rate_limit_func=AsyncMock(),
+        )
+
     assert mock_create_task.call_count == 2
     assert mock_bg.call_count == 2
-    _, second_kwargs = mock_bg.call_args_list[1]
-    assert second_kwargs["standby"] is True
 
 
 BURST_KEY = f"{TOKEN_KEY}:burst"
@@ -877,12 +1014,16 @@ async def test_burst_blocks_when_exceeded(redis):
     burst_limit = 200
 
     # first deduction: 150 tokens, within limit
-    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit)  # noqa: S307
+    result = await redis.eval(
+        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit
+    )  # noqa: S307
     assert result == 1
     assert int(await redis.get(TOKEN_KEY)) == 850
 
     # second deduction: 150 more would put burst at 300 > 200
-    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit)  # noqa: S307
+    result = await redis.eval(
+        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit
+    )  # noqa: S307
     assert result == 0
     assert int(await redis.get(TOKEN_KEY)) == 850  # unchanged
 
@@ -894,9 +1035,13 @@ async def test_burst_allows_within_cap(redis):
     await _init_tokens(redis, value=1000, limit=1000)
     burst_limit = 200
 
-    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit)  # noqa: S307
+    result = await redis.eval(
+        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit
+    )  # noqa: S307
     assert result == 1
-    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit)  # noqa: S307
+    result = await redis.eval(
+        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit
+    )  # noqa: S307
     assert result == 1
 
     assert int(await redis.get(TOKEN_KEY)) == 800
@@ -922,7 +1067,9 @@ async def test_burst_resets_after_ttl(redis):
     await redis.delete(BURST_KEY)
 
     # fresh window — should pass
-    result = await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit)  # noqa: S307
+    result = await redis.eval(
+        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit
+    )  # noqa: S307
     assert result == 1
     assert int(await redis.get(BURST_KEY)) == 150
 
@@ -980,7 +1127,9 @@ async def test_dispatched_removed_on_reentry(redis):
     async def capture_mid_pre(script, numkeys, *args):
         nonlocal removed_before_deduct
         if numkeys == 2 and removed_before_deduct is None:
-            removed_before_deduct = not await redis.sismember(dispatched_key, "run-cycle:q-agent")
+            removed_before_deduct = not await redis.sismember(
+                dispatched_key, "run-cycle:q-agent"
+            )
         return await original_eval(script, numkeys, *args)  # noqa: S307
 
     redis.eval = capture_mid_pre  # noqa: S307
@@ -1017,7 +1166,9 @@ async def test_dispatched_cycling_across_turns(redis):
         await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
         if turn > 0:
-            assert removed_during_turn is True, f"Turn {turn}: question not removed before deduction"
+            assert removed_during_turn is True, (
+                f"Turn {turn}: question not removed before deduction"
+            )
 
         assert await redis.sismember(dispatched_key, "run-multi:q-agentic"), (
             f"Turn {turn}: question not in dispatched after deduction"
@@ -1066,7 +1217,6 @@ async def test_execute_shield_completes_on_cancel(redis):
     await _init_tokens(redis, value=1000)
     retrier = _make_retrier()
     inflight_key = f"{TOKEN_KEY}:run:test-instance:inflight"
-    active_runs_key = f"{TOKEN_KEY}:active_runs"
 
     work_done = asyncio.Event()
 

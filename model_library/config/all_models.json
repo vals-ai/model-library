@@ -1,4 +1,718 @@
 {
+    "zai/glm-5.2-max-tokens-64k-top-p-1": {
+        "company": "zAI",
+        "label": "GLM 5.2",
+        "release_date": "2026-06-13",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "clear_thinking": false
+        },
+        "costs_per_million_token": {
+            "input": 1.4,
+            "output": 4.4,
+            "cache": {
+                "read": 0.26,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 64000,
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "glm-5.2",
+        "provider_name": "zai",
+        "full_key": "zai/glm-5.2-max-tokens-64k-top-p-1",
+        "slug": "zai_glm-5.2-max-tokens-64k-top-p-1"
+    },
+    "zai/glm-5.2-max-tokens-48k-top-p-1": {
+        "company": "zAI",
+        "label": "GLM 5.2",
+        "release_date": "2026-06-13",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "clear_thinking": false
+        },
+        "costs_per_million_token": {
+            "input": 1.4,
+            "output": 4.4,
+            "cache": {
+                "read": 0.26,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 48000,
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "glm-5.2",
+        "provider_name": "zai",
+        "full_key": "zai/glm-5.2-max-tokens-48k-top-p-1",
+        "slug": "zai_glm-5.2-max-tokens-48k-top-p-1"
+    },
+    "zai/glm-5.2-high": {
+        "company": "zAI",
+        "label": "GLM 5.2",
+        "release_date": "2026-06-13",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "clear_thinking": false
+        },
+        "costs_per_million_token": {
+            "input": 1.4,
+            "output": 4.4,
+            "cache": {
+                "read": 0.26,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "glm-5.2",
+        "provider_name": "zai",
+        "full_key": "zai/glm-5.2-high",
+        "slug": "zai_glm-5.2-high"
+    },
+    "zai/glm-5.2": {
+        "company": "zAI",
+        "label": "GLM 5.2",
+        "release_date": "2026-06-13",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "clear_thinking": false
+        },
+        "costs_per_million_token": {
+            "input": 1.4,
+            "output": 4.4,
+            "cache": {
+                "read": 0.26,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [
+            {
+                "zai/glm-5.2-high": {
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "zai/glm-5.2-max-tokens-48k-top-p-1": {
+                    "default_parameters": {
+                        "temperature": 1,
+                        "top_p": 1.0,
+                        "max_tokens": 48000,
+                        "reasoning_effort": "max"
+                    }
+                }
+            },
+            {
+                "zai/glm-5.2-max-tokens-64k-top-p-1": {
+                    "default_parameters": {
+                        "temperature": 1,
+                        "top_p": 1.0,
+                        "max_tokens": 64000,
+                        "reasoning_effort": "max"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "glm-5.2",
+        "provider_name": "zai",
+        "full_key": "zai/glm-5.2",
+        "slug": "zai_glm-5.2"
+    },
+    "kimi/kimi-k2.7-code": {
+        "company": "Moonshot AI",
+        "label": "Kimi K2.7 Code",
+        "release_date": "2026-06-12",
+        "open_source": true,
+        "documentation_url": "https://platform.kimi.ai/docs/guide/kimi-k2-7-code-quickstart",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 256000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "files": false,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.95,
+            "output": 4.0,
+            "cache": {
+                "read": 0.19,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 32768,
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "kimi-k2.7-code",
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k2.7-code",
+        "slug": "kimi_kimi-k2.7-code"
+    },
+    "cohere/north-mini-code-1-0": {
+        "company": "Cohere",
+        "label": "North Mini Code",
+        "release_date": "2026-06-09",
+        "open_source": true,
+        "documentation_url": "https://docs.cohere.com/v2/docs/models",
+        "properties": {
+            "context_window": 256000,
+            "max_tokens": 64000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "north-mini-code-1-0",
+        "provider_name": "cohere",
+        "full_key": "cohere/north-mini-code-1-0",
+        "slug": "cohere_north-mini-code-1-0"
+    },
+    "alibaba/qwen3.7-plus": {
+        "company": "Alibaba",
+        "label": "Qwen 3.7 Plus",
+        "release_date": "2026-06-01",
+        "open_source": false,
+        "documentation_url": "https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=doc#/doc/?type=model&url=2840914_2&modelId=qwen3.7-plus&serviceSite=international",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "preserve_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 0.4,
+            "output": 1.6,
+            "cache": {
+                "read": 0.04,
+                "write": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 256000.0,
+                "input": 1.2,
+                "output": 4.8,
+                "cache": {
+                    "read": 0.12,
+                    "write": 1.5,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7
+        },
+        "provider_endpoint": "qwen3.7-plus",
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3.7-plus",
+        "slug": "alibaba_qwen3.7-plus"
+    },
+    "minimax/MiniMax-M3": {
+        "company": "MiniMax",
+        "label": "MiniMax-M3",
+        "release_date": "2026-05-31",
+        "open_source": true,
+        "documentation_url": "https://platform.minimax.io/docs",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 512000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.6,
+            "output": 2.4,
+            "cache": {
+                "read": 0.12,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 512000.0,
+                "input": 1.2,
+                "output": 4.8,
+                "cache": {
+                    "read": 0.24,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "MiniMax-M3",
+        "provider_name": "minimax",
+        "full_key": "minimax/MiniMax-M3",
+        "slug": "minimax_MiniMax-M3"
+    },
+    "devin/swe-1-6-fast": {
+        "company": "Devin",
+        "label": "SWE-1.6 Fast",
+        "release_date": "2026-05-22",
+        "open_source": false,
+        "documentation_url": "https://cli.devin.ai/docs/models",
+        "properties": {
+            "context_window": 0,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": true
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "swe-1-6-fast",
+        "provider_name": "devin",
+        "full_key": "devin/swe-1-6-fast",
+        "slug": "devin_swe-1-6-fast"
+    },
+    "grok/grok-build-0.1": {
+        "company": "xAI",
+        "label": "Grok Build 0.1",
+        "release_date": "2026-05-20",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 256000,
+            "max_tokens": 256000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 2.0,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 0.2,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 2.0,
+                "output": 4.0,
+                "cache": {
+                    "read": 0.4,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "grok-build-0.1",
+        "provider_name": "grok",
+        "full_key": "grok/grok-build-0.1",
+        "slug": "grok_grok-build-0.1"
+    },
+    "cohere/command-a-plus-05-2026": {
+        "company": "Cohere",
+        "label": "Command A+",
+        "release_date": "2026-05-20",
+        "open_source": true,
+        "documentation_url": "https://docs.cohere.com/docs/command-a-plus",
+        "properties": {
+            "context_window": 128000,
+            "max_tokens": 64000,
+            "training_cutoff": "2025-04-01",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.9,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "command-a-plus-05-2026",
+        "provider_name": "cohere",
+        "full_key": "cohere/command-a-plus-05-2026",
+        "slug": "cohere_command-a-plus-05-2026"
+    },
+    "alibaba/qwen3.7-max": {
+        "company": "Alibaba",
+        "label": "Qwen 3.7 Max",
+        "release_date": "2026-05-20",
+        "open_source": false,
+        "documentation_url": "https://qwen.ai/blog?id=qwen3.7",
+        "properties": {
+            "context_window": 983616,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "preserve_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 2.5,
+            "output": 7.5,
+            "cache": {
+                "read": 0.25,
+                "write": 3.125,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7
+        },
+        "provider_endpoint": "qwen3.7-max",
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3.7-max",
+        "slug": "alibaba_qwen3.7-max"
+    },
+    "cursor/composer-2.5-fast": {
+        "company": "Cursor",
+        "label": "Composer 2.5 Fast",
+        "release_date": "2026-05-18",
+        "open_source": false,
+        "documentation_url": "https://cursor.com/docs/models/cursor-composer-2-5",
+        "properties": {
+            "context_window": 200000,
+            "max_tokens": 200000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 0.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "composer-2.5-fast",
+        "provider_name": "cursor",
+        "full_key": "cursor/composer-2.5-fast",
+        "slug": "cursor_composer-2.5-fast"
+    },
+    "cursor/composer-2.5": {
+        "company": "Cursor",
+        "label": "Composer 2.5",
+        "release_date": "2026-05-18",
+        "open_source": false,
+        "documentation_url": "https://cursor.com/docs/models/cursor-composer-2-5",
+        "properties": {
+            "context_window": 200000,
+            "max_tokens": 200000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.5,
+            "output": 2.5,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 1.0,
+                "write_markup": 0.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "composer-2.5",
+        "provider_name": "cursor",
+        "full_key": "cursor/composer-2.5",
+        "slug": "cursor_composer-2.5"
+    },
     "grok/grok-4.3": {
         "company": "xAI",
         "label": "Grok 4.3",
@@ -50,7 +764,8 @@
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 0.7,
-            "top_p": 0.95
+            "top_p": 0.95,
+            "reasoning_effort": "high"
         },
         "provider_endpoint": "grok-4.3",
         "provider_name": "grok",
@@ -100,6 +815,176 @@
         "provider_name": "mistralai",
         "full_key": "mistralai/mistral-medium-3.5",
         "slug": "mistralai_mistral-medium-3.5"
+    },
+    "poolside/laguna-xs.2:fast": {
+        "company": "Poolside",
+        "label": "Laguna XS.2 Fast",
+        "release_date": "2026-04-28",
+        "open_source": true,
+        "documentation_url": "https://docs.poolside.ai",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 32768,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.2,
+            "cache": {
+                "read": 0.05,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0
+        },
+        "provider_endpoint": "poolside/laguna-xs.2:fast",
+        "provider_name": "poolside",
+        "full_key": "poolside/laguna-xs.2:fast",
+        "slug": "poolside_laguna-xs.2:fast"
+    },
+    "poolside/laguna-xs.2": {
+        "company": "Poolside",
+        "label": "Laguna XS.2",
+        "release_date": "2026-04-28",
+        "open_source": true,
+        "documentation_url": "https://docs.poolside.ai",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 32768,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0
+        },
+        "provider_endpoint": "poolside/laguna-xs.2",
+        "provider_name": "poolside",
+        "full_key": "poolside/laguna-xs.2",
+        "slug": "poolside_laguna-xs.2"
+    },
+    "poolside/laguna-m.1:fast": {
+        "company": "Poolside",
+        "label": "Laguna M.1 Fast",
+        "release_date": "2026-04-28",
+        "open_source": true,
+        "documentation_url": "https://docs.poolside.ai",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 32768,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 0.4,
+            "cache": {
+                "read": 0.1,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0
+        },
+        "provider_endpoint": "poolside/laguna-m.1:fast",
+        "provider_name": "poolside",
+        "full_key": "poolside/laguna-m.1:fast",
+        "slug": "poolside_laguna-m.1:fast"
+    },
+    "poolside/laguna-m.1": {
+        "company": "Poolside",
+        "label": "Laguna M.1",
+        "release_date": "2026-04-28",
+        "open_source": true,
+        "documentation_url": "https://docs.poolside.ai",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 32768,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0
+        },
+        "provider_endpoint": "poolside/laguna-m.1",
+        "provider_name": "poolside",
+        "full_key": "poolside/laguna-m.1",
+        "slug": "poolside_laguna-m.1"
     },
     "openai/gpt-5.5-pro": {
         "company": "OpenAI",
@@ -520,6 +1405,102 @@
         "provider_name": "deepseek",
         "full_key": "deepseek/deepseek-v4-flash",
         "slug": "deepseek_deepseek-v4-flash"
+    },
+    "xiaomi/mimo-v2.5-pro": {
+        "company": "Xiaomi",
+        "label": "MiMo V2.5 Pro",
+        "release_date": "2026-04-22",
+        "open_source": true,
+        "documentation_url": "https://platform.xiaomimimo.com/#/docs/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "December 2024",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.435,
+            "output": 0.87,
+            "cache": {
+                "read": 0.0036,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "mimo-v2.5-pro",
+        "provider_name": "xiaomi",
+        "full_key": "xiaomi/mimo-v2.5-pro",
+        "slug": "xiaomi_mimo-v2.5-pro"
+    },
+    "xiaomi/mimo-v2.5": {
+        "company": "Xiaomi",
+        "label": "MiMo V2.5",
+        "release_date": "2026-04-22",
+        "open_source": true,
+        "documentation_url": "https://platform.xiaomimimo.com/#/docs/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "December 2024",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.14,
+            "output": 0.28,
+            "cache": {
+                "read": 0.0028,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "mimo-v2.5",
+        "provider_name": "xiaomi",
+        "full_key": "xiaomi/mimo-v2.5",
+        "slug": "xiaomi_mimo-v2.5"
     },
     "alibaba/qwen3.6-27b": {
         "company": "Alibaba",
@@ -962,6 +1943,115 @@
         "full_key": "alibaba/qwen3.6-plus",
         "slug": "alibaba_qwen3.6-plus"
     },
+    "zai/glm-5.1-thinking": {
+        "company": "zAI",
+        "label": "GLM 5.1",
+        "release_date": "2026-04-01",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 200000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "clear_thinking": false
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 3.2,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "glm-5.1",
+        "provider_name": "zai",
+        "full_key": "zai/glm-5.1-thinking",
+        "slug": "zai_glm-5.1-thinking"
+    },
+    "zai/glm-5.1": {
+        "company": "zAI",
+        "label": "GLM 5.1",
+        "release_date": "2026-04-01",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 200000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 3.2,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [
+            {
+                "zai/glm-5.1-thinking": {
+                    "properties": {
+                        "reasoning_model": true
+                    },
+                    "provider_properties": {
+                        "clear_thinking": false
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "glm-5.1",
+        "provider_name": "zai",
+        "full_key": "zai/glm-5.1",
+        "slug": "zai_glm-5.1"
+    },
     "openrouter/arcee-ai/trinity-large-thinking": {
         "company": "Arcee AI",
         "label": "Trinity Large Thinking",
@@ -1215,6 +2305,55 @@
         "full_key": "openai/gpt-5.4-mini",
         "slug": "openai_gpt-5.4-mini"
     },
+    "minimax/MiniMax-M2.7": {
+        "company": "MiniMax",
+        "label": "MiniMax-M2.7",
+        "release_date": "2026-03-17",
+        "open_source": true,
+        "documentation_url": "https://platform.minimax.io/docs",
+        "properties": {
+            "context_window": 196608,
+            "max_tokens": 196608,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.03,
+                "write": 0.375,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "MiniMax-M2.7",
+        "provider_name": "minimax",
+        "full_key": "minimax/MiniMax-M2.7",
+        "slug": "minimax_MiniMax-M2.7"
+    },
     "mistralai/mistral-small-2603": {
         "company": "Mistral",
         "label": "Mistral Small 4",
@@ -1286,7 +2425,9 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "clear_thinking": false
+        },
         "costs_per_million_token": {
             "input": 1.2,
             "output": 4.0,
@@ -1730,9 +2871,9 @@
         "full_key": "openai/gpt-5.4-2026-03-05",
         "slug": "openai_gpt-5.4-2026-03-05"
     },
-    "google/gemini-3.1-flash-lite-preview": {
+    "google/gemini-3.1-flash-lite": {
         "company": "Google",
-        "label": "Gemini 3.1 Flash Lite Preview",
+        "label": "Gemini 3.1 Flash Lite",
         "release_date": "2026-03-03",
         "open_source": false,
         "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
@@ -1776,10 +2917,10 @@
             "temperature": 1.0,
             "reasoning_effort": "high"
         },
-        "provider_endpoint": "gemini-3.1-flash-lite-preview",
+        "provider_endpoint": "gemini-3.1-flash-lite",
         "provider_name": "google",
-        "full_key": "google/gemini-3.1-flash-lite-preview",
-        "slug": "google_gemini-3.1-flash-lite-preview"
+        "full_key": "google/gemini-3.1-flash-lite",
+        "slug": "google_gemini-3.1-flash-lite"
     },
     "openai/gpt-5.3-codex": {
         "company": "OpenAI",
@@ -1836,7 +2977,7 @@
         "company": "Alibaba",
         "label": "Qwen 3.5 Flash",
         "release_date": "2026-02-23",
-        "open_source": true,
+        "open_source": false,
         "documentation_url": "https://www.alibabacloud.com/help/en/model-studio/models",
         "properties": {
             "context_window": 1000000,
@@ -1948,7 +3089,7 @@
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
         "properties": {
-            "context_window": 200000,
+            "context_window": 1000000,
             "max_tokens": 128000,
             "training_cutoff": null,
             "reasoning_model": true
@@ -2260,7 +3401,9 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "clear_thinking": false
+        },
         "costs_per_million_token": {
             "input": 1.0,
             "output": 3.2,
@@ -2346,7 +3489,7 @@
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
         "properties": {
-            "context_window": 200000,
+            "context_window": 1000000,
             "max_tokens": 128000,
             "training_cutoff": null,
             "reasoning_model": true
@@ -2402,7 +3545,7 @@
         "open_source": false,
         "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
         "properties": {
-            "context_window": 200000,
+            "context_window": 1000000,
             "max_tokens": 128000,
             "training_cutoff": null,
             "reasoning_model": false
@@ -3329,122 +4472,6 @@
         "full_key": "mistralai/mistral-large-2512",
         "slug": "mistralai_mistral-large-2512"
     },
-    "fireworks/deepseek-v3p2-thinking": {
-        "company": "DeepSeek",
-        "label": "DeepSeek V3.2 (Thinking)",
-        "release_date": "2025-12-01",
-        "open_source": true,
-        "documentation_url": "https://fireworks.ai/models",
-        "properties": {
-            "context_window": 160000,
-            "max_tokens": 20480,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.56,
-            "output": 1.68,
-            "cache": {
-                "read": 0.28,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "deepseek-v3p2",
-        "provider_name": "fireworks",
-        "full_key": "fireworks/deepseek-v3p2-thinking",
-        "slug": "fireworks_deepseek-v3p2-thinking"
-    },
-    "fireworks/deepseek-v3p2": {
-        "company": "DeepSeek",
-        "label": "DeepSeek V3.2 (Nonthinking)",
-        "release_date": "2025-12-01",
-        "open_source": true,
-        "documentation_url": "https://fireworks.ai/models",
-        "properties": {
-            "context_window": 160000,
-            "max_tokens": 20480,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.56,
-            "output": 1.68,
-            "cache": {
-                "read": 0.28,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [
-            {
-                "fireworks/deepseek-v3p2-thinking": {
-                    "label": "DeepSeek V3.2 (Thinking)",
-                    "properties": {
-                        "reasoning_model": true
-                    },
-                    "default_parameters": {
-                        "reasoning_effort": "high"
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0,
-            "reasoning_effort": "none"
-        },
-        "provider_endpoint": "deepseek-v3p2",
-        "provider_name": "fireworks",
-        "full_key": "fireworks/deepseek-v3p2",
-        "slug": "fireworks_deepseek-v3p2"
-    },
     "anthropic/claude-opus-4-5-20251101-thinking": {
         "company": "Anthropic",
         "label": "Claude Opus 4.5 (Thinking)",
@@ -3669,68 +4696,6 @@
         "full_key": "grok/grok-4-1-fast-non-reasoning",
         "slug": "grok_grok-4-1-fast-non-reasoning"
     },
-    "google/gemini-3-pro-preview": {
-        "company": "Google",
-        "label": "Gemini 3 Pro (11/25)",
-        "release_date": "2025-11-18",
-        "open_source": false,
-        "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
-        "properties": {
-            "context_window": 1048576,
-            "max_tokens": 65536,
-            "training_cutoff": "2025-01",
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": true,
-            "videos": true,
-            "files": true,
-            "batch": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 2.0,
-            "output": 12.0,
-            "cache": {
-                "read": 0.2,
-                "read_discount": 0.1,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            },
-            "context": {
-                "threshold": 200000.0,
-                "input": 4.0,
-                "output": 18.0,
-                "cache": {
-                    "read": 0.4,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gemini-3-pro-preview",
-        "provider_name": "google",
-        "full_key": "google/gemini-3-pro-preview",
-        "slug": "google_gemini-3-pro-preview"
-    },
     "openai/gpt-5.1-codex-mini": {
         "company": "OpenAI",
         "label": "GPT 5.1 Codex Mini",
@@ -3883,53 +4848,6 @@
         "provider_name": "openai",
         "full_key": "openai/gpt-5.1-2025-11-13",
         "slug": "openai_gpt-5.1-2025-11-13"
-    },
-    "kimi/kimi-k2-thinking": {
-        "company": "Moonshot AI",
-        "label": "Kimi K2 Thinking",
-        "release_date": "2025-11-06",
-        "open_source": true,
-        "documentation_url": "https://platform.moonshot.ai/docs",
-        "properties": {
-            "context_window": 256000,
-            "max_tokens": 32000,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.6,
-            "output": 2.5,
-            "cache": {
-                "read": 0.15,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.6
-        },
-        "provider_endpoint": "kimi-k2-thinking",
-        "provider_name": "kimi",
-        "full_key": "kimi/kimi-k2-thinking",
-        "slug": "kimi_kimi-k2-thinking"
     },
     "inception/mercury": {
         "company": "Inception",
@@ -5142,56 +6060,6 @@
         "provider_name": "grok",
         "full_key": "grok/grok-code-fast",
         "slug": "grok_grok-code-fast"
-    },
-    "fireworks/deepseek-v3p1": {
-        "company": "DeepSeek",
-        "label": "DeepSeek V3.1",
-        "release_date": "2025-08-21",
-        "open_source": true,
-        "documentation_url": "https://fireworks.ai/models",
-        "properties": {
-            "context_window": 163840,
-            "max_tokens": 163840,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.56,
-            "output": 1.68,
-            "cache": {
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "deepseek-v3p1",
-        "provider_name": "fireworks",
-        "full_key": "fireworks/deepseek-v3p1",
-        "slug": "fireworks_deepseek-v3p1"
     },
     "openai/gpt-5-nano-2025-08-07": {
         "company": "OpenAI",
@@ -6998,255 +7866,6 @@
         "full_key": "bedrock/claude-opus-4-20250514-v1",
         "slug": "bedrock_claude-opus-4-20250514-v1"
     },
-    "anthropic/claude-sonnet-4-20250514-thinking": {
-        "company": "Anthropic",
-        "label": "Claude Sonnet 4 (Thinking)",
-        "release_date": "2025-05-22",
-        "open_source": false,
-        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 64000,
-            "training_cutoff": "2025-03",
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": true,
-            "videos": false,
-            "files": true,
-            "batch": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 3.0,
-            "output": 15.0,
-            "cache": {
-                "read": 0.3,
-                "write": 3.75,
-                "read_discount": 0.1,
-                "write_markup": 1.25
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            },
-            "context": {
-                "threshold": 200000.0,
-                "input": 6.0,
-                "output": 22.5,
-                "cache": {
-                    "read": 0.6,
-                    "write": 7.5,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "claude-sonnet-4-20250514",
-        "provider_name": "anthropic",
-        "full_key": "anthropic/claude-sonnet-4-20250514-thinking",
-        "slug": "anthropic_claude-sonnet-4-20250514-thinking"
-    },
-    "anthropic/claude-sonnet-4-20250514": {
-        "company": "Anthropic",
-        "label": "Claude Sonnet 4 (Nonthinking)",
-        "release_date": "2025-05-22",
-        "open_source": false,
-        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 64000,
-            "training_cutoff": "2025-03",
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": true,
-            "videos": false,
-            "files": true,
-            "batch": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 3.0,
-            "output": 15.0,
-            "cache": {
-                "read": 0.3,
-                "write": 3.75,
-                "read_discount": 0.1,
-                "write_markup": 1.25
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            },
-            "context": {
-                "threshold": 200000.0,
-                "input": 6.0,
-                "output": 22.5,
-                "cache": {
-                    "read": 0.6,
-                    "write": 7.5,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "alternative_keys": [
-            {
-                "anthropic/claude-sonnet-4-20250514-thinking": {
-                    "properties": {
-                        "reasoning_model": true
-                    },
-                    "supports": {
-                        "temperature": false
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "claude-sonnet-4-20250514",
-        "provider_name": "anthropic",
-        "full_key": "anthropic/claude-sonnet-4-20250514",
-        "slug": "anthropic_claude-sonnet-4-20250514"
-    },
-    "anthropic/claude-opus-4-20250514-thinking": {
-        "company": "Anthropic",
-        "label": "Claude Opus 4 (Thinking)",
-        "release_date": "2025-05-22",
-        "open_source": false,
-        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 32000,
-            "training_cutoff": "2025-03",
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": true,
-            "videos": false,
-            "files": true,
-            "batch": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 15.0,
-            "output": 75.0,
-            "cache": {
-                "read": 1.5,
-                "write": 18.75,
-                "read_discount": 0.1,
-                "write_markup": 1.25
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "claude-opus-4-20250514",
-        "provider_name": "anthropic",
-        "full_key": "anthropic/claude-opus-4-20250514-thinking",
-        "slug": "anthropic_claude-opus-4-20250514-thinking"
-    },
-    "anthropic/claude-opus-4-20250514": {
-        "company": "Anthropic",
-        "label": "Claude Opus 4 (Nonthinking)",
-        "release_date": "2025-05-22",
-        "open_source": false,
-        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 32000,
-            "training_cutoff": "2025-03",
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": true,
-            "videos": false,
-            "files": true,
-            "batch": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 15.0,
-            "output": 75.0,
-            "cache": {
-                "read": 1.5,
-                "write": 18.75,
-                "read_discount": 0.1,
-                "write_markup": 1.25
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [
-            {
-                "anthropic/claude-opus-4-20250514-thinking": {
-                    "properties": {
-                        "reasoning_model": true
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "claude-opus-4-20250514",
-        "provider_name": "anthropic",
-        "full_key": "anthropic/claude-opus-4-20250514",
-        "slug": "anthropic_claude-opus-4-20250514"
-    },
     "mistralai/mistral-medium-2505": {
         "company": "Mistral",
         "label": "Mistral Medium 3.1 (05/2025)",
@@ -8601,7 +9220,7 @@
         "supports": {
             "images": true,
             "videos": true,
-            "files": true,
+            "files": false,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -8691,7 +9310,7 @@
         "supports": {
             "images": true,
             "videos": true,
-            "files": true,
+            "files": false,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -8826,54 +9445,6 @@
         "provider_name": "azure",
         "full_key": "azure/gpt-4o-2024-11-20",
         "slug": "azure_gpt-4o-2024-11-20"
-    },
-    "bedrock/claude-3-5-haiku-20241022-v1": {
-        "company": "Amazon",
-        "label": "Claude 3.5 Haiku (Bedrock)",
-        "release_date": "2024-10-22",
-        "open_source": false,
-        "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 0,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.8,
-            "output": 4.0,
-            "cache": {
-                "read": 0.08,
-                "write": 1.0,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "us.anthropic.claude-3-5-haiku-20241022-v1:0",
-        "provider_name": "bedrock",
-        "full_key": "bedrock/claude-3-5-haiku-20241022-v1",
-        "slug": "bedrock_claude-3-5-haiku-20241022-v1"
     },
     "openai/gpt-4o-2024-08-06": {
         "company": "OpenAI",
@@ -9431,5 +10002,5 @@
         "provider_name": "perplexity",
         "full_key": "perplexity/sonar",
         "slug": "perplexity_sonar"
-    },
+    }
 }

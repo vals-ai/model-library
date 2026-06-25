@@ -1,35 +1,32 @@
 # Model Library Tests
 
-Test suite for the model_library.
+Test suite for `model_library`.
 
 ## Structure
 
-```
+```text
 tests/
-├── unit/                          # Tests with mocked dependencies
-├── integration/                   # Tests with real API calls
-├── conftest.py                    # Shared fixtures and configuration
+├── unit/          # Tests with mocked dependencies
+├── integration/   # Tests with real provider API calls
+└── conftest.py    # Shared fixtures and configuration
 ```
 
-## Unit vs Integration Tests
+## Unit vs integration tests
 
-### Unit Tests
+### Unit tests
 
-- Mock external dependencies (APIs, databases)
-- Test isolated logic without network calls
-- Fast, deterministic, run without API keys
-- Focus on: request construction, parameter handling, response parsing
-- Example: "Does the code add `thinking_config` when model is gemini-2.5?"
+- Mock external dependencies such as provider APIs and databases.
+- Run without API keys.
+- Cover isolated logic such as request construction, parameter handling, and response parsing.
 
-### Integration Tests
+### Integration tests
 
-- Make real API calls to providers
-- Test end-to-end functionality
-- Slower, require API keys
-- Focus on: actual API behavior, token counting, streaming
-- Example: "Does Gemini API actually return reasoning tokens?"
+> **Warning:** Integration tests make real provider calls. Use sandbox or least-privilege keys, expect provider billing/rate limits, and do not send sensitive prompts unless intentional.
 
-## Running Tests
+- Make real provider API calls.
+- Require provider API keys and may incur cost/rate limits.
+
+## Running tests
 
 ```bash
 # Run unit tests
@@ -38,38 +35,40 @@ make test
 # Run integration tests
 make test-integration
 
-# Run specific test file
+# Run a specific test file
 make test DIR=tests/unit/test_tools.py
 
-# Run specific test class or method
-make test DIR=tests/unit/test_completion.py::TestCompletionUnit::test_temperature_parameter
+# Run a specific test function
+make test DIR=tests/unit/test_tools.py::test_build_body_includes_tools
 
-# Run specific model
+# Run integration tests for one model through the Makefile
 make test-integration MODEL=openai/gpt-5-nano-2025-08-07
 
-# Run long problem test
-make test-integration DIR=tests/integration/test_long_problem.py MODEL=openai/gpt-5-nano-2025-08-07
+# Run a raw pytest command for one model
+uv run pytest tests/integration -m integration --model=openai/gpt-5-nano-2025-08-07
 
+# Run the long-problem integration test for one model
+make test-integration DIR=tests/integration/test_long_problem.py MODEL=openai/gpt-5-nano-2025-08-07
 ```
+
+Use `MODEL=...` with Makefile targets. Use `--model=...` only when invoking `pytest` directly. Model parametrization decorators skip tests that do not match the selected model.
 
 ## Decorators
 
-- `@parametrize_all_models` - Pass in all model keys, excluding deprecated, including alternative keys
-- `@parametrize_models_for_provider` - Pass in all model keys for a specific provider, excluding deprecated, including alternative keys
+- `@parametrize_all_models` — pass all model keys, excluding deprecated models and including alternative keys.
+- `@parametrize_models_for_provider` — pass all model keys for one provider, excluding deprecated models and including alternative keys.
 
-When passing in --MODEL, these decorators will skip tests that don't match the model key.
+## Test markers
 
-## Test Markers
+- `@pytest.mark.unit` — unit tests.
+- `@pytest.mark.integration` — integration tests.
 
-- `@pytest.mark.unit` - Unit tests
-- `@pytest.mark.integration` - Integration tests
+## Environment setup
 
-## Environment Setup
+Integration tests load environment variables from the repo root `.env`.
 
-Integration tests load environment variables from root `.env`
+In internal checkouts, integration-test setup can create `.env` from AWS Secrets Manager when `.env` is missing. Public users should create `.env` themselves or export the provider API keys required by the integration tests they run.
 
-## Misc
+## Notes
 
-By default, tests run asynchronously, and multithreaded with 4 workers.
-Parameter to the same function run on the same worker.
-
+By default, tests run asynchronously and use 4 xdist workers. Parametrizations of the same test function run on the same worker.

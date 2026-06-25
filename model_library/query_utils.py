@@ -20,7 +20,6 @@ async def query_with_truncation_retry(
     *,
     question_id: str | None = None,
     run_id: str | None = None,
-    docent_ingest: bool = False,
 ) -> tuple[QueryResult, dict[str, int]]:
     """Query an LLM with automatic document truncation on context window errors.
 
@@ -29,10 +28,17 @@ async def query_with_truncation_retry(
     - Then retries on ``MaxContextWindowExceededError``, shortening by 10% each time
     - Also retries on ``MAX_TOKENS`` finish reason (output truncated), shortening by 5%
     """
-    if not llm._registry_key:  # pyright: ignore[reportPrivateUsage]
+    await llm.ensure_metadata_loaded()
+    if llm.metadata is None and not llm._registry_key:  # pyright: ignore[reportPrivateUsage]
         raise ValueError("LLM has no registry key — use get_registry_model()")
 
-    context_window = get_model_input_context_window(llm._registry_key)  # pyright: ignore[reportPrivateUsage]
+    context_window = llm.input_context_window
+    if context_window is None and llm._registry_key:  # pyright: ignore[reportPrivateUsage]
+        context_window = get_model_input_context_window(llm._registry_key)  # pyright: ignore[reportPrivateUsage]
+    if context_window is None:
+        raise ValueError(
+            "LLM metadata has no input context window — use get_registry_model()"
+        )
 
     truncation_record = {
         "initial_context_window_truncation": 0,
@@ -60,7 +66,6 @@ async def query_with_truncation_retry(
                 prompt,
                 question_id=question_id,
                 run_id=run_id,
-                docent_ingest=docent_ingest,
             )
 
             if result.finish_reason.reason == FinishReason.MAX_TOKENS:

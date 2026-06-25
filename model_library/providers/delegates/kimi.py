@@ -10,15 +10,23 @@ from model_library.base import (
     FileWithId,
     InputItem,
     LLMConfig,
+    ProviderConfig,
     RawInput,
     QueryResult,
     ToolDefinition,
 )
+from model_library.providers.openai import OpenAIConfig
 from model_library.register_models import register_provider
+
+
+class KimiConfig(ProviderConfig):
+    parallel_tool_calls: bool | None = None
 
 
 @register_provider("kimi")
 class KimiModel(DelegateOnly):
+    provider_config = KimiConfig()
+
     def __init__(
         self,
         model_name: str,
@@ -30,13 +38,20 @@ class KimiModel(DelegateOnly):
 
         # https://platform.moonshot.ai/docs/guide/migrating-from-openai-to-kimi#about-api-compatibility
         config = config or LLMConfig()
-        config.custom_endpoint = config.custom_endpoint or "https://api.moonshot.ai/v1/"
-        config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.KIMI_API_KEY
+        delegate_config = config.model_copy(
+            update={
+                "custom_endpoint": config.custom_endpoint
+                or "https://api.moonshot.ai/v1/",
+                "custom_api_key": config.custom_api_key
+                or SecretStr(model_library_settings.KIMI_API_KEY),
+                "provider_config": OpenAIConfig(
+                    parallel_tool_calls=self.provider_config.parallel_tool_calls
+                ),
+            }
         )
 
         self.init_delegate(
-            config=config,
+            config=delegate_config,
             delegate_provider="openai",
             use_completions=True,
         )

@@ -1,0 +1,27 @@
+base-config:
+  company: Devin
+  open_source: false
+  documentation_url: https://cli.devin.ai/docs/models
+  supports:
+    images: false
+    videos: false
+    files: true
+    batch: false
+    temperature: false
+    tools: true
+    output_schema: false
+  properties:
+    context_window: 0
+    max_tokens: 0
+    reasoning_model: true
+  metadata:
+    available_for_everyone: false
+    internal_only: true
+    available_as_evaluator: false
+    ignored_for_cost: true
+  costs_per_million_token: null
+
+swe-models:
+  devin/swe-1-6-fast:
+    label: SWE-1.6 Fast
+    release_date: 2026-05-22

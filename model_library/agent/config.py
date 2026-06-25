@@ -1,9 +1,23 @@
 from typing import Protocol
 
-from pydantic import ConfigDict, SkipValidation, field_validator
+from pydantic import ConfigDict, SkipValidation, field_validator, model_validator
 
 from model_library.base.input import InputItem, RawResponse, ToolDefinition
-from model_library.utils import PrettyModel
+from model_library.utils import ValsModel
+
+
+DEFAULT_COMPACTION_PROMPT = """You are performing a CONTEXT CHECKPOINT COMPACTION. Create a handoff summary for another LLM that will resume the task.
+
+Include:
+- Current progress and key decisions made
+- Important context, constraints, or user preferences
+- What remains to be done (clear next steps)
+- Any critical data, examples, or references needed to continue
+
+Be concise, structured, and focused on helping the next LLM seamlessly continue the work.
+"""
+
+DEFAULT_SUMMARY_PREFIX = "Another LLM agent started to solve this task and produced this summary of its progress. Use the information here to continue the work without duplicating effort.\n\n"
 
 
 def truncate_oldest(history: list[InputItem]) -> list[InputItem]:
@@ -68,7 +82,7 @@ class ToolFilterHook(Protocol):
     ) -> list[ToolDefinition]: ...
 
 
-class TurnLimit(PrettyModel):
+class TurnLimit(ValsModel):
     """Turn limit for agent execution
 
     - max_turns: maximum loop iterations (includes ErrorTurns)
@@ -102,7 +116,7 @@ class TimeMessageHook(Protocol):
     ) -> InputItem | None: ...
 
 
-class TimeLimit(PrettyModel):
+class TimeLimit(ValsModel):
     """Wall-clock time limit for agent execution
 
     - max_seconds: deadline in seconds
@@ -133,13 +147,72 @@ class TimeLimit(PrettyModel):
         return v
 
 
-class AgentConfig(PrettyModel):
+class HistoryCompaction(ValsModel):
+    """Compaction *gating* config — strategy-agnostic.
+
+    Tells the agent loop *when* to call the compaction hook and how many
+    failures to tolerate. Strategy-specific knobs (the LLM prompt, summary
+    prefix, etc.) belong on the hook factory itself
+    (e.g. ``llm_summary_compactor(llm, prompt=..., summary_prefix=...)``)
+    so custom strategies don't carry irrelevant fields.
+
+    Specify exactly one of `threshold_tokens` or `threshold_percentage`. The
+    default is 85% of the model's input context window.
+    """
+
+    threshold_tokens: int | None = None
+    threshold_percentage: float | None = None
+    max_failures: int = 2
+    compact_on_max_context: bool = False
+    max_compaction_context_retries: int = 2
+
+    @field_validator("threshold_tokens", mode="before")
+    @classmethod
+    def _validate_threshold_tokens(cls, v: int | None) -> int | None:
+        if v is not None and v < 1:
+            raise ValueError(f"threshold_tokens must be >= 1, got {v}")
+        return v
+
+    @field_validator("threshold_percentage", mode="before")
+    @classmethod
+    def _validate_threshold_percentage(cls, v: float | None) -> float | None:
+        if v is not None and not 0 < v <= 0.90:
+            raise ValueError(f"threshold_percentage must be in (0, 0.90], got {v}")
+        return v
+
+    @field_validator("max_failures", mode="before")
+    @classmethod
+    def _validate_max_failures(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError(f"max_failures must be >= 1, got {v}")
+        return v
+
+    @field_validator("max_compaction_context_retries", mode="before")
+    @classmethod
+    def _validate_max_compaction_context_retries(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError(f"max_compaction_context_retries must be >= 0, got {v}")
+        return v
+
+    @model_validator(mode="after")
+    def _validate_one_threshold(self) -> "HistoryCompaction":
+        if self.threshold_tokens is not None and self.threshold_percentage is not None:
+            raise ValueError(
+                "Specify exactly one of threshold_tokens or threshold_percentage."
+            )
+        if self.threshold_tokens is None and self.threshold_percentage is None:
+            self.threshold_percentage = 0.85
+        return self
+
+
+class AgentConfig(ValsModel):
     """Configuration for agent execution
 
     - turn_limit: turn limit config, None = unlimited
     - time_limit: wall-clock deadline config, None = unlimited
     - max_tool_calls_per_turn: cap on executed tool calls per turn, None = unlimited.
       Calls beyond the limit get a skip message as their result (not executed).
+    - history_compaction: optional summarization config for long agent histories.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
@@ -147,6 +220,7 @@ class AgentConfig(PrettyModel):
     turn_limit: TurnLimit | None
     time_limit: TimeLimit | None
     max_tool_calls_per_turn: int | None = None
+    history_compaction: HistoryCompaction | None = None
 
     @field_validator("max_tool_calls_per_turn", mode="before")
     @classmethod

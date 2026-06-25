@@ -155,7 +155,7 @@ class TestBatch:
     async def test_anthropic_batch_single_request(self):
         """Test Anthropic batch submission with a single request."""
         model = AnthropicModel(
-            "claude-sonnet-4-20250514", config=LLMConfig(supports_batch=True)
+            "claude-sonnet-4-5-20250929", config=LLMConfig(supports_batch=True)
         )
 
         if not model.batch:
@@ -183,7 +183,7 @@ class TestBatch:
     async def test_anthropic_batch_with_thinking(self):
         """Test Anthropic batch submission with extended thinking enabled."""
         model = AnthropicModel(
-            "claude-sonnet-4-20250514",
+            "claude-sonnet-4-5-20250929",
             config=LLMConfig(reasoning=True, supports_batch=True),
         )
 

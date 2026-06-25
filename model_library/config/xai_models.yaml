@@ -34,6 +34,7 @@ grok-4.3-models:
       reasoning_model: true
     default_parameters:
       max_tokens: null
+      reasoning_effort: "high"
     costs_per_million_token:
       input: 1.25
       output: 2.50
@@ -99,6 +100,7 @@ grok-4.20-models:
         output: 12.00
         cache:
           read: 0.40
+
 grok-4-models:
   base-config:
     supports:
@@ -246,6 +248,38 @@ grok-code-models:
     alternative_keys:
       - grok/grok-code-fast
       - grok/grok-code-fast-1-0825
+
+grok-build-models:
+  base-config:
+    supports:
+      temperature: true
+    costs_per_million_token:
+      cache:
+        read_discount: 0.2
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.95
+
+  grok/grok-build-0.1:
+    label: Grok Build 0.1
+    release_date: 2026-05-20
+    documentation_url: ""
+    properties:
+      context_window: 256_000
+      max_tokens: 256_000
+      training_cutoff: null
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.00
+      output: 2.00
+      cache:
+        read: 0.20
+      context:
+        threshold: 200_000
+        input: 2.00
+        output: 4.00
+        cache:
+          read: 0.40
 
 grok-3-models:
   base-config:

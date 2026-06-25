@@ -11,6 +11,10 @@ class ModelLibrarySettings:
     def set(self, **keys: str | bool):
         self._key_overrides.update({k.upper(): str(v) for k, v in keys.items()})
 
+    def unset(self, key: str):
+        self._key_overrides.pop(key.upper(), None)
+        os.environ.pop(key.upper(), None)
+
     def reset(self):
         self._key_overrides = {}
 

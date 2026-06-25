@@ -9,7 +9,52 @@ base-config:
     temperature: true
   properties:
     reasoning_model: false
+
+m3-models:
+  minimax/MiniMax-M3:
+    label: MiniMax-M3
+    release_date: 2026-05-31
+    supports:
+      images: true
+      videos: true
+      files: false
+    properties:
+      reasoning_model: true
+      context_window: 1_000_000
+      max_tokens: 512_000
+    costs_per_million_token:
+      input: 0.60
+      output: 2.40
+      cache:
+        read: 0.12
+      context:
+        threshold: 512_000
+        input: 1.20
+        output: 4.80
+        cache:
+          read: 0.24
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+
 m2-models:
+  minimax/MiniMax-M2.7:
+    label: MiniMax-M2.7
+    release_date: 2026-03-17
+    properties:
+      reasoning_model: true
+      context_window: 196_608
+      max_tokens: 196_608
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.03
+        write: 0.375
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+
   minimax/MiniMax-M2.5:
     label: MiniMax-M2.5
     release_date: 2026-02-12

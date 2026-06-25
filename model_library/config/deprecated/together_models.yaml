@@ -56,7 +56,7 @@ deprecated:
 
   together/moonshotai/Kimi-K2-Instruct:
     label: Kimi K2 Instruct
-    company: Kimi
+    company: Moonshot AI
     documentation_url: https://www.kimi.com/
     release_date: 2025-07-11
     supports:

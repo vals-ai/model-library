@@ -4,9 +4,20 @@ Unit tests for count_tokens functionality
 
 import pytest
 
-from model_library.registry_utils import get_registry_model
+from model_library.registry_utils import get_registry_config, get_registry_model
 from tests.conftest import parametrize_all_models
 from tests.test_helpers import get_example_tool_input
+
+
+def test_amazon_nova_models_do_not_advertise_files_until_file_paths_are_implemented():
+    for model_key in [
+        "amazon/amazon.nova-pro-v1:0",
+        "amazon/amazon.nova-lite-v1:0",
+    ]:
+        config = get_registry_config(model_key)
+        assert config is not None
+        assert config.supports is not None
+        assert config.supports.files is False
 
 
 @parametrize_all_models

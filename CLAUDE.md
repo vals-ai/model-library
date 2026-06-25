@@ -21,6 +21,11 @@ make config           # Regenerate all_models.json from YAML configs
 make deprecate model=provider/model-key  # Move a model to deprecated
 ```
 
+## PR checks
+
+- `Run Models` intentionally fails on the first PR run with `Check must be run manually on PRs`; this is an approval gate, not a code failure.
+- Manually rerun `Run Models` when live provider smoke coverage is needed, then investigate and report any provider/API failures from that rerun.
+
 ## Model config structure
 
 - Active configs: `model_library/config/*.yaml` (one per provider)

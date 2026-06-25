@@ -18,6 +18,7 @@ from model_library.base import (
     InputItem,
     LLMConfig,
     QueryResult,
+    QueryResultExtras,
     QueryResultMetadata,
     RawResponse,
     SystemInput,
@@ -251,6 +252,7 @@ class AI21LabsModel(LLM):
                 in_tokens=response.usage.prompt_tokens,
                 out_tokens=response.usage.completion_tokens,
             ),
+            extras=QueryResultExtras(response_id=response.id),
             tool_calls=tool_calls,
         )
 

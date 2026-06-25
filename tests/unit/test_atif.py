@@ -6,8 +6,13 @@ from unittest.mock import AsyncMock
 import pytest
 
 from model_library.agent.agent import Agent
-from model_library.agent.config import AgentConfig, TimeLimit, TurnLimit
-from model_library.agent.metadata import AgentTurn, ErrorTurn, SerializableException, ToolCallRecord
+from model_library.agent.config import AgentConfig, TurnLimit
+from model_library.agent.metadata import (
+    AgentTurn,
+    ErrorTurn,
+    SerializableException,
+    ToolCallRecord,
+)
 from model_library.agent.tool import Tool, ToolOutput
 from model_library.atif import (
     ATIFAgent,
@@ -19,6 +24,7 @@ from model_library.atif import (
     ATIFStep,
     ATIFTrajectory,
 )
+from model_library.base.gateway import GatewayLLM
 from model_library.base.input import (
     InputItem,
     RawResponse,
@@ -74,7 +80,9 @@ class TestATIFModels:
                     )
                 ]
             ),
-            metrics=ATIFMetrics(prompt_tokens=100, completion_tokens=20, cost_usd=0.001),
+            metrics=ATIFMetrics(
+                prompt_tokens=100, completion_tokens=20, cost_usd=0.001
+            ),
         )
         assert step.step_id == 1
         assert step.source == "agent"
@@ -126,7 +134,6 @@ class TestAgentResultToATIF:
         tool_records: list[ToolCallRecord] | None = None,
         reasoning: str | None = None,
         metadata: QueryResultMetadata | None = None,
-        raw: dict | None = None,
     ) -> AgentTurn:
         return AgentTurn(
             timestamp="2026-04-16T12:00:00Z",
@@ -137,7 +144,6 @@ class TestAgentResultToATIF:
                 finish_reason=FinishReasonInfo(reason=FinishReason.STOP, raw="stop"),
                 history=list(history) if history else [],
                 metadata=metadata or QueryResultMetadata(),
-                raw=raw or {},
             ),
             tool_call_records=tool_records or [],
             duration_seconds=1.0,
@@ -277,14 +283,16 @@ class TestAgentResultToATIF:
 
         assert trajectory.steps[1].reasoning_content == "Let me think step by step..."
 
-    def test_raw_response_in_extra(self):
-        """Raw provider response is preserved in step.extra."""
+    def test_raw_response_not_exported_in_extra(self):
+        """Provider raw responses stay in history and are not duplicated in ATIF extra."""
         question = TextInput(text="Hi")
-        raw = {"id": "chatcmpl-123", "object": "chat.completion", "choices": []}
-        turn_history: list[InputItem] = [question, RawResponse(response={})]
+        turn_history: list[InputItem] = [
+            question,
+            RawResponse(response={"id": "chatcmpl-123", "object": "chat.completion"}),
+        ]
 
         turns: list[AgentTurn | ErrorTurn] = [
-            self._make_turn("Hello!", history=turn_history, raw=raw)
+            self._make_turn("Hello!", history=turn_history)
         ]
 
         trajectory = ATIFTrajectory.from_agent_result(
@@ -293,8 +301,7 @@ class TestAgentResultToATIF:
             model_name="gpt-4",
         )
 
-        assert trajectory.steps[1].extra is not None
-        assert trajectory.steps[1].extra["raw_response"]["id"] == "chatcmpl-123"
+        assert trajectory.steps[1].extra is None
 
     def test_cost_aggregation(self):
         """Final metrics aggregate cost across turns."""
@@ -391,7 +398,9 @@ class TestAgentATIFExport:
             return_value=QueryResult(
                 output_text="The answer is 42.",
                 tool_calls=[ToolCall(id="call_1", name="done", args={"answer": "42"})],
-                finish_reason=FinishReasonInfo(reason=FinishReason.TOOL_CALLS, raw="tool_calls"),
+                finish_reason=FinishReasonInfo(
+                    reason=FinishReason.TOOL_CALLS, raw="tool_calls"
+                ),
                 metadata=QueryResultMetadata(in_tokens=50, out_tokens=20),
                 history=[TextInput(text="What?"), RawResponse(response={})],
             )
@@ -419,6 +428,45 @@ class TestAgentATIFExport:
         assert data["schema_version"] == "ATIF-v1.6"
         assert data["agent"]["model_name"] == "openai/gpt-4"
         assert len(data["steps"]) >= 2  # user + agent
+
+    async def test_atif_file_written_after_gateway_metadata_sync(self, tmp_path):
+        """Agent.run() syncs GatewayLLM metadata before ATIF export reads it."""
+        llm = GatewayLLM("gpt-4o-mini", "openai")
+        llm.query = AsyncMock(
+            return_value=QueryResult(
+                output_text=None,
+                tool_calls=[ToolCall(id="call_1", name="done", args={"answer": "42"})],
+                finish_reason=FinishReasonInfo(
+                    reason=FinishReason.TOOL_CALLS, raw="tool_calls"
+                ),
+                metadata=QueryResultMetadata(in_tokens=50, out_tokens=20),
+                history=[TextInput(text="What?"), RawResponse(response={})],
+            )
+        )
+
+        async def sync_metadata() -> None:
+            object.__setattr__(llm, "_gateway_metadata_loaded", True)
+
+        llm.sync_model_metadata = AsyncMock(side_effect=sync_metadata)
+        agent = Agent(
+            llm=llm,
+            tools=[DoneTool()],
+            name="test",
+            log_dir=tmp_path,
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
+        )
+
+        result = await agent.run(
+            input=[TextInput(text="What?")],
+            question_id="q1",
+            atif_export=True,
+        )
+
+        llm.sync_model_metadata.assert_awaited_once()
+        atif_path = result.output_dir / "trajectory_atif.json"
+        assert atif_path.exists()
+        data = json.loads(atif_path.read_text())
+        assert data["agent"]["model_name"] == "gpt-4o-mini"
 
     async def test_atif_not_written_by_default(self, tmp_path):
         """Agent.run() without atif_export does NOT write trajectory_atif.json."""

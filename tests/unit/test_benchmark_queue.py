@@ -49,6 +49,44 @@ def _run_dispatched_key(run_id: str):
     )
 
 
+def _active_heads_key():
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:active_heads"
+
+
+def _window_key():
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:active_head_window"
+
+
+def _unhealthy_since_key():
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:unhealthy_since"
+
+
+def _token_key():
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:tokens"
+
+
+def _run_meta_key(run_id: str):
+    return f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:run:{run_id}"
+
+
+async def _set_token_health(
+    redis,
+    *,
+    current: int,
+    limit: int,
+    ewma_ratio: float,
+    short_ewma_ratio: float | None = None,
+):
+    token_key = _token_key()
+    await redis.set(token_key, current)
+    await redis.set(f"{token_key}:limit", limit)
+    await redis.set(f"{token_key}:remaining_ratio_ewma_2m", ewma_ratio)
+    await redis.set(
+        f"{token_key}:remaining_ratio_ewma_15s",
+        ewma_ratio if short_ewma_ratio is None else short_ewma_ratio,
+    )
+
+
 async def _simulate_process_death(redis, run_id: str):
     """Delete alive key and block heartbeat from refreshing it (simulates kill -9)."""
     key = _alive_key(run_id)
@@ -166,6 +204,162 @@ async def test_queue_reuse_after_completion(redis):
     assert order == ["batch1-a", "batch1-b", "batch2-a", "batch2-b"]
 
 
+@patch.object(bq_module, "ACTIVE_HEAD_SCALE_UP_INTERVAL", 0)
+async def test_healthy_token_state_admits_additional_active_head(redis):
+    """Healthy token state increases the active-head window and admits a second run."""
+    await _set_token_health(redis, current=30, limit=100, ewma_ratio=0.30)
+    run1_entered = asyncio.Event()
+    run2_entered = asyncio.Event()
+    run1_done = False
+
+    async def run1():
+        nonlocal run1_done
+        async with benchmark_queue(MODEL_KEY, "run-1", logger):
+            run1_entered.set()
+            await asyncio.wait_for(run2_entered.wait(), timeout=2.0)
+        run1_done = True
+
+    async def run2():
+        await run1_entered.wait()
+        async with benchmark_queue(MODEL_KEY, "run-2", logger):
+            assert not run1_done
+            run2_entered.set()
+
+    await asyncio.gather(run1(), run2())
+
+
+async def test_missing_token_health_keeps_single_active_head(redis):
+    """Extra heads require token health; the first run still proceeds without it."""
+    run1_entered = asyncio.Event()
+    run2_entered = False
+
+    async def run1():
+        async with benchmark_queue(MODEL_KEY, "run-1", logger):
+            run1_entered.set()
+            await asyncio.sleep(0.1)
+
+    async def run2():
+        nonlocal run2_entered
+        await run1_entered.wait()
+        async with benchmark_queue(MODEL_KEY, "run-2", logger):
+            run2_entered = True
+
+    task1 = asyncio.create_task(run1())
+    task2 = asyncio.create_task(run2())
+    await asyncio.sleep(0.05)
+
+    assert not run2_entered
+
+    await asyncio.gather(task1, task2)
+
+
+@patch.object(bq_module, "ACTIVE_HEAD_SCALE_UP_INTERVAL", 0)
+async def test_mixed_token_health_uses_lower_current_or_ewma_ratio(redis):
+    """A low EWMA blocks scale-up even when current remaining tokens are high."""
+    await _set_token_health(redis, current=90, limit=100, ewma_ratio=0.20)
+    run1_entered = asyncio.Event()
+    run2_entered = False
+
+    async def run1():
+        async with benchmark_queue(MODEL_KEY, "run-1", logger):
+            run1_entered.set()
+            await asyncio.sleep(0.1)
+
+    async def run2():
+        nonlocal run2_entered
+        await run1_entered.wait()
+        async with benchmark_queue(MODEL_KEY, "run-2", logger):
+            run2_entered = True
+
+    task1 = asyncio.create_task(run1())
+    task2 = asyncio.create_task(run2())
+    await asyncio.sleep(0.05)
+
+    assert not run2_entered
+
+    await asyncio.gather(task1, task2)
+
+
+@patch.object(bq_module, "ACTIVE_HEAD_QUEUE_SCAN_LIMIT", 2)
+@patch.object(bq_module, "ACTIVE_HEAD_SCALE_UP_INTERVAL", 0)
+async def test_active_head_admission_scans_bounded_queue_prefix(redis):
+    """Active-head control does not scan/admit beyond the bounded FIFO prefix."""
+    now = 1000.0
+    await _set_token_health(redis, current=90, limit=100, ewma_ratio=0.90)
+    await redis.rpush(_queue_key(), "run-1", "run-2", "run-3")
+    for run_id in ("run-1", "run-2", "run-3"):
+        await redis.set(_alive_key(run_id), "1")
+    await redis.set(_window_key(), "3")
+
+    with patch.object(bq_module.time, "time", return_value=now):
+        await bq_module._control_and_admit_heads(  # pyright: ignore[reportPrivateUsage]
+            redis,
+            _queue_key(),
+            f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark",
+            _token_key(),
+            logger,
+        )
+
+    assert await redis.zrange(_active_heads_key(), 0, -1) == ["run-1", "run-2"]
+    assert await redis.llen(_notify_key("run-3")) == 0
+
+
+@patch.object(bq_module, "ACTIVE_HEAD_SCALE_UP_INTERVAL", 0)
+async def test_sustained_unhealthy_token_state_scales_window_down_by_attrition(redis):
+    """Below 15% short health for 15 seconds lowers the window by attrition."""
+    now = 1000.0
+    await _set_token_health(redis, current=10, limit=100, ewma_ratio=0.10)
+    await redis.rpush(_queue_key(), "run-1", "run-2")
+    await redis.set(_alive_key("run-1"), "1")
+    await redis.set(_alive_key("run-2"), "1")
+    await redis.set(_window_key(), "2")
+    await redis.set(_unhealthy_since_key(), str(now - 15))
+    await redis.zadd(_active_heads_key(), {"run-1": now - 10, "run-2": now - 9})
+
+    with patch.object(bq_module.time, "time", return_value=now):
+        await bq_module._control_and_admit_heads(  # pyright: ignore[reportPrivateUsage]
+            redis,
+            _queue_key(),
+            f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark",
+            _token_key(),
+            logger,
+        )
+
+    assert await redis.get(_window_key()) == "1"
+    assert set(await redis.zrange(_active_heads_key(), 0, -1)) == {"run-1", "run-2"}
+
+
+@patch.object(bq_module, "ACTIVE_HEAD_SCALE_UP_INTERVAL", 0)
+async def test_scale_down_waits_for_short_ewma_to_drop(redis):
+    """A transient current-token dip does not downscale while 15s health is okay."""
+    now = 1000.0
+    await _set_token_health(
+        redis,
+        current=10,
+        limit=100,
+        ewma_ratio=0.10,
+        short_ewma_ratio=0.20,
+    )
+    await redis.rpush(_queue_key(), "run-1", "run-2")
+    await redis.set(_alive_key("run-1"), "1")
+    await redis.set(_alive_key("run-2"), "1")
+    await redis.set(_window_key(), "2")
+    await redis.set(_unhealthy_since_key(), str(now - 15))
+    await redis.zadd(_active_heads_key(), {"run-1": now - 10, "run-2": now - 9})
+
+    with patch.object(bq_module.time, "time", return_value=now):
+        await bq_module._control_and_admit_heads(  # pyright: ignore[reportPrivateUsage]
+            redis,
+            _queue_key(),
+            f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark",
+            _token_key(),
+            logger,
+        )
+
+    assert await redis.get(_window_key()) == "2"
+    assert await redis.exists(_unhealthy_since_key()) == 0
+
+
 # ── Cancellation / error resilience ──────────────────────────────────
 
 
@@ -232,24 +426,22 @@ async def test_stale_cancelled_notification_is_cleared_when_not_cancelled(redis)
 
 
 async def test_cancel_check_exits_after_valid_proceed_before_yield(redis):
-    """Cancellation after proceed but before yield does not let the body run."""
+    """Cancellation after proceed validation but before yield does not let the body run."""
     cancel_now = False
-    delete_count = 0
     executed = False
-    original_delete = redis.delete
+    original_zscore = redis.zscore
 
     async def is_cancelled():
         return cancel_now
 
-    async def delete_and_cancel(*keys):
-        nonlocal cancel_now, delete_count
-        if _notify_key("run-1") in keys:
-            delete_count += 1
-            if delete_count == 2:
-                cancel_now = True
-        return await original_delete(*keys)
+    async def zscore_and_cancel(name, value):
+        nonlocal cancel_now
+        score = await original_zscore(name, value)
+        if name == _active_heads_key() and value == "run-1" and score is not None:
+            cancel_now = True
+        return score
 
-    redis.delete = delete_and_cancel
+    redis.zscore = zscore_and_cancel
 
     with pytest.raises(BenchmarkQueueCancelled):
         async with benchmark_queue(
@@ -261,9 +453,8 @@ async def test_cancel_check_exits_after_valid_proceed_before_yield(redis):
     assert await redis.llen(_queue_key()) == 0
 
 
-@patch.object(bq_module, "BLPOP_POLL_INTERVAL", 0.01)
-async def test_cancel_check_exits_waiter_without_notification(redis):
-    """A queued run exits on cancellation even if cleanup never pushes a sentinel."""
+async def test_waiting_run_uses_cancel_notification_not_cancel_polling(redis):
+    """A queued run waits for the backend cancellation sentinel instead of polling."""
     holder_entered = asyncio.Event()
     cancel_now = False
     executed = False
@@ -274,7 +465,7 @@ async def test_cancel_check_exits_waiter_without_notification(redis):
     async def holder():
         async with benchmark_queue(MODEL_KEY, "run-1", logger):
             holder_entered.set()
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(0.2)
 
     async def waiter():
         nonlocal executed
@@ -292,6 +483,12 @@ async def test_cancel_check_exits_waiter_without_notification(redis):
         await asyncio.sleep(0.01)
 
     cancel_now = True
+    await asyncio.sleep(0.05)
+    assert not waiter_task.done()
+
+    await redis.delete(_notify_key("run-2"))
+    await redis.rpush(_notify_key("run-2"), BENCHMARK_NOTIFY_CANCELLED)
+    await redis.lrem(_queue_key(), 1, "run-2")
 
     await asyncio.wait_for(waiter_task, timeout=2.0)
     await holder_task
@@ -359,7 +556,10 @@ async def test_stale_proceed_notification_for_non_head_is_ignored(redis):
     await asyncio.sleep(0.05)
     assert not executed
 
+    # Match backend cleanup: stale notifications are deleted before pushing cancel.
+    await redis.delete(_notify_key("run-2"))
     await redis.rpush(_notify_key("run-2"), BENCHMARK_NOTIFY_CANCELLED)
+    await redis.lrem(_queue_key(), 1, "run-2")
     await asyncio.wait_for(waiter_task, timeout=2.0)
     await holder_task
 
@@ -371,17 +571,18 @@ async def test_cancelled_notification_survives_stale_proceed_race(redis):
     holder_entered = asyncio.Event()
     executed = False
     simulate_cleanup_race = False
-    original_lindex = redis.lindex
+    original_zscore = redis.zscore
 
-    async def racing_lindex(name, index):
+    async def racing_zscore(name, value):
         nonlocal simulate_cleanup_race
-        if simulate_cleanup_race and name == _queue_key() and index == 0:
+        if simulate_cleanup_race and name == _active_heads_key() and value == "run-2":
             simulate_cleanup_race = False
+            await redis.zrem(_active_heads_key(), "run-2")
             await redis.lrem(_queue_key(), 1, "run-2")
             await redis.rpush(_notify_key("run-2"), BENCHMARK_NOTIFY_CANCELLED)
-        return await original_lindex(name, index)
+        return await original_zscore(name, value)
 
-    redis.lindex = racing_lindex
+    redis.zscore = racing_zscore
 
     async def holder():
         async with benchmark_queue(MODEL_KEY, "run-1", logger):
@@ -625,6 +826,11 @@ async def test_get_queue_status_during_run(redis):
     assert queue.entries[0].alive is True
     assert queue.entries[1].alive is True
     assert queue.entries[0].heartbeat_ttl > 0
+    assert queue.active_head_window == 1
+    assert queue.active_heads == ["run-1"]
+    assert queue.entries[0].is_active_head is True
+    assert queue.entries[0].display_state == "ACTIVE_HEAD"
+    assert queue.entries[1].is_active_head is False
 
     holder_task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -637,6 +843,98 @@ async def test_get_queue_status_empty(redis):
     models = (await get_status()).models
 
     assert models == []
+
+
+async def test_get_queue_status_respects_queue_entry_limit(redis):
+    """Bounded status keeps full queue length but fetches only the visible prefix."""
+    await redis.rpush(_queue_key(), "run-1", "run-2", "run-3")
+    for run_id in ("run-1", "run-2", "run-3"):
+        await redis.set(_alive_key(run_id), "1")
+
+    models = (await get_status(queue_entry_limit=2, include_historical=False)).models
+
+    assert len(models) == 1
+    queue = models[0].queue
+    assert queue is not None
+    assert queue.length == 3
+    assert [entry.run_id for entry in queue.entries] == ["run-1", "run-2"]
+
+
+async def test_fast_status_classifies_popped_token_active_run(redis):
+    """Fast polling should not mislabel early-released queued runs as direct."""
+    await redis.set(_token_key(), "100")
+    run_id = "popped-active-run"
+    run_meta = f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:run:{run_id}"
+    question_id = f"{run_id}:question-1"
+    question_meta = f"{_token_key()}:inflight:{question_id}"
+    await redis.hset(
+        run_meta,
+        mapping={
+            "total_requests": 1,
+            "slot_acquired": 1,
+            "enqueued_at": 1.0,
+            "slot_acquired_at": 2.0,
+            "popped_at": 3.0,
+        },
+    )
+    await redis.hset(question_meta, mapping={"run_id": run_id, "priority": "0"})
+    await redis.zadd(
+        f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:priority:0",
+        {question_id: 1_000_000_000_000.0},
+    )
+
+    models = (await get_status(queue_entry_limit=100, include_historical=False)).models
+
+    assert len(models) == 1
+    queue = models[0].queue
+    assert queue is not None
+    assert queue.entries[0].run_id == run_id
+    assert queue.entries[0].display_state == "POPPED"
+    assert queue.entries[0].is_queued is True
+    assert queue.entries[0].popped is True
+
+
+async def test_get_queue_status_can_skip_historical_scan(redis):
+    """Fast polling can omit popped/completed metadata that has no live token state."""
+    await redis.set(_token_key(), "100")
+    run_meta = f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:run:done-run"
+    await redis.hset(
+        run_meta,
+        mapping={"total_requests": 1, "enqueued_at": 1.0, "completed_at": 2.0},
+    )
+
+    models = (await get_status()).models
+    assert models[0].queue is not None
+    assert models[0].queue.entries[0].run_id == "done-run"
+
+    fast_models = (await get_status(include_historical=False)).models
+
+    assert len(fast_models) == 1
+    assert fast_models[0].queue is None
+
+
+async def test_get_queue_status_includes_history_with_queue_entry_limit(redis):
+    """Bounded queue reads can still include completed benchmark history."""
+    await redis.set(_token_key(), "100")
+    run_meta = f"{KEY_PREFIX}:{MODEL_KEY[0]}:{MODEL_KEY[1]}:benchmark:run:done-run"
+    await redis.hset(
+        run_meta,
+        mapping={
+            "total_requests": 1,
+            "slot_acquired": 1,
+            "enqueued_at": 1.0,
+            "popped_at": 2.0,
+            "completed_at": 3.0,
+        },
+    )
+
+    models = (await get_status(queue_entry_limit=100, include_historical=True)).models
+
+    assert len(models) == 1
+    queue = models[0].queue
+    assert queue is not None
+    assert queue.entries[0].run_id == "done-run"
+    assert queue.entries[0].display_state == "HISTORY_DONE"
 
 
 async def test_get_queue_status_dead_entry(redis):
@@ -871,6 +1169,32 @@ async def test_cancelled_run_does_not_early_release_to_next_waiter(redis):
         await task1
     with pytest.raises(asyncio.CancelledError):
         await task2
+
+
+@patch.object(bq_module, "EARLY_RELEASE_GRACE_PERIOD", 0)
+@patch.object(bq_module, "HEARTBEAT_INTERVAL", 0.05)
+async def test_reused_run_id_clears_stale_dispatched_and_lifecycle_fields(redis):
+    total = 3
+    dispatched_key = _run_dispatched_key("run-1")
+    meta_key = _run_meta_key("run-1")
+    for i in range(total):
+        await redis.sadd(dispatched_key, f"old-req-{i}")
+    await redis.hset(
+        meta_key,
+        mapping={
+            "popped_at": 1.0,
+            "completed_at": 2.0,
+            "slot_acquired_at": 3.0,
+        },
+    )
+
+    async with benchmark_queue(MODEL_KEY, "run-1", logger, total_requests=total):
+        assert await redis.scard(dispatched_key) == 0
+        meta = await redis.hgetall(meta_key)
+        assert "popped_at" not in meta
+        assert "completed_at" not in meta
+        assert meta["slot_acquired"] == "1"
+        assert float(meta["slot_acquired_at"]) > 3.0
 
 
 @patch.object(bq_module, "EARLY_RELEASE_GRACE_PERIOD", 0)

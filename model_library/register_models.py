@@ -1,11 +1,15 @@
 import importlib
+import json
 import pkgutil
 import threading
 from copy import deepcopy
 from datetime import date
+from functools import cache
 from pathlib import Path
+from urllib.parse import urljoin
 from typing import Any, Callable, Type, TypeVar, cast, get_type_hints
 
+import httpx
 import yaml
 from pydantic import ConfigDict, create_model, model_validator
 from pydantic.fields import Field
@@ -18,6 +22,8 @@ from model_library.utils import get_logger
 T = TypeVar("T", bound=LLM)
 
 logger = get_logger("register_models")
+
+GATEWAY_REGISTRY_TIMEOUT_SECONDS = 30
 
 """
 Model Registry structure
@@ -175,6 +181,7 @@ def all_subclasses(cls: type) -> list[type]:
     return result
 
 
+@cache
 def get_dynamic_provider_properties_model() -> type[BaseProviderProperties]:
     field_definitions: dict[str, Any] = {}
 
@@ -248,6 +255,58 @@ class ModelConfig(RawModelConfig):
 
 ModelRegistry = dict[str, ModelConfig]
 
+
+def model_config_from_json(data: dict[str, Any]) -> ModelConfig:
+    """Build a ModelConfig from a gateway registry JSON object."""
+    ProviderProperties = get_dynamic_provider_properties_model()
+    provider_properties = data.get("provider_properties", {})
+    model = ModelConfig.model_validate_json(json.dumps(data))
+    model.supports = model.supports.resolve()
+    model.provider_properties = ProviderProperties.model_validate(provider_properties)
+    return model
+
+
+def _gateway_registry_request(gateway_url: str) -> tuple[str, dict[str, str]]:
+    from model_library import model_library_settings as current_settings
+
+    api_key = current_settings.get("MODEL_GATEWAY_API_KEY")
+    if not api_key:
+        raise ValueError(
+            "MODEL_GATEWAY_API_KEY is required to load registry from gateway"
+        )
+
+    registry_url = urljoin(gateway_url.rstrip("/") + "/", "registry")
+    return registry_url, {"Authorization": f"Bearer {api_key}"}
+
+
+def _model_registry_from_gateway_payload(payload: object) -> ModelRegistry:
+    if not isinstance(payload, dict):
+        raise ValueError("Gateway registry response must be a JSON object")
+
+    payload_dict = cast(dict[str, object], payload)
+    raw_models = payload_dict.get("models")
+    if not isinstance(raw_models, dict):
+        raise ValueError("Gateway registry response must include a models object")
+
+    model_payloads = cast(dict[str, object], raw_models)
+    return {
+        key: model_config_from_json(cast(dict[str, Any], value))
+        for key, value in model_payloads.items()
+    }
+
+
+def _load_gateway_model_registry(gateway_url: str) -> ModelRegistry:
+    """Load the model registry from a gateway server."""
+    registry_url, headers = _gateway_registry_request(gateway_url)
+    logger.info("Loading model registry from gateway: %s", registry_url)
+    with httpx.Client(timeout=GATEWAY_REGISTRY_TIMEOUT_SECONDS) as client:
+        response = client.get(registry_url, headers=headers)
+        response.raise_for_status()
+        payload = response.json()
+
+    return _model_registry_from_gateway_payload(payload)
+
+
 # Folder containing provider YAMLs
 path_library = Path(__file__).parent / "config"
 
@@ -264,13 +323,108 @@ def deep_update(
     return base
 
 
+def parse_yaml_blocks(
+    model_blocks: dict[str, dict[str, dict[str, Any]]],
+    registry: ModelRegistry,
+) -> None:
+    """Parse a single YAML document's model blocks and merge into registry."""
+    ProviderProperties = get_dynamic_provider_properties_model()
+    # start each provider block with its base-config defaults
+    provider_base_config = model_blocks.get("base-config", {})
+    for model_block, model_data in model_blocks.items():
+        if model_block == "base-config":
+            continue
+
+        block_config = deepcopy(provider_base_config)
+        if "base-config" in model_data:
+            block_config = deep_update(block_config, model_data["base-config"])
+
+        for model_name, model_config in model_data.items():
+            if model_name == "base-config":
+                continue
+
+            # merge the per-model overrides
+            current_model_config = deepcopy(block_config)
+            current_model_config = deep_update(current_model_config, model_config)
+
+            provider_properties = current_model_config.pop("provider_properties", {})
+
+            # create model config object
+            raw_model_obj: RawModelConfig = RawModelConfig.model_validate(
+                current_model_config
+            )
+            raw_model_obj.supports = raw_model_obj.supports.resolve()
+
+            provider_endpoint = (
+                raw_model_obj.provider_endpoint or model_name.split("/", 1)[1]
+            )
+            # add provider metadata
+            model_obj = ModelConfig.model_validate(
+                {
+                    **raw_model_obj.model_dump(),
+                    "provider_name": model_name.split("/")[0],
+                    "provider_endpoint": provider_endpoint,
+                    "full_key": model_name,
+                    "slug": model_name.replace("/", "_"),
+                }
+            )
+            # load provider properties separately since the model was generated at runtime
+            model_obj.provider_properties = ProviderProperties.model_validate(
+                provider_properties
+            )
+
+            registry[model_name] = model_obj
+
+            # add alternative keys
+            alternative_keys = cast(
+                list[str | dict[str, dict[str, Any]]],
+                model_config.get("alternative_keys", []),
+            )
+            for key_item in alternative_keys:
+                match key_item:
+                    # check if we have config overrides
+                    case str():
+                        key = key_item
+                        alt_config = {}
+                    case dict():
+                        key = list(key_item.keys())[0]
+                        alt_config = key_item[key]
+
+                alternative_provider_properties = deep_update(
+                    deepcopy(provider_properties),
+                    alt_config.get("provider_properties", {}),
+                )
+                copy = deepcopy(registry[model_name])
+                provider_name, alternative_model = key.split("/", 1)
+
+                # if same provider, keep endpoint, otherwise override
+                if provider_name != copy.provider_name:
+                    copy.provider_name = provider_name
+                    copy.provider_endpoint = alternative_model
+
+                if alt_config:
+                    copy_dict = copy.model_dump()
+                    copy_dict = deep_update(copy_dict, alt_config)
+                    copy = ModelConfig.model_validate(copy_dict)
+
+                # handle thinking labels
+                if copy.properties.reasoning_model and "Nonthinking" in copy.label:
+                    copy.label = copy.label.replace("Nonthinking", "Thinking")
+
+                copy.slug = key.replace("/", "_")
+                copy.full_key = key
+                copy.alternative_keys = []
+                copy.provider_properties = ProviderProperties.model_validate(
+                    alternative_provider_properties
+                )
+
+                registry[key] = copy
+
+
 def _register_models() -> ModelRegistry:
     logger.debug(f"Loading model registry from {path_library}")
 
     registry: ModelRegistry = {}
-
-    # generate ProviderProperties class
-    ProviderProperties = get_dynamic_provider_properties_model()
 
     # load each provider YAML
     yaml_files = list(Path(path_library).glob("*.yaml"))
@@ -296,99 +450,7 @@ def _register_models() -> ModelRegistry:
             if not model_blocks:
                 continue
 
-            # start each provider block with its base-config defaults
-            provider_base_config = model_blocks.get("base-config", {})
-            for model_block, model_data in model_blocks.items():
-                if model_block == "base-config":
-                    continue
-
-                block_config = deepcopy(provider_base_config)
-                if "base-config" in model_data:
-                    block_config = deep_update(block_config, model_data["base-config"])
-
-                for model_name, model_config in model_data.items():
-                    if model_name == "base-config":
-                        continue
-
-                    # merge the per-model overrides
-                    current_model_config = deepcopy(block_config)
-                    current_model_config = deep_update(
-                        current_model_config, model_config
-                    )
-
-                    provider_properties = current_model_config.pop(
-                        "provider_properties", {}
-                    )
-
-                    # create model config object
-                    raw_model_obj: RawModelConfig = RawModelConfig.model_validate(
-                        current_model_config
-                    )
-                    raw_model_obj.supports = raw_model_obj.supports.resolve()
-
-                    provider_endpoint = (
-                        raw_model_obj.provider_endpoint or model_name.split("/", 1)[1]
-                    )
-                    # add provider metadata
-                    model_obj = ModelConfig.model_validate(
-                        {
-                            **raw_model_obj.model_dump(),
-                            "provider_name": model_name.split("/")[0],
-                            "provider_endpoint": provider_endpoint,
-                            "full_key": model_name,
-                            "slug": model_name.replace("/", "_"),
-                        }
-                    )
-                    # load provider properties separately since the model was generated at runtime
-                    model_obj.provider_properties = ProviderProperties.model_validate(
-                        provider_properties
-                    )
-
-                    registry[model_name] = model_obj
-
-                    # add alternative keys
-                    alternative_keys = cast(
-                        list[str | dict[str, dict[str, Any]]],
-                        model_config.get("alternative_keys", []),
-                    )
-                    for key_item in alternative_keys:
-                        match key_item:
-                            # check if we have config overrides
-                            case str():
-                                key = key_item
-                                alt_config = {}
-                            case dict():
-                                key = list(key_item.keys())[0]
-                                alt_config = key_item[key]
-
-                        copy = deepcopy(registry[model_name])
-                        provider_name, alternative_model = key.split("/", 1)
-
-                        # if same provider, keep endpoint, otherwise override
-                        if provider_name != copy.provider_name:
-                            copy.provider_name = provider_name
-                            copy.provider_endpoint = alternative_model
-
-                        if alt_config:
-                            copy_dict = copy.model_dump()
-                            copy_dict = deep_update(copy_dict, alt_config)
-                            copy = ModelConfig.model_validate(copy_dict)
-
-                        # handle thinking labels
-                        if (
-                            copy.properties.reasoning_model
-                            and "Nonthinking" in copy.label
-                        ):
-                            copy.label = copy.label.replace("Nonthinking", "Thinking")
-
-                        copy.slug = key.replace("/", "_")
-                        copy.full_key = key
-                        copy.alternative_keys = []
-                        copy.provider_properties = ProviderProperties.model_validate(
-                            provider_properties
-                        )
-
-                        registry[key] = copy
+            parse_yaml_blocks(model_blocks, registry)
 
     return registry
 
@@ -451,5 +513,23 @@ def get_model_registry() -> ModelRegistry:
                 global get_provider_registry
                 get_provider_registry()
 
-                _model_registry = _register_models()
+                from model_library import model_library_settings as current_settings
+
+                gateway_url = current_settings.get("MODEL_GATEWAY_URL")
+                if gateway_url:
+                    registry = _load_gateway_model_registry(gateway_url)
+                else:
+                    registry = _register_models()
+
+                    custom_config = current_settings.get("MODEL_LIBRARY_CUSTOM_CONFIG")
+                    if custom_config:
+                        # Local import avoids a circular dependency:
+                        # custom_register_models imports register_models helpers.
+                        from model_library.custom_register_models import (
+                            load_custom_model_configs,
+                        )
+
+                        logger.info(f"Loading custom config from {custom_config}")
+                        load_custom_model_configs(custom_config, registry=registry)
+                _model_registry = registry
     return _model_registry

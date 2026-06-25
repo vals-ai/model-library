@@ -56,17 +56,16 @@ gemini-3-models:
     metadata:
       available_as_evaluator: true
 
-  google/gemini-3.1-flash-lite-preview:
-    label: Gemini 3.1 Flash Lite Preview
+  google/gemini-3.1-flash-lite:
+    label: Gemini 3.1 Flash Lite
     release_date: 2026-03-03
     properties:
       context_window: 1048576
       max_tokens: 65536
       reasoning_model: true
-    costs_per_million_token: # guessing based on 2.5 flash lite
+    costs_per_million_token:
       input: 0.25
       output: 1.50
-
   google/gemini-3-flash-preview:
     label: Gemini 3 Flash (12/25)
     release_date: 2025-12-17
@@ -77,26 +76,6 @@ gemini-3-models:
     costs_per_million_token:
       input: 0.50
       output: 3.00
-
-  google/gemini-3-pro-preview:
-    label: Gemini 3 Pro (11/25)
-    release_date: 2025-11-18
-    properties:
-      context_window: 1048576
-      max_tokens: 65536
-      training_cutoff: "2025-01"
-      reasoning_model: true
-    costs_per_million_token:
-      input: 2.0
-      output: 12.0
-      cache:
-        read: 0.20
-      context:
-        threshold: 200_000
-        input: 4.0
-        output: 18.0
-        cache:
-          read: 0.40
 
 gemma-4-models:
   base-config:

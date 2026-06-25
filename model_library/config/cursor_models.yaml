@@ -1,0 +1,41 @@
+base-config:
+  company: Cursor
+  open_source: false
+  documentation_url: https://cursor.com/docs/models/cursor-composer-2-5
+  supports:
+    images: true
+    videos: false
+    files: false
+    batch: false
+    temperature: false
+    tools: true
+    output_schema: false
+  properties:
+    context_window: 200_000
+    max_tokens: 200_000
+    reasoning_model: true
+  metadata:
+    available_for_everyone: false
+    internal_only: true
+    available_as_evaluator: false
+
+composer-models:
+  cursor/composer-2.5:
+    label: Composer 2.5
+    release_date: 2026-05-18
+    costs_per_million_token:
+      input: 0.5
+      output: 2.5
+      cache:
+        read: 0.2
+        write_markup: 0
+
+  cursor/composer-2.5-fast:
+    label: Composer 2.5 Fast
+    release_date: 2026-05-18
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache:
+        read: 0.5
+        write_markup: 0

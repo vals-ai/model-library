@@ -24,6 +24,7 @@ from model_library.base import (
     InputItem,
     LLMConfig,
     QueryResult,
+    QueryResultExtras,
     QueryResultMetadata,
     RawInput,
     RawResponse,
@@ -72,13 +73,15 @@ class AmazonModel(LLM):
     @override
     def _get_default_api_key(self) -> str:
         if getattr(model_library_settings, "AWS_ACCESS_KEY_ID", None):
-            return json.dumps(
-                {
-                    "AWS_ACCESS_KEY_ID": model_library_settings.AWS_ACCESS_KEY_ID,
-                    "AWS_SECRET_ACCESS_KEY": model_library_settings.AWS_SECRET_ACCESS_KEY,
-                    "AWS_DEFAULT_REGION": model_library_settings.AWS_DEFAULT_REGION,
-                }
-            )
+            creds: dict[str, str] = {
+                "AWS_ACCESS_KEY_ID": model_library_settings.AWS_ACCESS_KEY_ID,
+                "AWS_SECRET_ACCESS_KEY": model_library_settings.AWS_SECRET_ACCESS_KEY,
+                "AWS_DEFAULT_REGION": model_library_settings.AWS_DEFAULT_REGION,
+            }
+            session_token = model_library_settings.get("AWS_SESSION_TOKEN")
+            if session_token:
+                creds["AWS_SESSION_TOKEN"] = session_token
+            return json.dumps(creds)
         return "using-environment"
 
     @override
@@ -100,6 +103,7 @@ class AmazonModel(LLM):
                         "bedrock-runtime",
                         aws_access_key_id=creds["AWS_ACCESS_KEY_ID"],
                         aws_secret_access_key=creds["AWS_SECRET_ACCESS_KEY"],
+                        aws_session_token=creds.get("AWS_SESSION_TOKEN"),
                         region_name=creds["AWS_DEFAULT_REGION"],
                         config=botocore.config.Config(max_pool_connections=1000),  # pyright: ignore[reportAttributeAccessIssue]
                     ),
@@ -449,6 +453,10 @@ class AmazonModel(LLM):
             **body,
         )
 
+        response_id = None
+        if response_metadata := response.get("ResponseMetadata"):
+            response_id = response_metadata.get("RequestId")
+
         messages, stop_reason, metadata = await self.stream_response(response)
 
         text = " ".join([i["text"] for i in messages["content"] if "text" in i])
@@ -486,6 +494,7 @@ class AmazonModel(LLM):
             reasoning=reasoning,
             finish_reason=mapped_finish_reason,
             metadata=metadata,
+            extras=QueryResultExtras(response_id=response_id),
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=messages)],
         )

@@ -1,3 +1,4 @@
+import dataclasses
 import json
 import logging
 import time
@@ -8,13 +9,15 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, computed_field, field_validator
+from pydantic import Field, computed_field
 from rich.pretty import pretty_repr
 
-from model_library.agent.config import AgentConfig
-from model_library.agent.hooks import AgentHooks, TurnResult
+from model_library.agent.config import AgentConfig, TimeLimit, TurnLimit
+from model_library.agent.history_compaction import apply_compaction
+from model_library.agent.hooks import AgentHooks, TurnResult, default_compaction_hook
 from model_library.agent.metadata import (
     AgentTurn,
+    CompactionSummary,
     ErrorTurn,
     SerializableException,
     ToolCallRecord,
@@ -29,7 +32,8 @@ from model_library.base.input import (
     ToolResult,
 )
 from model_library.base.output import QueryResultMetadata
-from model_library.utils import PrettyModel, run_logging
+from model_library.exceptions import MaxContextWindowExceededError
+from model_library.utils import SecondsMetric, ValsModel, run_logging
 
 
 class AgentStopReason(StrEnum):
@@ -40,12 +44,13 @@ class AgentStopReason(StrEnum):
     ERROR = "error"
 
 
-class AgentResult(PrettyModel):
+class AgentResult(ValsModel):
     """Result of an agent run
 
     - final_answer: from determine_answer hook, done tool output, or LLM text
     - final_error: set on max turns/time, unhandled exceptions, or no answer
     - turns: TurnSummary for successful queries, ErrorTurn for failed ones
+    - compactions: successful and failed history compaction attempts
     - error_count: ErrorTurns + failed tool calls
 
     Durations (all wall clock, all rounded to ms):
@@ -53,6 +58,13 @@ class AgentResult(PrettyModel):
     - final_retry_overhead_seconds: sum of retry overhead across turns
     - final_effective_duration_seconds: wall clock minus retry overhead
     - final_aggregated_metadata.duration_seconds: sum of LLM query durations (excludes retries)
+    - final_compaction_metadata.duration_seconds: sum of LLM query durations across compactions (excludes retries)
+
+    Token/cost metadata is split deliberately: ``final_aggregated_metadata``
+    reports task cost (LLM calls inside agent turns), and
+    ``final_compaction_metadata`` reports compaction overhead. Sum them for
+    the actual bill. They're kept apart so users can attribute cost between
+    the agent's reasoning loop and the housekeeping mechanism.
 
     The time budget (TimeLimit.max_seconds) is checked using wall clock minus retry overhead,
     so retry/backoff time does not count against the budget.
@@ -62,13 +74,9 @@ class AgentResult(PrettyModel):
     final_error: SerializableException | None = None
     final_history: list[InputItem] = Field(exclude=True, repr=False)
     turns: list[TurnSummary | ErrorTurn]
-    final_duration_seconds: float  # wall clock, rounded to ms
+    compactions: list[CompactionSummary] = Field(default_factory=list)
+    final_duration_seconds: SecondsMetric  # wall clock, rounded to ms
     output_dir: Path = Field(exclude=True)
-
-    @field_validator("final_duration_seconds", mode="before")
-    @classmethod
-    def _round_duration(cls, v: float) -> float:
-        return round(v, 3)
 
     @computed_field
     @property
@@ -144,11 +152,30 @@ class AgentResult(PrettyModel):
     @computed_field
     @property
     def final_aggregated_metadata(self) -> QueryResultMetadata:
-        """Aggregated LLM query metadata across all turns (excludes tool sub-LLM calls)"""
+        """Aggregated LLM query metadata across agent turns only.
+
+        Excludes history compaction calls — those are aggregated separately
+        in ``final_compaction_metadata``. Sum the two for the true bill.
+        """
         result = QueryResultMetadata()
         for turn in self.turns:
             if isinstance(turn, TurnSummary):
                 result = result + turn.metadata
+        return result
+
+    @computed_field
+    @property
+    def final_compaction_metadata(self) -> QueryResultMetadata:
+        """Aggregated LLM query metadata across history compaction calls only.
+
+        Reported separately from ``final_aggregated_metadata`` so callers can
+        attribute cost between the agent's reasoning loop and compaction
+        overhead.
+        """
+        result = QueryResultMetadata()
+        for compaction in self.compactions:
+            if compaction.metadata is not None:
+                result = result + compaction.metadata
         return result
 
 
@@ -167,15 +194,26 @@ class Agent:
         log_dir: Path = Path("logs"),
         config: AgentConfig,
         hooks: AgentHooks | None = None,
+        history_secret: bytes | None = None,
     ):
         self._name = name
         self._llm = llm
-        self._tools = {tool.name: tool for tool in tools}
+        self._tools = {
+            tool.name: tool for tool in tools if tool.execution_type == "local"
+        }
         self._tool_defs = [tool.definition for tool in tools]
 
         self._log_dir = self._build_log_dir(log_dir, name, llm.model_name)
         self._config = config
-        self._hooks = hooks or AgentHooks()
+        # ``dataclasses.replace`` so we don't mutate the caller's
+        # ``AgentHooks`` instance (may be shared across agents). Non-compaction
+        # hooks are ready immediately; default compaction hook resolution happens
+        # in run(), after async metadata loading makes gateway context-window
+        # fields available.
+        user_hooks = hooks or AgentHooks()
+        self._hooks = dataclasses.replace(user_hooks)
+        self._default_compaction_initialized = user_hooks.compaction is not None
+        self._history_secret = history_secret
 
     def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
         yield "name", self._name
@@ -183,6 +221,7 @@ class Agent:
         yield "tools", list(self._tools)
         yield "config", self._config
         yield "hooks", self._hooks
+        yield "history_signed", self._history_secret is not None
 
     def __repr__(self) -> str:
         return pretty_repr(self)
@@ -219,19 +258,26 @@ class Agent:
         run_id: str | None = None,
         state: dict[str, Any] | None = None,
         logger: logging.Logger | None = None,
-        docent_ingest: bool = False,
         atif_export: bool = False,
     ) -> AgentResult:
         """Run the agent loop
 
         Each turn executes in this order:
-        1. Check time limit and turn limit
+        1. Check turn limit
         2. before_query hook (skipped on first turn)
-        3. turn_limit.turn_message (appended to history)
-        4. time_limit.time_message (appended to history)
-        5. LLM query
-        6. Tool execution
-        7. should_stop hook
+        3. compaction_hook (if configured and threshold reached)
+        4. Check time limit
+        5. turn_limit.turn_message (appended to history)
+        6. time_limit.time_message (appended to history)
+        7. LLM query
+        8. Tool execution
+        9. should_stop hook
+
+        Compaction runs before the per-turn message hooks so injected
+        messages survive into the query — successful compaction replaces
+        history with [SystemInputs..., summary] and would otherwise drop
+        anything appended just before it. The time-limit check sits after
+        compaction so its elapsed reading matches what time_message sees.
 
         The loop stops when any of these occur:
         - A tool returns done=True
@@ -250,6 +296,16 @@ class Agent:
             .getChild(f"<question={question_id}>")
         )
         question_logger.setLevel(logging.DEBUG)
+        await self._llm.ensure_metadata_loaded()
+        if (
+            self._config.history_compaction is not None
+            and self._hooks.compaction is None
+            and not self._default_compaction_initialized
+        ):
+            hook = default_compaction_hook(self._llm, self._config.history_compaction)
+            if hook is not None:
+                self._hooks = dataclasses.replace(self._hooks, compaction=hook)
+            self._default_compaction_initialized = True
         with run_logging(question_logger, self._log_dir, question_id) as output_dir:
             question_logger.debug(repr(self))
 
@@ -261,7 +317,6 @@ class Agent:
                 run_id=run_id,
                 output_dir=output_dir,
                 logger=question_logger,
-                docent_ingest=docent_ingest,
                 atif_export=atif_export,
             )
 
@@ -290,7 +345,9 @@ class Agent:
             (init_dir / "state.json").write_text(
                 json.dumps(state, indent=2, default=str)
             )
-            (init_dir / "history.bin").write_bytes(LLM.serialize_input(input))
+            (init_dir / "history.json").write_text(
+                LLM.serialize_input(input, secret=self._history_secret)
+            )
         except Exception:
             logger.exception("Failed to write init directory")
 
@@ -307,16 +364,17 @@ class Agent:
         turn_dir = output_dir / "turns" / f"turn_{turn_number:03d}"
         turn_dir.mkdir(parents=True, exist_ok=True)
         try:
-            # Exclude history and raw from JSON — history is saved as .bin,
-            # raw contains non-serializable provider objects
-            turn_data = turn.model_dump(exclude={"query_result": {"history", "raw"}})
+            # Exclude history from result JSON — history is saved separately.
+            turn_data = turn.model_dump(exclude={"query_result": {"history"}})
             (turn_dir / "result.json").write_text(
                 json.dumps(turn_data, indent=2, default=str)
             )
             (turn_dir / "state.json").write_text(
                 json.dumps(state, indent=2, default=str)
             )
-            (turn_dir / "history.bin").write_bytes(LLM.serialize_input(history))
+            (turn_dir / "history.json").write_text(
+                LLM.serialize_input(history, secret=self._history_secret)
+            )
         except Exception:
             logger.exception(f"Failed to write turn {turn_number} directory")
 
@@ -344,7 +402,6 @@ class Agent:
         state: dict[str, Any] | None = None,
         output_dir: Path,
         logger: logging.Logger,
-        docent_ingest: bool = False,
         atif_export: bool = False,
     ) -> AgentResult:
         if state is None:
@@ -359,15 +416,22 @@ class Agent:
         # track turns (summaries for the result, raw turns for hooks)
         turns: list[TurnSummary | ErrorTurn] = []
         raw_turns: list[AgentTurn | ErrorTurn] = []
+        # Compaction loop locals: ``compactions`` is appended to by the
+        # agent (exposed in AgentResult/ATIF); ``compaction_state`` is a
+        # hook-private scratchpad. The hook also receives the prior
+        # ``AgentTurn`` (read from ``raw_turns``) to estimate next-turn
+        # size from real metadata + tool_call_records.
+        compactions: list[CompactionSummary] = []
+        compaction_state: dict[str, Any] = {}
 
         start_time = time.monotonic()
 
         final_error: SerializableException | None = None
         last_query_error: Exception | None = None
 
-        turn_limit = self._config.turn_limit
-        time_limit = self._config.time_limit
-        turn_number = 0
+        turn_limit: TurnLimit | None = self._config.turn_limit
+        time_limit: TimeLimit | None = self._config.time_limit
+        turn_number: int = 0
         retry_overhead = 0.0
 
         try:
@@ -375,7 +439,51 @@ class Agent:
                 turn_start = time.monotonic()
                 turn_number += 1
 
-                # check time limit
+                logger.info(
+                    f"Turn {turn_number}/{turn_limit.max_turns if turn_limit else '?'} starting"
+                )
+
+                # hook: before_query (skip first turn, nothing to transform)
+                if turn_number > 1:
+                    if last_query_error is not None:
+                        logger.debug(
+                            f"before_query: handling error {type(last_query_error).__name__}: {last_query_error}"
+                        )
+                    new_history = self._hooks.before_query(history, last_query_error)
+                    last_query_error = None
+                    if new_history != history:
+                        logger.debug(
+                            f"before_query modified history: {len(history)} → {len(new_history)} items"
+                        )
+                    history = new_history
+
+                # Compaction must run BEFORE per-turn message injection.
+                # Successful compaction replaces history with [SystemInputs...,
+                # summary]; if turn/time_message were appended first, they
+                # would be folded into the summary rather than reaching the
+                # LLM as explicit items.
+                # Prior turn (if successful) is the last entry in raw_turns —
+                # ErrorTurn means we have no metadata/tool results to forward.
+                prior = raw_turns[-1] if raw_turns else None
+                history, _ = await apply_compaction(
+                    self._hooks.compaction,
+                    history,
+                    trigger="each_turn",
+                    state=compaction_state,
+                    compactions=compactions,
+                    turn_number=turn_number,
+                    tools=self._tool_defs,
+                    previous_turn=prior if isinstance(prior, AgentTurn) else None,
+                    output_dir=output_dir,
+                    question_id=question_id,
+                    run_id=run_id,
+                    logger=logger,
+                )
+
+                # Compute elapsed once, after compaction. Used by both the
+                # time-limit check and the time_message hook so they agree on
+                # how much time has been consumed (compaction can take tens
+                # of seconds against a large history).
                 elapsed = time.monotonic() - start_time
                 effective_elapsed = (
                     elapsed
@@ -399,32 +507,20 @@ class Agent:
                     logger.warning(str(final_error))
                     break
 
-                logger.info(
-                    f"Turn {turn_number}/{turn_limit.max_turns if turn_limit else '?'} starting"
-                )
-
-                # hook: before_query (skip first turn, nothing to transform)
-                if turn_number > 1:
-                    if last_query_error is not None:
-                        logger.debug(
-                            f"before_query: handling error {type(last_query_error).__name__}: {last_query_error}"
-                        )
-                    new_history = self._hooks.before_query(history, last_query_error)
-                    last_query_error = None
-                    if new_history != history:
-                        logger.debug(
-                            f"before_query modified history: {len(history)} → {len(new_history)} items"
-                        )
-                    history = new_history
-
-                # hooks: optional per-turn message injection
+                # hooks: optional per-turn message injection (runs after
+                # compaction so injected messages survive into the query).
+                # Capture the resolved messages so the force-compact path
+                # below can re-append them — forced compaction also strips
+                # all non-system items, which would otherwise drop these
+                # per-turn nudges.
+                injected_turn_msgs: list[InputItem] = []
                 if turn_limit is not None and turn_limit.turn_message is not None:
                     msg = turn_limit.turn_message(turn_number, turn_limit.max_turns)
                     if msg is not None:
                         logger.debug(
                             f"Hook turn_message({turn_number}/{turn_limit.max_turns}): {msg}"
                         )
-                        history.append(msg)
+                        injected_turn_msgs.append(msg)
                 if time_limit is not None and time_limit.time_message is not None:
                     msg = time_limit.time_message(
                         effective_elapsed, time_limit.max_seconds
@@ -433,7 +529,7 @@ class Agent:
                         logger.debug(
                             f"Hook time_message({effective_elapsed:.3f}s/{time_limit.max_seconds}s): {msg}"
                         )
-                        history.append(msg)
+                        injected_turn_msgs.append(msg)
 
                 # filter tools for this turn
                 if turn_limit is not None and turn_limit.tool_filter is not None:
@@ -443,17 +539,46 @@ class Agent:
                 else:
                     tools_for_turn = self._tool_defs
 
-                # query LLM
+                # TODO: Add tool-output truncation so we can properly handle
+                # compaction-on-overflow.
                 try:
                     query_start = time.monotonic()
-                    response = await self._llm.query(
-                        input=history,
-                        tools=tools_for_turn,
-                        question_id=question_id,
-                        run_id=run_id,
-                        logger=logger,
-                        in_agent=True,
-                    )
+                    try:
+                        response = await self._llm.query(
+                            input=history + injected_turn_msgs,
+                            tools=tools_for_turn,
+                            question_id=question_id,
+                            run_id=run_id,
+                            logger=logger,
+                            in_agent=True,
+                        )
+                    except MaxContextWindowExceededError:
+                        history, summary = await apply_compaction(
+                            self._hooks.compaction,
+                            history,
+                            trigger="max_context",
+                            state=compaction_state,
+                            compactions=compactions,
+                            turn_number=turn_number,
+                            tools=self._tool_defs,
+                            previous_turn=None,
+                            output_dir=output_dir,
+                            question_id=question_id,
+                            run_id=run_id,
+                            logger=logger,
+                        )
+                        # No compaction occurred, just re-raise the error.
+                        if summary is None or not summary.success:
+                            raise
+                        query_start = time.monotonic()
+                        response = await self._llm.query(
+                            input=history + injected_turn_msgs,
+                            tools=tools_for_turn,
+                            question_id=question_id,
+                            run_id=run_id,
+                            logger=logger,
+                            in_agent=True,
+                        )
                     query_wall = time.monotonic() - query_start
                     turn_retry_overhead = max(
                         0.0, query_wall - response.metadata.default_duration_seconds
@@ -490,14 +615,33 @@ class Agent:
                 logger.info(
                     f"Turn {turn_number}/{turn_limit.max_turns if turn_limit else '?'} | {len(tool_call_records)} tool calls"
                     + f" | in: {response.metadata.total_input_tokens}, out: {response.metadata.total_output_tokens}"
-                    + f", cost:{response.metadata.cost.total if response.metadata.cost else '?'}"
                 )
-                for r in tool_call_records:
-                    icon = "✓" if r.tool_output.error is None else "✗"
-                    error_str = f" {r.tool_output.error}" if r.tool_output.error else ""
-                    logger.info(
-                        f"  {icon} {r.tool_call.name} ({r.duration_seconds}s){error_str}"
-                    )
+                records_by_seq = {
+                    (r.tool_call.sequence if r.tool_call.sequence is not None else i): r
+                    for i, r in enumerate(tool_call_records)
+                }
+                events_by_seq = {
+                    (
+                        e.sequence
+                        if e.sequence is not None
+                        else len(tool_call_records) + i
+                    ): e
+                    for i, e in enumerate(response.provider_tool_events)
+                }
+                all_seqs = sorted(set(records_by_seq) | set(events_by_seq))
+                for seq in all_seqs:
+                    if seq in records_by_seq:
+                        r = records_by_seq[seq]
+                        icon = "✓" if r.tool_output.error is None else "✗"
+                        error_str = (
+                            f" {r.tool_output.error}" if r.tool_output.error else ""
+                        )
+                        logger.info(
+                            f"  {icon} {r.tool_call.name} ({r.duration_seconds}s){error_str}"
+                        )
+                    else:
+                        event = events_by_seq[seq]
+                        logger.info(f"  ✓ {event.name} [{event.type}] (provider)")
 
                 turn = AgentTurn(
                     timestamp=datetime.now(timezone.utc).isoformat(),
@@ -547,27 +691,6 @@ class Agent:
         elapsed = time.monotonic() - start_time
         answer = self._hooks.determine_answer(state, raw_turns, final_error)
 
-        if docent_ingest:
-            if not run_id:
-                logger.warning("Docent ingestion skipped: run_id not provided")
-            else:
-                try:
-                    from model_library.docent import (
-                        agent_turns_to_docent_agent_run,
-                        ingest,
-                    )
-
-                    ingest(
-                        run_id,
-                        agent_turns_to_docent_agent_run(
-                            raw_turns,
-                            question_id,
-                            answer,
-                        ),
-                    )
-                except Exception:
-                    logger.warning("Docent ingestion failed", exc_info=True)
-
         if atif_export:
             try:
                 from model_library.atif import ATIFTrajectory
@@ -604,13 +727,14 @@ class Agent:
                         "top_k": self._llm.top_k,
                         "reasoning": self._llm.reasoning or None,
                         "compute_effort": self._llm.compute_effort,
-                        "reasoning_effort": self._llm.reasoning_effort,
+                        "reasoning_effort": _reasoning_effort,
                     }.items()
                     if v is not None
                 } or None
 
                 trajectory = ATIFTrajectory.from_agent_result(
                     turns=raw_turns,
+                    compactions=compactions,
                     agent_name=self._name,
                     model_name=self._llm.model_name,
                     tool_definitions=_tool_defs,
@@ -629,6 +753,7 @@ class Agent:
             final_error=final_error,
             final_history=history,
             turns=turns,
+            compactions=compactions,
             final_duration_seconds=elapsed,
             output_dir=output_dir,
         )

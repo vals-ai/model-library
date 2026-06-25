@@ -4,6 +4,8 @@ import logging
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
+import tiktoken
+
 from model_library.agent import Agent, AgentConfig, Tool, ToolOutput
 from model_library.base.input import TextInput, ToolCall
 from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
@@ -70,14 +72,16 @@ def mock_llm(*responses: QueryResult | Exception) -> MagicMock:
 
     llm = _MockLLM()
     llm.model_name = "mock-model"
+    llm.max_tokens = None
     llm.query = AsyncMock(side_effect=list(responses))
+    llm.ensure_metadata_loaded = AsyncMock(return_value=None)
+    # Tokenizer used by default compaction estimate. Approximate cl100k.
+    llm.get_encoding = AsyncMock(return_value=tiktoken.get_encoding("cl100k_base"))
 
     return llm
 
 
-def make_agent(
-    llm: MagicMock, tools: list[Tool] | None = None, **kwargs: Any
-) -> Agent:
+def make_agent(llm: MagicMock, tools: list[Tool] | None = None, **kwargs: Any) -> Agent:
     kwargs.setdefault("name", "test")
     kwargs.setdefault("config", _cfg)
 

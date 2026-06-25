@@ -1,6 +1,7 @@
 """Unit tests for model_library.agent"""
 
 import asyncio
+import json
 import logging
 import time as time_module
 from pathlib import Path
@@ -8,14 +9,15 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+import tiktoken
 
 from model_library.agent import (
-    Agent,
     AgentConfig,
     AgentHooks,
     AgentResult,
     AgentTurn,
     ErrorTurn,
+    HistoryCompaction,
     SerializableException,
     TimeLimit,
     Tool,
@@ -25,10 +27,22 @@ from model_library.agent import (
     TurnLimit,
     TurnResult,
     TurnSummary,
+    llm_summary_compactor,
     truncate_oldest,
 )
-from model_library.base.input import InputItem, RawResponse, TextInput, ToolCall
+from model_library.agent.history_compaction import resolve_threshold_tokens
+from model_library.base.base import LLM
+from model_library.base.gateway import GatewayLLM
+from model_library.base.input import (
+    InputItem,
+    RawResponse,
+    SystemInput,
+    TextInput,
+    ToolCall,
+    ToolResult,
+)
 from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
+from model_library.exceptions import MaxContextWindowExceededError
 
 
 from tests.unit.agent.helpers import (
@@ -50,7 +64,9 @@ class EchoTool(Tool):
     description = "Echo the input"
     parameters = {"text": {"type": "string"}}
 
-    async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+    async def execute(
+        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
+    ) -> ToolOutput:
         return ToolOutput(output=args.get("text", ""))
 
 
@@ -59,10 +75,11 @@ class StateTool(Tool):
     description = "Set a state value"
     parameters = {"key": {"type": "string"}, "value": {"type": "string"}}
 
-    async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+    async def execute(
+        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
+    ) -> ToolOutput:
         state[args["key"]] = args["value"]
         return ToolOutput(output="ok")
-
 
 
 class FailingTool(Tool):
@@ -70,7 +87,9 @@ class FailingTool(Tool):
     description = "Always fails"
     parameters: dict[str, Any] = {}
 
-    async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+    async def execute(
+        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
+    ) -> ToolOutput:
         raise RuntimeError("tool broke")
 
 
@@ -81,7 +100,9 @@ class ErrorReturnTool(Tool):
     description = "Returns error"
     parameters: dict[str, Any] = {}
 
-    async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+    async def execute(
+        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
+    ) -> ToolOutput:
         return ToolOutput(output="error details", error="something went wrong")
 
 
@@ -90,7 +111,9 @@ class LLMCallingTool(Tool):
     description = "Retrieve info"
     parameters = {"q": {"type": "string"}}
 
-    async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+    async def execute(
+        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
+    ) -> ToolOutput:
         sub_metadata = QueryResultMetadata(
             in_tokens=50, out_tokens=20, cost=QueryResultCost(input=0.005, output=0.003)
         )
@@ -143,7 +166,11 @@ class TestAgentBasicLoop:
         tc = make_tool_call("echo", {"text": "hi"})
         responses = [make_tool_response([tc]) for _ in range(5)]
         llm = mock_llm(*responses)
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=3), time_limit=None))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=3), time_limit=None),
+        )
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -162,12 +189,23 @@ class TestAgentBasicLoop:
         def budget_message(turn_number: int, max_turns: int) -> InputItem | None:
             return TextInput(text=f"Turn {turn_number}/{max_turns}")
 
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=5, turn_message=budget_message), time_limit=None))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=TurnLimit(max_turns=5, turn_message=budget_message),
+                time_limit=None,
+            ),
+        )
         await agent.run([TextInput(text="go")], question_id="q1")
 
         # second query should have the turn message in its input
         second_call_input = llm.query.call_args_list[1].kwargs["input"]
-        injected = [m for m in second_call_input if isinstance(m, TextInput) and "Turn " in m.text]
+        injected = [
+            m
+            for m in second_call_input
+            if isinstance(m, TextInput) and "Turn " in m.text
+        ]
         assert len(injected) == 1
         assert injected[0].text == "Turn 2/5"
 
@@ -175,7 +213,13 @@ class TestAgentBasicLoop:
         """turn_message returning None does not append anything"""
         llm = mock_llm(make_text_response("done"))
 
-        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5, turn_message=lambda t, m: None), time_limit=None))
+        agent = make_agent(
+            llm,
+            config=AgentConfig(
+                turn_limit=TurnLimit(max_turns=5, turn_message=lambda t, m: None),
+                time_limit=None,
+            ),
+        )
         await agent.run([TextInput(text="go")], question_id="q1")
 
         first_call_input = llm.query.call_args_list[0].kwargs["input"]
@@ -195,7 +239,13 @@ class TestAgentBasicLoop:
             return call_count[0] * 5.0  # 5s per call, ~30s per turn
 
         with patch.object(time_module, "monotonic", side_effect=fake_monotonic):
-            agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=None, time_limit=TimeLimit(max_seconds=50)))
+            agent = make_agent(
+                llm,
+                [EchoTool()],
+                config=AgentConfig(
+                    turn_limit=None, time_limit=TimeLimit(max_seconds=50)
+                ),
+            )
             result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert not result.success
@@ -207,22 +257,36 @@ class TestAgentBasicLoop:
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
 
-        def remaining_message(elapsed_seconds: float, max_seconds: float) -> InputItem | None:
+        def remaining_message(
+            elapsed_seconds: float, max_seconds: float
+        ) -> InputItem | None:
             remaining = max_seconds - elapsed_seconds
             return TextInput(text=f"{remaining:.0f}s remaining")
 
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=None, time_limit=TimeLimit(max_seconds=300, time_message=remaining_message)))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=None,
+                time_limit=TimeLimit(max_seconds=300, time_message=remaining_message),
+            ),
+        )
         await agent.run([TextInput(text="go")], question_id="q1")
 
         # first query should have the time message
         first_call_input = llm.query.call_args_list[0].kwargs["input"]
-        injected = [m for m in first_call_input if isinstance(m, TextInput) and "remaining" in m.text]
+        injected = [
+            m
+            for m in first_call_input
+            if isinstance(m, TextInput) and "remaining" in m.text
+        ]
         assert len(injected) == 1
-
 
     async def test_text_only_auto_stops_without_should_stop(self):
         llm = mock_llm(make_text_response("done"))
-        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None))
+        agent = make_agent(
+            llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None)
+        )
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -263,20 +327,23 @@ class TestAgentBasicLoop:
 
 class TestAgentFileOutput:
     async def test_init_dir_written(self):
-        """init/ directory contains config.json, state.json, history.bin"""
+        """init/ directory contains config.json, state.json, history.json"""
         llm = mock_llm(make_text_response("done"))
         agent = make_agent(llm)
         state = {"key": "value"}
 
-        result = await agent.run([TextInput(text="hello")], question_id="q1", state=state)
+        result = await agent.run(
+            [TextInput(text="hello")], question_id="q1", state=state
+        )
 
         init_dir = result.output_dir / "turns" / "init"
         assert init_dir.exists()
         assert (init_dir / "config.json").exists()
         assert (init_dir / "state.json").exists()
-        assert (init_dir / "history.bin").exists()
+        assert (init_dir / "history.json").exists()
 
         import json
+
         config = json.loads((init_dir / "config.json").read_text())
         assert "tools" in config
         assert "llm" in config
@@ -289,7 +356,7 @@ class TestAgentFileOutput:
         assert init_state == {"key": "value"}
 
     async def test_turn_dirs_written(self):
-        """Each successful turn gets a turn_NNN/ directory with result.json, state.json, history.bin"""
+        """Each successful turn gets a turn_NNN/ directory with result.json, state.json, history.json"""
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
         agent = make_agent(llm, [EchoTool()])
@@ -300,17 +367,46 @@ class TestAgentFileOutput:
         assert turn_dir.exists()
         assert (turn_dir / "result.json").exists()
         assert (turn_dir / "state.json").exists()
-        assert (turn_dir / "history.bin").exists()
+        assert (turn_dir / "history.json").exists()
 
         turn_dir2 = result.output_dir / "turns" / "turn_002"
         assert turn_dir2.exists()
         assert (turn_dir2 / "result.json").exists()
 
+    async def test_history_secret_signs_saved_turn_history(self):
+        """Agent can HMAC-sign saved history when configured with a secret."""
+        provider_obj = {"role": "assistant", "content": "done"}
+        response = QueryResult(
+            output_text="done",
+            metadata=make_metadata(),
+            tool_calls=[],
+            history=[TextInput(text="hello"), RawResponse(response=provider_obj)],
+        )
+        llm = mock_llm(response)
+        agent = make_agent(llm, history_secret=b"test-secret")
+
+        result = await agent.run([TextInput(text="hello")], question_id="q1")
+
+        history_path = result.output_dir / "turns" / "turn_001" / "history.json"
+        data = json.loads(history_path.read_text())
+        assert set(data[1]["response"]) == {"pickle", "hmac"}
+
+        restored = LLM.deserialize_input(history_path, secret=b"test-secret")
+        assert isinstance(restored[1], RawResponse)
+        assert restored[1].response == provider_obj
+
+        with pytest.raises(ValueError, match="HMAC verification failed"):
+            LLM.deserialize_input(history_path, secret=b"wrong-secret")
+
     async def test_error_turn_dir_written(self):
         """Error turns get a turn_NNN/ directory with just error.json"""
         llm = mock_llm(RuntimeError("boom"), make_text_response("recovered"))
         hooks = AgentHooks(before_query=lambda h, e: h)
-        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None), hooks=hooks)
+        agent = make_agent(
+            llm,
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
+            hooks=hooks,
+        )
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -319,7 +415,7 @@ class TestAgentFileOutput:
         assert (error_dir / "error.json").exists()
         assert not (error_dir / "result.json").exists()
         assert not (error_dir / "state.json").exists()
-        assert not (error_dir / "history.bin").exists()
+        assert not (error_dir / "history.json").exists()
 
     async def test_result_json_written(self):
         """result.json is written at the output_dir root"""
@@ -332,6 +428,7 @@ class TestAgentFileOutput:
         assert result_path.exists()
 
         import json
+
         data = json.loads(result_path.read_text())
         assert data["final_answer"] == "done"
         assert data["success"] is True
@@ -472,7 +569,12 @@ class TestAgentToolExecution:
             parameters = {"needed": {"type": "string"}, "optional": {"type": "string"}}
             required = ["needed"]
 
-            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+            async def execute(
+                self,
+                args: dict[str, Any],
+                state: dict[str, Any],
+                logger: logging.Logger,
+            ) -> ToolOutput:
                 return ToolOutput(output=args["needed"])
 
         tc = make_tool_call("opt", {"needed": "yes"})  # "optional" omitted
@@ -503,7 +605,11 @@ class TestAgentToolExecution:
     async def test_state_shared_between_tools(self):
         set_call = make_tool_call("set_state", {"key": "found", "value": "yes"})
         echo_call = make_tool_call("echo", {"text": "check"})
-        llm = mock_llm(make_tool_response([set_call]), make_tool_response([echo_call]), make_text_response("done"))
+        llm = mock_llm(
+            make_tool_response([set_call]),
+            make_tool_response([echo_call]),
+            make_text_response("done"),
+        )
         agent = make_agent(llm, [StateTool(), EchoTool()])
         state: dict[str, Any] = {}
 
@@ -544,7 +650,9 @@ class TestAgentToolMetadata:
     async def test_tool_metadata_aggregated_in_turn(self):
         tc = make_tool_call("retrieve", {"q": "test"})
         llm = mock_llm(
-            make_tool_response([tc], metadata=make_metadata(in_tokens=100, out_tokens=50)),
+            make_tool_response(
+                [tc], metadata=make_metadata(in_tokens=100, out_tokens=50)
+            ),
             make_text_response("done"),
         )
         agent = make_agent(llm, [LLMCallingTool()])
@@ -564,7 +672,10 @@ class TestAgentToolMetadata:
     async def test_metadata_aggregates_across_turns(self):
         tc = make_tool_call("echo", {"text": "hi"})
         meta = make_metadata(in_tokens=100, out_tokens=50, cost_total=0.02)
-        llm = mock_llm(make_tool_response([tc], metadata=meta), make_text_response("done", metadata=meta))
+        llm = mock_llm(
+            make_tool_response([tc], metadata=meta),
+            make_text_response("done", metadata=meta),
+        )
         agent = make_agent(llm, [EchoTool()])
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
@@ -586,7 +697,12 @@ class TestAgentHooks:
         def stop_at_3(turn_result: TurnResult) -> bool:
             return turn_result.turn_number >= 3
 
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None), hooks=AgentHooks(should_stop=stop_at_3))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None),
+            hooks=AgentHooks(should_stop=stop_at_3),
+        )
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -603,9 +719,16 @@ class TestAgentHooks:
         llm = mock_llm(*responses)
 
         def stop_on_exit(turn_result: TurnResult) -> bool:
-            return turn_result.response_text is not None and "EXIT" in turn_result.response_text
+            return (
+                turn_result.response_text is not None
+                and "EXIT" in turn_result.response_text
+            )
 
-        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None), hooks=AgentHooks(should_stop=stop_on_exit))
+        agent = make_agent(
+            llm,
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=10), time_limit=None),
+            hooks=AgentHooks(should_stop=stop_on_exit),
+        )
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -639,7 +762,9 @@ class TestAgentHooks:
         ) -> str:
             return f"score={state.get('score', 'unknown')}"
 
-        agent = make_agent(llm, [StateTool()], hooks=AgentHooks(determine_answer=answer_from_state))
+        agent = make_agent(
+            llm, [StateTool()], hooks=AgentHooks(determine_answer=answer_from_state)
+        )
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -660,7 +785,12 @@ class TestAgentHooks:
                 return "salvaged"
             return ""
 
-        agent = make_agent(llm, [StateTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=3), time_limit=None), hooks=AgentHooks(determine_answer=salvage))
+        agent = make_agent(
+            llm,
+            [StateTool()],
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=3), time_limit=None),
+            hooks=AgentHooks(determine_answer=salvage),
+        )
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -683,7 +813,11 @@ class TestAgentHooks:
         responses = [make_tool_response([tc]) for _ in range(5)]
         llm = mock_llm(*responses)
 
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=2), time_limit=None))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=2), time_limit=None),
+        )
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -701,7 +835,9 @@ class TestAgentHooks:
         def on_result(record: ToolCallRecord, state: dict) -> None:
             records.append(record)
 
-        agent = make_agent(llm, [EchoTool()], hooks=AgentHooks(on_tool_result=on_result))
+        agent = make_agent(
+            llm, [EchoTool()], hooks=AgentHooks(on_tool_result=on_result)
+        )
 
         await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -714,13 +850,19 @@ class TestAgentHooks:
         """before_query receives last_query_error and can recover"""
         errors_seen: list[Exception | None] = []
 
-        def handle_error(history: list[InputItem], error: Exception | None) -> list[InputItem]:
+        def handle_error(
+            history: list[InputItem], error: Exception | None
+        ) -> list[InputItem]:
             errors_seen.append(error)
             return history
 
         llm = mock_llm(RuntimeError("query failed"), make_text_response("recovered"))
 
-        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None), hooks=AgentHooks(before_query=handle_error))
+        agent = make_agent(
+            llm,
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
+            hooks=AgentHooks(before_query=handle_error),
+        )
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -736,7 +878,9 @@ class TestAgentHooks:
         """Without before_query, query error is re-raised and sets final_error"""
         llm = mock_llm(RuntimeError("query failed"), make_text_response("unreachable"))
 
-        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None))
+        agent = make_agent(
+            llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None)
+        )
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -755,7 +899,9 @@ class TestErrorHandling:
     async def test_query_exception_creates_error_turn(self):
         llm = mock_llm(ValueError("bad input"), make_text_response("unreachable"))
 
-        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None))
+        agent = make_agent(
+            llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None)
+        )
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -765,12 +911,23 @@ class TestErrorHandling:
 
     async def test_error_count_includes_error_turns_and_failed_tools(self):
         tc = make_tool_call("fail", {})
-        llm = mock_llm(RuntimeError("query failed"), make_tool_response([tc]), make_text_response("done"))
+        llm = mock_llm(
+            RuntimeError("query failed"),
+            make_tool_response([tc]),
+            make_text_response("done"),
+        )
 
-        def handle_error(history: list[InputItem], error: Exception | None) -> list[InputItem]:
+        def handle_error(
+            history: list[InputItem], error: Exception | None
+        ) -> list[InputItem]:
             return history
 
-        agent = make_agent(llm, [FailingTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None), hooks=AgentHooks(before_query=handle_error))
+        agent = make_agent(
+            llm,
+            [FailingTool()],
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
+            hooks=AgentHooks(before_query=handle_error),
+        )
 
         result = await agent.run([TextInput(text="test")], question_id="q1")
 
@@ -794,7 +951,9 @@ class TestAgentResultComputedFields:
         defaults.update(kwargs)
         return AgentResult(**defaults)
 
-    def _make_turn_summary(self, in_tokens: int = 10, out_tokens: int = 5, **kwargs: Any) -> TurnSummary:
+    def _make_turn_summary(
+        self, in_tokens: int = 10, out_tokens: int = 5, **kwargs: Any
+    ) -> TurnSummary:
         defaults: dict[str, Any] = {
             "output_text_length": 0,
             "reasoning_length": 0,
@@ -810,14 +969,19 @@ class TestAgentResultComputedFields:
         assert self._make_result(final_error=None).success is True
 
     def test_success_false_when_error(self):
-        result = self._make_result(final_error=SerializableException(type="Err", message="bad"))
+        result = self._make_result(
+            final_error=SerializableException(type="Err", message="bad")
+        )
         assert result.success is False
 
     def test_total_turns(self):
         result = self._make_result(
             turns=[
                 self._make_turn_summary(),
-                ErrorTurn(error=SerializableException(type="E", message="e"), duration_seconds=0.0),
+                ErrorTurn(
+                    error=SerializableException(type="E", message="e"),
+                    duration_seconds=0.0,
+                ),
                 self._make_turn_summary(),
             ]
         )
@@ -826,11 +990,37 @@ class TestAgentResultComputedFields:
     def test_tool_usage(self):
         result = self._make_result(
             turns=[
-                self._make_turn_summary(tool_calls=[
-                    ToolCallSummary(tool_name="search", tool_call_id="1", args_lengths={}, output_length=1, success=True, done=False, duration_seconds=0.1),
-                    ToolCallSummary(tool_name="search", tool_call_id="2", args_lengths={}, output_length=1, success=True, done=False, duration_seconds=0.1),
-                    ToolCallSummary(tool_name="submit", tool_call_id="3", args_lengths={}, output_length=1, success=True, done=False, duration_seconds=0.1),
-                ]),
+                self._make_turn_summary(
+                    tool_calls=[
+                        ToolCallSummary(
+                            tool_name="search",
+                            tool_call_id="1",
+                            args_lengths={},
+                            output_length=1,
+                            success=True,
+                            done=False,
+                            duration_seconds=0.1,
+                        ),
+                        ToolCallSummary(
+                            tool_name="search",
+                            tool_call_id="2",
+                            args_lengths={},
+                            output_length=1,
+                            success=True,
+                            done=False,
+                            duration_seconds=0.1,
+                        ),
+                        ToolCallSummary(
+                            tool_name="submit",
+                            tool_call_id="3",
+                            args_lengths={},
+                            output_length=1,
+                            success=True,
+                            done=False,
+                            duration_seconds=0.1,
+                        ),
+                    ]
+                ),
             ]
         )
         assert result.tool_usage == {"search": 2, "submit": 1}
@@ -841,10 +1031,29 @@ class TestAgentResultComputedFields:
         result = self._make_result(
             turns=[
                 ErrorTurn(error=err, duration_seconds=0.0),
-                self._make_turn_summary(tool_calls=[
-                    ToolCallSummary(tool_name="a", tool_call_id="1", args_lengths={}, output_length=1, success=False, done=False, duration_seconds=0.1, error=err),
-                    ToolCallSummary(tool_name="b", tool_call_id="2", args_lengths={}, output_length=1, success=True, done=False, duration_seconds=0.1),
-                ]),
+                self._make_turn_summary(
+                    tool_calls=[
+                        ToolCallSummary(
+                            tool_name="a",
+                            tool_call_id="1",
+                            args_lengths={},
+                            output_length=1,
+                            success=False,
+                            done=False,
+                            duration_seconds=0.1,
+                            error=err,
+                        ),
+                        ToolCallSummary(
+                            tool_name="b",
+                            tool_call_id="2",
+                            args_lengths={},
+                            output_length=1,
+                            success=True,
+                            done=False,
+                            duration_seconds=0.1,
+                        ),
+                    ]
+                ),
             ]
         )
         # 1 ErrorTurn + 1 failed tool = 2
@@ -854,7 +1063,10 @@ class TestAgentResultComputedFields:
         result = self._make_result(
             turns=[
                 self._make_turn_summary(in_tokens=100, out_tokens=50),
-                ErrorTurn(error=SerializableException(type="E", message="e"), duration_seconds=0.0),
+                ErrorTurn(
+                    error=SerializableException(type="E", message="e"),
+                    duration_seconds=0.0,
+                ),
                 self._make_turn_summary(in_tokens=200, out_tokens=100),
             ]
         )
@@ -864,7 +1076,12 @@ class TestAgentResultComputedFields:
 
     def test_final_aggregated_metadata_skips_error_turns(self):
         result = self._make_result(
-            turns=[ErrorTurn(error=SerializableException(type="E", message="e"), duration_seconds=0.0)]
+            turns=[
+                ErrorTurn(
+                    error=SerializableException(type="E", message="e"),
+                    duration_seconds=0.0,
+                )
+            ]
         )
         assert result.final_aggregated_metadata == QueryResultMetadata()
 
@@ -872,9 +1089,16 @@ class TestAgentResultComputedFields:
         result = self._make_result(
             final_duration_seconds=10.0,
             turns=[
-                self._make_turn_summary(duration_seconds=4.0, retry_overhead_seconds=1.0),
-                ErrorTurn(error=SerializableException(type="E", message="e"), duration_seconds=0.3),
-                self._make_turn_summary(duration_seconds=5.0, retry_overhead_seconds=0.5),
+                self._make_turn_summary(
+                    duration_seconds=4.0, retry_overhead_seconds=1.0
+                ),
+                ErrorTurn(
+                    error=SerializableException(type="E", message="e"),
+                    duration_seconds=0.3,
+                ),
+                self._make_turn_summary(
+                    duration_seconds=5.0, retry_overhead_seconds=0.5
+                ),
             ],
         )
         assert result.final_retry_overhead_seconds == 1.5
@@ -887,7 +1111,9 @@ class TestAgentResultComputedFields:
 class TestModels:
     def test_tool_call_record_success_computed_from_error(self):
         tc = ToolCall(id="1", name="t", args={})
-        ok = ToolCallRecord(tool_call=tc, tool_output=ToolOutput(output="r"), duration_seconds=0.1)
+        ok = ToolCallRecord(
+            tool_call=tc, tool_output=ToolOutput(output="r"), duration_seconds=0.1
+        )
         assert ok.success is True
 
         err = ToolCallRecord(
@@ -926,7 +1152,12 @@ class TestModels:
 
     def test_turn_result_properties(self):
         tc = ToolCall(id="tc_1", name="echo", args={"text": "hi"})
-        qr = QueryResult(output_text="hello", metadata=QueryResultMetadata(), tool_calls=[tc], history=[])
+        qr = QueryResult(
+            output_text="hello",
+            metadata=QueryResultMetadata(),
+            tool_calls=[tc],
+            history=[],
+        )
         turn = AgentTurn(duration_seconds=0.0, query_result=qr)
         tr = TurnResult(turn_number=1, turn=turn, state={}, elapsed_seconds=0.5)
 
@@ -935,7 +1166,11 @@ class TestModels:
 
     def test_agent_result_repr(self):
         result = AgentResult(
-            final_answer="answer", final_error=None, final_history=[], turns=[], final_duration_seconds=1.0,
+            final_answer="answer",
+            final_error=None,
+            final_history=[],
+            turns=[],
+            final_duration_seconds=1.0,
             output_dir=Path("/tmp/test"),
         )
         r = repr(result)
@@ -945,7 +1180,9 @@ class TestModels:
     # --- ToolCallSummary ---
 
     def test_tool_call_summary_from_record(self):
-        tc = ToolCall(id="1", name="search", args={"query": "hello world", "limit": "10"})
+        tc = ToolCall(
+            id="1", name="search", args={"query": "hello world", "limit": "10"}
+        )
         output = ToolOutput(output="found 3 results", error=None, done=False)
         record = ToolCallRecord(tool_call=tc, tool_output=output, duration_seconds=1.5)
 
@@ -965,7 +1202,9 @@ class TestModels:
         tc = ToolCall(id="2", name="fail", args={"x": "y"})
         output = ToolOutput(output="boom", error="something broke", done=False)
         error = SerializableException(type="ToolFailed", message="something broke")
-        record = ToolCallRecord(tool_call=tc, tool_output=output, duration_seconds=0.5, error=error)
+        record = ToolCallRecord(
+            tool_call=tc, tool_output=output, duration_seconds=0.5, error=error
+        )
 
         summary = record.to_summary()
 
@@ -1039,7 +1278,9 @@ class TestModels:
         assert summary.tool_calls[0].metadata.in_tokens == 50
 
     def test_turn_summary_none_text_and_reasoning(self):
-        qr = QueryResult(output_text=None, reasoning=None, metadata=QueryResultMetadata(), history=[])
+        qr = QueryResult(
+            output_text=None, reasoning=None, metadata=QueryResultMetadata(), history=[]
+        )
         turn = AgentTurn(query_result=qr, duration_seconds=0.5)
 
         summary = turn.to_summary()
@@ -1084,8 +1325,6 @@ class TestTruncateOldest:
         assert result == [resp2, tool2, text2]
 
     def test_preserves_system_input(self):
-        from model_library.base.input import SystemInput
-
         system = SystemInput(text="you are helpful")
         resp1 = RawResponse(response="model reply 1")
         tool1 = TextInput(text="tool output 1")
@@ -1106,8 +1345,6 @@ class TestTruncateOldest:
         assert result == []
 
     def test_preserves_initial_user_input(self):
-        from model_library.base.input import SystemInput
-
         system = SystemInput(text="you are helpful")
         user_input = TextInput(text="solve this problem")
         resp1 = RawResponse(response="model reply 1")
@@ -1121,13 +1358,361 @@ class TestTruncateOldest:
         assert result[2:] == [resp2, tool2]
 
     def test_no_response_raises_when_nothing_can_be_truncated(self):
-        from model_library.base.input import SystemInput
-
         system = SystemInput(text="you are helpful")
         user_input = TextInput(text="very long prompt")
 
         with pytest.raises(ValueError, match="No prior exchange found to truncate"):
             truncate_oldest([system, user_input])
+
+
+# --- History compaction ---
+
+
+class TestHistoryCompaction:
+    @pytest.fixture(autouse=True)
+    def _patch_context_window(self):
+        with patch(
+            "model_library.agent.history_compaction.get_model_input_context_window",
+            return_value=200_000,
+        ):
+            yield
+
+    async def test_compacts_history_and_records_success_artifact(self):
+        large_result = "large-result " * 80
+        tc = make_tool_call("echo", {"text": large_result})
+        first = make_tool_response(
+            [tc],
+            output_text=None,
+            metadata=make_metadata(in_tokens=10, out_tokens=5),
+        )
+        first.history = [
+            SystemInput(text="stay concise"),
+            TextInput(text="go"),
+            RawResponse(response="assistant called echo"),
+        ]
+        llm = mock_llm(
+            first,
+            make_text_response("summary: keep the result"),
+            make_text_response("done"),
+        )
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=None,
+                time_limit=None,
+                history_compaction=HistoryCompaction(threshold_tokens=50),
+            ),
+        )
+
+        result = await agent.run(
+            [SystemInput(text="stay concise"), TextInput(text="go")],
+            question_id="q1",
+        )
+
+        assert result.final_answer == "done"
+        assert len(result.compactions) == 1
+        c = result.compactions[0]
+        assert c.success
+        assert c.summary == "summary: keep the result"
+        encoding = await llm.get_encoding()
+        pending_tool_tokens = len(encoding.encode(large_result, disallowed_special=()))
+        assert c.input_token_estimate == 15 + pending_tool_tokens
+        assert 15 < c.threshold_tokens < c.input_token_estimate
+        assert c.threshold_tokens == 50
+        assert c.turn_number == 2
+        assert c.artifacts_subdir == "compactions/compaction_001"
+        compaction_dir = result.output_dir / c.artifacts_subdir
+        assert (compaction_dir / "previous_history.bin").exists()
+
+        compaction_call = llm.query.call_args_list[1].kwargs["input"]
+        compaction_tools = llm.query.call_args_list[1].kwargs["tools"]
+        assert compaction_tools == []
+        assert compaction_call[:-1] == [
+            SystemInput(text="stay concise"),
+            TextInput(text="go"),
+            RawResponse(response="assistant called echo"),
+            ToolResult(tool_call=tc, result=large_result),
+        ]
+        assert isinstance(compaction_call[-1], TextInput)
+        assert "CONTEXT CHECKPOINT COMPACTION" in compaction_call[-1].text
+
+        next_input = llm.query.call_args_list[2].kwargs["input"]
+        assert len(next_input) == 2
+        assert next_input[0] == SystemInput(text="stay concise")
+        assert isinstance(next_input[1], TextInput)
+        assert next_input[1].text.startswith(
+            "Another LLM agent started to solve this task"
+        )
+        assert next_input[1].text.endswith("summary: keep the result")
+
+    async def test_empty_compaction_summary_is_failure_not_infinite_loop(self):
+        """If the compaction LLM returns whitespace-only output, treat it as a
+        failure rather than retrying forever on the same input.
+        """
+        tc = make_tool_call("echo", {"text": "x"})
+        first = make_tool_response(
+            [tc],
+            output_text=None,
+            metadata=make_metadata(in_tokens=200, out_tokens=20),
+        )
+        first.history = [
+            TextInput(text="go"),
+            RawResponse(response="r1"),
+        ]
+        llm = mock_llm(
+            first,
+            make_text_response("   \n  "),  # whitespace-only summary
+            make_text_response("done"),
+        )
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=None,
+                time_limit=None,
+                history_compaction=HistoryCompaction(
+                    threshold_tokens=10, max_failures=1
+                ),
+            ),
+        )
+
+        result = await agent.run([TextInput(text="go")], question_id="q1")
+
+        assert result.success
+        assert len(result.compactions) == 1
+        c = result.compactions[0]
+        assert not c.success
+        assert c.error is not None
+        assert c.error.type == "EmptyCompactionSummaryError"
+        # Three calls: turn 1 main, one compaction attempt, turn 2 main.
+        # Without the fix, the loop would spin forever on the same input.
+        assert llm.query.call_count == 3
+
+    async def test_max_context_compaction_is_opt_in(self):
+        tc = make_tool_call("echo", {"text": "x"})
+        first = make_tool_response(
+            [tc],
+            output_text=None,
+            metadata=make_metadata(in_tokens=10, out_tokens=5),
+        )
+        first.history = [
+            TextInput(text="user-task"),
+            RawResponse(response="r1"),
+        ]
+        llm = mock_llm(
+            first,
+            MaxContextWindowExceededError("ctx too big"),
+            make_text_response("unreachable"),
+        )
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=TurnLimit(max_turns=5),
+                time_limit=None,
+                history_compaction=HistoryCompaction(threshold_tokens=1_000_000),
+            ),
+        )
+
+        result = await agent.run([TextInput(text="user-task")], question_id="q1")
+
+        assert not result.success
+        assert result.final_error is not None
+        assert result.final_error.type == "MaxContextWindowExceededError"
+        assert result.compactions == []
+        assert llm.query.call_count == 2
+
+    async def test_truncate_then_compact_on_max_context_window(self):
+        """If the turn query raises MaxContextWindowExceededError (e.g. a tool
+        result blew past context before the threshold check could fire), the
+        agent can compact before surfacing the error."""
+        tc = make_tool_call("echo", {"text": "x"})
+        first = make_tool_response(
+            [tc],
+            output_text=None,
+            metadata=make_metadata(in_tokens=10, out_tokens=5),
+        )
+        first.history = [
+            TextInput(text="user-task"),
+            RawResponse(response="r1"),
+        ]
+        # Sequence: turn 1 query OK; turn 2 query raises max-context;
+        # compaction returns a summary; turn-2 retry succeeds.
+        llm = mock_llm(
+            first,
+            MaxContextWindowExceededError("ctx too big"),
+            make_text_response("overflow summary"),
+            make_text_response("done"),
+        )
+        # Threshold high enough that the threshold gate will NOT fire — the
+        # max-context path is the only way compaction can happen here.
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=None,
+                time_limit=None,
+                history_compaction=HistoryCompaction(
+                    threshold_tokens=1_000_000,
+                    compact_on_max_context=True,
+                ),
+            ),
+        )
+
+        result = await agent.run([TextInput(text="user-task")], question_id="q1")
+
+        assert result.success
+        assert result.final_answer == "done"
+        assert len(result.compactions) == 1
+        assert result.compactions[0].success
+        assert result.compactions[0].summary == "overflow summary"
+        # 4 LLM calls: turn-1 main, turn-2 main (overflow), compaction,
+        # turn-2 retry.
+        assert llm.query.call_count == 4
+
+    async def test_compaction_context_retries_are_bounded(self, tmp_path: Path):
+        tc = make_tool_call("echo", {"text": "x"})
+        llm = mock_llm(
+            MaxContextWindowExceededError("compaction input too big"),
+            MaxContextWindowExceededError("still too big"),
+            MaxContextWindowExceededError("still too big after retries"),
+        )
+        cfg = HistoryCompaction(
+            threshold_tokens=100,
+            compact_on_max_context=True,
+            max_compaction_context_retries=2,
+        )
+        hook = llm_summary_compactor(llm, cfg)
+        assert hook is not None
+
+        history: list[InputItem] = [
+            TextInput(text="user-task"),
+            RawResponse(response="r1"),
+            ToolResult(tool_call=tc, result="t1"),
+            RawResponse(response="r2"),
+            ToolResult(tool_call=tc, result="t2"),
+            RawResponse(response="r3"),
+            ToolResult(tool_call=tc, result="t3"),
+        ]
+
+        _, summary = await hook(
+            history,
+            state={},
+            trigger="max_context",
+            turn_number=2,
+            compaction_number=1,
+            tools=[],
+            previous_turn=None,
+            output_dir=tmp_path,
+            question_id="q1",
+            run_id=None,
+            logger=logging.getLogger("test"),
+        )
+
+        assert summary is not None
+        assert not summary.success
+        assert summary.error is not None
+        assert summary.error.type == "MaxContextWindowExceededError"
+        assert llm.query.call_count == 3
+
+    async def test_resolves_threshold_tokens(self):
+        llm = mock_llm(make_text_response("done"))
+        llm._registry_key = "openai/gpt-4o-mini"
+        llm.max_tokens = 64_000
+        agent = make_agent(
+            llm,
+            [],
+            config=AgentConfig(
+                turn_limit=None,
+                time_limit=None,
+                history_compaction=HistoryCompaction(threshold_percentage=0.85),
+            ),
+        )
+
+        with patch(
+            "model_library.agent.history_compaction.get_model_input_context_window",
+            return_value=200_000,
+        ):
+            await agent.run([TextInput(text="go")], question_id="q1")
+            resolved = resolve_threshold_tokens(
+                llm, HistoryCompaction(threshold_percentage=0.85)
+            )
+        assert agent._hooks.compaction is not None
+        assert resolved == 170_000
+
+    async def test_gateway_llm_syncs_metadata_before_default_compaction(self):
+        large_result = "large-result " * 80
+        tc = make_tool_call("echo", {"text": large_result})
+        first = make_tool_response(
+            [tc],
+            output_text=None,
+            metadata=make_metadata(in_tokens=10, out_tokens=5),
+        )
+        first.history = [
+            SystemInput(text="stay concise"),
+            TextInput(text="go"),
+            RawResponse(response="assistant called echo"),
+        ]
+        llm = GatewayLLM("gpt-4o-mini", "openai")
+        llm.query = AsyncMock(
+            side_effect=[
+                first,
+                make_text_response("summary: keep the result"),
+                make_text_response("done"),
+            ]
+        )
+        llm.get_encoding = AsyncMock(return_value=tiktoken.get_encoding("cl100k_base"))
+
+        async def sync_metadata() -> None:
+            from model_library.registry_utils import get_registry_config
+
+            metadata = get_registry_config("openai/gpt-4o-mini")
+            assert metadata is not None
+            metadata = metadata.model_copy(deep=True)
+            metadata.properties.context_window = 200_000
+            metadata.properties.max_tokens = 0
+            object.__setattr__(llm, "_metadata", metadata)
+            object.__setattr__(llm, "_gateway_metadata_loaded", True)
+
+        llm.sync_model_metadata = AsyncMock(side_effect=sync_metadata)
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=None,
+                time_limit=None,
+                history_compaction=HistoryCompaction(threshold_tokens=50),
+            ),
+        )
+
+        result = await agent.run(
+            [SystemInput(text="stay concise"), TextInput(text="go")],
+            question_id="q1",
+        )
+
+        llm.sync_model_metadata.assert_awaited_once()
+        assert result.final_answer == "done"
+        assert len(result.compactions) == 1
+        assert result.compactions[0].success
+
+    async def test_raw_model_disables_compaction(self, caplog):
+        llm = mock_llm(make_text_response("done"))
+        llm._registry_key = None
+        agent = make_agent(
+            llm,
+            [],
+            config=AgentConfig(
+                turn_limit=None,
+                time_limit=None,
+                history_compaction=HistoryCompaction(threshold_percentage=0.7),
+            ),
+        )
+
+        with caplog.at_level("WARNING"):
+            await agent.run([TextInput(text="go")], question_id="q1")
+        assert agent._hooks.compaction is None
+        assert "Disabling history compaction" in caplog.text
 
 
 # --- Tool definition ---
@@ -1150,7 +1735,12 @@ class TestToolDefinition:
             description = "test"
             parameters = {"a": {"type": "string"}, "b": {"type": "integer"}}
 
-            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+            async def execute(
+                self,
+                args: dict[str, Any],
+                state: dict[str, Any],
+                logger: logging.Logger,
+            ) -> ToolOutput:
                 return ToolOutput(output="ok")
 
         tool = MultiParamTool()
@@ -1163,17 +1753,29 @@ class TestToolDefinition:
                 description = "test"
                 parameters: dict[str, Any] = {}
 
-                async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                async def execute(
+                    self,
+                    args: dict[str, Any],
+                    state: dict[str, Any],
+                    logger: logging.Logger,
+                ) -> ToolOutput:
                     return ToolOutput(output="ok")
 
     def test_missing_description_raises(self):
-        with pytest.raises(TypeError, match="must define class attribute 'description'"):
+        with pytest.raises(
+            TypeError, match="must define class attribute 'description'"
+        ):
 
             class NoDescTool(Tool):
                 name = "test"
                 parameters: dict[str, Any] = {}
 
-                async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                async def execute(
+                    self,
+                    args: dict[str, Any],
+                    state: dict[str, Any],
+                    logger: logging.Logger,
+                ) -> ToolOutput:
                     return ToolOutput(output="ok")
 
     def test_missing_parameters_raises(self):
@@ -1183,7 +1785,12 @@ class TestToolDefinition:
                 name = "test"
                 description = "test"
 
-                async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+                async def execute(
+                    self,
+                    args: dict[str, Any],
+                    state: dict[str, Any],
+                    logger: logging.Logger,
+                ) -> ToolOutput:
                     return ToolOutput(output="ok")
 
     def test_required_auto_derived_from_parameters(self):
@@ -1192,7 +1799,12 @@ class TestToolDefinition:
             description = "test"
             parameters = {"x": {"type": "string"}, "y": {"type": "integer"}}
 
-            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+            async def execute(
+                self,
+                args: dict[str, Any],
+                state: dict[str, Any],
+                logger: logging.Logger,
+            ) -> ToolOutput:
                 return ToolOutput(output="ok")
 
         assert set(AutoRequiredTool.required) == {"x", "y"}
@@ -1204,7 +1816,12 @@ class TestToolDefinition:
             parameters = {"a": {"type": "string"}, "b": {"type": "string"}}
             required = ["a"]
 
-            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+            async def execute(
+                self,
+                args: dict[str, Any],
+                state: dict[str, Any],
+                logger: logging.Logger,
+            ) -> ToolOutput:
                 return ToolOutput(output="ok")
 
         assert PartialRequiredTool.required == ["a"]
@@ -1215,7 +1832,12 @@ class TestToolDefinition:
             description = "base desc"
             parameters = {"a": {"type": "string"}}
 
-            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+            async def execute(
+                self,
+                args: dict[str, Any],
+                state: dict[str, Any],
+                logger: logging.Logger,
+            ) -> ToolOutput:
                 return ToolOutput(output="ok")
 
         tool = OverridableTool(name="custom", description="custom desc")
@@ -1232,7 +1854,12 @@ class TestToolDefinition:
             def __init__(self):
                 pass  # deliberately skip super().__init__()
 
-            async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+            async def execute(
+                self,
+                args: dict[str, Any],
+                state: dict[str, Any],
+                logger: logging.Logger,
+            ) -> ToolOutput:
                 return ToolOutput(output="ok")
 
         tool = NoSuperTool()
@@ -1252,7 +1879,13 @@ class TestMaxToolCallsPerTurn:
         tc2 = make_tool_call("echo", {"text": "second"})
         tc3 = make_tool_call("echo", {"text": "third"})
         llm = mock_llm(make_tool_response([tc1, tc2, tc3]), make_text_response("done"))
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=None, time_limit=None, max_tool_calls_per_turn=1))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=None, time_limit=None, max_tool_calls_per_turn=1
+            ),
+        )
 
         result = await agent.run([TextInput(text="go")], question_id="q1")
 
@@ -1269,13 +1902,18 @@ class TestMaxToolCallsPerTurn:
         tc1 = make_tool_call("echo", {"text": "ok"})
         tc2 = make_tool_call("echo", {"text": "skip me"})
         llm = mock_llm(make_tool_response([tc1, tc2]), make_text_response("done"))
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=None, time_limit=None, max_tool_calls_per_turn=1))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=None, time_limit=None, max_tool_calls_per_turn=1
+            ),
+        )
 
         await agent.run([TextInput(text="go")], question_id="q1")
 
         # second LLM call should have both tool results in its input
         second_call_input = llm.query.call_args_list[1].kwargs["input"]
-        from model_library.base.input import ToolResult
         tool_results = [m for m in second_call_input if isinstance(m, ToolResult)]
         assert len(tool_results) == 2
 
@@ -1287,12 +1925,19 @@ class TestAgentLogging:
     async def test_before_query_logs_error(self, caplog: pytest.LogCaptureFixture):
         """before_query logs when it receives a non-None error"""
         llm = mock_llm(RuntimeError("boom"), make_text_response("done"))
-        agent = make_agent(llm, config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None), hooks=AgentHooks(before_query=lambda h, e: h))
+        agent = make_agent(
+            llm,
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=5), time_limit=None),
+            hooks=AgentHooks(before_query=lambda h, e: h),
+        )
 
         with caplog.at_level(logging.DEBUG):
             await agent.run([TextInput(text="go")], question_id="q1")
 
-        assert any("before_query: handling error RuntimeError: boom" in r.message for r in caplog.records)
+        assert any(
+            "before_query: handling error RuntimeError: boom" in r.message
+            for r in caplog.records
+        )
 
     async def test_before_query_no_error_no_log(self, caplog: pytest.LogCaptureFixture):
         """before_query does not log when there is no error"""
@@ -1303,14 +1948,20 @@ class TestAgentLogging:
         with caplog.at_level(logging.DEBUG):
             await agent.run([TextInput(text="go")], question_id="q1")
 
-        assert not any("before_query: handling error" in r.message for r in caplog.records)
+        assert not any(
+            "before_query: handling error" in r.message for r in caplog.records
+        )
 
-    async def test_before_query_logs_history_modification(self, caplog: pytest.LogCaptureFixture):
+    async def test_before_query_logs_history_modification(
+        self, caplog: pytest.LogCaptureFixture
+    ):
         """before_query logs when the hook returns a modified history"""
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
 
-        def shrink(history: list[InputItem], error: Exception | None) -> list[InputItem]:
+        def shrink(
+            history: list[InputItem], error: Exception | None
+        ) -> list[InputItem]:
             return history[:1]
 
         agent = make_agent(llm, [EchoTool()], hooks=AgentHooks(before_query=shrink))
@@ -1320,7 +1971,9 @@ class TestAgentLogging:
 
         assert any("before_query modified history" in r.message for r in caplog.records)
 
-    async def test_before_query_unchanged_history_no_modification_log(self, caplog: pytest.LogCaptureFixture):
+    async def test_before_query_unchanged_history_no_modification_log(
+        self, caplog: pytest.LogCaptureFixture
+    ):
         """before_query does not log 'modified history' when history is unchanged"""
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
@@ -1329,9 +1982,13 @@ class TestAgentLogging:
         with caplog.at_level(logging.DEBUG):
             await agent.run([TextInput(text="go")], question_id="q1")
 
-        assert not any("before_query modified history" in r.message for r in caplog.records)
+        assert not any(
+            "before_query modified history" in r.message for r in caplog.records
+        )
 
-    async def test_turn_message_logs_only_when_injected(self, caplog: pytest.LogCaptureFixture):
+    async def test_turn_message_logs_only_when_injected(
+        self, caplog: pytest.LogCaptureFixture
+    ):
         """turn_message only logs when the hook returns a non-None message"""
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
@@ -1339,7 +1996,14 @@ class TestAgentLogging:
         def message_on_turn_2(turn_number: int, max_turns: int) -> InputItem | None:
             return TextInput(text=f"turn {turn_number}") if turn_number == 2 else None
 
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=5, turn_message=message_on_turn_2), time_limit=None))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=TurnLimit(max_turns=5, turn_message=message_on_turn_2),
+                time_limit=None,
+            ),
+        )
 
         with caplog.at_level(logging.DEBUG):
             await agent.run([TextInput(text="go")], question_id="q1")
@@ -1348,7 +2012,9 @@ class TestAgentLogging:
         assert len(turn_msg_logs) == 1
         assert "2/5" in turn_msg_logs[0].message
 
-    async def test_time_message_logs_only_when_injected(self, caplog: pytest.LogCaptureFixture):
+    async def test_time_message_logs_only_when_injected(
+        self, caplog: pytest.LogCaptureFixture
+    ):
         """time_message only logs when the hook returns a non-None message"""
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]), make_text_response("done"))
@@ -1359,7 +2025,14 @@ class TestAgentLogging:
             call_count[0] += 1
             return TextInput(text="hurry") if call_count[0] == 1 else None
 
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=None, time_limit=TimeLimit(max_seconds=300, time_message=message_once)))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(
+                turn_limit=None,
+                time_limit=TimeLimit(max_seconds=300, time_message=message_once),
+            ),
+        )
 
         with caplog.at_level(logging.DEBUG):
             await agent.run([TextInput(text="go")], question_id="q1")
@@ -1368,28 +2041,43 @@ class TestAgentLogging:
         assert len(time_msg_logs) == 1
         assert "hurry" in time_msg_logs[0].message
 
-    async def test_should_stop_no_info_log_when_continues(self, caplog: pytest.LogCaptureFixture):
+    async def test_should_stop_no_info_log_when_continues(
+        self, caplog: pytest.LogCaptureFixture
+    ):
         """should_stop does not log the stop message when it returns False"""
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]), make_tool_response([tc]))
         # always returns False; max_turns stops the loop instead
-        agent = make_agent(llm, [EchoTool()], config=AgentConfig(turn_limit=TurnLimit(max_turns=1), time_limit=None), hooks=AgentHooks(should_stop=lambda _: False))
+        agent = make_agent(
+            llm,
+            [EchoTool()],
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=1), time_limit=None),
+            hooks=AgentHooks(should_stop=lambda _: False),
+        )
 
         with caplog.at_level(logging.INFO):
             await agent.run([TextInput(text="go")], question_id="q1")
 
-        assert not any("should_stop hook returned True" in r.message for r in caplog.records)
+        assert not any(
+            "should_stop hook returned True" in r.message for r in caplog.records
+        )
 
-    async def test_should_stop_info_log_when_stops(self, caplog: pytest.LogCaptureFixture):
+    async def test_should_stop_info_log_when_stops(
+        self, caplog: pytest.LogCaptureFixture
+    ):
         """should_stop produces an INFO log when it returns True"""
         tc = make_tool_call("echo", {"text": "hi"})
         llm = mock_llm(make_tool_response([tc]))
-        agent = make_agent(llm, [EchoTool()], hooks=AgentHooks(should_stop=lambda _: True))
+        agent = make_agent(
+            llm, [EchoTool()], hooks=AgentHooks(should_stop=lambda _: True)
+        )
 
         with caplog.at_level(logging.INFO):
             await agent.run([TextInput(text="go")], question_id="q1")
 
-        assert any("should_stop hook returned True" in r.message for r in caplog.records)
+        assert any(
+            "should_stop hook returned True" in r.message for r in caplog.records
+        )
 
 
 # --- Retry time budget ---
@@ -1422,6 +2110,7 @@ class TestRetryTimeBudget:
 
         llm = MagicMock()
         llm.query = AsyncMock(side_effect=query_side_effect)
+        llm.ensure_metadata_loaded = AsyncMock(return_value=None)
         llm.instance_logger = logging.getLogger("mock_llm")
         return llm, fake_monotonic
 
@@ -1439,10 +2128,14 @@ class TestRetryTimeBudget:
         )
 
         with patch.object(time_module, "monotonic", new=fake_mono):
-            agent = make_agent(llm, [EchoTool()], config=AgentConfig(
-                turn_limit=None,
-                time_limit=TimeLimit(max_seconds=30),
-            ))
+            agent = make_agent(
+                llm,
+                [EchoTool()],
+                config=AgentConfig(
+                    turn_limit=None,
+                    time_limit=TimeLimit(max_seconds=30),
+                ),
+            )
             result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert result.success
@@ -1462,10 +2155,14 @@ class TestRetryTimeBudget:
         )
 
         with patch.object(time_module, "monotonic", new=fake_mono):
-            agent = make_agent(llm, [EchoTool()], config=AgentConfig(
-                turn_limit=None,
-                time_limit=TimeLimit(max_seconds=30, include_retries=True),
-            ))
+            agent = make_agent(
+                llm,
+                [EchoTool()],
+                config=AgentConfig(
+                    turn_limit=None,
+                    time_limit=TimeLimit(max_seconds=30, include_retries=True),
+                ),
+            )
             result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert not result.success
@@ -1484,10 +2181,14 @@ class TestRetryTimeBudget:
         )
 
         with patch.object(time_module, "monotonic", new=fake_mono):
-            agent = make_agent(llm, [EchoTool()], config=AgentConfig(
-                turn_limit=None,
-                time_limit=TimeLimit(max_seconds=300),
-            ))
+            agent = make_agent(
+                llm,
+                [EchoTool()],
+                config=AgentConfig(
+                    turn_limit=None,
+                    time_limit=TimeLimit(max_seconds=300),
+                ),
+            )
             result = await agent.run([TextInput(text="go")], question_id="q1")
 
         assert result.success
@@ -1549,6 +2250,7 @@ class TestConcurrentRuns:
 
         llm = MagicMock()
         llm.query = AsyncMock(side_effect=capturing_query)
+        llm.ensure_metadata_loaded = AsyncMock(return_value=None)
         agent = make_agent(llm)
 
         await asyncio.gather(
@@ -1561,5 +2263,3 @@ class TestConcurrentRuns:
         names = {lg.name for lg in captured if lg is not None}
         assert any("q001" in name for name in names)
         assert any("q002" in name for name in names)
-
-

@@ -1,13 +1,14 @@
+import base64
 import hashlib
+import hmac
 import io
 import json
 import logging
 import pickle
 import threading
 import time
-import uuid
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Generator
+from collections.abc import Awaitable, Generator, Mapping
 from math import ceil
 from pathlib import Path
 from typing import (
@@ -15,16 +16,20 @@ from typing import (
     Callable,
     Literal,
     Sequence,
+    TYPE_CHECKING,
+    TypedDict,
     TypeVar,
+    cast,
 )
 
 import tiktoken
-from pydantic import BaseModel, SecretStr, model_serializer
+from pydantic import BaseModel, ConfigDict, SecretStr, ValidationError, model_serializer
 from rich.pretty import pretty_repr
 from tiktoken.core import Encoding
 from typing_extensions import deprecated
 
 import model_library.base.serialize as init_serialize_opts
+import model_library.telemetry as telemetry
 from model_library.base.batch import (
     LLMBatchMixin,
 )
@@ -32,10 +37,12 @@ from model_library.base.input import (
     FileInput,
     FileWithId,
     InputItem,
+    RawInput,
+    RawResponse,
     SystemInput,
-    TextInput,
     ToolDefinition,
     ToolResult,
+    normalize_query_input,
 )
 from model_library.base.output import (
     QueryResult,
@@ -43,14 +50,24 @@ from model_library.base.output import (
     QueryResultMetadata,
     RateLimit,
 )
+from model_library.base.query_ids import resolve_query_ids
 from model_library.base.utils import (
     get_pretty_input_types,
     serialize_for_tokenizing,
 )
+from model_library.exceptions import InvalidStructuredOutputError
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
 from model_library.retriers.token import TokenRetrier
-from model_library.utils import MAX_LOG_HISTORY, PrettyModel, truncate_str
+from model_library.utils import (
+    MAX_LOG_HISTORY,
+    ValsModel,
+    round_to_milliseconds,
+    truncate_str,
+)
+
+if TYPE_CHECKING:
+    from model_library.register_models import ModelConfig
 
 _ = init_serialize_opts
 
@@ -59,6 +76,8 @@ PydanticT = TypeVar("PydanticT", bound=BaseModel)
 
 class ProviderConfig(BaseModel):
     """Base class for provider-specific configs. Do not use directly."""
+
+    model_config = ConfigDict(extra="forbid")
 
     @model_serializer(mode="plain")
     def serialize_actual(self):
@@ -75,7 +94,7 @@ class TokenRetryParams(BaseModel):
     limit_refresh_seconds: Literal[60] = 60
 
 
-class LLMConfig(PrettyModel):
+class LLMConfig(ValsModel):
     max_tokens: int | None = None
     temperature: float | None = None
     top_p: float | None = None
@@ -91,10 +110,96 @@ class LLMConfig(PrettyModel):
     supports_tools: bool = False
     supports_output_schema: bool = False
     native: bool = True
-    provider_config: ProviderConfig | None = None
+    provider_config: dict[str, Any] | ProviderConfig | None = None
     registry_key: str | None = None
     custom_api_key: SecretStr | None = None
     custom_endpoint: str | None = None
+
+
+GATEWAY_CONFIG_EXCLUDED_FIELDS = frozenset(
+    {
+        "custom_api_key",
+        "custom_endpoint",
+        "native",
+        "provider_config",
+        "registry_key",
+    }
+)
+
+
+def dump_llm_config(config: LLMConfig | None) -> dict[str, Any]:
+    if config is None:
+        return {}
+
+    data = config.model_dump(exclude_none=True, exclude_unset=True, mode="json")
+    if config.custom_api_key is not None:
+        data["custom_api_key"] = config.custom_api_key.get_secret_value()
+    return data
+
+
+def dump_gateway_config(
+    config: LLMConfig | None,
+    *,
+    mode: Literal["json", "python"] = "json",
+    exclude_none: bool = True,
+    exclude_unset: bool = True,
+) -> dict[str, Any]:
+    if config is None:
+        return {}
+
+    data = config.model_dump(
+        exclude_none=exclude_none,
+        exclude_unset=exclude_unset,
+        mode=mode,
+    )
+    for field in GATEWAY_CONFIG_EXCLUDED_FIELDS:
+        data.pop(field, None)
+    return data
+
+
+def normalize_llm_config_for_model(
+    model: str,
+    config: LLMConfig | Mapping[str, Any] | None,
+    *,
+    reject_unknown_fields: bool = False,
+    require_custom_key_for_endpoint: bool = True,
+) -> LLMConfig | None:
+    if config is None:
+        return None
+    data = dump_llm_config(config) if isinstance(config, LLMConfig) else dict(config)
+    if not data:
+        return None
+
+    unknown_fields = set(data) - set(LLMConfig.model_fields)
+    if reject_unknown_fields and unknown_fields:
+        fields = ", ".join(sorted(unknown_fields))
+        raise ValueError(f"Unknown LLM config field(s): {fields}")
+
+    if (
+        require_custom_key_for_endpoint
+        and data.get("custom_endpoint")
+        and not data.get("custom_api_key")
+    ):
+        raise ValueError("custom_endpoint requires custom_api_key")
+
+    provider_config = data.get("provider_config")
+    provider_name, separator, _model_name = model.partition("/")
+    if isinstance(provider_config, dict) and separator:
+        from model_library.registry_utils import get_provider_registry
+
+        model_class = get_provider_registry().get(provider_name)
+        if model_class is None:
+            raise ValueError(
+                f"Model {model} not found in registry: unknown provider {provider_name}"
+            )
+        provider_config_template = getattr(model_class, "provider_config", None)
+        if isinstance(provider_config_template, BaseModel):
+            provider_config_class: type[BaseModel] = provider_config_template.__class__
+            data["provider_config"] = provider_config_class.model_validate(
+                provider_config
+            )
+
+    return LLMConfig(**data)
 
 
 # shared across all subclasses and instances
@@ -103,11 +208,20 @@ client_registry_lock = threading.Lock()
 client_registry: dict[tuple[str, str], Any] = {}
 
 
+class SignedPickle(TypedDict):
+    """HMAC-signed pickle blob for non-JSON-serializable fields."""
+
+    pickle: str
+    hmac: str
+
+
 class LLM(ABC):
     """
     Base class for all LLMs
     LLM call errors should be raised as exceptions
     """
+
+    gateway_mode: bool = False
 
     @property
     def _client_registry_key(self) -> tuple[str, str]:
@@ -181,6 +295,7 @@ class LLM(ABC):
 
         config = config or LLMConfig()
         self._registry_key = config.registry_key
+        self._metadata: ModelConfig | None = None
 
         self.max_tokens: int | None = config.max_tokens
         self.temperature: float | None = config.temperature
@@ -240,6 +355,7 @@ class LLM(ABC):
 
     def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
         attrs = vars(self).copy()
+        attrs.pop("_metadata", None)
         attrs.pop("custom_retrier", None)
         attrs.pop("instance_logger", None)
         yield from attrs.items()
@@ -248,6 +364,22 @@ class LLM(ABC):
         return pretty_repr(self)
 
     __str__ = __repr__
+
+    @property
+    def metadata(self) -> "ModelConfig | None":
+        return self._metadata
+
+    @property
+    def input_context_window(self) -> int | None:
+        if self.metadata is None:
+            return None
+
+        from model_library.registry_utils import get_input_context_window_from_config
+
+        return get_input_context_window_from_config(self.metadata)
+
+    async def ensure_metadata_loaded(self) -> None:
+        return None
 
     @staticmethod
     async def timer_wrapper(func: Callable[[], Awaitable[R]]) -> tuple[R, float]:
@@ -288,7 +420,6 @@ class LLM(ABC):
         run_id: str | None = None,
         question_id: str | None = None,
         in_agent: bool = False,
-        docent_ingest: bool = False,
         **kwargs: object,
     ) -> QueryResult:
         """
@@ -301,18 +432,38 @@ class LLM(ABC):
             model_name = self._registry_key or f"{self.provider}/{self.model_name}"
             raise Exception(f"{model_name} does not support structured outputs")
 
-        # represents a run
-        run_id_provided = bool(run_id)
-
-        if not run_id:
-            run_id = uuid.uuid4().hex[:8]
-
-        # represents a question (can have multiple queries if agentic)
-        if not question_id:
-            question_id = uuid.uuid4().hex[:14]
-
-        # represents a query
-        query_id = uuid.uuid4().hex[:14]
+        run_id, question_id, query_id = resolve_query_ids(
+            run_id=run_id,
+            question_id=question_id,
+            query_id=kwargs.pop("query_id", None),
+        )
+        telemetry.set_attributes(
+            {
+                "run_id": run_id,
+                "question_id": question_id,
+                "query_id": query_id,
+                "model.provider": self.provider,
+                "model.name": self.model_name,
+                "model.registry_key": self._registry_key,
+                "llm.in_agent": in_agent,
+                "llm.in_agent.mode": telemetry.mode_attribute(in_agent),
+                "llm.tool.count": len(tools),
+                "llm.output_schema.mode": telemetry.mode_attribute(
+                    output_schema is not None
+                ),
+                "retry_queue.mode": telemetry.mode_attribute(
+                    self.token_retry_params is not None
+                ),
+            }
+        )
+        telemetry.add_event(
+            "model_library.query.start",
+            {
+                "run_id": run_id,
+                "question_id": question_id,
+                "query_id": query_id,
+            },
+        )
 
         _base_logger = logger or self.instance_logger.getChild(f"<run={run_id}>")
 
@@ -326,20 +477,10 @@ class LLM(ABC):
         if in_agent:
             query_logger.setLevel(logging.WARNING)
 
-        if docent_ingest and not run_id_provided:
-            query_logger.warning("docent_ingest=True but no run_id provided")
-
         info_enabled = query_logger.isEnabledFor(logging.INFO)
         debug_enabled = query_logger.isEnabledFor(logging.DEBUG)
 
-        # format str input
-        if isinstance(input, str):
-            input = [TextInput(text=input)]
-
-        # back-compat: system_prompt kwarg is deprecated, use SystemInput as first input item
-        system_prompt_kwarg = kwargs.pop("system_prompt", None)
-        if system_prompt_kwarg is not None:
-            input = [SystemInput(text=str(system_prompt_kwarg)), *input]
+        input = normalize_query_input(input, kwargs=kwargs)
 
         item_info = ""
         tool_info = ""
@@ -367,17 +508,8 @@ class LLM(ABC):
 
             short_kwargs = {k: truncate_str(repr(v)) for k, v in kwargs.items()}
 
-        # join input with history
-        input = [*history, *input]
-
-        # validate SystemInput: at most one, must be first
-        system_inputs = [
-            i for i, item in enumerate(input) if isinstance(item, SystemInput)
-        ]
-        if len(system_inputs) > 1:
-            raise ValueError("At most one SystemInput is allowed per query")
-        if system_inputs and system_inputs[0] != 0:
-            raise ValueError("SystemInput must be the first item in the input sequence")
+        # join input with history and validate SystemInput placement
+        input = normalize_query_input(input, history=history)
 
         if info_enabled:
             query_logger.info(
@@ -389,13 +521,33 @@ class LLM(ABC):
             query_logger.debug([repr(item) for item in input])
 
         async def query_func() -> QueryResult:
-            return await self._query_impl(
-                input,
-                tools=tools,
-                query_logger=query_logger,
-                output_schema=output_schema,
-                **kwargs,
-            )
+            with telemetry.start_span(
+                "model_library.provider_query",
+                {
+                    "run_id": run_id,
+                    "question_id": question_id,
+                    "query_id": query_id,
+                    "model.provider": self.provider,
+                    "model.name": self.model_name,
+                    "model.registry_key": self._registry_key,
+                    "llm.in_agent": in_agent,
+                    "llm.in_agent.mode": telemetry.mode_attribute(in_agent),
+                    "llm.output_schema.mode": telemetry.mode_attribute(
+                        output_schema is not None
+                    ),
+                    "retry_queue.mode": telemetry.mode_attribute(
+                        self.token_retry_params is not None
+                    ),
+                },
+                kind="client",
+            ):
+                return await self._query_impl(
+                    input,
+                    tools=tools,
+                    query_logger=query_logger,
+                    output_schema=output_schema,
+                    **kwargs,
+                )
 
         async def timed_query() -> tuple[QueryResult, float]:
             return await LLM.timer_wrapper(query_func)
@@ -432,17 +584,43 @@ class LLM(ABC):
             else self.custom_retrier(immediate_retry)
         )
 
+        telemetry.add_event(
+            "model_library.query.retry_wrapper_start",
+            {
+                "run_id": run_id,
+                "question_id": question_id,
+                "query_id": query_id,
+                "retry_queue.mode": telemetry.mode_attribute(
+                    self.token_retry_params is not None
+                ),
+            },
+        )
         output, duration = await run_with_retry()
-        output.metadata.duration_seconds = duration
+        telemetry.add_event(
+            "model_library.query.retry_wrapper_done",
+            {
+                "run_id": run_id,
+                "question_id": question_id,
+                "query_id": query_id,
+                "llm.duration_seconds": duration,
+            },
+        )
+        output.metadata.duration_seconds = round_to_milliseconds(duration)
         output.metadata.cost = await self._calculate_cost(output.metadata)
 
         if output_schema is not None and output.output_text:
-            if isinstance(output_schema, dict):
-                output.output_parsed = json.loads(output.output_text)
-            else:
-                output.output_parsed = output_schema.model_validate_json(
-                    output.output_text
-                )
+            parser_error_type: str | None = None
+            try:
+                if isinstance(output_schema, dict):
+                    output.output_parsed = json.loads(output.output_text)
+                else:
+                    output.output_parsed = output_schema.model_validate_json(
+                        output.output_text
+                    )
+            except (json.JSONDecodeError, ValidationError) as exc:
+                parser_error_type = type(exc).__name__
+            if parser_error_type is not None:
+                raise InvalidStructuredOutputError(parser_error_type=parser_error_type)
 
         if info_enabled:
             max_string = None if debug_enabled else 400
@@ -452,26 +630,17 @@ class LLM(ABC):
         if debug_enabled:
             query_logger.debug(repr(output))
 
-        # Skip ingestion when in_agent — the Agent handles its own ingestion
-        # after the full loop so that all turns are in one Docent agent run.
-        if docent_ingest and not in_agent and run_id_provided:
-            try:
-                from model_library.docent import (
-                    ingest,
-                    query_result_to_docent_agent_run,
-                )
-
-                ingest(
-                    run_id,
-                    query_result_to_docent_agent_run(
-                        input,
-                        output,
-                        question_id,
-                    ),
-                )
-            except Exception:
-                query_logger.warning("Docent ingestion failed", exc_info=True)
-
+        telemetry.add_event(
+            "model_library.query.done",
+            {
+                "run_id": run_id,
+                "question_id": question_id,
+                "query_id": query_id,
+                "gen_ai.usage.input_tokens": output.metadata.total_input_tokens,
+                "gen_ai.usage.output_tokens": output.metadata.total_output_tokens,
+                "llm.duration_seconds": duration,
+            },
+        )
         return output
 
     async def init_token_retry(self, token_retry_params: TokenRetryParams) -> None:
@@ -491,7 +660,7 @@ class LLM(ABC):
         bill_reasoning: bool = True,
     ) -> QueryResultCost | None:
         """Calculate cost for a query"""
-        from model_library.registry_utils import get_model_cost
+        from model_library.registry_utils import compute_model_cost
 
         if not self._registry_key:
             self.instance_logger.warning(
@@ -499,54 +668,11 @@ class LLM(ABC):
             )
             return None
 
-        costs = get_model_cost(self._registry_key)
-        if not costs:
-            return None
-
-        MILLION = 1_000_000
-
-        input_cost = costs.input
-        output_cost = costs.output
-
-        # apply fixed values or discounts/markup
-        # applied before other price changes
-        cache_read_cost, cache_write_cost = None, None
-        if metadata.cache_read_tokens or metadata.cache_write_tokens:
-            if not costs.cache:
-                raise Exception("Cache costs not set")
-            cache_read_cost, cache_write_cost = costs.cache.get_costs(input_cost)
-
-        # costs for long context
-        total_in = metadata.total_input_tokens
-        if costs.context and total_in > costs.context.threshold:
-            input_cost, output_cost = costs.context.get_costs(
-                input_cost,
-                output_cost,
-                total_in,
-            )
-            if costs.context.cache:
-                cache_read_cost, cache_write_cost = costs.context.cache.get_costs(
-                    input_cost
-                )
-
-        # costs for batching
-        if batch:
-            if not costs.batch:
-                raise Exception("Batch costs not set")
-            input_cost, output_cost = costs.batch.get_costs(input_cost, output_cost)
-
-        return QueryResultCost(
-            input=input_cost * metadata.in_tokens / MILLION,
-            output=output_cost * metadata.out_tokens / MILLION,
-            reasoning=output_cost * metadata.reasoning_tokens / MILLION
-            if metadata.reasoning_tokens is not None and bill_reasoning
-            else None,
-            cache_read=cache_read_cost * metadata.cache_read_tokens / MILLION
-            if metadata.cache_read_tokens is not None and cache_read_cost
-            else None,
-            cache_write=cache_write_cost * metadata.cache_write_tokens / MILLION
-            if metadata.cache_write_tokens is not None and cache_write_cost
-            else None,
+        return compute_model_cost(
+            self._registry_key,
+            metadata,
+            batch=batch,
+            bill_reasoning=bill_reasoning,
         )
 
     @abstractmethod
@@ -682,25 +808,23 @@ class LLM(ABC):
         tools: list[ToolDefinition] = [],
         **kwargs: object,
     ) -> str:
-        input = [*history, *input]
-
-        # back-compat: system_prompt kwarg is deprecated, use SystemInput as first input item
-        system_prompt_kwarg = kwargs.pop("system_prompt", None)
-        if system_prompt_kwarg is not None:
-            input = [SystemInput(text=str(system_prompt_kwarg)), *input]
+        input = normalize_query_input(input, history=history, kwargs=kwargs)
 
         system_prompt = ""
-        if isinstance(input[0], SystemInput):
+        if input and isinstance(input[0], SystemInput):
             system_prompt = input[0].text
             input = input[1:]
 
         # special case if using a delegate
         # don't inherit method override by default
+        parsed_input: object
         if self.delegate:
-            parsed_input = await self.delegate.parse_input(input, **kwargs)
+            parsed_input = (
+                await self.delegate.parse_input(input, **kwargs) if input else []
+            )
             parsed_tools = await self.delegate.parse_tools(tools)
         else:
-            parsed_input = await self.parse_input(input, **kwargs)
+            parsed_input = await self.parse_input(input, **kwargs) if input else []
             parsed_tools = await self.parse_tools(tools)
 
         serialized_input = serialize_for_tokenizing(parsed_input)
@@ -723,7 +847,8 @@ class LLM(ABC):
         Combines parsed input and tools, then tokenizes the result.
         """
 
-        if not input and not history:
+        input = normalize_query_input(input, history=history, kwargs=kwargs)
+        if not input and not tools:
             return 0
 
         if self.delegate:
@@ -733,7 +858,7 @@ class LLM(ABC):
         self.instance_logger.debug(f"Token Count Encoding: {encoding}")
 
         string_input = await self.stringify_input(
-            input, history=history, tools=tools, **kwargs
+            input, history=[], tools=tools, **kwargs
         )
 
         count = len(encoding.encode(string_input, disallowed_special=()))
@@ -757,23 +882,98 @@ class LLM(ABC):
         )
 
     @staticmethod
-    def serialize_input(input: Sequence[InputItem]) -> bytes:
-        return pickle.dumps(input)
+    def serialize_input(
+        input: Sequence[InputItem], *, secret: bytes | None = None
+    ) -> str:
+        """Serialize input items to a JSON string.
+
+        RawResponse.response and RawInput.input hold arbitrary provider SDK
+        objects that aren't JSON-serializable.  These fields are pickled and
+        base64-encoded inline.  When *secret* is provided, each pickled blob
+        gets an HMAC-SHA256 tag so the receiver can verify it wasn't tampered
+        with before unpickling.
+        """
+        items: list[dict[str, Any]] = []
+        for item in input:
+            if isinstance(item, RawResponse):
+                d = {
+                    "kind": "raw_response",
+                    "response": LLM._pickle_field(item.response, secret),
+                }
+            elif isinstance(item, RawInput):
+                d = {
+                    "kind": "raw_input",
+                    "input": LLM._pickle_field(item.input, secret),
+                }
+            else:
+                d = item.model_dump()
+            items.append(d)
+        return json.dumps(items, default=str)
 
     @staticmethod
-    def deserialize_input(data: bytes | Path):
-        """
-        Deserialize input from bytes or a file path.
+    def deserialize_input(
+        data: str | bytes | Path, *, secret: bytes | None = None
+    ) -> list[InputItem]:
+        """Deserialize input from a JSON string, bytes, or file path.
 
-        WARNING: Uses pickle which can execute arbitrary code. Only deserialize
-        data from trusted sources.
+        Restores pickled RawResponse.response and RawInput.input fields.
+        When *secret* is provided, HMAC tags on pickled blobs are verified
+        before unpickling — rejects tampered data.
 
-        Save if you serialize_input() -> nothing happens to that data -> deserialize_input()
-        Unsafe if you serialize_input() -> send over a network for example -> send back
-
-        If deserializing from untrusted sources, add HMAC verification.
+        WARNING: Uses pickle internally, which can execute arbitrary code.
+        Without a secret, data is deserialized without verification — only
+        use this on trusted data (e.g. local files you serialized yourself).
         """
         if isinstance(data, Path):
-            with open(data, "rb") as f:
-                data = f.read()
-        return pickle.loads(data)
+            data = data.read_text()
+        elif isinstance(data, bytes):
+            data = data.decode()
+
+        from pydantic import TypeAdapter
+
+        adapter = TypeAdapter(list[InputItem])
+        items = adapter.validate_json(data)
+
+        LLM.restore_raw_fields(items, secret=secret)
+        return items
+
+    @staticmethod
+    def restore_raw_fields(
+        items: list[InputItem], *, secret: bytes | None = None
+    ) -> None:
+        """Unpickle RawResponse.response and RawInput.input fields in-place."""
+        for item in items:
+            if isinstance(item, RawResponse) and isinstance(item.response, (str, dict)):
+                item.response = LLM._unpickle_field(
+                    cast("str | SignedPickle", item.response), secret
+                )
+            elif isinstance(item, RawInput) and isinstance(item.input, (str, dict)):
+                item.input = LLM._unpickle_field(
+                    cast("str | SignedPickle", item.input), secret
+                )
+
+    @staticmethod
+    def _pickle_field(value: Any, secret: bytes | None) -> str | SignedPickle:
+        """Pickle a value to base64. If secret is given, attach an HMAC tag."""
+        pickled = base64.b64encode(pickle.dumps(value)).decode()
+        if secret:
+            tag = hmac.new(secret, pickled.encode(), hashlib.sha256).hexdigest()
+            return SignedPickle(pickle=pickled, hmac=tag)
+        return pickled
+
+    @staticmethod
+    def _unpickle_field(value: str | SignedPickle, secret: bytes | None) -> Any:
+        """Unpickle a base64 value. If secret is given, verify the HMAC tag first."""
+        if isinstance(value, dict):
+            pickled = value["pickle"]
+            if secret:
+                expected = hmac.new(
+                    secret, pickled.encode(), hashlib.sha256
+                ).hexdigest()
+                if not hmac.compare_digest(value.get("hmac", ""), expected):
+                    raise ValueError("HMAC verification failed on pickled field")
+            return pickle.loads(base64.b64decode(pickled))
+        # Plain base64 string — no HMAC
+        if secret:
+            raise ValueError("Expected HMAC-signed pickle blob but got unsigned string")
+        return pickle.loads(base64.b64decode(value))

@@ -137,8 +137,8 @@ def assert_no_thinking_config(config: Dict[str, Any]) -> None:
 def assert_basic_result(result: Any) -> None:
     """Assert basic requirements for a query result."""
     assert result.output_text
-    assert result.metadata.in_tokens > 0
-    assert result.metadata.out_tokens > 0
+    assert result.metadata.total_input_tokens > 0
+    assert result.metadata.total_output_tokens > 0
 
 
 def get_api_call_config(mock_client: Any) -> Dict[str, Any]:

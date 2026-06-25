@@ -68,6 +68,7 @@ async def test_serialize_deserialize_history_roundtrip(model_key: str):
 
     model = get_registry_model(model_key)
 
+    tools = []
     if model.supports_tools:
         input, system_prompt, tools = get_example_tool_input()
 
@@ -77,7 +78,7 @@ async def test_serialize_deserialize_history_roundtrip(model_key: str):
 
     serialized = LLM.serialize_input(response.history)
 
-    assert isinstance(serialized, bytes)
+    assert isinstance(serialized, str)
     assert len(serialized) > 0
 
     dinput = LLM.deserialize_input(serialized)
@@ -96,4 +97,4 @@ async def test_serialize_deserialize_history_roundtrip(model_key: str):
 
     if response.tool_calls:
         tool_result = ToolResult(tool_call=response.tool_calls[0], result="low")
-        await model.query([*dinput, tool_result])
+        await model.query([*dinput, tool_result], tools=tools)

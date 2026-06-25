@@ -94,6 +94,22 @@ def model_to_yaml_entry(model_key: str, data: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def model_to_deprecated_entry_data(model_config: Any) -> dict[str, Any]:
+    """Return a self-contained deprecated YAML entry for a resolved model."""
+    model_data = remove_none(model_config.model_dump(mode="python"))
+    for field in EXCLUDE_FIELDS:
+        model_data.pop(field, None)
+    # remove empty provider_properties
+    if not model_data.get("provider_properties"):
+        model_data.pop("provider_properties", None)
+    # remove metadata.deprecated — inherited from deprecated block base-config
+    if "metadata" in model_data:
+        model_data["metadata"].pop("deprecated", None)
+        if not model_data["metadata"]:
+            del model_data["metadata"]
+    return model_data
+
+
 def deprecate(model_key: str) -> None:
     # load the resolved model from registry
     from model_library import model_library_settings
@@ -134,18 +150,7 @@ def deprecate(model_key: str) -> None:
         print(f"  created {deprecated_file}")
 
     # dump fully resolved model, clean up
-    model_data = remove_none(model_config.model_dump(mode="json"))
-    for field in EXCLUDE_FIELDS:
-        model_data.pop(field, None)
-    # remove empty provider_properties
-    if not model_data.get("provider_properties"):
-        model_data.pop("provider_properties", None)
-    # remove metadata.deprecated — inherited from deprecated block base-config
-    if "metadata" in model_data:
-        model_data["metadata"].pop("deprecated", None)
-        if not model_data["metadata"]:
-            del model_data["metadata"]
-    model_entry = model_data
+    model_entry = model_to_deprecated_entry_data(model_config)
 
     # generate YAML entry
     entry_yaml = model_to_yaml_entry(model_key, model_entry)

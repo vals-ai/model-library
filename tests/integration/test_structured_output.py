@@ -53,7 +53,15 @@ async def test_structured_output_pydantic(model_key: str):
     model = get_model_if_supports_output_schema(model_key)
 
     result = await model.query(
-        [TextInput(text="Provide a nested structure with inner value 'hello world'")],
+        [
+            TextInput(
+                text=(
+                    "Provide a nested JSON object with exactly this shape: "
+                    '{"inner": {"value": "hello world"}}. '
+                    "Respond as JSON."
+                )
+            )
+        ],
         output_schema=Outer,
     )
 
@@ -67,7 +75,14 @@ async def test_structured_output_dict_schema(model_key: str):
     model = get_model_if_supports_output_schema(model_key)
 
     result = await model.query(
-        [TextInput(text="What color is the sky? Respond with just the color name.")],
+        [
+            TextInput(
+                text=(
+                    "What color is the sky? Respond as JSON with just the color "
+                    "name in the color field."
+                )
+            )
+        ],
         output_schema={
             "type": "object",
             "properties": {"color": {"type": "string"}},
@@ -91,8 +106,15 @@ async def test_structured_output_with_image(model_key: str):
 
     result = await model.query(
         [
-            TextInput(text="What color is the image? Respond with just the color name."),
-            FileWithBase64(type="image", name="red_image.png", mime="png", base64=encoded),
+            TextInput(
+                text=(
+                    "What color is the image? Respond as JSON with just the color "
+                    "name in the color field."
+                )
+            ),
+            FileWithBase64(
+                type="image", name="red_image.png", mime="png", base64=encoded
+            ),
         ],
         output_schema=Color,
     )

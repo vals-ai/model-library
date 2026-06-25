@@ -13,6 +13,7 @@ from google.genai.types import (
     File,
     FinishReason,
     FunctionDeclaration,
+    FunctionResponse,
     GenerateContentConfig,
     GenerateContentResponse,
     GenerateContentResponseUsageMetadata,
@@ -60,6 +61,7 @@ from model_library.base import (
 from model_library.base import (
     FinishReason as StandardFinishReason,
 )
+from model_library.base.input import normalize_query_input
 from model_library.exceptions import (
     BadInputError,
     ImmediateRetryException,
@@ -222,7 +224,6 @@ class GoogleModel(LLM):
 
         if not getattr(model_library_settings, "GCP_CREDS", None):
             self.supports_batch = False
-            self.instance_logger.warning("GCP_CREDS not set, disabling batching")
 
         # https://ai.google.dev/gemini-api/docs/openai
         if self.native:
@@ -285,14 +286,16 @@ class GoogleModel(LLM):
 
             match item:
                 case ToolResult():
-                    # id check
                     new_input.append(
                         Content(
                             role="user",
                             parts=[
-                                Part.from_function_response(
-                                    name=item.tool_call.name,
-                                    response={"result": item.result},
+                                Part(
+                                    function_response=FunctionResponse(
+                                        id=item.tool_call.id,
+                                        name=item.tool_call.name,
+                                        response={"result": item.result},
+                                    )
                                 )
                             ],
                         )
@@ -475,6 +478,7 @@ class GoogleModel(LLM):
         tool_calls: list[ToolCall] = []
 
         metadata: GenerateContentResponseUsageMetadata | None = None
+        response_id: str | None = None
 
         stream = await self.get_client().aio.models.generate_content_stream(**body)
         contents: list[Content | None] = []
@@ -484,6 +488,8 @@ class GoogleModel(LLM):
 
         async for chunk in stream:
             chunks.append(chunk)
+            if chunk.response_id:
+                response_id = chunk.response_id
             candidates = chunk.candidates
             if not candidates:
                 continue
@@ -561,6 +567,7 @@ class GoogleModel(LLM):
                 reasoning_tokens=metadata.thoughts_token_count or 0,
                 cache_read_tokens=cache_read_tokens,
             )
+        result.extras.response_id = response_id
         return result
 
     @override
@@ -585,7 +592,7 @@ class GoogleModel(LLM):
                 input, history=history, tools=tools, **kwargs
             )
 
-        input = [*history, *input]
+        input = normalize_query_input(input, history=history, kwargs=kwargs)
         if not input:
             return 0
 

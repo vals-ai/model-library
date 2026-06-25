@@ -1,5 +1,4 @@
-.PHONY: help install test test-integration test-all style style-check typecheck config deprecate run-models browse_models
-
+.PHONY: help install test test-integration test-all style style-check typecheck config deprecate run-models browse_models gateway
 help:
 	@echo "Makefile for model-library"
 	@echo "Usage:"
@@ -14,12 +13,11 @@ help:
 	@echo "  make deprecate        Deprecate a model"
 	@echo "  make run-models       Run all models"
 	@echo "  make browse_models    Interactively browse models and their configurations"
-
 PYTHON_VERSION ?= 3.11
 
 install:
 	uv venv --python $(PYTHON_VERSION)
-	uv sync --dev --extra docent
+	uv sync --locked --dev --extra docent --extra server
 	@echo "🎉 Done! Run 'source .venv/bin/activate' to activate the environment locally."
 
 venv_check:
@@ -61,3 +59,5 @@ run-models: venv_check
 browse_models: venv_check
 	@uv run python -m scripts.browse_models
 
+gateway: venv_check
+	@uv run uvicorn model_gateway.main:create_app --factory --host 0.0.0.0 --port 8000 --reload

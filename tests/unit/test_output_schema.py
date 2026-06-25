@@ -79,7 +79,7 @@ class TestAnthropicBuildBodyOutputSchema:
     @pytest.fixture
     def model(self):
         return AnthropicModel(
-            "claude-sonnet-4-20250514", config=LLMConfig(max_tokens=1024)
+            "claude-sonnet-4-5-20250929", config=LLMConfig(max_tokens=1024)
         )
 
     async def test_dict_schema(self, model: AnthropicModel):
@@ -98,7 +98,6 @@ class TestAnthropicBuildBodyOutputSchema:
 
 
 UNSUPPORTED_PROVIDER_MODELS = [
-    "fireworks/deepseek-v3p2",
     "perplexity/sonar-pro",
     "together/zai-org/GLM-4.5-Air-FP8",
     "cohere/command-a-03-2025",
@@ -110,8 +109,7 @@ UNSUPPORTED_PROVIDER_MODELS = [
 ]
 
 UNSUPPORTED_BIG_THREE_MODELS = [
-    "anthropic/claude-sonnet-4-20250514",
-    "anthropic/claude-opus-4-20250514",
+    "anthropic/claude-opus-4-1-20250805",
     "openai/gpt-4o-2024-05-13",
     "openai/o3-deep-research",
 ]

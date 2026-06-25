@@ -7,7 +7,7 @@ from typing import Any, Literal, Sequence, cast
 from anthropic import APIConnectionError, AsyncAnthropic, transform_schema
 from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
 from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from typing_extensions import override
 
 from model_library import model_library_settings
@@ -27,6 +27,7 @@ from model_library.base import (
     ProviderConfig,
     QueryResult,
     QueryResultCost,
+    QueryResultExtras,
     QueryResultMetadata,
     RateLimit,
     RawInput,
@@ -38,6 +39,7 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.input import normalize_query_input
 from model_library.exceptions import (
     ImmediateRetryException,
     NoMatchingToolCallError,
@@ -50,6 +52,31 @@ from model_library.register_models import register_provider
 from model_library.utils import (
     create_anthropic_client_with_defaults,
 )
+
+ANTHROPIC_FILES_BETA = "files-api-2025-04-14"
+ANTHROPIC_INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14"
+ANTHROPIC_SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-06-01"
+
+
+def _json_safe_anthropic_value(value: Any) -> Any:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, BaseModel):
+        return value.model_dump(mode="json", exclude_none=True)
+    if hasattr(value, "model_dump"):
+        return _json_safe_anthropic_value(
+            value.model_dump(mode="json", exclude_none=True)
+        )
+    if isinstance(value, dict):
+        dict_value = cast(dict[object, object], value)
+        return {
+            str(key): _json_safe_anthropic_value(nested)
+            for key, nested in dict_value.items()
+        }
+    if isinstance(value, list | tuple):
+        sequence_value = cast(list[object] | tuple[object, ...], value)
+        return [_json_safe_anthropic_value(item) for item in sequence_value]
+    return str(value)
 
 
 def map_anthropic_finish_reason(
@@ -79,6 +106,15 @@ def map_anthropic_finish_reason(
 class AnthropicConfig(ProviderConfig):
     supports_compute_effort: bool = False
     supports_auto_thinking: bool = False
+    fallback_models: list[str] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_fallback_models(self) -> "AnthropicConfig":
+        if len(self.fallback_models) > 3:
+            raise ValueError("fallback_models supports at most 3 entries")
+        if len(set(self.fallback_models)) != len(self.fallback_models):
+            raise ValueError("fallback_models must not contain duplicate models")
+        return self
 
 
 class AnthropicBatchMixin(LLMBatchMixin):
@@ -203,6 +239,7 @@ class AnthropicBatchMixin(LLMBatchMixin):
                     metadata=metadata,
                     tool_calls=tool_calls,
                     history=[],  # History not available in batch results
+                    extras=QueryResultExtras(response_id=message_data.get("id")),
                 )
 
                 batch_results.append(
@@ -348,6 +385,12 @@ class AnthropicModel(LLM):
             AnthropicBatchMixin(self) if self.supports_batch else None
         )
 
+    def _fallback_models_for_request(self) -> list[str]:
+        fallback_models = self.provider_config.fallback_models
+        if self.model_name in fallback_models:
+            raise ValueError("fallback_models must not include requested model")
+        return fallback_models
+
     async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
         raw_responses = [x for x in input if isinstance(x, RawResponse)]
         tool_call_ids: list[str] = []
@@ -378,10 +421,15 @@ class AnthropicModel(LLM):
                 new_input.append({"role": "user", "content": content_user.copy()})
                 content_user.clear()
 
+        def flush_after_tool_result():
+            if content_user and content_user[-1]["type"] == "tool_result":
+                flush_content_user()
+
         tool_call_ids = await self.get_tool_call_ids(input)
 
         for item in input:
             if isinstance(item, TextInput):
+                flush_after_tool_result()
                 content_user.append({"type": "text", "text": item.text})
                 continue
 
@@ -391,29 +439,29 @@ class AnthropicModel(LLM):
                         parsed = await self.parse_image(item)
                     case "file":
                         parsed = await self.parse_file(item)
+                flush_after_tool_result()
                 content_user.append(parsed)
+                continue
+
+            if isinstance(item, ToolResult):
+                if item.tool_call.id not in tool_call_ids:
+                    raise NoMatchingToolCallError()
+
+                if content_user and content_user[-1]["type"] != "tool_result":
+                    flush_content_user()
+                content_user.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": item.tool_call.id,
+                        "content": [{"type": "text", "text": item.result}],
+                    }
+                )
                 continue
 
             # non content user item
             flush_content_user()
 
             match item:
-                case ToolResult():
-                    if item.tool_call.id not in tool_call_ids:
-                        raise NoMatchingToolCallError()
-
-                    new_input.append(
-                        {
-                            "role": "user",
-                            "content": [
-                                {
-                                    "type": "tool_result",
-                                    "tool_use_id": item.tool_call.id,
-                                    "content": [{"type": "text", "text": item.result}],
-                                }
-                            ],
-                        }
-                    )
                 case RawResponse():
                     content = cast(ParsedBetaMessage, item.response).content
                     new_input.append({"role": "assistant", "content": content})
@@ -671,11 +719,22 @@ class AnthropicModel(LLM):
             if client_base_url:
                 is_anthropic_endpoint = "api.anthropic.com" in str(client_base_url)
 
-        stream_kwargs = {**body}
+        stream_kwargs: dict[str, Any] = {**body}
         if is_anthropic_endpoint:
-            betas = ["files-api-2025-04-14"]
+            betas = [ANTHROPIC_FILES_BETA]
             if not self.provider_config.supports_auto_thinking:
-                betas.extend(["interleaved-thinking-2025-05-14"])
+                betas.append(ANTHROPIC_INTERLEAVED_THINKING_BETA)
+
+            fallback_models = self._fallback_models_for_request()
+            if fallback_models:
+                betas.append(ANTHROPIC_SERVER_SIDE_FALLBACK_BETA)
+                extra_body = cast(
+                    dict[str, Any], stream_kwargs.setdefault("extra_body", {})
+                )
+                extra_body["fallbacks"] = [
+                    {"model": model} for model in fallback_models
+                ]
+
             stream_kwargs["betas"] = betas
 
         try:
@@ -710,17 +769,32 @@ class AnthropicModel(LLM):
         if no_useful_content:
             handle_empty_response(mapped_finish_reason, {"raw": str(message)})
 
+        usage = message.usage
+        metadata_extra: dict[str, Any] = {
+            "anthropic_response_model": message.model,
+        }
+        if usage.iterations is not None:
+            metadata_extra["anthropic_usage_iterations"] = _json_safe_anthropic_value(
+                usage.iterations
+            )
+            if any(
+                iteration.type == "fallback_message" for iteration in usage.iterations
+            ):
+                metadata_extra["fallback"] = True
+
         return QueryResult(
             output_text=text,
             reasoning=reasoning,
             finish_reason=mapped_finish_reason,
             metadata=QueryResultMetadata(
                 # see _calculate_cost
-                in_tokens=message.usage.input_tokens,
-                out_tokens=message.usage.output_tokens,
-                cache_read_tokens=message.usage.cache_read_input_tokens,
-                cache_write_tokens=message.usage.cache_creation_input_tokens,
+                in_tokens=usage.input_tokens,
+                out_tokens=usage.output_tokens,
+                cache_read_tokens=usage.cache_read_input_tokens,
+                cache_write_tokens=usage.cache_creation_input_tokens,
+                extra=metadata_extra,
             ),
+            extras=QueryResultExtras(response_id=message.id),
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=message)],
         )
@@ -772,13 +846,29 @@ class AnthropicModel(LLM):
         Count the number of tokens using Anthropic's native token counting API.
         https://docs.anthropic.com/en/docs/build-with-claude/token-counting
         """
-        try:
-            input = [*history, *input]
-            if not input:
-                return 0
+        input = normalize_query_input(input, history=history, kwargs=kwargs)
+        if not input:
+            return 0
 
+        # Anthropic native count rejects:
+        # - PDF URLs: omit; don't download them.
+        # - uploaded file IDs: omit; don't download them.
+        countable_input = [
+            item
+            for item in input
+            if not isinstance(item, FileWithId)
+            and not (
+                isinstance(item, FileWithUrl)
+                and item.type == "file"
+                and item.mime == "application/pdf"
+            )
+        ]
+        if not countable_input:
+            return await super().count_tokens(input, history=[], tools=tools, **kwargs)
+
+        try:
             body = await self.build_body(
-                input, tools=tools, output_schema=None, **kwargs
+                countable_input, tools=tools, output_schema=None, **kwargs
             )
 
             # Remove fields not supported by count_tokens endpoint
@@ -791,9 +881,7 @@ class AnthropicModel(LLM):
             return response.input_tokens
         except Exception as e:
             self.instance_logger.error(f"Error counting tokens: {e}")
-            return await super().count_tokens(
-                input, history=history, tools=tools, **kwargs
-            )
+            return await super().count_tokens(input, history=[], tools=tools, **kwargs)
 
     @override
     async def _calculate_cost(

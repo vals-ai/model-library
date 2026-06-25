@@ -1,160 +1,103 @@
-# Model Library Configuration
+# Model Configs
 
-This directory contains YAML configuration files that define all available models in the model-proxy library.
+Each YAML file defines models for one provider. Configs use a three-level inheritance system: provider base → model-block base → individual model.
 
-## Configuration Structure
-
-Each model configuration is organized into distinct sections:
-
-### Core Sections
-
-#### `properties`
-Model-specific technical characteristics and capabilities:
-- `context_window`: Maximum context window in tokens
-- `max_tokens`: Maximum output tokens the model can generate
-- `training_cutoff`: Training data cutoff date (string or null)
-- `reasoning_model`: Whether the model is a reasoning/thinking model
+## Structure
 
 ```yaml
-properties:
-  context_window: 200_000
-  max_tokens: 32_000
-  training_cutoff: "2025-03"
-  reasoning_model: false
-```
-
-#### `supports`
-Feature support flags indicating model capabilities:
-- `images`: Supports image inputs
-- `videos`: Supports video inputs
-- `files`: Supports file inputs
-- `batch`: Supports batch requests
-- `temperature`: Supports temperature parameter
-- `tools`: Supports tool/function calling
-
-```yaml
-supports:
-  images: true
-  files: true
-  tools: true
-  batch: true
-  temperature: true
-  videos: false
-```
-
-#### `metadata`
-Vals platform-specific metadata for model availability and status:
-- `deprecated`: Model is deprecated and should not be used for new projects
-- `available_for_everyone`: Model is available to all users
-- `available_as_evaluator`: Model can be used as an evaluator
-- `ignored_for_cost`: Exclude from cost calculations
-
-```yaml
-metadata:
-  deprecated: false
-  available_for_everyone: true
-  available_as_evaluator: false
-  ignored_for_cost: false
-```
-
-#### Other Sections
-
-- `costs_per_million_token`: Pricing information (input, output, cache, batch, context). Set to `null` for models without known pricing
-- `default_parameters`: Default parameter values (temperature, top_p, reasoning_effort)
-- `provider_properties`: Provider-specific configuration options
-- `alternative_keys`: Alternative model identifiers/aliases
-
-## Configuration Inheritance
-
-Configurations support hierarchical inheritance through `base-config` blocks:
-
-### 1. Provider-level base-config
-```yaml
-base-config:
+base-config:                        # inherited by all models in this file
   company: Anthropic
   open_source: false
   supports:
     images: true
     tools: true
-  metadata:
-    available_for_everyone: true
-```
 
-### 2. Model-block base-config
-```yaml
-claude-4-models:
-  base-config:
-    supports:
-      temperature: true
+claude-4-models:                    # model block
+  base-config:                      # inherited by models in this block
     default_parameters:
       temperature: 1
 
-  anthropic/claude-opus-4-1-20250805:
-    # Inherits from both provider and block base-configs
+  anthropic/claude-opus-4-6:        # individual model (overrides both bases)
+    label: Claude Opus 4.6
+    release_date: 2025-06-01
     properties:
       context_window: 200_000
       max_tokens: 32_000
+      training_cutoff: "2025-03"
+      reasoning_model: false
+    supports:
+      batch: true
+      temperature: true
+    costs_per_million_token:
+      input: 15.0
+      output: 75.0
+    metadata:
+      available_for_everyone: true
+      available_as_evaluator: true
 ```
 
-### 3. Individual model overrides
-Models can override any inherited configuration:
+## Fields
 
-```yaml
-anthropic/claude-opus-4-1-20250805:
-  properties:
-    context_window: 200_000
-    max_tokens: 32_000
-  metadata:
-    available_for_everyone: false  # Override base-config
-```
+| Field | Description |
+|-------|-------------|
+| `properties` | `context_window`, `max_tokens`, `training_cutoff`, `reasoning_model` |
+| `supports` | Boolean flags: `images`, `videos`, `files`, `batch`, `temperature`, `tools`, `output_schema` |
+| `costs_per_million_token` | `input`, `output`, optional `cache`, `batch`, `context` pricing. Set to `null` for models without known pricing |
+| `metadata` | `deprecated`, `available_for_everyone`, `available_as_evaluator`, `ignored_for_cost`, `internal_only` |
+| `default_parameters` | `temperature`, `top_p`, `top_k`, `reasoning_effort` |
+| `provider_properties` | Provider-specific flags (e.g. `supports_auto_thinking`) |
+| `provider_endpoint` | Override the model name sent to the provider API |
+| `alternative_keys` | Alternative model identifiers/aliases |
+
+## Configuration Inheritance
+
+Configurations support hierarchical inheritance through `base-config` blocks:
+
+1. Provider-level `base-config` applies to every model in the YAML file.
+2. Model-block `base-config` applies to every model in that block.
+3. Individual model fields override both base levels.
+
+Nested dictionaries are merged recursively instead of replaced wholesale.
 
 ## Alternative Keys
 
-Models can define alternative identifiers that map to the same configuration:
-
-```yaml
-anthropic/claude-3-5-sonnet-20241022:
-  label: Claude 3.5 Sonnet Latest
-  properties:
-    context_window: 200_000
-    max_tokens: 8_192
-  alternative_keys:
-    - anthropic/claude-3-5-sonnet-latest
-    - anthropic/claude-3.5-sonnet-latest
-```
-
-Alternative keys can also override configuration:
+Map additional identifiers to the same model, optionally with config overrides:
 
 ```yaml
 alternative_keys:
-  - anthropic/claude-opus-4-1-20250805-thinking:
+  - anthropic/claude-opus-4-6-latest                 # simple alias
+  - anthropic/claude-opus-4-6-thinking:              # alias with overrides
       properties:
         reasoning_model: true
 ```
 
-## Generating all_models.json
+## Custom Configs
 
-After making changes to any YAML configuration file, regenerate the compiled configuration:
+Use `load_custom_model_configs` to load additional YAML files at runtime from a local path or URL. Models defined there override bundled defaults.
 
-```bash
-make config
-```
+Use `load_latest_vals_model_configs` to pull bundled config YAML files from a branch of the public model-library repository and merge them into the runtime registry.
 
-This generates `all_models.json` which is used by the model registry at runtime.
+Set `MODEL_LIBRARY_CUSTOM_CONFIG` to load a local path or URL automatically during registry initialization.
+
+## After Editing
+
+Run `make config` to regenerate `all_models.json`. The generated file is used by the model registry at runtime; do not edit it manually.
 
 ## Schema Validation
 
 The configuration is validated using Pydantic models defined in `register_models.py`:
+
 - `Properties` - Model properties
 - `Supports` - Feature support flags
 - `Metadata` - Platform metadata
 - `DefaultParameters` - Default parameter values
 - `CostProperties` - Pricing information
-- `ProviderProperties` - Provider-specific config (dynamically generated)
+- `ProviderProperties` - Provider-specific config, generated dynamically from provider config classes
 
 ## Migration Notes
 
 ### Previous Structure (Deprecated)
+
 The old configuration used `class_properties` which mixed support flags and metadata:
 
 ```yaml

@@ -2,12 +2,14 @@
 Unit tests for retry logic.
 """
 
+from contextlib import nullcontext
 from typing import Type
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import httpcore
 import httpx
 import pytest
+from openai import BadRequestError
 
 from model_library.base import LLM, QueryResult
 from model_library.base import FinishReason
@@ -17,6 +19,7 @@ from model_library.exceptions import (
     BadInputError,
     ContentFilterError,
     ImmediateRetryException,
+    ImmediateRetryExhaustedError,
     MaxContextWindowExceededError,
     MaxOutputTokensExceededError,
     ModelNoOutputError,
@@ -169,6 +172,85 @@ async def test_core_errors(
         assert query_impl_mock.call_count == 1
 
 
+async def test_immediate_retry_records_attempt_count():
+    succeeds_after_retries = AsyncMock(
+        side_effect=[
+            ImmediateRetryException("Immediate retry"),
+            ImmediateRetryException("Immediate retry"),
+            "success",
+        ]
+    )
+
+    with patch("model_library.retriers.base.telemetry.set_attributes") as set_attrs:
+        result = await BaseRetrier.immediate_retry_wrapper(
+            succeeds_after_retries,
+            MagicMock(),
+        )
+
+    assert result == "success"
+    set_attrs.assert_called_once_with({"retry.immediate_attempts": 2})
+
+
+async def test_backoff_retry_records_attempt_count_on_success():
+    succeeds_after_retry = AsyncMock(side_effect=[RetryException("retry"), "success"])
+    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=3)
+
+    with patch("model_library.retriers.base.telemetry.set_attributes") as set_attrs:
+        result = await retry_decorator(retrier)(succeeds_after_retry)()
+
+    assert result == "success"
+    set_attrs.assert_any_call({"retry.attempts": 1})
+
+
+async def test_backoff_retry_records_attempt_and_sleep_spans():
+    succeeds_after_retry = AsyncMock(side_effect=[RetryException("retry"), "success"])
+    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=3)
+    spans: list[tuple[str, dict[str, object | None]]] = []
+    events: list[tuple[str, dict[str, object | None]]] = []
+
+    def fake_start_span(name: str, attributes: dict[str, object | None]):
+        spans.append((name, dict(attributes)))
+        return nullcontext()
+
+    def fake_add_event(name: str, attributes: dict[str, object | None]):
+        events.append((name, dict(attributes)))
+
+    with (
+        patch(
+            "model_library.retriers.base.telemetry.start_span",
+            side_effect=fake_start_span,
+        ),
+        patch(
+            "model_library.retriers.base.telemetry.add_event",
+            side_effect=fake_add_event,
+        ),
+    ):
+        result = await retry_decorator(retrier)(succeeds_after_retry)()
+
+    assert result == "success"
+    assert spans[0] == (
+        "model_library.retry_attempt",
+        {"retry.strategy": "backoff", "retry.attempt": 0},
+    )
+    assert spans[1][0] == "model_library.retry_sleep"
+    assert spans[1][1]["retry.strategy"] == "backoff"
+    assert spans[1][1]["retry.attempt"] == 1
+    assert spans[1][1]["exception.type"] == "RetryException"
+    assert spans[2] == (
+        "model_library.retry_attempt",
+        {"retry.strategy": "backoff", "retry.attempt": 1},
+    )
+    assert events[0] == (
+        "model_library.retry_attempt_start",
+        {"retry.strategy": "backoff", "retry.attempt": 0},
+    )
+    assert ("model_library.retry_sleep", spans[1][1]) in events
+    assert events[-1] == (
+        "model_library.retry_attempt_success",
+        {"retry.strategy": "backoff", "retry.attempt": 1},
+    )
+
+
 async def test_immediate_retry_exception_success(mock_llm: LLM):
     """
     Test that ImmediateRetryException triggers immediate retries
@@ -210,24 +292,12 @@ async def test_immediate_retry_exception_success(mock_llm: LLM):
 
 async def test_immediate_retry_exception_limit(mock_llm: LLM):
     """
-    Test that ImmediateRetryException reaches limit
+    Test that ImmediateRetryException reaches limit and the resulting
+    ImmediateRetryExhaustedError is NOT retried by the outer backoff retrier.
     """
 
-    # raise ImmediateRetryException twice, then succeed
     query_impl_mock = AsyncMock(
-        side_effect=[
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-        ]
+        side_effect=[ImmediateRetryException("Immediate retry")] * 11
     )
     mock_llm._query_impl = query_impl_mock  # pyright: ignore[reportPrivateUsage]
 
@@ -245,12 +315,26 @@ async def test_immediate_retry_exception_limit(mock_llm: LLM):
             wraps=ExponentialBackoffRetrier.execute,
         ) as mock_backoff_retry,
     ):
-        with pytest.raises(Exception):
+        with pytest.raises(ImmediateRetryExhaustedError):
             await mock_llm.query("Mock Input")
 
-    assert query_impl_mock.call_count == 12
-    assert mock_immediate_retry.call_count == 2
+    # only one immediate-retry cycle: 1 initial + 10 retries before giving up
+    assert query_impl_mock.call_count == 11
+    assert mock_immediate_retry.call_count == 1
     assert mock_backoff_retry.call_count == 1
+
+
+async def test_immediate_retry_exhausted_is_not_retriable():
+    """
+    The error raised after immediate retries are exhausted must not be
+    retriable, even though its message contains keywords like 'retry' that
+    appear in RETRIABLE_EXCEPTION_CODES.
+    """
+    original = ModelNoOutputError("model produced no output")
+    exhausted = ImmediateRetryExhaustedError(10, 10, original)
+
+    assert "retry" in str(exhausted).lower()
+    assert is_retriable_error(exhausted) is False
 
 
 @pytest.mark.parametrize(
@@ -273,6 +357,10 @@ async def test_immediate_retry_exception_limit(mock_llm: LLM):
         ("Error 400", False),  # bad request
         ("Misc Error", False),  # generic error
         ("overloaded", True),  # overloaded error from anthropic
+        (
+            "unknown error, 999 (1000)",
+            True,
+        ),
     ],
 )
 async def test_retry_by_exception_message(
@@ -313,6 +401,7 @@ async def test_context_window_error_gives_up(mock_llm: LLM):
         "Invalid request: Your request exceeded model token limit: 262144 (requested: 263162)",  # kimi
         "Payload Too Large",
         "invalid params, context window exceeds limit (2013)",  # minimax
+        "Error code: 400 - {'error': {'code': 400, 'message': 'Input length 264373 exceeds the maximum allowed input length of 262112 tokens.', 'type': 'Bad Request'}}",  # poolside
     ]
 
     for exception_message in exception_messages:
@@ -343,7 +432,9 @@ async def test_handle_empty_response(
     Test that handle_empty_response raises the correct exception for each finish reason
     """
     with pytest.raises(expected_exception):
-        handle_empty_response(FinishReasonInfo(reason=finish_reason, raw=str(finish_reason.value)))
+        handle_empty_response(
+            FinishReasonInfo(reason=finish_reason, raw=str(finish_reason.value))
+        )
 
 
 async def test_no_retry_exception_not_retried_despite_retriable_message():
@@ -357,3 +448,58 @@ async def test_no_retry_exception_not_retried_despite_retriable_message():
     assert is_retriable_error(MaxOutputTokensExceededError(poison_message)) is False
     assert is_retriable_error(MaxContextWindowExceededError(poison_message)) is False
     assert is_retriable_error(ContentFilterError(poison_message)) is False
+
+
+# Exact 400 body returned by the xiaomi/mimo-v2.5 endpoint when it rejects an
+# image payload mid-run.
+_MIMO_MULTIMODAL_ERROR_BODY = {
+    "error": {
+        "code": "400",
+        "message": "Request Error",
+        "param": "Multimodal data is corrupted or cannot be processed.",
+        "type": "",
+    }
+}
+# str(BadRequestError) reproduces the SDK's "Error code: <status> - <body>" form.
+_MIMO_MULTIMODAL_ERROR_MESSAGE = (
+    "Error code: 400 - {'error': {'code': '400', 'message': 'Request Error', "
+    "'param': 'Multimodal data is corrupted or cannot be processed.', 'type': ''}}"
+)
+
+
+def _mimo_multimodal_error() -> BadRequestError:
+    """Build the exact openai.BadRequestError mimo raises on a bad image payload."""
+    request = httpx.Request("POST", "https://mimo.example/v1/chat/completions")
+    response = httpx.Response(400, request=request)
+    return BadRequestError(
+        _MIMO_MULTIMODAL_ERROR_MESSAGE,
+        response=response,
+        body=_MIMO_MULTIMODAL_ERROR_BODY,
+    )
+
+
+async def test_mimo_multimodal_400_is_retriable():
+    """
+    The exact 400 ('Multimodal data is corrupted or cannot be processed') that
+    mimo returns must be classified as retriable, even though a plain 400 is not.
+    """
+    err = _mimo_multimodal_error()
+    assert err.status_code == 400
+    assert "multimodal data is corrupted" in str(err).lower()
+    assert is_retriable_error(err) is True
+
+
+async def test_query_retries_on_mimo_multimodal_400(mock_llm: LLM):
+    """
+    End-to-end: a query that hits mimo's multimodal 400 once is retried by the
+    backoff retrier and succeeds on the next attempt.
+    """
+    query_impl_mock = AsyncMock(
+        side_effect=[_mimo_multimodal_error(), QueryResult(output_text="success")]
+    )
+    mock_llm._query_impl = query_impl_mock  # pyright: ignore[reportPrivateUsage]
+
+    result = await mock_llm.query("Mock Input")
+
+    assert result.output_text == "success"
+    assert query_impl_mock.call_count == 2

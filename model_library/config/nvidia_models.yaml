@@ -1,0 +1,9 @@
+base-config:
+  company: NVIDIA
+  documentation_url: https://docs.api.nvidia.com/nim/
+  open_source: true
+  supports:
+    images: false
+    tools: true
+    files: false
+    temperature: true

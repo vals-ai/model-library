@@ -5,7 +5,9 @@ import io
 import json
 import logging
 import time
-from typing import Any, AsyncIterator, Literal, Sequence, cast
+from collections import deque
+from collections.abc import Mapping, Sequence
+from typing import Any, AsyncIterator, Literal, cast
 
 from openai import APIConnectionError, AsyncOpenAI
 from openai.lib._pydantic import to_strict_json_schema
@@ -24,11 +26,15 @@ from openai.types.moderation_create_response import ModerationCreateResponse
 from openai.types.responses import (
     ResponseFunctionToolCall,
     ResponseOutputText,
-    ResponseStreamEvent,
+)
+from openai.types.responses.response_function_web_search import (
+    ActionSearch,
+    ResponseFunctionWebSearch,
 )
 from openai.types.responses.response import Response
+from openai.types.responses.response_stream_event import ResponseStreamEvent
 from openai.types.responses.tool_param import ToolParam as ResponsesToolParam
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 from typing_extensions import deprecated, override
 
 from model_library import model_library_settings
@@ -48,6 +54,7 @@ from model_library.base import (
     LLMConfig,
     ProviderConfig,
     PydanticT,
+    ProviderToolEvent,
     QueryResult,
     QueryResultCost,
     QueryResultExtras,
@@ -75,6 +82,34 @@ from model_library.retriers.base import BaseRetrier
 from model_library.utils import create_openai_client_with_defaults
 
 
+def _to_json_value(value: object) -> JsonValue:
+    if isinstance(value, BaseModel):
+        return _to_json_value(value.model_dump(mode="json"))
+
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[object, object], value)
+        return {str(key): _to_json_value(item) for key, item in mapping.items()}
+
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        sequence = cast(Sequence[object], value)
+        return [_to_json_value(item) for item in sequence]
+
+    return cast(JsonValue, json.loads(json.dumps(value, allow_nan=False)))
+
+
+def _safe_search_results(
+    value: object, query_logger: logging.Logger
+) -> JsonValue | None:
+    if value is None:
+        return None
+
+    try:
+        return _to_json_value(value)
+    except (TypeError, ValueError):
+        query_logger.warning("Dropping non-JSON-serializable search results")
+        return None
+
+
 def map_openai_completions_finish_reason(
     finish_reason: str | None,
 ) -> FinishReasonInfo:
@@ -87,6 +122,8 @@ def map_openai_completions_finish_reason(
             reason = FinishReason.TOOL_CALLS
         case "content_filter":
             reason = FinishReason.CONTENT_FILTER
+        case "model_context_window_exceeded":
+            reason = FinishReason.CONTEXT_WINDOW_EXCEEDED
         case _:
             reason = FinishReason.UNKNOWN
 
@@ -226,6 +263,7 @@ class OpenAIBatchMixin(LLMBatchMixin):
                 if response.usage:
                     output.metadata.in_tokens = response.usage.input_tokens
                     output.metadata.out_tokens = response.usage.output_tokens
+                output.extras.response_id = response.id
 
                 batch_results.append(
                     BatchResult(
@@ -292,10 +330,16 @@ class OpenAIBatchMixin(LLMBatchMixin):
         return batch_status == "cancelled"
 
 
+OpenAIToolCallMode = Literal["default", "auto", "code_mode"]
+
+
 class OpenAIConfig(ProviderConfig):
     deep_research: bool = False
+    tool_call_mode: OpenAIToolCallMode = "default"
     verbosity: Literal["low", "medium", "high"] | None = None
     prompt_cache_retention: Literal["24h", "in_memory"] | None = None
+    reasoning_context: Literal["current_turn", "all_turns"] | None = None
+    parallel_tool_calls: bool | None = None
     # TODO: move to LLMConfig so OpenAI-compatible delegate providers can configure it.
     stream_completions: bool = True
 
@@ -338,8 +382,11 @@ class OpenAIModel(LLM):
         super().__init__(model_name, provider, config=config)
 
         self.deep_research = self.provider_config.deep_research
+        self.tool_call_mode = self.provider_config.tool_call_mode
         self.verbosity = self.provider_config.verbosity
         self.prompt_cache_retention = self.provider_config.prompt_cache_retention
+        self.reasoning_context = self.provider_config.reasoning_context
+        self.parallel_tool_calls = self.provider_config.parallel_tool_calls
         self.stream_completions = self.provider_config.stream_completions
 
         # batch client
@@ -441,6 +488,11 @@ class OpenAIModel(LLM):
                                 "type": "function_call_output",
                                 "call_id": item.tool_call.call_id,
                                 "output": item.result,
+                                **(
+                                    {"code_mode_id": item.tool_call.code_mode_id}
+                                    if item.tool_call.code_mode_id is not None
+                                    else {}
+                                ),
                             }
                         )
                 case RawResponse():
@@ -555,6 +607,9 @@ class OpenAIModel(LLM):
                 "strict": body.kwargs.get("strict", False),
             }
 
+            if body.allowed_callers is not None:
+                base_payload["allowed_callers"] = body.allowed_callers
+
             if self.use_completions:
                 payload = {
                     "type": "function",
@@ -615,6 +670,9 @@ class OpenAIModel(LLM):
             parsed_tools = await self.parse_tools(tools)
             if parsed_tools:
                 body["tools"] = parsed_tools
+
+        if self.parallel_tool_calls is not None:
+            body["parallel_tool_calls"] = self.parallel_tool_calls
 
         # DeepSeek documents max_tokens for thinking mode, not max_completion_tokens
         if self.reasoning and self.max_tokens and self.provider not in {"deepseek"}:
@@ -693,6 +751,7 @@ class OpenAIModel(LLM):
         output_text: str = ""
         reasoning_text: str = ""
         raw_tool_calls: list[ChatCompletionMessageToolCall] = []
+        tool_calls_by_stream_index: dict[int, ChatCompletionMessageToolCall] = {}
 
         finish_reason: str | None = None
         metadata: QueryResultMetadata = QueryResultMetadata()
@@ -723,6 +782,7 @@ class OpenAIModel(LLM):
         completion_id: str | None = None
         if not self.stream_completions:
             completion = cast(ChatCompletion, completion)
+            completion_id = completion.id
             query_logger.debug(f"Completion created: {completion.id}")
             if completion.choices:
                 choice = completion.choices[0]
@@ -772,6 +832,19 @@ class OpenAIModel(LLM):
                     if choice.delta and choice.delta.tool_calls:
                         for tool_call_chunk in choice.delta.tool_calls:
                             func = tool_call_chunk.function
+                            if self.provider == "poolside":
+                                existing_tool_call = tool_calls_by_stream_index.get(
+                                    tool_call_chunk.index
+                                )
+                                if existing_tool_call is not None:
+                                    if func and func.name:
+                                        existing_tool_call.function.name = func.name
+                                    if func and func.arguments:
+                                        existing_tool_call.function.arguments += (
+                                            func.arguments
+                                        )
+                                    continue
+
                             # start of new tool call
                             if tool_call_chunk.id and (
                                 not raw_tool_calls
@@ -809,6 +882,10 @@ class OpenAIModel(LLM):
                                         **extras,
                                     )
                                 )
+                                if self.provider == "poolside":
+                                    tool_calls_by_stream_index[
+                                        tool_call_chunk.index
+                                    ] = raw_tool_calls[-1]
                             # accumulate delta
                             elif func and raw_tool_calls:
                                 if func.name:
@@ -857,7 +934,6 @@ class OpenAIModel(LLM):
         )
         if reasoning_text:
             setattr(final_message, "reasoning_content", reasoning_text)
-
         return QueryResult(
             output_text=output_text,
             reasoning=reasoning_text,
@@ -865,6 +941,7 @@ class OpenAIModel(LLM):
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=final_message)],
             metadata=metadata,
+            extras=QueryResultExtras(response_id=completion_id),
         )
 
     async def _check_deep_research_args(
@@ -889,11 +966,7 @@ class OpenAIModel(LLM):
             tool_body = cast(dict[str, Any], tool_body)
             tool_type = tool_body.get("type", None)
 
-            if tool_type in {
-                "web_search",
-                "web_search_preview",
-                "web_search_preview_2025_03_11",
-            }:
+            if tool_type in {"web_search", "web_search_preview"}:
                 valid = True
         if not valid:
             raise Exception("Deep research models require web search tools")
@@ -915,7 +988,31 @@ class OpenAIModel(LLM):
         if self.deep_research:
             await self._check_deep_research_args(tools, **kwargs)
 
-        parsed_tools = await self.parse_tools(tools)
+        parsed_tools: list[Any] = cast(list[Any], await self.parse_tools(tools))
+        if self.tool_call_mode != "default":
+            if self.tool_call_mode == "auto":
+                allowed_callers = ["code_mode", "direct"]
+            elif self.tool_call_mode == "code_mode":
+                allowed_callers = ["code_mode"]
+            else:
+                raise ValueError(f"Unknown tool_call_mode: {self.tool_call_mode}")
+
+            has_code_mode_tool = any(
+                isinstance(tool, dict)
+                and cast(dict[str, Any], tool).get("type") == "code_mode"
+                for tool in parsed_tools
+            )
+            for tool in parsed_tools:
+                if not isinstance(tool, dict):
+                    continue
+                tool_body = cast(dict[str, Any], tool)
+                if (
+                    tool_body.get("type") == "function"
+                    and "allowed_callers" not in tool_body
+                ):
+                    tool_body["allowed_callers"] = allowed_callers
+            if self.tool_call_mode in {"auto", "code_mode"} and not has_code_mode_tool:
+                parsed_tools.append({"type": "code_mode", "language": "javascript"})
 
         body: dict[str, Any] = {
             "model": self.model_name,
@@ -931,8 +1028,11 @@ class OpenAIModel(LLM):
         if self.reasoning:
             body["include"] = ["reasoning.encrypted_content"]
             body["reasoning"] = {"summary": "auto"}
+            body["store"] = False
             if self.reasoning_effort is not None:
                 body["reasoning"]["effort"] = self.reasoning_effort  # type: ignore[reportArgumentType]
+            if self.reasoning_context is not None:
+                body["reasoning"]["context"] = self.reasoning_context
 
         if self.verbosity is not None:
             body["text"] = {"format": {"type": "text"}, "verbosity": self.verbosity}
@@ -957,6 +1057,9 @@ class OpenAIModel(LLM):
             if self.verbosity is not None:
                 text_block["verbosity"] = self.verbosity
             body["text"] = text_block
+
+        if self.parallel_tool_calls is not None:
+            body["parallel_tool_calls"] = self.parallel_tool_calls
 
         if self.supports_temperature:
             if self.temperature is not None:
@@ -990,51 +1093,70 @@ class OpenAIModel(LLM):
                 **kwargs,
             )
 
+        stream_responses = bool(kwargs.pop("stream", True))
         body = await self.build_body(
             input, tools=tools, output_schema=output_schema, **kwargs
         )
 
         try:
-            stream = await self.get_client().responses.create(
+            openai_response = await self.get_client().responses.create(
                 **body,  # pyright: ignore[reportAny]
-                stream=True,
+                stream=stream_responses,
             )
         except APIConnectionError:
             raise ImmediateRetryException("Failed to connect to OpenAI")
 
         response: Response | None = None
-        stream_events: list[ResponseStreamEvent] = []
-        async for event in stream:
-            stream_events.append(event)
-            match event.type:
-                case "response.created":
-                    query_logger.debug(f"Response created: {event.response.id}")
-                    response = event.response
-                case "response.completed":
-                    query_logger.debug(f"Response completed: {event.response.id}")
-                    response = event.response
-                case "response.incomplete":
-                    query_logger.error(f"Response incomplete: {event.response.id}")
-                    response = event.response
-                case "response.in_progress":
-                    query_logger.debug(f"Response in progress: {event.response.id}")
-                    response = event.response
-                case "response.failed":
-                    query_logger.error(
-                        f"Response failed: {event.response.id} | {event.response.error}"
-                    )
-                    response = event.response
-                case _:
-                    continue
+        recent_stream_events: deque[dict[str, str | None]] = deque(maxlen=5)
+        if stream_responses:
+            stream = cast(AsyncIterator[ResponseStreamEvent], openai_response)
+            async for event in stream:
+                event_response = getattr(event, "response", None)
+                recent_stream_events.append(
+                    {
+                        "type": event.type,
+                        "response_id": getattr(event_response, "id", None),
+                    }
+                )
+                match event.type:
+                    case "response.created":
+                        query_logger.debug(f"Response created: {event.response.id}")
+                        response = event.response
+                    case "response.completed":
+                        query_logger.debug(f"Response completed: {event.response.id}")
+                        response = event.response
+                    case "response.incomplete":
+                        query_logger.error(f"Response incomplete: {event.response.id}")
+                        response = event.response
+                    case "response.in_progress":
+                        query_logger.debug(f"Response in progress: {event.response.id}")
+                        response = event.response
+                    case "response.failed":
+                        query_logger.error(
+                            f"Response failed: {event.response.id} | {event.response.error}"
+                        )
+                        response = event.response
+                    case _:
+                        continue
+        else:
+            response = cast(Response, openai_response)
+
         if not response:
             query_logger.error(
-                f"Model returned no response. Events: {[e.model_dump(exclude_unset=True, exclude_none=True) for e in stream_events]}"
+                f"Model returned no response. Recent events: {list(recent_stream_events)}"
             )
             raise ImmediateRetryException("Model returned no response")
         query_logger.debug(f"Response finished: {response.id}")
 
+        has_code_mode_output = any(
+            getattr(output, "type", None) == "code_mode_output"
+            for output in response.output
+        )
         no_useful_content = (
-            not response.output_text and not response.reasoning and not response.tools
+            not response.output_text
+            and not response.reasoning
+            and not response.tools
+            and not has_code_mode_output
         )
         finish_reason = (
             None
@@ -1043,9 +1165,11 @@ class OpenAIModel(LLM):
         )
 
         tool_calls: list[ToolCall] = []
+        provider_tool_events: list[ProviderToolEvent] = []
         citations: list[Citation] = []
         reasoning = None
-        for output in response.output:
+        code_mode_outputs: list[str] = []
+        for i, output in enumerate(response.output):
             if output.type == "message":
                 for content in output.content:
                     if not isinstance(content, ResponseOutputText):
@@ -1054,7 +1178,37 @@ class OpenAIModel(LLM):
                         citations.append(Citation(**citation.model_dump()))
 
             if output.type == "reasoning":
-                reasoning = " ".join([i.text for i in output.summary])
+                reasoning = " ".join([s.text for s in output.summary])
+                continue
+            if output.type == "code_mode_output":  # pyright: ignore[reportUnnecessaryComparison]
+                code_mode_result = getattr(output, "result", None)
+                if code_mode_result is not None:
+                    code_mode_outputs.append(
+                        code_mode_result
+                        if isinstance(code_mode_result, str)
+                        else json.dumps(code_mode_result)
+                    )
+                continue
+            if isinstance(output, ResponseFunctionWebSearch):
+                if isinstance(output.action, ActionSearch):
+                    query = output.action.query or next(
+                        iter(output.action.queries or []), ""
+                    )
+                    sources: list[JsonValue] = [
+                        s.url for s in (output.action.sources or [])
+                    ]
+                    provider_tool_events.append(
+                        ProviderToolEvent(
+                            id=output.id,
+                            provider="openai",
+                            type="web_search_call",
+                            name="web_search",
+                            status=output.status,
+                            input=query,
+                            output=sources,
+                            sequence=i,
+                        )
+                    )
                 continue
             if output.type != "function_call":
                 continue
@@ -1067,8 +1221,17 @@ class OpenAIModel(LLM):
                     call_id=output.call_id,
                     name=output.name,
                     args=output.arguments,
+                    code_mode_id=getattr(output, "code_mode_id", None),
+                    sequence=i,
                 )
             )
+
+        output_text = (
+            "\n".join(
+                part for part in [response.output_text, *code_mode_outputs] if part
+            )
+            or None
+        )
 
         mapped_finish_reason = map_openai_responses_finish_reason(
             response.status, finish_reason, has_tool_calls=bool(tool_calls)
@@ -1084,12 +1247,18 @@ class OpenAIModel(LLM):
             )
 
         result = QueryResult(
-            output_text=response.output_text,
+            output_text=output_text,
             reasoning=reasoning,
             finish_reason=mapped_finish_reason,
             tool_calls=tool_calls,
+            provider_tool_events=provider_tool_events,
             history=[*input, RawResponse(response=response.output)],
-            extras=QueryResultExtras(citations=citations),
+            extras=QueryResultExtras(
+                citations=citations,
+                search_results=_safe_search_results(
+                    getattr(response, "search_results", None), query_logger
+                ),
+            ),
         )
         if response.usage:
             # see _calculate_cost
@@ -1101,10 +1270,7 @@ class OpenAIModel(LLM):
                 reasoning_tokens=reasoning_tokens,
                 cache_read_tokens=cache_read_tokens,
             )
-
-        search_results = getattr(response, "search_results", None)
-        if search_results is not None:
-            result.raw["search_results"] = search_results
+        result.extras.response_id = response.id
 
         return result
 

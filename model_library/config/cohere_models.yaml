@@ -10,6 +10,42 @@ base-config:
     reasoning_model: false
     training_cutoff: null
 
+command-a-plus-models:
+  cohere/command-a-plus-05-2026:
+    label: Command A+
+    release_date: 2026-05-20
+    open_source: true
+    documentation_url: https://docs.cohere.com/docs/command-a-plus
+    supports:
+      images: true
+      temperature: true
+    properties:
+      context_window: 128_000
+      max_tokens: 64_000
+      reasoning_model: true
+      training_cutoff: "2025-04-01"
+    costs_per_million_token: null
+    default_parameters:
+      temperature: 0.9
+      top_p: 0.95
+
+north-mini-code-models:
+  cohere/north-mini-code-1-0:
+    label: North Mini Code
+    release_date: 2026-06-09
+    open_source: true
+    supports:
+      temperature: true
+    properties:
+      context_window: 256_000
+      max_tokens: 64_000
+      reasoning_model: true
+      training_cutoff: null
+    costs_per_million_token: null
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+
 command-models:
   base-config:
     supports:

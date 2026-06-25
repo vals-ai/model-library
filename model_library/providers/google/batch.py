@@ -63,6 +63,9 @@ def parse_predictions_jsonl(jsonl: str) -> list[BatchResult]:
                 output.metadata.out_tokens = response["usageMetadata"].get(
                     "candidatesTokenCount", 0
                 )
+            output.extras.response_id = response.get("responseId") or response.get(
+                "response_id"
+            )
             results.append(BatchResult(custom_id=custom_id, output=output))
         else:
             error = data.get("error", {}).get("message", "Unknown error")

@@ -29,6 +29,57 @@ deprecated:
     metadata:
       deprecated: true
 
+  anthropic/claude-sonnet-4-20250514:
+    label: Claude Sonnet 4 (Nonthinking)
+    release_date: 2025-05-22
+    supports:
+      batch: true
+    properties:
+      context_window: 200_000
+      max_tokens: 64_000
+      training_cutoff: "2025-03"
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache:
+        read: 0.3
+        write: 3.75
+      context:
+        threshold: 200_000
+        input: 6.00
+        output: 22.5
+        cache:
+          read: 0.6
+          write: 7.50
+    alternative_keys:
+      - anthropic/claude-sonnet-4-20250514-thinking:
+          properties:
+            reasoning_model: true
+          supports:
+            temperature: false
+
+  anthropic/claude-opus-4-20250514:
+    label: Claude Opus 4 (Nonthinking)
+    release_date: 2025-05-22
+    supports:
+      batch: true
+    properties:
+      context_window: 200_000
+      max_tokens: 32_000
+      training_cutoff: "2025-03"
+    metadata:
+      available_for_everyone: false
+    costs_per_million_token:
+      input: 15.0
+      output: 75.0
+      cache:
+        read: 1.5
+        write: 18.75
+    alternative_keys:
+      - anthropic/claude-opus-4-20250514-thinking:
+          properties:
+            reasoning_model: true
+
   anthropic/claude-3-7-sonnet-20250219:
     label: Claude 3.7 Sonnet (Nonthinking)
     release_date: 2025-02-24

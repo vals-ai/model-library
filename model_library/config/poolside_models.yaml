@@ -1,0 +1,63 @@
+base-config:
+  company: Poolside
+  documentation_url: https://docs.poolside.ai
+  open_source: false
+  supports:
+    images: false
+    tools: true
+    files: false
+
+laguna-models:
+  base-config:
+    properties:
+      context_window: 262_144
+    default_parameters:
+      temperature: 1.0
+
+  poolside/laguna-xs.2:
+    label: Laguna XS.2
+    release_date: 2026-04-28
+    open_source: true
+    provider_endpoint: poolside/laguna-xs.2
+    properties:
+      reasoning_model: true
+      max_tokens: 32_768
+    costs_per_million_token: null
+
+  poolside/laguna-m.1:
+    label: Laguna M.1
+    release_date: 2026-04-28
+    open_source: true
+    provider_endpoint: poolside/laguna-m.1
+    properties:
+      reasoning_model: true
+      max_tokens: 32_768
+    costs_per_million_token: null
+
+  poolside/laguna-xs.2:fast:
+    label: Laguna XS.2 Fast
+    release_date: 2026-04-28
+    open_source: true
+    provider_endpoint: poolside/laguna-xs.2:fast
+    properties:
+      reasoning_model: true
+      max_tokens: 32_768
+    costs_per_million_token:
+      input: 0.1
+      output: 0.2
+      cache:
+        read: 0.05
+
+  poolside/laguna-m.1:fast:
+    label: Laguna M.1 Fast
+    release_date: 2026-04-28
+    open_source: true
+    provider_endpoint: poolside/laguna-m.1:fast
+    properties:
+      reasoning_model: true
+      max_tokens: 32_768
+    costs_per_million_token:
+      input: 0.2
+      output: 0.4
+      cache:
+        read: 0.1

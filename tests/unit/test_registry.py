@@ -16,7 +16,7 @@ from model_library.register_models import (
     get_provider_registry,
     register_provider,
 )
-from model_library.registry_utils import get_registry_model
+from model_library.registry_utils import get_registry_model, recompute_cost
 
 
 @pytest.mark.parametrize("concurrency_type", ["threads", "async"])
@@ -119,21 +119,55 @@ async def test_manual_and_registry_instantiation():
     assert isinstance(model3, FireworksModel)
 
 
+def test_registry_metadata_is_available_but_not_rendered():
+    model = get_registry_model("google/gemini-2.5-flash")
+
+    assert model.metadata is not None
+    rendered = repr(model)
+    assert "_metadata" not in rendered
+    assert "ModelConfig" not in rendered
+
+
+async def test_cli_models_not_instantiable():
+    with pytest.raises(ValueError, match="Cursor CLI"):
+        get_registry_model("cursor/composer-2.5")
+    with pytest.raises(ValueError, match="Devin CLI"):
+        get_registry_model("devin/swe-1-6-fast")
+
+
+async def test_cursor_cli_model_cost_can_be_recomputed_from_registry():
+    cost = await recompute_cost(
+        "cursor/composer-2.5-fast",
+        {
+            "in_tokens": 100,
+            "out_tokens": 20,
+            "cache_read_tokens": 1000,
+            "cache_write_tokens": 10,
+        },
+    )
+
+    assert cost.input == pytest.approx(0.0003)
+    assert cost.output == pytest.approx(0.0003)
+    assert cost.cache_read == pytest.approx(0.0005)
+    assert cost.cache_write is None
+    assert cost.total == pytest.approx(0.0011)
+
+
 async def test_none_costs():
     """Models without costs should have costs_per_million_token=None and return None cost."""
     from model_library.base import QueryResultMetadata
     from model_library.registry_utils import get_model_cost, get_registry_config
 
-    # meta/muse_spark has no costs defined in its YAML config
-    config = get_registry_config("meta/muse_spark")
+    # poolside/laguna-xs.2 has no costs defined in its YAML config
+    config = get_registry_config("poolside/laguna-xs.2")
     assert config is not None
     assert config.costs_per_million_token is None
 
-    cost = get_model_cost("meta/muse_spark")
+    cost = get_model_cost("poolside/laguna-xs.2")
     assert cost is None
 
     # _calculate_cost should return None when costs are missing
-    model = get_registry_model("meta/muse_spark")
+    model = get_registry_model("poolside/laguna-xs.2")
     metadata = QueryResultMetadata(in_tokens=100, out_tokens=50)
     result = await model._calculate_cost(metadata)
     assert result is None

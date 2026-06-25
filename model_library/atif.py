@@ -12,13 +12,18 @@ import uuid
 from collections.abc import Sequence
 from typing import Any
 
-from model_library.agent.metadata import AgentTurn, ErrorTurn, ToolCallRecord
+from model_library.agent.metadata import (
+    AgentTurn,
+    CompactionSummary,
+    ErrorTurn,
+    ToolCallRecord,
+)
 from model_library.base.input import RawResponse, SystemInput, TextInput
 from model_library.base.output import QueryResultMetadata
-from model_library.utils import PrettyModel
+from model_library.utils import ValsModel
 
 
-class ATIFAgent(PrettyModel):
+class ATIFAgent(ValsModel):
     name: str
     version: str
     model_name: str
@@ -26,7 +31,7 @@ class ATIFAgent(PrettyModel):
     extra: dict[str, Any] | None = None
 
 
-class ATIFMetrics(PrettyModel):
+class ATIFMetrics(ValsModel):
     prompt_tokens: int
     completion_tokens: int
     cached_tokens: int | None = None
@@ -37,7 +42,7 @@ class ATIFMetrics(PrettyModel):
     extra: dict[str, Any] | None = None
 
 
-class ATIFFinalMetrics(PrettyModel):
+class ATIFFinalMetrics(ValsModel):
     total_prompt_tokens: int
     total_completion_tokens: int
     total_cached_tokens: int | None = None
@@ -46,22 +51,22 @@ class ATIFFinalMetrics(PrettyModel):
     extra: dict[str, Any] | None = None
 
 
-class ATIFObservationResult(PrettyModel):
+class ATIFObservationResult(ValsModel):
     source_call_id: str
     content: str
 
 
-class ATIFObservation(PrettyModel):
+class ATIFObservation(ValsModel):
     results: list[ATIFObservationResult]
 
 
-class ATIFToolCall(PrettyModel):
+class ATIFToolCall(ValsModel):
     tool_call_id: str
     function_name: str
     arguments: dict[str, Any]
 
 
-class ATIFStep(PrettyModel):
+class ATIFStep(ValsModel):
     step_id: int
     timestamp: str
     source: str  # "user", "agent", or "system"
@@ -76,7 +81,7 @@ class ATIFStep(PrettyModel):
     extra: dict[str, Any] | None = None
 
 
-class ATIFTrajectory(PrettyModel):
+class ATIFTrajectory(ValsModel):
     schema_version: str = "ATIF-v1.6"
     session_id: str
     notes: str | None = None
@@ -94,6 +99,7 @@ class ATIFTrajectory(PrettyModel):
         cls,
         *,
         turns: Sequence[AgentTurn | ErrorTurn],
+        compactions: Sequence[CompactionSummary] = (),
         agent_name: str,
         model_name: str,
         agent_version: str = "1.0",
@@ -109,6 +115,7 @@ class ATIFTrajectory(PrettyModel):
 
         Args:
             turns: The list of AgentTurn/ErrorTurn from the agent run.
+            compactions: History compaction attempts from the agent run.
             agent_name: Name of the agent.
             model_name: Model key used for the agent.
             agent_version: Version string for the agent.
@@ -172,16 +179,15 @@ class ATIFTrajectory(PrettyModel):
                 continue
 
             metadata = turn.query_result.metadata
-            total_prompt += metadata.total_input_tokens
-            total_completion += metadata.total_output_tokens
-            if metadata.cache_read_tokens is not None:
+            step_metrics = _make_step_metrics(metadata)
+            total_prompt += step_metrics.prompt_tokens
+            total_completion += step_metrics.completion_tokens
+            if step_metrics.cached_tokens is not None:
                 has_cached = True
-                total_cached += metadata.cache_read_tokens
-            if metadata.cost is not None:
+                total_cached += step_metrics.cached_tokens
+            if step_metrics.cost_usd is not None:
                 has_cost = True
-                total_cost += metadata.cost.total
-
-            step_extra: dict[str, Any] = {"raw_response": turn.query_result.raw}
+                total_cost += step_metrics.cost_usd
 
             step_counter += 1
             steps.append(
@@ -195,8 +201,7 @@ class ATIFTrajectory(PrettyModel):
                     reasoning_effort=reasoning_effort,
                     tool_calls=_make_tool_calls(turn),
                     observation=_make_observation(turn.tool_call_records),
-                    metrics=_make_step_metrics(metadata),
-                    extra=step_extra,
+                    metrics=step_metrics,
                 )
             )
 
@@ -207,6 +212,37 @@ class ATIFTrajectory(PrettyModel):
             total_cost_usd=total_cost if has_cost else None,
             total_steps=len(steps),
         )
+
+        # Compactions aren't a first-party ATIF concept and their cost is
+        # housekeeping overhead, not task cost. Keep them out of
+        # final_metrics; expose them in `extra` with a separate aggregate so
+        # consumers can compute the true bill as final_metrics + compaction.
+        extra: dict[str, Any] | None = None
+        if compactions:
+            comp_prompt = sum(
+                c.metadata.total_input_tokens for c in compactions if c.metadata
+            )
+            comp_completion = sum(
+                c.metadata.total_output_tokens for c in compactions if c.metadata
+            )
+            # Match final_metrics: distinguish "no cost data" (None) from "zero
+            # cost" (0.0). Plain `sum(...) or None` would coerce a real 0.0 to
+            # None.
+            comp_cost = 0.0
+            comp_has_cost = False
+            for c in compactions:
+                if c.metadata is not None and c.metadata.cost is not None:
+                    comp_cost += c.metadata.cost.total
+                    comp_has_cost = True
+            extra = {
+                "compactions": [c.model_dump(exclude_none=True) for c in compactions],
+                "compaction_metrics": {
+                    "total_prompt_tokens": comp_prompt,
+                    "total_completion_tokens": comp_completion,
+                    "total_cost_usd": comp_cost if comp_has_cost else None,
+                    "count": len(compactions),
+                },
+            }
 
         return cls(
             session_id=session_id or str(uuid.uuid4()),
@@ -219,6 +255,7 @@ class ATIFTrajectory(PrettyModel):
             ),
             steps=steps,
             final_metrics=final_metrics,
+            extra=extra,
         )
 
 

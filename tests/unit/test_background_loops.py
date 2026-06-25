@@ -17,22 +17,22 @@ import fakeredis.aioredis
 import pytest
 
 bg_module = importlib.import_module("model_library.retriers.token.background")
-from model_library.base.output import RateLimit
-from model_library.retriers.token.background import (
-    FULL_TOKENS_SHUTDOWN,
-    LOOP_POLL_INTERVAL,
+from model_library.base.output import RateLimit  # noqa: E402
+from model_library.retriers.token.background import (  # noqa: E402
     REFILL_TASK_TTL,
     LoopConfig,
+    _delete_active_key_if_owned,
+    _refresh_active_key_if_unowned_or_owned,
     background_loops,
 )
-from model_library.retriers.token.token import (
+from model_library.retriers.token.token import (  # noqa: E402
     INFLIGHT_MAX_AGE,
     MAX_PRIORITY,
     MIN_PRIORITY,
     PRIORITY_STALE_AGE,
-    REAP_INTERVAL,
+    REFILL_TOKENS_LUA,
 )
-from model_library.retriers.token.utils import set_redis_client
+from model_library.retriers.token.utils import set_redis_client  # noqa: E402
 
 logger = logging.getLogger("test_background_loops")
 
@@ -128,6 +128,15 @@ async def _init_redis(redis, limit: int = 10_000, tps: int = 100) -> None:
     )
 
 
+async def _keep_active_run(redis, clock, run_id: str = "run-active") -> None:
+    """Prevent idle shutdown in tests that intentionally keep tokens at limit."""
+    await redis.sadd(f"{TOKEN_KEY}:active_runs", run_id)
+    await redis.zadd(
+        f"{TOKEN_KEY}:run:{run_id}:inflight",
+        {"q-active": clock.now + INFLIGHT_MAX_AGE + PRIORITY_STALE_AGE},
+    )
+
+
 @pytest.fixture
 def redis():
     client = fakeredis.aioredis.FakeRedis(decode_responses=True)
@@ -164,7 +173,9 @@ async def test_refill_increases_tokens_after_drain(redis, clock):
     await redis.set(TOKEN_KEY, drained)
     cfg = _cfg()
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=0.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:
@@ -189,9 +200,12 @@ async def test_refill_caps_at_limit(redis, clock):
     limit = 10_000
     await _init_redis(redis, limit=limit)
     await redis.set(TOKEN_KEY, limit)
+    await _keep_active_run(redis, clock)
     cfg = _cfg(limit=limit)
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=0.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:
@@ -232,17 +246,19 @@ async def test_correction_corrects_down(redis, clock):
             raw={},
         )
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=0.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:
-        task = asyncio.create_task(
-            background_loops(cfg, get_rate_limit, logger)
-        )
+        task = asyncio.create_task(background_loops(cfg, get_rate_limit, logger))
         await _yield(80)
 
         tokens = int(await redis.get(TOKEN_KEY))
-        assert tokens <= header_remaining, f"expected tokens <= {header_remaining}, got {tokens}"
+        assert tokens == header_remaining, (
+            f"expected tokens == {header_remaining}, got {tokens}"
+        )
 
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
@@ -267,13 +283,13 @@ async def test_correction_skips_when_header_limit_too_low(redis, clock):
             raw={},
         )
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=0.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:
-        task = asyncio.create_task(
-            background_loops(cfg, get_rate_limit, logger)
-        )
+        task = asyncio.create_task(background_loops(cfg, get_rate_limit, logger))
         await _yield(80)
 
         tokens = int(await redis.get(TOKEN_KEY))
@@ -302,13 +318,13 @@ async def test_correction_skips_when_header_limit_too_high(redis, clock):
             raw={},
         )
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=0.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:
-        task = asyncio.create_task(
-            background_loops(cfg, get_rate_limit, logger)
-        )
+        task = asyncio.create_task(background_loops(cfg, get_rate_limit, logger))
         await _yield(80)
 
         tokens = int(await redis.get(TOKEN_KEY))
@@ -340,13 +356,13 @@ async def test_correction_does_not_correct_up(redis, clock):
             raw={},
         )
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=0.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:
-        task = asyncio.create_task(
-            background_loops(cfg, get_rate_limit, logger)
-        )
+        task = asyncio.create_task(background_loops(cfg, get_rate_limit, logger))
         await _yield(80)
 
         tokens = int(await redis.get(TOKEN_KEY))
@@ -372,7 +388,9 @@ async def test_correction_exits_when_none(redis, clock):
         call_count += 1
         return None
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=0.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:
@@ -521,7 +539,9 @@ async def test_reaper_cleans_all_priority_levels(redis, clock):
         for p in range(MAX_PRIORITY, MIN_PRIORITY + 1):
             pkey = f"{base}:priority:{p}"
             remaining = await redis.zrangebyscore(pkey, "-inf", "+inf")
-            assert f"stale-at-{p}" not in remaining, f"stale entry at priority {p} not reaped"
+            assert f"stale-at-{p}" not in remaining, (
+                f"stale entry at priority {p} not reaped"
+            )
 
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
@@ -545,7 +565,9 @@ async def test_standby_takeover_refreshes_config(redis, clock):
         mapping={"limit": 20_000, "tokens_per_second": 200},
     )
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=0.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=0.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:
@@ -604,8 +626,9 @@ async def test_reaper_cleans_empty_active_runs(redis, clock):
 
 async def test_heartbeat_writes_task_keys(redis, clock):
     """Heartbeat writes task keys for alive workers."""
-    await _init_redis(redis)
-    cfg = _cfg()
+    await _init_redis(redis, tps=0)
+    await redis.set(TOKEN_KEY, 0)
+    cfg = _cfg(tps=0)
 
     patches = _make_patches(clock, LOOP_POLL_INTERVAL=1.0)
     for p in patches:
@@ -632,8 +655,9 @@ async def test_heartbeat_writes_task_keys(redis, clock):
 
 async def test_heartbeat_writes_active_key(redis, clock):
     """Heartbeat writes active key with loop_id when is_active is True."""
-    await _init_redis(redis)
-    cfg = _cfg()
+    await _init_redis(redis, tps=0)
+    await redis.set(TOKEN_KEY, 0)
+    cfg = _cfg(tps=0)
 
     patches = _make_patches(clock, LOOP_POLL_INTERVAL=1.0)
     for p in patches:
@@ -658,6 +682,118 @@ async def test_heartbeat_writes_active_key(redis, clock):
     finally:
         for p in reversed(patches):
             p.stop()
+
+
+async def test_active_loop_stands_down_when_required_worker_is_cancelled(redis, clock):
+    """A dead refill worker stops active heartbeats and allows another owner to stay active."""
+    await _init_redis(redis, tps=0)
+    await redis.set(TOKEN_KEY, 0)
+    cfg = _cfg(tps=0)
+    original_eval = redis.eval
+    fail_next_refill = False
+    other_owner = "other-loop-id"
+
+    async def cancel_refill_once(script, numkeys, *keys_and_args):
+        nonlocal fail_next_refill
+        if script == REFILL_TOKENS_LUA and fail_next_refill:
+            fail_next_refill = False
+            raise asyncio.CancelledError
+        return await original_eval(script, numkeys, *keys_and_args)
+
+    redis.eval = AsyncMock(side_effect=cancel_refill_once)
+
+    patches = _make_patches(clock, LOOP_POLL_INTERVAL=1.0)
+    for p in patches:
+        p.start()
+    try:
+        task = asyncio.create_task(
+            background_loops(cfg, AsyncMock(return_value=None), logger)
+        )
+        await _yield(30)
+        first_owner = await redis.get(f"{TOKEN_KEY}:task:active")
+        assert first_owner is not None
+
+        fail_next_refill = True
+        await _yield(90)
+        await redis.set(f"{TOKEN_KEY}:task:active", other_owner, ex=9999)
+        await redis.delete(f"{TOKEN_KEY}:task:refill")
+        await redis.delete(f"{TOKEN_KEY}:task:reaper")
+        await _yield(30)
+
+        assert await redis.get(f"{TOKEN_KEY}:task:active") == other_owner
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    finally:
+        for p in reversed(patches):
+            p.stop()
+
+
+async def test_active_key_stays_refreshed_when_optional_correction_exits(redis, clock):
+    """Correction can exit normally without demoting an otherwise healthy active loop."""
+    await _init_redis(redis, tps=0)
+    await redis.set(TOKEN_KEY, 0)
+    cfg = _cfg(tps=0)
+    get_rate_limit = AsyncMock(return_value=None)
+
+    patches = _make_patches(clock, LOOP_POLL_INTERVAL=1.0)
+    for p in patches:
+        p.start()
+    try:
+        task = asyncio.create_task(background_loops(cfg, get_rate_limit, logger))
+        await _yield(90)
+        await redis.delete(f"{TOKEN_KEY}:task:correction")
+        await _yield(30)
+
+        assert get_rate_limit.await_count == 1
+        assert await redis.get(f"{TOKEN_KEY}:task:correction") is None
+        assert await redis.get(f"{TOKEN_KEY}:task:refill") == "1"
+        assert await redis.get(f"{TOKEN_KEY}:task:reaper") == "1"
+        active_owner = await redis.get(f"{TOKEN_KEY}:task:active")
+        assert active_owner is not None
+        assert len(active_owner) == 36
+
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    finally:
+        for p in reversed(patches):
+            p.stop()
+
+
+async def test_active_key_compare_delete_preserves_new_owner(redis):
+    active_key = f"{TOKEN_KEY}:task:active"
+    await redis.set(active_key, "new-owner")
+
+    deleted = await _delete_active_key_if_owned(active_key, "old-owner")
+
+    assert deleted is False
+    assert await redis.get(active_key) == "new-owner"
+
+
+async def test_active_key_refresh_preserves_new_owner(redis):
+    active_key = f"{TOKEN_KEY}:task:active"
+    await redis.set(active_key, "new-owner")
+
+    refreshed = await _refresh_active_key_if_unowned_or_owned(
+        active_key, "old-owner", REFILL_TASK_TTL
+    )
+
+    assert refreshed is False
+    assert await redis.get(active_key) == "new-owner"
+
+
+async def test_active_key_refresh_claims_unowned_key(redis):
+    active_key = f"{TOKEN_KEY}:task:active"
+
+    refreshed = await _refresh_active_key_if_unowned_or_owned(
+        active_key, "owner", REFILL_TASK_TTL
+    )
+
+    assert refreshed is True
+    assert await redis.get(active_key) == "owner"
+    assert 0 < await redis.ttl(active_key) <= REFILL_TASK_TTL
 
 
 # -- Standby -> Takeover -----------------------------------------------------
@@ -761,16 +897,60 @@ async def test_standby_does_not_write_active_key(redis, clock):
             p.stop()
 
 
+async def test_concurrent_standby_takeover_starts_one_active_loop(redis, clock):
+    """Only one standby contender claims active ownership and starts workers."""
+    await _init_redis(redis)
+    await redis.set(TOKEN_KEY, 0)
+    cfg_1 = _cfg()
+    cfg_2 = _cfg()
+    correction_calls = {"loop-1": 0, "loop-2": 0}
+
+    async def get_rate_limit_1():
+        correction_calls["loop-1"] += 1
+        return None
+
+    async def get_rate_limit_2():
+        correction_calls["loop-2"] += 1
+        return None
+
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=0.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
+    for p in patches:
+        p.start()
+    try:
+        task_1 = asyncio.create_task(
+            background_loops(cfg_1, get_rate_limit_1, logger, standby=True)
+        )
+        task_2 = asyncio.create_task(
+            background_loops(cfg_2, get_rate_limit_2, logger, standby=True)
+        )
+        await _yield(120)
+
+        assert await redis.get(f"{TOKEN_KEY}:task:active") is not None
+        assert sum(correction_calls.values()) == 1
+
+        task_1.cancel()
+        task_2.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task_1
+        with pytest.raises(asyncio.CancelledError):
+            await task_2
+    finally:
+        for p in reversed(patches):
+            p.stop()
+
+
 # -- Watchdog -> Demotion ----------------------------------------------------
 
 
 async def test_watchdog_detects_takeover_and_demotes(redis, clock):
     """When another loop writes the active key, watchdog raises _Demoted, group shuts down,
     and the loop goes to standby."""
-    await _init_redis(redis)
+    await _init_redis(redis, tps=0)
     # drain tokens so idle shutdown in reaper doesn't trigger
     await redis.set(TOKEN_KEY, 0)
-    cfg = _cfg()
+    cfg = _cfg(tps=0)
 
     patches = _make_patches(clock, LOOP_POLL_INTERVAL=1.0)
     for p in patches:
@@ -814,10 +994,10 @@ async def test_watchdog_detects_takeover_and_demotes(redis, clock):
 async def test_demotion_clears_worker_tasks(redis, clock):
     """After demotion, worker_tasks dict is cleared so heartbeat no longer
     writes stale task keys."""
-    await _init_redis(redis)
+    await _init_redis(redis, tps=0)
     # drain tokens so idle shutdown doesn't trigger
     await redis.set(TOKEN_KEY, 0)
-    cfg = _cfg()
+    cfg = _cfg(tps=0)
 
     patches = _make_patches(clock, LOOP_POLL_INTERVAL=1.0)
     for p in patches:
@@ -1020,7 +1200,9 @@ async def test_heartbeat_cancelled_on_exit(redis, clock):
     await _init_redis(redis)
     cfg = _cfg()
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=1.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=1.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:
@@ -1054,7 +1236,9 @@ async def test_non_standby_immediately_active(redis, clock):
     await _init_redis(redis)
     cfg = _cfg()
 
-    patches = _make_patches(clock, LOOP_POLL_INTERVAL=1.0)
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=1.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
     for p in patches:
         p.start()
     try:

@@ -5,3 +5,5 @@ model_library.egg-info
 **/.DS_Store
 /logs/**
 .scratch/
+/build/lib/server
+/build/lib/model_gateway

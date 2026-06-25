@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.git/
+docs/
+tests/
+scripts/
+infra/
+build/
+*.md
+Makefile
+.env

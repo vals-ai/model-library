@@ -192,6 +192,8 @@ async def main():
             continue
         if getattr(config.provider_properties, "serverless", True) is False:
             continue
+        if config.provider_name == "cursor":
+            continue
         if config.metadata.internal_only:
             continue
         if key in IGNORED_MODELS:

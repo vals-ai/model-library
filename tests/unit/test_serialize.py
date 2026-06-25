@@ -16,7 +16,7 @@ async def test_serialize_deserialize_roundtrip():
 
     serialized = LLM.serialize_input(input)
 
-    assert isinstance(serialized, bytes)
+    assert isinstance(serialized, str)
     assert len(serialized) > 0
 
     dinput = LLM.deserialize_input(serialized)
@@ -41,7 +41,7 @@ async def test_deserialize_from_file():
 
     serialized = LLM.serialize_input(input)
 
-    with tempfile.NamedTemporaryFile(suffix=".pkl", delete=False) as f:
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False, mode="w") as f:
         f.write(serialized)
         temp_path = f.name
 

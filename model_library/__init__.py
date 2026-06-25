@@ -1,10 +1,16 @@
 from __future__ import annotations
 
-from model_library.base import LLM, LLMConfig
 from model_library.logging import set_logging
 from model_library.settings import ModelLibrarySettings
 
 model_library_settings: ModelLibrarySettings = ModelLibrarySettings()
+
+from model_library.base import LLM, LLMConfig  # noqa: E402
+
+from model_library.custom_register_models import (  # noqa: E402
+    load_custom_model_configs,
+    load_latest_vals_model_configs,
+)
 
 set_logging()
 
@@ -32,4 +38,6 @@ __all__ = [
     "model",
     "raw_model",
     "set_logging",
+    "load_custom_model_configs",
+    "load_latest_vals_model_configs",
 ]

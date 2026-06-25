@@ -1,18 +1,10 @@
+from __future__ import annotations
+
 import io
 import logging
 from collections.abc import Sequence
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
-from mistralai.client import Mistral
-from mistralai.client.models import (
-    AssistantMessage,
-    ContentChunk,
-    TextChunk,
-    ThinkChunk,
-)
-from mistralai.client.models.completionevent import CompletionEvent
-from mistralai.client.models.toolcall import ToolCall as MistralToolCall
-from mistralai.client.utils.eventstreaming import EventStreamAsync
 from pydantic import BaseModel
 from typing_extensions import override
 
@@ -28,6 +20,7 @@ from model_library.base import (
     InputItem,
     LLMConfig,
     QueryResult,
+    QueryResultExtras,
     QueryResultMetadata,
     RawInput,
     RawResponse,
@@ -46,6 +39,10 @@ from model_library.exceptions import (
 from model_library.file_utils import trim_images
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
+
+if TYPE_CHECKING:
+    from mistralai.client import Mistral
+    from mistralai.client.models.toolcall import ToolCall as MistralToolCall
 
 
 def map_mistral_finish_reason(
@@ -78,6 +75,8 @@ class MistralModel(LLM):
     ) -> Mistral:
         if not self.has_client():
             assert api_key
+
+            from mistralai.client import Mistral
 
             if base_url:
                 client = Mistral(
@@ -232,6 +231,8 @@ class MistralModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
+        from mistralai.client.models import AssistantMessage
+
         # mistral supports max 8 images, merge extra images into the 8th image
         input = trim_images(input, max_images=8)
 
@@ -275,13 +276,18 @@ class MistralModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
+        from mistralai.client.models import (
+            AssistantMessage,
+            ContentChunk,
+            TextChunk,
+            ThinkChunk,
+        )
+
         body = await self.build_body(
             input, tools=tools, output_schema=output_schema, **kwargs
         )
 
-        response: EventStreamAsync[
-            CompletionEvent
-        ] = await self.get_client().chat.stream_async(
+        response = await self.get_client().chat.stream_async(
             **body,  # pyright: ignore[reportAny]
         )
 
@@ -292,11 +298,14 @@ class MistralModel(LLM):
         in_tokens = 0
         out_tokens = 0
         finish_reason = None
+        response_id: str | None = None
         raw_tool_calls: list[MistralToolCall] = []
 
         try:
             async for chunk in response:
                 data = chunk.data
+                if data.id:
+                    response_id = data.id
                 for choice in data.choices:
                     delta = choice.delta
                     if isinstance(delta.content, list):
@@ -381,4 +390,5 @@ class MistralModel(LLM):
                 out_tokens=out_tokens,
                 # Reasoning tokens are not supported by Mistral 09/22/25
             ),
+            extras=QueryResultExtras(response_id=response_id),
         )

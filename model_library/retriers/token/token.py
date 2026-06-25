@@ -5,6 +5,7 @@ import time
 from math import ceil, floor
 from typing import Any, Callable, Coroutine
 
+import model_library.telemetry as telemetry
 from model_library.base.base import QueryResult, RateLimit
 from model_library.exceptions import exception_message
 from model_library.retriers.base import BaseRetrier
@@ -33,6 +34,9 @@ DYNAMIC_ESTIMATE_TTL: int = (
 )
 
 BURST_FRACTION: float = 0.8  # max 80% of token limit deducted per second
+
+_BACKGROUND_LOOP_TASKS: dict[str, asyncio.Task[None]] = {}
+
 
 # Lua: atomic check-and-deduct with per-second burst cap.
 # KEYS[1] = token key, KEYS[2] = burst key
@@ -184,8 +188,18 @@ class TokenRetrier(BaseRetrier):
             },
         )
 
+        existing_task = _BACKGROUND_LOOP_TASKS.get(key)
+        if existing_task is not None:
+            if existing_task.done():
+                del _BACKGROUND_LOOP_TASKS[key]
+            elif not config_changed:
+                logger.debug(
+                    f"Token retry background loop already running for {key}; skipping duplicate init"
+                )
+                return
+
         cfg = LoopConfig(key, limit, tokens_per_second)
-        asyncio.create_task(
+        task = asyncio.create_task(
             background_loops(
                 cfg,
                 get_rate_limit_func,
@@ -193,6 +207,13 @@ class TokenRetrier(BaseRetrier):
                 standby=active is not None and not config_changed,
             )
         )
+        _BACKGROUND_LOOP_TASKS[key] = task
+
+        def _remove_completed_task(done_task: asyncio.Task[None]) -> None:
+            if _BACKGROUND_LOOP_TASKS.get(key) is done_task:
+                del _BACKGROUND_LOOP_TASKS[key]
+
+        task.add_done_callback(_remove_completed_task)
 
     def __init__(
         self,
@@ -233,6 +254,7 @@ class TokenRetrier(BaseRetrier):
         )
         self.token_key = TokenRetrier.get_token_key(client_registry_key)
         self._run_id = run_id
+        self._telemetry_question_id = question_id
         self._question_id = f"{run_id}:{question_id}"
         self._is_queued: bool | None = None  # lazy: set on first _pre_function call
         self._burst_limit: int | None = None  # lazy: read from config
@@ -246,6 +268,7 @@ class TokenRetrier(BaseRetrier):
 
         # benchmark keys
         self._queue_key = f"{self._base_key}:benchmark:queue"
+        self._active_heads_key = f"{self._base_key}:benchmark:active_heads"
         self._run_meta_key = f"{self._base_key}:benchmark:run:{self._run_id}"
 
         self.dynamic_estimate_key = (
@@ -253,6 +276,25 @@ class TokenRetrier(BaseRetrier):
             if use_dynamic_estimate
             else None
         )
+        telemetry.set_attributes(
+            {
+                "retry_queue.mode": "enabled",
+                "retry_queue.question_ref": self._question_id,
+                "retry_queue.dynamic_estimate.mode": telemetry.mode_attribute(
+                    use_dynamic_estimate
+                ),
+                "retry_queue.estimate_input_tokens": self.estimate_input_tokens,
+                "retry_queue.estimate_output_tokens": self.estimate_output_tokens,
+                "retry_queue.estimate_total_tokens": self.estimate_total_tokens,
+            }
+        )
+
+    def _telemetry_ids(self) -> dict[str, str]:
+        return {
+            "run_id": self._run_id,
+            "question_id": self._telemetry_question_id,
+            "retry_queue.question_ref": self._question_id,
+        }
 
     async def _calculate_wait_time(
         self, attempt: int, exception: Exception | None = None
@@ -274,6 +316,19 @@ class TokenRetrier(BaseRetrier):
         )
 
         self.logger.warning(logger_msg)
+
+        telemetry.add_event(
+            "retry_queue.provider_retry",
+            {
+                **self._telemetry_ids(),
+                "retry_queue.attempt": self.attempts,
+                "retry_queue.max_tries": self.max_tries,
+                "retry_queue.elapsed_seconds": elapsed,
+                "retry_queue.next_wait_seconds": wait_time,
+                "retry_queue.priority": self.priority,
+                "exception.type": type(exception).__name__ if exception else None,
+            },
+        )
 
         if self.retry_callback:
             self.retry_callback(self.attempts, exception, elapsed, wait_time)
@@ -305,10 +360,12 @@ class TokenRetrier(BaseRetrier):
             pos = await utils.redis_client.lpos(self._queue_key, self._run_id)
             self._is_queued = pos is not None
 
-        # straggler: my benchmark is no longer the queue head (early-released)
+        # straggler: my benchmark is no longer an active head (early-released)
         if self._is_queued:
-            head = await utils.redis_client.lindex(self._queue_key, 0)
-            if head != self._run_id:
+            is_active_head = await utils.redis_client.zscore(
+                self._active_heads_key, self._run_id
+            )
+            if is_active_head is None:
                 self.priority = MAX_PRIORITY
 
         # remove from dispatched so early release knows we're waiting again
@@ -328,11 +385,31 @@ class TokenRetrier(BaseRetrier):
             self._question_meta_key,
             mapping={"run_id": self._run_id, "priority": str(self.priority)},
         )
+        await utils.redis_client.expire(self._question_meta_key, INFLIGHT_MAX_AGE)
         self.logger.debug(f"priority: {self.priority}, waiting: {priority_key}")
+        wait_attrs = {
+            **self._telemetry_ids(),
+            "retry_queue.mode": "enabled",
+            "retry_queue.priority": self.priority,
+            "retry_queue.estimate_input_tokens": self.estimate_input_tokens,
+            "retry_queue.estimate_output_tokens": self.estimate_output_tokens,
+            "retry_queue.estimate_total_tokens": self.estimate_total_tokens,
+            "retry_queue.dynamic_estimate.mode": telemetry.mode_attribute(
+                self.dynamic_estimate_key is not None
+            ),
+            "retry_queue.benchmark_queue.mode": telemetry.mode_attribute(
+                self._is_queued is True
+            ),
+        }
+        telemetry.set_attributes(wait_attrs)
+        telemetry.add_event("retry_queue.wait_start", wait_attrs)
 
         _deducted = False
+        last_blocked_event_at = 0.0
+        last_insufficient_event_at = 0.0
         try:
             while True:
+                now = time.time()
                 wait_time = random.uniform(TOKEN_WAIT_TIME * 0.5, TOKEN_WAIT_TIME * 1.5)
 
                 # refresh timestamp so reaper knows we're alive
@@ -346,6 +423,16 @@ class TokenRetrier(BaseRetrier):
                         f"[Token Wait] Lower priority requests exist, waiting {wait_time:.1f}s | "
                         f"Priority: {self.priority}"
                     )
+                    if now - last_blocked_event_at >= 30:
+                        last_blocked_event_at = now
+                        telemetry.add_event(
+                            "retry_queue.lower_priority_blocked",
+                            {
+                                **self._telemetry_ids(),
+                                "retry_queue.priority": self.priority,
+                                "retry_queue.next_wait_seconds": wait_time,
+                            },
+                        )
                 else:
                     # dynamically adjust actual estimate tokens based on past requests
                     if self.dynamic_estimate_key:
@@ -399,6 +486,15 @@ class TokenRetrier(BaseRetrier):
                         self.logger.debug(
                             f"Deducted {self.actual_estimate_total_tokens} tokens from {self.token_key}"
                         )
+                        telemetry.add_event(
+                            "retry_queue.tokens_deducted",
+                            {
+                                **self._telemetry_ids(),
+                                "retry_queue.priority": self.priority,
+                                "retry_queue.estimated_tokens": self.actual_estimate_total_tokens,
+                                "retry_queue.attempt": self.attempts,
+                            },
+                        )
                         return
 
                     self.logger.debug(
@@ -406,6 +502,17 @@ class TokenRetrier(BaseRetrier):
                         f"estimate_tokens: {self.actual_estimate_total_tokens} | "
                         f"Priority: {self.priority}"
                     )
+                    if now - last_insufficient_event_at >= 30:
+                        last_insufficient_event_at = now
+                        telemetry.add_event(
+                            "retry_queue.insufficient_tokens",
+                            {
+                                **self._telemetry_ids(),
+                                "retry_queue.priority": self.priority,
+                                "retry_queue.estimated_tokens": self.actual_estimate_total_tokens,
+                                "retry_queue.next_wait_seconds": wait_time,
+                            },
+                        )
 
                 # Zzz
                 self.logger.debug(f"Sleeping for {wait_time:.1f}s")
@@ -418,7 +525,28 @@ class TokenRetrier(BaseRetrier):
                 if not _deducted:
                     await utils.redis_client.delete(self._question_meta_key)
 
-            await asyncio.shield(_pre_cleanup())
+            try:
+                await asyncio.shield(_pre_cleanup())
+            except Exception as exc:
+                telemetry.record_exception(
+                    exc,
+                    {
+                        **self._telemetry_ids(),
+                        "retry_queue.cleanup.phase": "pre_function",
+                    },
+                )
+                telemetry.add_event(
+                    "retry_queue.wait_cleanup_failed",
+                    self._telemetry_ids(),
+                )
+                raise
+            telemetry.add_event(
+                "retry_queue.wait_cleanup_done",
+                {
+                    **self._telemetry_ids(),
+                    "retry_queue.deducted": _deducted,
+                },
+            )
 
     async def _adjust_dynamic_estimate_ratio(self, actual_tokens: int) -> None:
         if not self.dynamic_estimate_key:
@@ -440,6 +568,15 @@ class TokenRetrier(BaseRetrier):
         self.logger.info(
             f"[Token Ratio] {self.token_key} | Observed: {observed_ratio:.5f} | "
             f"Global Ratio: {current_ratio:.5f} -> {new_ratio:.5f}"
+        )
+        telemetry.add_event(
+            "retry_queue.dynamic_estimate_adjusted",
+            {
+                **self._telemetry_ids(),
+                "retry_queue.observed_ratio": observed_ratio,
+                "retry_queue.previous_ratio": current_ratio,
+                "retry_queue.new_ratio": new_ratio,
+            },
         )
 
     async def _post_function(self, result: tuple[QueryResult, float]) -> None:
@@ -470,6 +607,15 @@ class TokenRetrier(BaseRetrier):
         await utils.redis_client.eval(
             REFILL_TOKENS_LUA, 1, self.token_key, difference, limit
         )
+        telemetry.add_event(
+            "retry_queue.tokens_released",
+            {
+                **self._telemetry_ids(),
+                "retry_queue.estimated_tokens": self.actual_estimate_total_tokens,
+                "retry_queue.actual_tokens": actual_tokens,
+                "retry_queue.difference_tokens": difference,
+            },
+        )
 
         result[0].metadata.extra["token_metadata"] = {
             "estimated": self.estimate_total_tokens,
@@ -493,7 +639,25 @@ class TokenRetrier(BaseRetrier):
                     await utils.redis_client.srem(self._active_runs_key, self._run_id)
                 await utils.redis_client.delete(self._question_meta_key)
 
-            await asyncio.shield(_exec_cleanup())
+            try:
+                await asyncio.shield(_exec_cleanup())
+            except Exception as exc:
+                telemetry.record_exception(
+                    exc,
+                    {
+                        **self._telemetry_ids(),
+                        "retry_queue.cleanup.phase": "execute",
+                    },
+                )
+                telemetry.add_event(
+                    "retry_queue.execute_cleanup_failed",
+                    self._telemetry_ids(),
+                )
+                raise
+            telemetry.add_event(
+                "retry_queue.execute_cleanup_done",
+                self._telemetry_ids(),
+            )
 
     async def validate(self) -> None:
         await utils.validate_redis_client(

@@ -1,4 +1,5 @@
 import importlib
+import os
 import pkgutil
 from types import ModuleType
 from typing import Any, Callable
@@ -8,6 +9,9 @@ import pytest
 
 from model_library import providers
 from model_library.base import LLM, QueryResult
+
+# Prevent MODEL_GATEWAY_URL leaking from .env/direnv into tests
+os.environ.pop("MODEL_GATEWAY_URL", None)
 
 
 @pytest.fixture
@@ -83,6 +87,12 @@ def mock_all_mock_model_library_settings():
             match name:
                 case "AWS_DEFAULT_REGION":
                     return "us-east-1"
+                case "MODEL_GATEWAY_URL":
+                    return ""
+                case "MODEL_LIBRARY_CUSTOM_CONFIG":
+                    return None
+                case "RUN_ID" | "QUESTION_ID" | "TASK_ID" | "IDENTITY" | "QUERY_ID":
+                    raise AttributeError(f"Missing config key: {name}")
                 case _:
                     return f"mock_ENV_{name}"
 
@@ -92,7 +102,14 @@ def mock_all_mock_model_library_settings():
             except AttributeError:
                 return default
 
+        def unset(self, key: str):
+            os.environ.pop(key.upper(), None)
+
     fake = FakeSettings()
+
+    import model_library
+
+    model_library.model_library_settings = fake
 
     def patch_settings(mod: ModuleType):
         if hasattr(mod, "model_library_settings"):

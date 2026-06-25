@@ -1,3 +1,4 @@
+import logging
 from functools import cache
 from pathlib import Path
 from typing import TypedDict
@@ -16,7 +17,23 @@ from model_library.register_models import (
     get_provider_registry,
 )
 
+logger = logging.getLogger("model_library")
 ALL_MODELS_PATH = Path(__file__).parent / "config" / "all_models.json"
+
+
+def _gateway_url() -> str | None:
+    from model_library import model_library_settings
+
+    return model_library_settings.get("MODEL_GATEWAY_URL", None)
+
+
+def _raise_gateway_metadata_helper_error(helper_name: str) -> None:
+    raise RuntimeError(
+        f"{helper_name}() is local-registry only when MODEL_GATEWAY_URL is set. "
+        "Use get_registry_model() and await model.ensure_metadata_loaded() for "
+        "authoritative gateway metadata, or get_model_registry() only for "
+        "explicit bulk discovery snapshots."
+    )
 
 
 def create_config(
@@ -92,14 +109,19 @@ def _get_model_from_registry(
     provider_endpoint: str = registry_config.provider_endpoint
     ModelClass: type[LLM] = get_provider_registry()[provider_name]
 
-    return ModelClass(
+    llm = ModelClass(
         model_name=provider_endpoint,
         provider=registry_config.provider_name,
         config=model_config,
     )
+    llm._metadata = registry_config.model_copy(deep=True)  # pyright: ignore[reportPrivateUsage]
+    return llm
 
 
 def get_registry_config(model_str: str) -> ModelConfig | None:
+    if _gateway_url():
+        _raise_gateway_metadata_helper_error("get_registry_config")
+
     config = get_model_registry().get(model_str, None)
     if config is not None:
         return config
@@ -116,10 +138,32 @@ def get_registry_model(
     model_str: str,
     override_config: LLMConfig | None = None,
 ) -> LLM:
-    """Get a model including default config"""
+    """Get a model including default config.
+
+    If MODEL_GATEWAY_URL is set, returns an unsynced GatewayLLM that routes through the gateway server.
+    Gateway mode does not require client-side registry knowledge. Call
+    await model.ensure_metadata_loaded() before reading gateway metadata fields.
+    """
+    from model_library import model_library_settings
+
+    gateway_url = model_library_settings.get("MODEL_GATEWAY_URL", None)
+    if gateway_url:
+        from model_library.base.gateway import GatewayLLM
+
+        logger.info(
+            "MODEL_GATEWAY_URL is set, routing through gateway: %s", gateway_url
+        )
+        provider, model_name = model_str.split("/", 1)
+        return GatewayLLM(model_name, provider, config=override_config)
+
     registry_config = get_registry_config(model_str)
     if not registry_config:
         raise Exception(f"Model {model_str} not found in registry")
+
+    if registry_config.provider_name in {"cursor", "devin"}:
+        raise ValueError(
+            f"Model {model_str} is only available through {registry_config.company} CLI"
+        )
 
     return _get_model_from_registry(registry_config, override_config)
 
@@ -134,28 +178,48 @@ def get_raw_model(
     return ModelClass(model_name=model_name, provider=provider, config=config)
 
 
-@cache
 def get_model_cost(model_str: str) -> CostProperties | None:
+    if _gateway_url():
+        _raise_gateway_metadata_helper_error("get_model_cost")
+
+    return _get_model_cost_cached(model_str)
+
+
+@cache
+def _get_model_cost_cached(model_str: str) -> CostProperties | None:
     model_config = get_registry_config(model_str)
     if not model_config:
         raise Exception(f"Model {model_str} not found in registry")
     return model_config.costs_per_million_token
 
 
-@cache
 def get_model_input_context_window(model_name: str) -> int:
     """Return the input context window for the model"""
+    if _gateway_url():
+        _raise_gateway_metadata_helper_error("get_model_input_context_window")
+
+    return _get_model_input_context_window_cached(model_name)
+
+
+def get_input_context_window_from_config(model: ModelConfig) -> int:
+    """Return usable input tokens from a registry config.
+
+    OpenAI and Meta configs express a total context window that includes the
+    output budget, so subtract max output tokens for prompt/input capacity.
+    """
+    context_window = model.properties.context_window
+    if model.provider_name in {"openai", "meta"}:
+        context_window -= model.properties.max_tokens
+    return max(context_window, 0)
+
+
+@cache
+def _get_model_input_context_window_cached(model_name: str) -> int:
     model = get_registry_config(model_name)
     if not model:
         raise Exception(f"Model {model_name} not found in registry")
 
-    context_window = model.properties.context_window
-    match model.provider_name:
-        case "openai" | "meta":
-            context_window -= model.properties.max_tokens
-        case _:
-            pass
-    return context_window
+    return get_input_context_window_from_config(model)
 
 
 class TokenDict(TypedDict, total=False):
@@ -168,6 +232,58 @@ class TokenDict(TypedDict, total=False):
     cache_write_tokens: int | None
 
 
+def compute_model_cost(
+    model_str: str,
+    metadata: QueryResultMetadata,
+    *,
+    batch: bool = False,
+    bill_reasoning: bool = True,
+) -> QueryResultCost | None:
+    costs = get_model_cost(model_str)
+    if not costs:
+        return None
+
+    million = 1_000_000
+    input_cost = costs.input
+    output_cost = costs.output
+    cache_read_cost, cache_write_cost = None, None
+
+    if metadata.cache_read_tokens or metadata.cache_write_tokens:
+        if not costs.cache:
+            raise Exception("Cache costs not set")
+        cache_read_cost, cache_write_cost = costs.cache.get_costs(input_cost)
+
+    if costs.context and metadata.total_input_tokens > costs.context.threshold:
+        input_cost, output_cost = costs.context.get_costs(
+            input_cost,
+            output_cost,
+            metadata.total_input_tokens,
+        )
+        if costs.context.cache:
+            cache_read_cost, cache_write_cost = costs.context.cache.get_costs(
+                input_cost
+            )
+
+    if batch:
+        if not costs.batch:
+            raise Exception("Batch costs not set")
+        input_cost, output_cost = costs.batch.get_costs(input_cost, output_cost)
+
+    return QueryResultCost(
+        input=input_cost * metadata.in_tokens / million,
+        output=output_cost * metadata.out_tokens / million,
+        reasoning=output_cost * metadata.reasoning_tokens / million
+        if metadata.reasoning_tokens is not None and bill_reasoning
+        else None,
+        cache_read=cache_read_cost * metadata.cache_read_tokens / million
+        if metadata.cache_read_tokens is not None and cache_read_cost
+        else None,
+        cache_write=cache_write_cost * metadata.cache_write_tokens / million
+        if metadata.cache_write_tokens is not None and cache_write_cost
+        else None,
+    )
+
+
 async def recompute_cost(
     model_str: str,
     tokens: TokenDict,
@@ -175,8 +291,8 @@ async def recompute_cost(
     """
     Recompute the cost for a model based on token information.
 
-    Uses the model provider's existing _calculate_cost method to ensure
-    provider-specific cost calculations are applied.
+    Uses registry pricing only. This also supports models that are exposed
+    through external CLIs and intentionally cannot instantiate a provider.
 
     Args:
         model_str: The model identifier (e.g., "openai/gpt-4o")
@@ -199,8 +315,6 @@ async def recompute_cost(
     if "out_tokens" not in tokens:
         raise ValueError("Token dict must contain 'out_tokens'")
 
-    model = get_registry_model(model_str)
-
     metadata = QueryResultMetadata(
         in_tokens=tokens["in_tokens"],
         out_tokens=tokens["out_tokens"],
@@ -209,10 +323,9 @@ async def recompute_cost(
         cache_write_tokens=tokens.get("cache_write_tokens"),
     )
 
-    cost = await model._calculate_cost(metadata)  # type: ignore[arg-type]
+    cost = compute_model_cost(model_str, metadata)
     if cost is None:
         raise Exception(f"No cost information available for model {model_str}")
-
     return cost
 
 
@@ -222,18 +335,29 @@ def get_provider_names() -> list[str]:
     return sorted([provider_name for provider_name in get_provider_registry().keys()])
 
 
-@cache
 def get_model_names(
     provider: str | None = None,
     include_deprecated: bool = False,
     include_alt_keys: bool = True,
 ) -> list[str]:
     """
-    Return model names in the registry
+    Return model names in the local registry.
     - provider: Filter by provider name
     - include_deprecated: Include deprecated models
     - include_alt_keys: Include alternative keys from the same provider
     """
+    if _gateway_url():
+        _raise_gateway_metadata_helper_error("get_model_names")
+
+    return _get_model_names_cached(provider, include_deprecated, include_alt_keys)
+
+
+@cache
+def _get_model_names_cached(
+    provider: str | None = None,
+    include_deprecated: bool = False,
+    include_alt_keys: bool = True,
+) -> list[str]:
     registry = get_model_registry()
     alternative_keys_set: set[str] = set()
 

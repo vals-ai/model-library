@@ -1,15 +1,16 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import computed_field
+from typing_extensions import override
 
 from model_library.base.input import ToolBody, ToolDefinition
 from model_library.base.output import QueryResultMetadata
-from model_library.utils import PrettyModel
+from model_library.utils import ValsModel
 
 
-class ToolOutput(PrettyModel):
+class ToolOutput(ValsModel):
     """Result of a tool execution
 
     output: text sent back to the LLM as the tool result
@@ -45,10 +46,13 @@ class Tool(ABC):
     description: str
     parameters: dict[str, Any]
     required: list[str]
+    execution_type: Literal["local", "provider"] = "local"
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if getattr(cls, "__abstractmethods__", None):
+            return
+        if getattr(cls, "execution_type", "local") == "provider":
             return
         for attr in ("name", "description", "parameters"):
             if not hasattr(cls, attr):
@@ -96,3 +100,31 @@ class Tool(ABC):
                 required=self.required,
             ),
         )
+
+
+class ProviderTool(Tool):
+    """A tool executed by the provider server-side, not the local agent.
+
+    Pass a raw tool body (e.g. {"type": "web_search"}) and the provider
+    handles execution internally. The agent records the event via
+    provider_tool_events on QueryResult but never calls execute().
+    """
+
+    parameters: dict[str, Any] = {}
+    required: list[str] = []
+    execution_type = "provider"
+
+    def __init__(self, name: str, body: Any, description: str = ""):
+        self.name = name
+        self.description = description
+        self.body = body
+
+    @property
+    @override
+    def definition(self) -> ToolDefinition:
+        return ToolDefinition(name=self.name, body=self.body)
+
+    async def execute(
+        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
+    ) -> ToolOutput:
+        raise RuntimeError("ProviderTool is executed by the provider, not the agent")

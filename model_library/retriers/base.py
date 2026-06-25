@@ -4,9 +4,11 @@ import time
 from abc import ABC, abstractmethod
 from typing import Any, Awaitable, Callable, Literal, TypeVar
 
+import model_library.telemetry as telemetry
 from model_library.base.base import QueryResult
 from model_library.exceptions import (
     ImmediateRetryException,
+    ImmediateRetryExhaustedError,
     MaxContextWindowExceededError,
     exception_message,
     is_context_window_error,
@@ -40,13 +42,24 @@ class BaseRetrier(ABC):
         retries = 0
         while True:
             try:
-                return await func()
+                result = await func()
+                telemetry.set_attributes({"retry.immediate_attempts": retries})
+                return result
             except ImmediateRetryException as e:
                 if retries >= MAX_IMMEDIATE_RETRIES:
-                    raise Exception(
-                        f"[Immediate Retry Max] | {retries}/{MAX_IMMEDIATE_RETRIES} | Exception {exception_message(e)}"
+                    telemetry.set_attributes({"retry.immediate_attempts": retries})
+                    raise ImmediateRetryExhaustedError(
+                        retries, MAX_IMMEDIATE_RETRIES, e
                     ) from e
                 retries += 1
+                telemetry.add_event(
+                    "model_library.immediate_retry",
+                    {
+                        "retry.attempt": retries,
+                        "retry.max_tries": MAX_IMMEDIATE_RETRIES,
+                        "exception.type": type(e).__name__,
+                    },
+                )
 
                 logger.warning(
                     f"[Immediate Retry] | {retries}/{MAX_IMMEDIATE_RETRIES} | Exception {exception_message(e)}"
@@ -127,6 +140,22 @@ class BaseRetrier(ABC):
             Exception: The original exception otherwise
         """
 
+        telemetry.set_attributes({"retry.attempts": self.attempts})
+        telemetry.add_event(
+            "model_library.retry_giveup",
+            {
+                "retry.strategy": self.strategy,
+                "retry.reason": reason,
+                "retry.attempt": self.attempts,
+                "retry.max_tries": self.max_tries,
+                "exception.type": type(exception).__name__,
+            },
+        )
+        telemetry.record_exception(
+            exception,
+            {"retry.strategy": self.strategy, "retry.reason": reason},
+        )
+
         self.logger.error(
             f"[Give up] | {self.strategy} | {reason} | Exception: {exception_message(exception)}"
         )
@@ -173,13 +202,35 @@ class BaseRetrier(ABC):
         self.start_time = time.time()
 
         await self.validate()
+        telemetry.set_attributes(
+            {
+                "retry.strategy": self.strategy,
+                "retry.max_tries": self.max_tries,
+                "retry.max_time_seconds": self.max_time,
+            }
+        )
 
         while True:
             try:
-                await self._pre_function()
-                result = await func(*args, **kwargs)
-                await self._post_function(result)
-                return result
+                attempt_attributes = {
+                    "retry.strategy": self.strategy,
+                    "retry.attempt": self.attempts,
+                }
+                with telemetry.start_span(
+                    "model_library.retry_attempt",
+                    attempt_attributes,
+                ):
+                    telemetry.add_event(
+                        "model_library.retry_attempt_start", attempt_attributes
+                    )
+                    await self._pre_function()
+                    result = await func(*args, **kwargs)
+                    await self._post_function(result)
+                    telemetry.set_attributes({"retry.attempts": self.attempts})
+                    telemetry.add_event(
+                        "model_library.retry_attempt_success", attempt_attributes
+                    )
+                    return result
 
             except Exception as e:
                 elapsed = time.time() - self.start_time
@@ -205,8 +256,19 @@ class BaseRetrier(ABC):
                 wait_time = await self._calculate_wait_time(self.attempts, e)
                 # call pre retry sleep hook
                 await self._on_retry(e, elapsed, wait_time)
-
-                await asyncio.sleep(wait_time)
+                sleep_attributes = {
+                    "retry.strategy": self.strategy,
+                    "retry.attempt": self.attempts,
+                    "retry.elapsed_seconds": elapsed,
+                    "retry.next_wait_seconds": wait_time,
+                    "exception.type": type(e).__name__,
+                }
+                with telemetry.start_span(
+                    "model_library.retry_sleep",
+                    sleep_attributes,
+                ):
+                    telemetry.add_event("model_library.retry_sleep", sleep_attributes)
+                    await asyncio.sleep(wait_time)
 
     async def validate(self) -> None:
         """Validate the retrier"""

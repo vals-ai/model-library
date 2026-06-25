@@ -15,6 +15,42 @@ deprecated:
     metadata:
       deprecated: true
 
+  bedrock/claude-3-5-haiku-20241022-v1:
+    company: Amazon
+    label: Claude 3.5 Haiku (Bedrock)
+    release_date: 2024-10-22
+    open_source: false
+    documentation_url: https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet
+    properties:
+      context_window: 200000
+      max_tokens: 0
+      reasoning_model: false
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: false
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.8
+      output: 4.0
+      cache:
+        read: 0.08
+        write: 1.0
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+    provider_endpoint: us.anthropic.claude-3-5-haiku-20241022-v1:0
+
   bedrock/claude-3-5-sonnet-20240620-v2:
     company: Amazon
     label: Claude 3.5 Sonnet (Bedrock)

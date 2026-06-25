@@ -38,7 +38,9 @@ async def test_check_deep_research_args_warns_low_tokens_and_missing_background(
 
     await model._check_deep_research_args(tools)  # pyright: ignore[reportPrivateUsage]
 
-    logged_messages = [call.args[0] for call in model.instance_logger.warning.call_args_list]
+    logged_messages = [
+        call.args[0] for call in model.instance_logger.warning.call_args_list
+    ]
     assert any("max_tokens >=" in msg for msg in logged_messages)
     assert any("background=True" in msg for msg in logged_messages)
 
@@ -52,9 +54,7 @@ async def test_query_impl_parses_deep_research_response():
         "o3-deep-research",
         config=LLMConfig(provider_config=OpenAIConfig(deep_research=True)),
     )
-    model.get_client = Mock()
-
-    from openai.types.responses import Response, ResponseCompletedEvent
+    from openai.types.responses import Response
 
     response = Response.model_validate(
         {
@@ -98,23 +98,23 @@ async def test_query_impl_parses_deep_research_response():
         }
     )
 
-    stream_event = ResponseCompletedEvent(
-        type="response.completed",
-        response=response,
-        sequence_number=1,
-    )
-
-    async def fake_stream():
-        yield stream_event
-
-    model.get_client().responses.create = AsyncMock(return_value=fake_stream())
+    client = Mock()
+    client.responses.create = AsyncMock(return_value=response)
+    model.get_client = Mock(return_value=client)
 
     web_search_tool = Mock()
     web_search_tool.body = {"type": "web_search"}
     result = await model._query_impl(
-        [TextInput(text="")], tools=[web_search_tool], stream=False, query_logger=MagicMock()
+        [TextInput(text="")],
+        tools=[web_search_tool],
+        stream=False,
+        query_logger=MagicMock(),
     )  # pyright: ignore[reportPrivateUsage]
 
+    client.responses.create.assert_awaited_once()
+    await_args = client.responses.create.await_args
+    assert await_args is not None
+    assert await_args.kwargs["stream"] is False
     assert result.output_text == "Report [1]"
     assert result.reasoning == "Reasoning"
     assert len(result.extras.citations) == 1

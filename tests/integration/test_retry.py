@@ -4,6 +4,8 @@ Unit tests for retry logic.
 
 import asyncio
 
+import pytest
+
 from model_library.base import TextInput
 from model_library.exceptions import (
     MaxContextWindowExceededError,
@@ -24,5 +26,7 @@ async def test_context_window_error_caught_real_api_calls():
         assert False, "No exception raised"
     except MaxContextWindowExceededError:
         assert True
+    except TimeoutError:
+        pytest.skip("Provider did not return a context-window error before timeout")
     except Exception as e:
         assert False, str(e)

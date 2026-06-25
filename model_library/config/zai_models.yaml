@@ -18,10 +18,66 @@ base-config:
       write_markup: 1
 
 glm-5-models:
+  zai/glm-5.2:
+    label: GLM 5.2
+    release_date: 2026-06-13
+    costs_per_million_token:
+      input: 1.4
+      output: 4.4
+      cache:
+        read: 0.26
+    properties:
+      context_window: 1_000_000
+      max_tokens: 131_072
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+      reasoning_effort: "max"
+    provider_properties:
+      clear_thinking: false
+    alternative_keys:
+      - zai/glm-5.2-high:
+          default_parameters:
+            reasoning_effort: "high"
+      - zai/glm-5.2-max-tokens-48k-top-p-1:
+          default_parameters:
+            temperature: 1
+            top_p: 1.0
+            max_tokens: 48_000
+            reasoning_effort: "max"
+      - zai/glm-5.2-max-tokens-64k-top-p-1:
+          default_parameters:
+            temperature: 1
+            top_p: 1.0
+            max_tokens: 64_000
+            reasoning_effort: "max"
+
+  zai/glm-5.1:
+    label: GLM 5.1
+    release_date: 2026-04-01
+    costs_per_million_token:
+      input: 1
+      output: 3.2
+      cache:
+        read: 0.2
+    properties:
+      reasoning_model: false
+      context_window: 200_000
+      max_tokens: 131_072
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+    alternative_keys:
+      - zai/glm-5.1-thinking:
+          properties:
+            reasoning_model: true
+          provider_properties:
+            clear_thinking: false
+
   zai/glm-5:
     label: GLM 5
     release_date: 2026-02-11
-    costs_per_million_token: # guessing!!!
+    costs_per_million_token:
       input: 1
       output: 3.2
       cache:

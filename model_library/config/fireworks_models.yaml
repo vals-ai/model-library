@@ -24,37 +24,6 @@ deepseek-models:
     default_parameters:
       temperature: 1
 
-  fireworks/deepseek-v3p1:
-    label: DeepSeek V3.1
-    release_date: 2025-08-21
-    properties:
-      context_window: 163_840
-      max_tokens: 163_840
-    costs_per_million_token:
-      input: 0.56
-      output: 1.68
-
-  fireworks/deepseek-v3p2:
-    label: DeepSeek V3.2 (Nonthinking)
-    release_date: 2025-12-01
-    properties:
-      context_window: 160_000
-      max_tokens: 20_480
-    default_parameters:
-      reasoning_effort: "none"
-    costs_per_million_token:
-      input: 0.56
-      output: 1.68
-      cache:
-        read: 0.28
-    alternative_keys:
-      - fireworks/deepseek-v3p2-thinking:
-          label: DeepSeek V3.2 (Thinking)
-          properties:
-            reasoning_model: true
-          default_parameters:
-            reasoning_effort: "high"
-
 openai-models:
   base-config:
     company: OpenAI
@@ -88,9 +57,8 @@ openai-models:
 
 kimi-models:
   base-config:
-    company: Kimi
+    company: Moonshot AI
     open_source: true
     documentation_url: https://www.kimi.com/
     supports:
       images: false
-

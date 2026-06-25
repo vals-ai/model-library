@@ -27,6 +27,7 @@ from model_library.base import (
     LLMBatchMixin,
     LLMConfig,
     QueryResult,
+    QueryResultExtras,
     QueryResultMetadata,
     SystemInput,
     TextInput,
@@ -341,4 +342,5 @@ class DummyAIModel(LLM):
                 in_tokens=response["usage"]["in_tokens"],
                 out_tokens=response["usage"]["out_tokens"],
             ),
+            extras=QueryResultExtras(response_id=response.get("id")),
         )

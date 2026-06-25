@@ -3,6 +3,7 @@ Integration tests for provider tool-calling.
 """
 
 from model_library.base import (
+    RawResponse,
     TextInput,
     ToolBody,
     ToolDefinition,
@@ -58,7 +59,7 @@ async def test_openai_tools_optional():
 
 async def test_fireworks_streaming_tools_roundtrip():
     """Test that streaming completions correctly handle tool calls."""
-    model = get_registry_model("fireworks/glm-4p6")
+    model = get_registry_model("fireworks/gpt-oss-20b")
 
     tools = [
         ToolDefinition(
@@ -89,11 +90,14 @@ async def test_fireworks_streaming_tools_roundtrip():
     assert result1.tool_calls[0].name == "get_weather"
     assert "Tokyo" in result1.tool_calls[0].args
 
-    # Verify history contains the full conversation (input + assistant message)
-    assert len(result1.history) == 2, (
+    # Verify history contains the full conversation and assistant message.
+    # The system prompt is normalized into a SystemInput and included in history.
+    assert len(result1.history) >= 2, (
         "Expected history to contain input and assistant message"
     )
-    assert result1.history[-1].response.role == "assistant", (
+    last_history_item = result1.history[-1]
+    assert isinstance(last_history_item, RawResponse)
+    assert last_history_item.response.role == "assistant", (
         "Last message should be from assistant"
     )
 
@@ -112,7 +116,7 @@ async def test_fireworks_streaming_tools_roundtrip():
     assert len(result2.tool_calls) == 0, "Should not make additional tool calls"
 
     # Verify token counts
-    assert result1.metadata.in_tokens > 0
-    assert result1.metadata.out_tokens > 0
-    assert result2.metadata.in_tokens > 0
-    assert result2.metadata.out_tokens > 0
+    assert result1.metadata.total_input_tokens > 0
+    assert result1.metadata.total_output_tokens > 0
+    assert result2.metadata.total_input_tokens > 0
+    assert result2.metadata.total_output_tokens > 0

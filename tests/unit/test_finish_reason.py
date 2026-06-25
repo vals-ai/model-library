@@ -1,5 +1,7 @@
 import typing
 
+import pytest
+
 from model_library.base import FinishReason, FinishReasonInfo
 from model_library.providers.ai21labs import map_ai21_finish_reason
 from model_library.providers.amazon import map_amazon_finish_reason
@@ -81,6 +83,13 @@ async def test_openai_completions_finish_reason_all_values():
             expected_reason=expected[finish_reason],
             expected_raw=finish_reason,
         )
+
+    info = map_openai_completions_finish_reason("model_context_window_exceeded")
+    _assert_finish_reason_info(
+        info,
+        expected_reason=FinishReason.CONTEXT_WINDOW_EXCEEDED,
+        expected_raw="model_context_window_exceeded",
+    )
 
 
 async def test_openai_responses_finish_reason_all_values():
@@ -268,6 +277,7 @@ async def test_xai_finish_reason_all_values():
 
 
 async def test_mistral_finish_reason_all_values():
+    pytest.importorskip("mistralai")
     from mistralai.client.models import ChatCompletionChoiceFinishReason as MistralFinishReason
 
     union_args = typing.get_args(MistralFinishReason)

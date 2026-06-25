@@ -17,11 +17,96 @@ base-config:
       input_discount: 0.5
       output_discount: 0.5
 
-
 deprecated:
   base-config:
     metadata:
       deprecated: true
+
+  google/gemini-3-pro-preview:
+    company: Google
+    label: Gemini 3 Pro (11/25)
+    release_date: 2025-11-18
+    open_source: false
+    documentation_url: https://ai.google.dev/gemini-api/docs/models
+    properties:
+      context_window: 1048576
+      max_tokens: 65536
+      training_cutoff: 2025-01
+      reasoning_model: true
+    supports:
+      images: true
+      videos: true
+      files: true
+      batch: true
+      temperature: true
+      tools: true
+      output_schema: true
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 2.0
+      output: 12.0
+      cache:
+        read: 0.2
+        read_discount: 0.1
+        write_markup: 1.0
+      batch:
+        input_discount: 0.5
+        output_discount: 0.5
+      context:
+        threshold: 200000.0
+        input: 4.0
+        output: 18.0
+        cache:
+          read: 0.4
+          read_discount: 1.0
+          write_markup: 1.0
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+      reasoning_effort: high
+    provider_endpoint: gemini-3-pro-preview
+
+  google/gemini-3.1-flash-lite-preview:
+    company: Google
+    label: Gemini 3.1 Flash Lite Preview
+    release_date: 2026-03-03
+    open_source: false
+    documentation_url: https://ai.google.dev/gemini-api/docs/models
+    properties:
+      context_window: 1048576
+      max_tokens: 65536
+      reasoning_model: true
+    supports:
+      images: true
+      videos: true
+      files: true
+      batch: true
+      temperature: true
+      tools: true
+      output_schema: true
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.25
+      output: 1.5
+      cache:
+        read_discount: 0.1
+        write_markup: 1.0
+      batch:
+        input_discount: 0.5
+        output_discount: 0.5
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+      reasoning_effort: high
+    provider_endpoint: gemini-3.1-flash-lite-preview
 
   google/gemini-2.5-flash-lite-preview-09-2025:
     company: Google
@@ -58,9 +143,9 @@ deprecated:
         input_discount: 0.5
         output_discount: 0.5
     alternative_keys:
-    - google/gemini-2.5-flash-lite-preview-09-2025-thinking:
-        properties:
-          reasoning_model: true
+      - google/gemini-2.5-flash-lite-preview-09-2025-thinking:
+          properties:
+            reasoning_model: true
     default_parameters:
       temperature: 1.0
     provider_endpoint: gemini-2.5-flash-lite-preview-09-2025

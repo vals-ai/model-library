@@ -9,8 +9,9 @@ import asyncio
 import logging
 import time
 import uuid
+from contextlib import nullcontext
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import fakeredis.aioredis
@@ -49,7 +50,9 @@ class EchoTool(Tool):
     description = "Echo"
     parameters = {"text": {"type": "string"}}
 
-    async def execute(self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger) -> ToolOutput:
+    async def execute(
+        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
+    ) -> ToolOutput:
         return ToolOutput(output=args.get("text", ""))
 
 
@@ -69,6 +72,7 @@ def _make_qr(text: str = "ok") -> QueryResult:
 def _mock_llm(*responses: QueryResult | Exception) -> MagicMock:
     llm = MagicMock()
     llm.query = AsyncMock(side_effect=list(responses))
+    llm.ensure_metadata_loaded = AsyncMock(return_value=None)
     llm.model_name = "test-model"
     llm.run_id = "default-run-id"
     return llm
@@ -98,6 +102,16 @@ async def _init_tokens(redis, value: int = 1000, limit: int = 1000):
     await redis.set(f"{TOKEN_KEY}:limit", str(limit))
 
 
+class _Settings:
+    def __init__(self, **values: str):
+        self._values = values
+        for key, value in values.items():
+            setattr(self, key, value)
+
+    def get(self, name: str, default: str | None = None) -> str | None:
+        return self._values.get(name, default)
+
+
 def _make_mock_llm_class():
     return type(
         "MockLLM",
@@ -114,6 +128,204 @@ def _make_mock_llm_class():
             "upload_file": AsyncMock(return_value=None),
         },
     )
+
+
+async def test_token_retry_telemetry_uses_original_question_id(redis):
+    await _init_tokens(redis, value=1000, limit=1000)
+    retrier = _make_retrier(run_id="run-a", question_id="question-a")
+    events: list[tuple[str, dict[str, object | None]]] = []
+
+    def fake_add_event(name: str, attrs: dict[str, object | None] | None = None):
+        events.append((name, dict(attrs or {})))
+
+    with patch(
+        "model_library.retriers.token.token.telemetry.add_event", fake_add_event
+    ):
+        await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    wait_start = next(
+        attrs for name, attrs in events if name == "retry_queue.wait_start"
+    )
+    tokens_deducted = next(
+        attrs for name, attrs in events if name == "retry_queue.tokens_deducted"
+    )
+    assert wait_start["run_id"] == "run-a"
+    assert wait_start["question_id"] == "question-a"
+    assert wait_start["retry_queue.question_ref"] == "run-a:question-a"
+    assert wait_start["retry_queue.mode"] == "enabled"
+    assert tokens_deducted["question_id"] == "question-a"
+    assert tokens_deducted["retry_queue.question_ref"] == "run-a:question-a"
+
+
+async def _query_identity_attrs(settings: _Settings, **kwargs: object) -> dict[str, object | None]:
+    MockLLM = _make_mock_llm_class()
+    llm = MockLLM("gpt-4o", "openai")
+    llm._query_impl = AsyncMock(return_value=QueryResult(output_text="ok"))  # pyright: ignore[reportPrivateUsage]
+    attrs_seen: list[dict[str, object | None]] = []
+
+    def fake_set_attributes(attrs: dict[str, object | None]) -> None:
+        attrs_seen.append(dict(attrs))
+
+    with (
+        patch("model_library.model_library_settings", settings),
+        patch("model_library.base.base.telemetry.set_attributes", fake_set_attributes),
+    ):
+        await llm.query("hello", **kwargs)
+
+    return next(attrs for attrs in attrs_seen if "model.provider" in attrs)
+
+
+async def test_llm_query_uses_settings_run_and_question_ids():
+    attrs = await _query_identity_attrs(
+        _Settings(RUN_ID="run-from-settings", QUESTION_ID="question-from-settings")
+    )
+
+    assert attrs["run_id"] == "run-from-settings"
+    assert attrs["question_id"] == "question-from-settings"
+    assert isinstance(attrs["query_id"], str)
+    assert len(cast(str, attrs["query_id"])) == 14
+
+
+async def test_llm_query_uses_task_id_alias_when_question_id_absent():
+    attrs = await _query_identity_attrs(
+        _Settings(RUN_ID="run-from-settings", TASK_ID="task-from-settings")
+    )
+
+    assert attrs["run_id"] == "run-from-settings"
+    assert attrs["question_id"] == "task-from-settings"
+
+
+async def test_llm_query_uses_task_id_alias_when_question_id_blank():
+    attrs = await _query_identity_attrs(
+        _Settings(QUESTION_ID=" ", TASK_ID="task-from-settings")
+    )
+
+    assert attrs["question_id"] == "task-from-settings"
+
+
+async def test_llm_query_question_id_setting_precedes_task_id_alias():
+    attrs = await _query_identity_attrs(
+        _Settings(
+            RUN_ID="run-from-settings",
+            QUESTION_ID="question-from-settings",
+            TASK_ID="task-from-settings",
+        )
+    )
+
+    assert attrs["question_id"] == "question-from-settings"
+
+
+async def test_llm_query_explicit_ids_override_settings_ids():
+    attrs = await _query_identity_attrs(
+        _Settings(RUN_ID="run-from-settings", QUESTION_ID="question-from-settings"),
+        run_id="run-explicit",
+        question_id="question-explicit",
+        query_id="query-explicit",
+    )
+
+    assert attrs["run_id"] == "run-explicit"
+    assert attrs["question_id"] == "question-explicit"
+    assert attrs["query_id"] == "query-explicit"
+
+
+async def test_llm_query_ignores_query_id_setting():
+    attrs = await _query_identity_attrs(_Settings(QUERY_ID="query-from-settings"))
+
+    assert attrs["query_id"] != "query-from-settings"
+    assert isinstance(attrs["query_id"], str)
+    assert len(cast(str, attrs["query_id"])) == 14
+
+
+@pytest.mark.parametrize("query_id", ["", " ", "\t"])
+async def test_llm_query_treats_blank_explicit_query_id_as_absent(query_id: str):
+    attrs = await _query_identity_attrs(_Settings(), query_id=query_id)
+
+    assert attrs["query_id"] != query_id
+    assert isinstance(attrs["query_id"], str)
+    assert len(cast(str, attrs["query_id"])) == 14
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "match"),
+    [
+        ({"run_id": ""}, "run_id must not be blank"),
+        ({"run_id": " "}, "run_id must not be blank"),
+        ({"question_id": ""}, "question_id must not be blank"),
+        ({"question_id": "\t"}, "question_id must not be blank"),
+    ],
+)
+async def test_llm_query_rejects_blank_explicit_run_and_question_ids(
+    kwargs: dict[str, str], match: str
+):
+    with pytest.raises(ValueError, match=match):
+        await _query_identity_attrs(_Settings(), **kwargs)
+
+
+async def test_llm_query_treats_blank_settings_ids_as_absent():
+    attrs = await _query_identity_attrs(
+        _Settings(RUN_ID="", QUESTION_ID=" ", TASK_ID="\t")
+    )
+
+    assert isinstance(attrs["run_id"], str)
+    assert len(cast(str, attrs["run_id"])) == 8
+    assert isinstance(attrs["question_id"], str)
+    assert len(cast(str, attrs["question_id"])) == 14
+
+
+async def test_query_id_is_used_for_logging_and_not_forwarded_to_provider():
+    MockLLM = _make_mock_llm_class()
+    llm = MockLLM("gpt-4o", "openai")
+    llm._query_impl = AsyncMock(return_value=QueryResult(output_text="ok"))  # pyright: ignore[reportPrivateUsage]
+
+    await llm.query("hello", run_id="run-a", question_id="q1", query_id="query-a")
+
+    _args, kwargs = llm._query_impl.call_args  # pyright: ignore[reportPrivateUsage]
+    assert "query_id" not in kwargs
+    assert "run_id" not in kwargs
+    assert "question_id" not in kwargs
+
+
+async def test_llm_query_records_provider_query_span():
+    MockLLM = _make_mock_llm_class()
+    llm = MockLLM("gpt-4o", "openai")
+    llm._query_impl = AsyncMock(return_value=QueryResult(output_text="ok"))  # pyright: ignore[reportPrivateUsage]
+    spans: list[tuple[str, dict[str, object | None], str]] = []
+
+    def fake_start_span(
+        name: str,
+        attributes: dict[str, object | None],
+        *,
+        kind: str = "internal",
+    ):
+        spans.append((name, dict(attributes), kind))
+        return nullcontext()
+
+    with patch(
+        "model_library.base.base.telemetry.start_span", side_effect=fake_start_span
+    ):
+        await llm.query("hello", run_id="run-a", question_id="q1", query_id="query-a")
+
+    provider_spans = [
+        span for span in spans if span[0] == "model_library.provider_query"
+    ]
+    assert provider_spans == [
+        (
+            "model_library.provider_query",
+            {
+                "run_id": "run-a",
+                "question_id": "q1",
+                "query_id": "query-a",
+                "model.provider": "openai",
+                "model.name": "gpt-4o",
+                "model.registry_key": None,
+                "llm.in_agent": False,
+                "llm.in_agent.mode": "disabled",
+                "llm.output_schema.mode": "disabled",
+                "retry_queue.mode": "disabled",
+            },
+            "client",
+        )
+    ]
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -198,7 +410,9 @@ async def test_agent_logger_name_format():
     llm = _mock_llm(_make_qr())
     llm.model_name = "gpt-4o"
     captured: list[logging.Logger] = []
-    llm.query = AsyncMock(side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr())
+    llm.query = AsyncMock(
+        side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr()
+    )
     agent = Agent(name="submit", llm=llm, tools=[], config=_cfg)
     await agent.run([TextInput(text="go")], question_id="q1")
     assert captured and "agent.submit<gpt-4o>" in captured[0].name
@@ -209,7 +423,9 @@ async def test_agent_passes_scoped_logger_to_llm():
     llm.model_name = "gpt-4o"
     llm.run_id = "run-xyz"
     captured: list[logging.Logger] = []
-    llm.query = AsyncMock(side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr())
+    llm.query = AsyncMock(
+        side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr()
+    )
     agent = Agent(name="eval", llm=llm, tools=[], config=_cfg)
     await agent.run([TextInput(text="go")], question_id="q1")
     assert captured and captured[0].name.startswith("agent.eval<gpt-4o>")
@@ -471,7 +687,9 @@ async def test_run_id_and_question_id_forwarded_to_token_retrier():
 
     class CapturingRetrier:
         def __init__(self, **kwargs: Any):
-            captured.update({"run_id": kwargs["run_id"], "question_id": kwargs["question_id"]})
+            captured.update(
+                {"run_id": kwargs["run_id"], "question_id": kwargs["question_id"]}
+            )
 
         async def execute(self, func: Any, *args: Any, **kwargs: Any) -> Any:
             return await func()

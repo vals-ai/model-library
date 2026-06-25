@@ -1,16 +1,16 @@
 import logging
 import socket
-from collections.abc import Generator, Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 
 import aiohttp
 import httpx
 from anthropic import AsyncAnthropic
 from httpx_aiohttp import AiohttpTransport
 from openai import AsyncOpenAI
-from pydantic.main import BaseModel
+from pydantic import AfterValidator, BaseModel
 from rich.pretty import pretty_repr
 
 MAX_LLM_LOG_LENGTH = 100
@@ -18,8 +18,15 @@ MAX_LOG_HISTORY = 20  # number of history items to log
 logger = logging.getLogger("llm")
 
 
-class PrettyModel(BaseModel):
-    """BaseModel with pretty __repr__ and __str__"""
+def round_to_milliseconds(value: float) -> float:
+    return round(value, 3)
+
+
+SecondsMetric = Annotated[float, AfterValidator(round_to_milliseconds)]
+
+
+class ValsModel(BaseModel):
+    """BaseModel with pretty repr."""
 
     def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
         repr_fields = {
@@ -49,7 +56,7 @@ def create_file_logger(
     log_file: str | Path,
     level: int = logging.INFO,
     console: bool = False,
-) -> Iterator[logging.Logger]:
+) -> Generator[logging.Logger, None, None]:
     """Context manager that creates a logger writing to a file
 
     Usage:
@@ -89,7 +96,7 @@ def run_logging(
     logger: logging.Logger,
     log_dir: Path,
     question_id: str,
-) -> Iterator[Path]:
+) -> Generator[Path, None, None]:
     """Manage file logging for an agent run.
 
     Always yields a question-scoped directory for output files (result.json, histories/).
@@ -189,11 +196,14 @@ def default_aiohttp_httpx_client(
     )
 
 
-def default_httpx_client() -> httpx.AsyncClient:
+def default_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncClient:
     """Fallback httpx client without aiohttp (used when aiohttp is not available)."""
     return httpx.AsyncClient(
         timeout=httpx.Timeout(None),
-        limits=httpx.Limits(max_connections=2000, max_keepalive_connections=300),
+        limits=httpx.Limits(
+            max_connections=2000, max_keepalive_connections=300
+        ),  # TODO: increase, but make sure prod enough sockets to not hit file descriptor limit
+        headers=headers,
     )
 
 
