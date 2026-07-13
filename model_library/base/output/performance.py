@@ -51,6 +51,34 @@ class QueryPerformanceEvent(ValsModel):
         ge=0,
         description="Monotonic elapsed milliseconds from query start.",
     )
+    channel_text_start_char: int | None = Field(
+        default=None,
+        ge=0,
+        exclude_if=lambda value: value is None,
+        description="Inclusive character offset into the channel's final text for text delta events.",
+    )
+    channel_text_end_char: int | None = Field(
+        default=None,
+        ge=0,
+        exclude_if=lambda value: value is None,
+        description="Exclusive character offset into the channel's final text for text delta events.",
+    )
+
+    @model_validator(mode="after")
+    def validate_text_offsets(self) -> Self:
+        has_start = self.channel_text_start_char is not None
+        has_end = self.channel_text_end_char is not None
+        if has_start != has_end:
+            raise ValueError("text offset fields must be set together")
+        if has_start and self.type not in ("content_delta", "reasoning_delta"):
+            raise ValueError("text offsets are only valid for text delta events")
+        if (
+            self.channel_text_start_char is not None
+            and self.channel_text_end_char is not None
+            and self.channel_text_end_char < self.channel_text_start_char
+        ):
+            raise ValueError("channel_text_end_char must be >= channel_text_start_char")
+        return self
 
 
 class QueryTimeToFirstToken(ValsModel):
