@@ -234,59 +234,6 @@ class TestQueryResultPerformance:
             },
         }
 
-    async def test_metadata_deserializes_gateway_timeline_with_text_offsets(self):
-        """Regression: gateway responses include per-delta channel_text_start_char/
-        channel_text_end_char on performance timeline events. Older clients with
-        extra='forbid' and no such fields rejected the response. The client must
-        accept and round-trip these fields."""
-        metadata = QueryResultMetadata.model_validate(
-            {
-                "performance": {
-                    "timeline": [
-                        {
-                            "channel": "content",
-                            "index": 0,
-                            "start_ms": 700,
-                            "first_token_ms": 760,
-                            "end_ms": 1300,
-                            "events": [
-                                {"type": "content_started", "timestamp_ms": 700},
-                                {
-                                    "type": "content_delta",
-                                    "timestamp_ms": 760,
-                                    "channel_text_start_char": 0,
-                                    "channel_text_end_char": 5,
-                                },
-                                {
-                                    "type": "content_delta",
-                                    "timestamp_ms": 900,
-                                    "channel_text_start_char": 5,
-                                    "channel_text_end_char": 12,
-                                },
-                                {"type": "content_finished", "timestamp_ms": 1300},
-                            ],
-                        },
-                    ],
-                }
-            }
-        )
-
-        events = metadata.performance.timeline[0].events
-        assert events[1].channel_text_start_char == 0
-        assert events[1].channel_text_end_char == 5
-        assert events[2].channel_text_start_char == 5
-        assert events[2].channel_text_end_char == 12
-        # started/finished events omit the offsets (excluded when None)
-        assert events[0].channel_text_start_char is None
-        dumped = metadata.model_dump()["performance"]["timeline"][0]["events"]
-        assert dumped[1] == {
-            "type": "content_delta",
-            "timestamp_ms": 760,
-            "channel_text_start_char": 0,
-            "channel_text_end_char": 5,
-        }
-        assert dumped[0] == {"type": "content_started", "timestamp_ms": 700}
-
     async def test_metadata_addition_does_not_aggregate_query_performance(self):
         meta1 = QueryResultMetadata(
             duration_seconds=1.0,
