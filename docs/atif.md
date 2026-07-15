@@ -27,34 +27,44 @@ data = trajectory.to_json_dict()  # dict, None fields excluded
 
 ## Field mapping
 
-| ATIF field                            | model-library source                                |
-| ------------------------------------- | --------------------------------------------------- |
-| `step.message`                        | `QueryResult.output_text`                           |
-| `step.reasoning_content`              | `QueryResult.reasoning`                             |
-| `step.tool_calls`                     | `QueryResult.tool_calls`                            |
-| `step.observation`                    | `ToolCallRecord.tool_output.output` per call        |
-| `step.metrics.prompt_tokens`          | `QueryResultMetadata.total_input_tokens`            |
-| `step.metrics.completion_tokens`      | `QueryResultMetadata.total_output_tokens`           |
-| `step.metrics.cached_tokens`          | `QueryResultMetadata.cache_read_tokens`             |
-| `step.metrics.cost_usd`               | `QueryResultCost.total`                             |
-| `step.reasoning_effort`               | passed to `from_agent_result(reasoning_effort=...)` |
-| `step.is_copied_context`              | set manually on `ATIFStep`                          |
-| `step.source = "system"` (initial)    | `SystemInput.text` from first turn's history        |
-| `step.source = "user"` (initial)      | `TextInput.text` from first turn's history          |
-| `agent.tool_definitions`              | passed to `from_agent_result(tool_definitions=...)` |
-| `trajectory.notes`                    | set manually on `ATIFTrajectory`                    |
-| `trajectory.continued_trajectory_ref` | set manually on `ATIFTrajectory`                    |
-| `metrics.prompt_token_ids`            | set manually on `ATIFMetrics`                       |
-| `metrics.extra`                       | set manually on `ATIFMetrics`                       |
+| ATIF field | model-library source |
+| --- | --- |
+| `step.message` | `QueryResult.output_text`, coerced to `""` when absent |
+| `step.reasoning_content` | `QueryResult.reasoning` |
+| `step.tool_calls` | `QueryResult.tool_calls` |
+| `step.observation` | `ToolCallRecord.tool_output.output` per call |
+| `step.metrics.prompt_tokens` | `QueryResultMetadata.total_input_tokens` |
+| `step.metrics.completion_tokens` | `QueryResultMetadata.total_output_tokens` |
+| `step.metrics.cached_tokens` | `QueryResultMetadata.cache_read_tokens` |
+| `step.metrics.cost_usd` | `QueryResultCost.total` |
+| `step.reasoning_effort` | Passed to `from_agent_result(reasoning_effort=...)` |
+| `step.is_copied_context` | Set manually on `ATIFStep` |
+| Initial `step.source = "system"` | `SystemInput.text` from the first turn's history |
+| Initial `step.source = "user"` | `TextInput.text` from the first turn's history |
+| Error `step.source = "system"` | `ErrorTurn`; message is `Error: <message>`, with `error_type` and `duration_seconds` in `step.extra` and no step metrics |
+| `agent.tool_definitions` | Passed to `from_agent_result(tool_definitions=...)` |
+| `trajectory.notes` | Set manually on `ATIFTrajectory` |
+| `trajectory.continued_trajectory_ref` | Set manually on `ATIFTrajectory` |
+| `metrics.prompt_token_ids` | Set manually on `ATIFMetrics` |
+| `metrics.extra` | Set manually on `ATIFMetrics` |
 
-Provider-specific raw responses are retained in `QueryResult.history` as
-`RawResponse` items for follow-up model calls, but ATIF export does not duplicate
-them into `step.extra`.
+## Export boundaries
 
-History compactions aren't first-party in ATIF. When the agent run includes
-compactions, they're dumped into `trajectory.extra["compactions"]` as a list
-of serialized `CompactionSummary` records, with an aggregate at
-`trajectory.extra["compaction_metrics"]` (`total_prompt_tokens`,
-`total_completion_tokens`, `total_cost_usd`, `count`). `final_metrics`
-reports task cost only (LLM calls inside agent steps); add the compaction
-aggregate for the true bill.
+- Provider-specific `RawResponse` items remain in `QueryResult.history` for
+  follow-up model calls.
+- ATIF export does not duplicate raw provider responses into `step.extra`.
+- `ErrorTurn` entries become system steps so trajectory consumers can distinguish
+  failures from agent output by `step.extra.error_type`.
+
+## Compaction and billing
+
+History compactions are not first-party ATIF steps:
+
+| Location | Contents |
+| --- | --- |
+| `trajectory.extra["compactions"]` | Serialized `CompactionSummary` records |
+| `trajectory.extra["compaction_metrics"]` | `total_prompt_tokens`, `total_completion_tokens`, `total_cost_usd`, and `count` |
+| `final_metrics` | Task LLM calls inside agent steps only |
+
+For the true bill, add `trajectory.extra["compaction_metrics"]` to the task cost
+in `final_metrics`.

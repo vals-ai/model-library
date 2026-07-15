@@ -3,8 +3,6 @@
 import httpx
 from pydantic import BaseModel, ValidationError
 
-from model_library.exceptions import InvalidStructuredOutputError
-
 
 class ErrorBody(BaseModel):
     code: str
@@ -65,12 +63,6 @@ def map_exception_to_error(
                 message=msg,
                 provider=provider,
             ),
-        )
-
-    if isinstance(exc, InvalidStructuredOutputError):
-        return ErrorResponse(
-            502,
-            ErrorBody(code="provider_bad_response", message=msg, provider=provider),
         )
 
     if (

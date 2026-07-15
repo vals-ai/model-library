@@ -1,7 +1,11 @@
 from types import TracebackType
 from unittest.mock import MagicMock
 
+from anthropic.types.beta import BetaTextBlock
+from examples.extras.prompt_caching import _run_report
+
 from model_library.base import TextInput
+from model_library.base.output import QueryResult, QueryResultMetadata
 from model_library.base.input import SystemInput
 from model_library.registry_utils import get_registry_model
 from tests.conftest import parametrize_models_for_provider
@@ -56,6 +60,15 @@ async def test_anthropic_cache_control_on_tools_when_no_system(model_key: str):
     assert body["tools"][-1].get("cache_control", {}).get("type") == "ephemeral"
 
 
+def test_prompt_caching_report_handles_missing_performance():
+    report = _run_report(
+        "no-performance",
+        QueryResult(output_text="ok", metadata=QueryResultMetadata()),
+    )
+
+    assert report["performance"] is None
+
+
 async def test_anthropic_query_maps_cache_usage():
     """End-to-end stub of _query_impl to verify cache fields are propagated."""
 
@@ -67,16 +80,11 @@ async def test_anthropic_query_maps_cache_usage():
             self.cache_creation_input_tokens = 123
             self.iterations = None
 
-    class _DummyText:
-        def __init__(self, text: str):
-            self.type = "text"
-            self.text = text
-
     class _DummyMessage:
         def __init__(self):
             self.id = "msg_1"
             self.model = "claude-haiku-4-5-20251001"
-            self.content = [_DummyText("hello")]  # minimal block
+            self.content = [BetaTextBlock(type="text", text="hello")]
             self.usage = _DummyUsage()
             self.stop_reason = None
 
@@ -91,6 +99,10 @@ async def test_anthropic_query_maps_cache_usage():
             tb: TracebackType | None,
         ) -> bool:
             return False
+
+        async def __aiter__(self):
+            if False:
+                yield None
 
         async def get_final_message(self):
             return _DummyMessage()
@@ -107,13 +119,12 @@ async def test_anthropic_query_maps_cache_usage():
         def __init__(self):
             self.beta = _DummyBeta()
 
-    model = get_registry_model("anthropic/claude-haiku-4-5-20251001")
-
     def get_dummy_client(
         api_key: str | None = None, base_url: str | None = None
     ) -> _DummyClient:
         return _DummyClient()
 
+    model = get_registry_model("anthropic/claude-haiku-4-5-20251001")
     model.get_client = get_dummy_client
 
     res = await model._query_impl(

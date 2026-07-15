@@ -2,6 +2,7 @@ import asyncio
 import logging
 import time
 import uuid
+from contextlib import suppress
 from math import exp, floor
 from typing import Any, Callable, Coroutine
 
@@ -399,3 +400,8 @@ async def background_loops(
             standby = True
     finally:
         heartbeat_task.cancel()
+        try:
+            with suppress(asyncio.CancelledError):
+                await heartbeat_task
+        finally:
+            await _delete_active_key_if_owned(active_key, loop_id)

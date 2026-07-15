@@ -48,35 +48,45 @@ result.output_dir        # Path to log directory
 ## ConductorResult
 
 | Field | Type | Description |
-|-------|------|-------------|
+| --- | --- | --- |
 | `messages` | `list[ConversationMessage]` | Flat list of conversation messages |
 | `stop_reason` | `ConductorStopReason` | Why the conversation ended |
-| `total_duration_seconds` | `float` | Wall clock for entire run |
-| `output_dir` | `Path` | Log directory (excluded from JSON) |
+| `total_duration_seconds` | `float` | Wall clock for the entire run |
+| `auditor_aggregated_metadata` | `QueryResultMetadata` | Sum of each auditor result's `final_aggregated_metadata`; excludes compaction metadata |
+| `target_aggregated_metadata` | `QueryResultMetadata` | Sum of each target result's `final_aggregated_metadata`; excludes compaction metadata |
+| `final_aggregated_metadata` | `QueryResultMetadata` | Auditor plus target aggregate; excludes compaction metadata |
+| `output_dir` | `Path` | Log directory, excluded from JSON |
+
+For total billing metadata, add the nested `AgentResult.final_compaction_metadata`
+values separately; the conductor aggregates task-query metadata only.
 
 Each `ConversationMessage` has `role` (`"auditor"` or `"target"`) and `result` (full `AgentResult`).
 
 ## Stop Conditions
 
 | Reason | When |
-|--------|------|
+| --- | --- |
 | `AUDITOR_DONE` | Auditor's agent uses a done tool |
 | `MAX_EXCHANGES` | `config.max_exchanges` reached |
-| `MAX_TIME` | `config.time_limit.max_seconds` exceeded |
-| `ERROR` | Agent raises an exception or produces empty response |
+| `MAX_TIME` | The pre-exchange time check finds `config.time_limit.max_seconds` already reached |
+| `ERROR` | Agent raises an exception or produces an empty response |
+
+The time limit is checked before each exchange, not during auditor or target
+execution. An exchange may therefore finish after the budget, and an overrun in
+the final configured exchange can still end as `MAX_EXCHANGES`.
 
 Only the auditor can intentionally end the conversation. The conversation can end on an odd number of messages (auditor done without target response).
 
 ## Configuration
 
 | Field | Type | Description |
-|-------|------|-------------|
+| --- | --- | --- |
 | `max_exchanges` | `int` (>= 1) | Maximum auditor-target exchange pairs |
-| `time_limit` | `TimeLimit \| None` | Optional wall-clock budget (only `max_seconds` is used) |
+| `time_limit` | `TimeLimit \| None` | Optional pre-exchange wall-clock budget; only `max_seconds` is used |
 
 ## Logging
 
-```
+```text
 logs/<name>/<auditor_model>_<target_model>/<timestamp>_<uuid>/
 ├── <question_id>/
 │   ├── agent.log

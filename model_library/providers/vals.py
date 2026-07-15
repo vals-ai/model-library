@@ -342,5 +342,7 @@ class DummyAIModel(LLM):
                 in_tokens=response["usage"]["in_tokens"],
                 out_tokens=response["usage"]["out_tokens"],
             ),
-            extras=QueryResultExtras(response_id=response.get("id")),
+            extras=QueryResultExtras(
+                provider_response_id=response.get("id"),
+            ),
         )

@@ -1,9 +1,9 @@
-import logging
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from anthropic.types.beta import BetaTextBlock
 from ai21.models.chat import AssistantMessage
 from ai21.models.chat.chat_completion_response import (
     ChatCompletionResponse,
@@ -19,18 +19,32 @@ from google.genai.types import (
     Part,
 )
 
-from model_library.base import TextInput
 from model_library.providers.ai21labs import AI21LabsModel
-from model_library.providers.amazon import AmazonModel
-from model_library.providers.anthropic import AnthropicModel
+from model_library.providers.anthropic import AnthropicBatchMixin, AnthropicModel
 from model_library.providers.google.batch import parse_predictions_jsonl
 from model_library.providers.google.google import GoogleModel
 from model_library.providers.mistral import MistralModel
 from model_library.providers.vals import DummyAIModel
-from model_library.providers.xai import XAIModel
+from tests.unit.provider_response_helpers import (
+    _AMAZON_BLOCK_STOP,
+    _INPUT,
+    _LOGGER,
+    _amazon_response,
+    _amazon_text,
+    _query_amazon,
+    _query_anthropic,
+    _query_xai,
+    _xai_response,
+)
 
-_INPUT = [TextInput(text="hello")]
-_LOGGER = logging.getLogger("test")
+
+class _AsyncItems:
+    def __init__(self, *items: object):
+        self._items = items
+
+    async def __aiter__(self):
+        for item in self._items:
+            yield item
 
 
 async def test_ai21_query_captures_response_id_metadata():
@@ -56,37 +70,24 @@ async def test_ai21_query_captures_response_id_metadata():
         result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
 
     assert result.extras.response_id == "ai21-response-1"
+    assert result.extras.provider_response_id == "ai21-response-1"
 
 
 async def test_amazon_query_captures_request_id_metadata():
-    response = {
-        "ResponseMetadata": {"RequestId": "amazon-request-1"},
-        "stream": [
-            {"messageStart": {"role": "assistant"}},
-            {"contentBlockDelta": {"delta": {"text": "hello"}}},
-            {"contentBlockStop": {}},
-            {"metadata": {"usage": {"inputTokens": 1, "outputTokens": 2}}},
-            {"messageStop": {"stopReason": "end_turn"}},
-        ],
-    }
-    model = AmazonModel("anthropic.claude")
-    client = MagicMock()
-    client.converse_stream.return_value = response
-
-    with (
-        patch.object(model, "get_client", return_value=client),
-        patch.object(model, "build_body", new_callable=AsyncMock, return_value={}),
-    ):
-        result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
+    result = await _query_amazon(
+        _amazon_response(_amazon_text("hello"), _AMAZON_BLOCK_STOP, output_tokens=2)
+    )
 
     assert result.extras.response_id == "amazon-request-1"
+    assert result.extras.provider_response_id == "amazon-request-1"
+    assert result.extras.provider_request_id == "amazon-request-1"
 
 
 async def test_anthropic_query_captures_message_id_metadata():
     message = SimpleNamespace(
         id="anthropic-message-1",
         model="claude-test",
-        content=[SimpleNamespace(type="text", text="hello")],
+        content=[BetaTextBlock(type="text", text="hello")],
         stop_reason="end_turn",
         usage=SimpleNamespace(
             input_tokens=1,
@@ -95,30 +96,54 @@ async def test_anthropic_query_captures_message_id_metadata():
             cache_creation_input_tokens=0,
             iterations=None,
         ),
+        _request_id="anthropic-request-1",
     )
 
-    class MockStream:
-        async def __aenter__(self) -> "MockStream":
-            return self
-
-        async def __aexit__(self, *args: object) -> None:
-            return None
-
-        async def get_final_message(self) -> SimpleNamespace:
-            return message
-
-    client = SimpleNamespace(
-        beta=SimpleNamespace(messages=SimpleNamespace(stream=lambda **_: MockStream()))
+    result = await _query_anthropic(
+        message,
+        [
+            SimpleNamespace(
+                type="content_block_delta",
+                delta=SimpleNamespace(type="text_delta", text="hello"),
+            )
+        ],
     )
-    model = AnthropicModel("claude-test")
-
-    with (
-        patch.object(model, "get_client", return_value=client),
-        patch.object(model, "build_body", new_callable=AsyncMock, return_value={}),
-    ):
-        result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
 
     assert result.extras.response_id == "anthropic-message-1"
+    assert result.extras.provider_response_id == "anthropic-message-1"
+    assert result.extras.provider_request_id == "anthropic-request-1"
+
+
+async def test_anthropic_batch_captures_message_id_metadata():
+    model = AnthropicModel("claude-test")
+    client = MagicMock()
+    client.messages.batches.retrieve = AsyncMock(
+        return_value=SimpleNamespace(processing_status="ended")
+    )
+    client.messages.batches.results = AsyncMock(
+        return_value=_AsyncItems(
+            SimpleNamespace(
+                model_dump=lambda: {
+                    "custom_id": "request-1",
+                    "result": {
+                        "type": "succeeded",
+                        "message": {
+                            "id": "anthropic-batch-message-1",
+                            "content": [{"type": "text", "text": "hello"}],
+                            "usage": {"input_tokens": 1, "output_tokens": 2},
+                        },
+                    },
+                }
+            )
+        )
+    )
+
+    with patch.object(model, "get_client", return_value=client):
+        results = await AnthropicBatchMixin(model).get_batch_results("batch-1")
+
+    assert results[0].custom_id == "request-1"
+    assert results[0].output.extras.response_id == "anthropic-batch-message-1"
+    assert results[0].output.extras.provider_response_id == "anthropic-batch-message-1"
 
 
 async def test_google_query_captures_response_id_metadata():
@@ -148,6 +173,36 @@ async def test_google_query_captures_response_id_metadata():
         result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
 
     assert result.extras.response_id == "google-response-1"
+    assert result.extras.provider_response_id == "google-response-1"
+
+
+async def test_google_query_allows_missing_response_id_metadata():
+    async def stream() -> AsyncIterator[GenerateContentResponse]:
+        yield GenerateContentResponse(
+            candidates=[
+                Candidate(
+                    content=Content(parts=[Part(text="hello")]),
+                    finish_reason=FinishReason.STOP,
+                )
+            ],
+            usage_metadata=GenerateContentResponseUsageMetadata(
+                prompt_token_count=1,
+                candidates_token_count=2,
+            ),
+        )
+
+    client = MagicMock()
+    client.aio.models.generate_content_stream = AsyncMock(return_value=stream())
+    model = GoogleModel("gemini-test")
+
+    with (
+        patch.object(model, "get_client", return_value=client),
+        patch.object(model, "build_body", new_callable=AsyncMock, return_value={}),
+    ):
+        result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
+
+    assert result.output_text == "hello"
+    assert result.extras.response_id is None
 
 
 def test_google_batch_parse_captures_response_id_metadata():
@@ -158,6 +213,7 @@ def test_google_batch_parse_captures_response_id_metadata():
     )
 
     assert results[0].output.extras.response_id == "google-batch-1"
+    assert results[0].output.extras.provider_response_id == "google-batch-1"
 
 
 async def test_mistral_query_captures_response_id_metadata():
@@ -168,10 +224,22 @@ async def test_mistral_query_captures_response_id_metadata():
                 choices=[
                     SimpleNamespace(
                         delta=SimpleNamespace(content="hello", tool_calls=None),
-                        finish_reason="stop",
+                        finish_reason=None,
                     )
                 ],
                 usage=SimpleNamespace(prompt_tokens=1, completion_tokens=2),
+            )
+        )
+        yield SimpleNamespace(
+            data=SimpleNamespace(
+                id=None,
+                choices=[
+                    SimpleNamespace(
+                        delta=SimpleNamespace(content=" world", tool_calls=None),
+                        finish_reason="stop",
+                    )
+                ],
+                usage=None,
             )
         )
 
@@ -186,42 +254,38 @@ async def test_mistral_query_captures_response_id_metadata():
         result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
 
     assert result.extras.response_id == "mistral-response-1"
+    assert result.extras.provider_response_id == "mistral-response-1"
 
 
 async def test_vals_query_captures_response_id_metadata():
     model = DummyAIModel("response-id-evaluator")
 
-    result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
+    with patch("model_library.providers.vals.random.random", return_value=1.0):
+        result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
 
     assert result.extras.response_id == "mock-id"
+    assert result.extras.provider_response_id == "mock-id"
 
 
 async def test_xai_query_captures_response_id_metadata():
-    latest_response = SimpleNamespace(
-        id="xai-response-1",
-        tool_calls=[],
-        content="hello",
-        reasoning_content="",
-        finish_reason="stop",
-        usage=SimpleNamespace(
-            prompt_tokens=3,
-            cached_prompt_text_tokens=1,
+    result = await _query_xai(
+        _xai_response(
+            response_id="xai-response-1",
+            content="hello",
             completion_tokens=2,
-            reasoning_tokens=0,
         ),
+        chunk_content="hello",
     )
 
-    async def stream() -> AsyncIterator[tuple[SimpleNamespace, None]]:
-        yield latest_response, None
-
-    chat = SimpleNamespace(stream=stream)
-    client = SimpleNamespace(chat=SimpleNamespace(create=lambda **_: chat))
-    model = XAIModel("grok-test")
-
-    with (
-        patch.object(model, "get_client", return_value=client),
-        patch.object(model, "build_body", new_callable=AsyncMock, return_value={}),
-    ):
-        result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
-
     assert result.extras.response_id == "xai-response-1"
+    assert result.extras.provider_response_id == "xai-response-1"
+
+
+async def test_xai_query_allows_missing_response_id_metadata():
+    result = await _query_xai(
+        _xai_response(content="hello", completion_tokens=2),
+        chunk_content="hello",
+    )
+
+    assert result.output_text == "hello"
+    assert result.extras.response_id is None

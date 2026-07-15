@@ -2,6 +2,7 @@ import asyncio
 import logging
 import random
 import time
+from contextlib import suppress
 from math import ceil, floor
 from typing import Any, Callable, Coroutine
 
@@ -36,6 +37,7 @@ DYNAMIC_ESTIMATE_TTL: int = (
 BURST_FRACTION: float = 0.8  # max 80% of token limit deducted per second
 
 _BACKGROUND_LOOP_TASKS: dict[str, asyncio.Task[None]] = {}
+_BACKGROUND_LOOP_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 # Lua: atomic check-and-deduct with per-second burst cap.
@@ -188,32 +190,42 @@ class TokenRetrier(BaseRetrier):
             },
         )
 
-        existing_task = _BACKGROUND_LOOP_TASKS.get(key)
-        if existing_task is not None:
-            if existing_task.done():
-                del _BACKGROUND_LOOP_TASKS[key]
-            elif not config_changed:
-                logger.debug(
-                    f"Token retry background loop already running for {key}; skipping duplicate init"
+        lock = _BACKGROUND_LOOP_LOCKS.setdefault(key, asyncio.Lock())
+        async with lock:
+            existing_task = _BACKGROUND_LOOP_TASKS.get(key)
+            if existing_task is not None:
+                if existing_task.done():
+                    del _BACKGROUND_LOOP_TASKS[key]
+                elif not config_changed:
+                    logger.debug(
+                        f"Token retry background loop already running for {key}; skipping duplicate init"
+                    )
+                    return
+                else:
+                    existing_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await existing_task
+                    if _BACKGROUND_LOOP_TASKS.get(key) is existing_task:
+                        del _BACKGROUND_LOOP_TASKS[key]
+
+            cfg = LoopConfig(key, limit, tokens_per_second)
+            task = asyncio.create_task(
+                background_loops(
+                    cfg,
+                    get_rate_limit_func,
+                    logger,
+                    standby=active is not None and not config_changed,
                 )
-                return
-
-        cfg = LoopConfig(key, limit, tokens_per_second)
-        task = asyncio.create_task(
-            background_loops(
-                cfg,
-                get_rate_limit_func,
-                logger,
-                standby=active is not None and not config_changed,
             )
-        )
-        _BACKGROUND_LOOP_TASKS[key] = task
+            _BACKGROUND_LOOP_TASKS[key] = task
 
-        def _remove_completed_task(done_task: asyncio.Task[None]) -> None:
-            if _BACKGROUND_LOOP_TASKS.get(key) is done_task:
-                del _BACKGROUND_LOOP_TASKS[key]
+            def _remove_completed_task(done_task: asyncio.Task[None]) -> None:
+                if _BACKGROUND_LOOP_TASKS.get(key) is done_task:
+                    del _BACKGROUND_LOOP_TASKS[key]
+                    if not lock.locked():
+                        _BACKGROUND_LOOP_LOCKS.pop(key, None)
 
-        task.add_done_callback(_remove_completed_task)
+            task.add_done_callback(_remove_completed_task)
 
     def __init__(
         self,
@@ -378,14 +390,16 @@ class TokenRetrier(BaseRetrier):
             self.client_registry_key, self.priority
         )
 
-        # let storage know we are waiting at this priority (sorted set: question_id → timestamp)
-        await utils.redis_client.zadd(priority_key, {self._question_id: time.time()})
-        # per-request hash so status endpoint can group queued requests by run
-        await utils.redis_client.hset(
-            self._question_meta_key,
-            mapping={"run_id": self._run_id, "priority": str(self.priority)},
-        )
-        await utils.redis_client.expire(self._question_meta_key, INFLIGHT_MAX_AGE)
+        # let storage know we are waiting at this priority and expose metadata
+        # for the status endpoint (pipelined — single round-trip).
+        async with utils.redis_client.pipeline(transaction=False) as pipe:
+            pipe.zadd(priority_key, {self._question_id: time.time()})
+            pipe.hset(  # pyright: ignore[reportUnknownMemberType]
+                self._question_meta_key,
+                mapping={"run_id": self._run_id, "priority": str(self.priority)},
+            )
+            pipe.expire(self._question_meta_key, INFLIGHT_MAX_AGE)
+            await pipe.execute()
         self.logger.debug(f"priority: {self.priority}, waiting: {priority_key}")
         wait_attrs = {
             **self._telemetry_ids(),

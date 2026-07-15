@@ -4,7 +4,7 @@ YAML-based model registry with 3-level inheritance.
 
 ## Directory Structure
 
-```
+```text
 model_library/config/
 ├── all_models.json              # generated — do not edit
 ├── anthropic_models.yaml
@@ -59,13 +59,14 @@ Provider-specific `provider_properties` are validated by each provider:
 - **OpenAI-compatible completions**: Set `stream_completions: false` to use non-streaming chat completions. The default is `true`.
 - **OpenAI Responses**: Set `code_mode: true` to add the hosted Code Mode tool. When enabled, function tools without explicit `allowed_callers` are sent with `allowed_callers: ["code_mode", "direct"]`.
 - **Meta**: Set `use_responses: true` on selected models to route the OpenAI-compatible delegate through the Responses API instead of Chat Completions.
+- **OpenAI-compatible providers**: Set `prompt_cache_key: id` to derive an OpenAI prompt-cache key from the resolved `run_id` and `question_id`, or `prompt_cache_key: hash` to derive it from the stable prompt prefix, for Responses and Chat Completions.
 - **Alibaba Qwen reasoning models**: Set `preserve_thinking: true` to preserve reasoning context across turns.
 
 Models may also set `provider_endpoint` when the registry key should differ from the upstream provider model ID.
 
 Configured provider default rate limits are not bundled in the public package; use live provider rate-limit headers when available.
 
-Use `supports.files` only for provider-supported non-image document/file inputs. Providers with image/video-only multimodal APIs should keep `supports.files: false` and set `supports.images`/`supports.videos` instead, so callers can choose image or video fallbacks rather than provider file-upload paths.
+Use `supports.files` only for provider-supported non-image document/file inputs. Providers with image/video-only multimodal APIs should keep `supports.files: false` and set `supports.images`/`supports.videos` instead, so callers can choose image or video fallbacks rather than provider file-upload paths. The validator still runs file examples when `supports.files` is false and fails if a file example works, because that means the registry config is stale.
 
 To restore a deprecated model to the active registry, move its entry from
 `config/deprecated/<provider>_models.yaml` back to the matching active provider
@@ -108,34 +109,44 @@ MODEL_LIBRARY_INCLUDE_DEPRECATED=True
 
 ## Gateway registry loading
 
-When `MODEL_GATEWAY_URL` is set, `get_model_registry()` fetches the full registry
-snapshot from the gateway server's `/registry` endpoint using `MODEL_GATEWAY_API_KEY`.
-This remote snapshot is for explicit bulk discovery; failures are strict and do
-not silently fall back to local files.
+### Discovery and helper behavior
 
-Legacy local registry helpers such as `get_registry_config()`, `get_model_cost()`,
-`get_model_input_context_window()`, and `get_model_names()` raise in gateway mode
-instead of implicitly fetching or serving a cached full `/registry` snapshot.
+When `MODEL_GATEWAY_URL` is set:
 
-Request execution is server-authoritative in gateway mode: `get_registry_model()`
-constructs an unsynced `GatewayLLM` from the model string without fetching or
-requiring client-side registry knowledge, and gateway requests send only explicit
-override config. On provider-model cache miss, the gateway server merges those
-overrides with its loaded registry config and caches the provider model by model
-and override config, plus token retry params when token retry is active.
-Registry/config changes are not hot-reloaded into existing cached provider
-models; restart or cache invalidation is required to pick them up. Gateway
-metadata attributes such as `supports_tools` and `supports_temperature` start
-with local defaults until `await model.ensure_metadata_loaded()` loads current
-gateway-side metadata onto the model instance. Repeated calls are no-ops after
-the first successful load. After loading, `model.metadata` is the full server
-`ModelConfig` registry entry for that model; local registry-backed models expose
-the same property from the local registry immediately. The underlying
-`/models/resolve` response returns both the server-built `effective_config` and
-the full server `registry_config` for that one model, so callers migrating
-registry-entry reads can use `model.metadata` without fetching the full
-`/registry` snapshot. Gateway batch capability metadata is preserved, but
-client-side gateway batch calls raise until gateway batch endpoints exist.
+- `get_model_registry()` fetches the full `/registry` snapshot with
+  `MODEL_GATEWAY_API_KEY` for explicit bulk discovery.
+- Registry-fetch failures are strict; the client does not fall back to local
+  files.
+- Local helpers such as `get_registry_config()`, `get_model_cost()`,
+  `get_model_input_context_window()`, and `get_model_names()` raise instead of
+  implicitly fetching or serving a cached gateway snapshot.
+
+### Request execution
+
+Gateway execution is server-authoritative:
+
+1. `get_registry_model()` constructs an unsynced `GatewayLLM` from the model
+   string without a client-side registry fetch.
+2. Requests send only explicit override config.
+3. On a provider-model cache miss, the server merges overrides with its loaded
+   registry config.
+4. The server caches the provider model by model and override config, plus token
+   retry parameters when active.
+
+Registry changes are not hot-reloaded into existing cached provider models;
+restart or explicit cache invalidation is required.
+
+### Single-model metadata
+
+- Capability attributes such as `supports_tools` and `supports_temperature` begin with local defaults.
+- `await model.ensure_metadata_loaded()` resolves current gateway metadata once;
+  later calls are no-ops after the first success.
+- `model.metadata` then contains the full server `ModelConfig` registry entry.
+- Local registry-backed models expose the same property immediately.
+- `/models/resolve` returns `effective_config`, full `registry_config`, and the
+  server-computed context window for one model.
+- Gateway batch capability metadata is preserved, but client-side gateway batch
+  calls raise until gateway batch endpoints exist.
 
 ## Custom config overrides
 

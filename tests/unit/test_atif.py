@@ -128,7 +128,7 @@ class TestAgentResultToATIF:
 
     def _make_turn(
         self,
-        output_text: str,
+        output_text: str | None,
         history: Sequence[InputItem] | None = None,
         tool_calls: list[ToolCall] | None = None,
         tool_records: list[ToolCallRecord] | None = None,
@@ -192,6 +192,25 @@ class TestAgentResultToATIF:
         assert trajectory.final_metrics.total_prompt_tokens == 10
         assert trajectory.final_metrics.total_completion_tokens == 5
         assert trajectory.final_metrics.total_steps == 2
+
+    def test_agent_step_coerces_absent_output_text_to_empty_message(self):
+        question = TextInput(text="Use a tool")
+        turns: list[AgentTurn | ErrorTurn] = [
+            self._make_turn(
+                None,
+                history=[question, RawResponse(response={})],
+                tool_calls=[ToolCall(id="call_1", name="search", args={})],
+            )
+        ]
+
+        trajectory = ATIFTrajectory.from_agent_result(
+            turns=turns,
+            agent_name="agent",
+            model_name="gpt-4",
+        )
+
+        assert trajectory.steps[1].source == "agent"
+        assert trajectory.steps[1].message == ""
 
     def test_multi_turn_with_tools(self):
         """Agent calls a tool, gets observation, responds = agent step has tool_calls + observation."""

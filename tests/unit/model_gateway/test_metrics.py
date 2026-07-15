@@ -1,8 +1,11 @@
 import json
+from types import SimpleNamespace
 
 import pytest
+from starlette.responses import Response
 
 from model_gateway import metrics
+from model_gateway.telemetry_helpers import dimension_telemetry_attributes
 
 
 @pytest.fixture(autouse=True)
@@ -12,10 +15,21 @@ def reset_metrics_state():
     metrics.flush_metrics()
 
 
-def _last_emf(capsys: pytest.CaptureFixture[str]) -> dict[str, object]:
+def _emf_payloads(capsys: pytest.CaptureFixture[str]) -> list[dict[str, object]]:
     out = capsys.readouterr().out.strip().splitlines()
-    assert out
-    return json.loads(out[-1])
+    return [json.loads(line) for line in out if line]
+
+
+def _last_emf(capsys: pytest.CaptureFixture[str]) -> dict[str, object]:
+    payloads = _emf_payloads(capsys)
+    assert payloads
+    return payloads[-1]
+
+
+async def _reset_inflight() -> None:
+    current = await metrics.get_inflight()
+    if current:
+        await metrics.adjust_inflight(-current)
 
 
 def test_model_dimensions_include_model_endpoint_and_param_group(monkeypatch):
@@ -83,6 +97,11 @@ def test_param_group_excludes_sensitive_and_prompt_like_keys():
 def test_param_group_returns_none_when_all_params_are_excluded():
     assert metrics.param_group({"system_prompt": "secret"}) == "none"
     assert metrics.param_group({"query_id": "query-a"}) == "none"
+    assert (
+        metrics.param_group({"messages": [{"role": "user", "content": "secret"}]})
+        == "none"
+    )
+    assert metrics.param_group({"output": "secret"}) == "none"
 
 
 def test_param_group_keeps_response_json_schema():
@@ -98,6 +117,27 @@ def test_param_group_keeps_response_json_schema():
     )["ParamGroup"]
 
     assert group_a != group_b
+
+
+def test_param_group_rejects_unsupported_values():
+    with pytest.raises(TypeError, match="Unsupported param group value: object"):
+        metrics.param_group({"max_tokens": object()})
+
+
+def test_dimension_telemetry_attributes_use_model_dimensions():
+    dimensions = metrics.model_dimensions(
+        operation="query",
+        model="openai/gpt-4o",
+        config={"max_tokens": 7},
+    )
+
+    attrs = dimension_telemetry_attributes(dimensions)
+
+    assert attrs == {
+        "model.provider_endpoint": dimensions["ProviderEndpoint"],
+        "model.param_group": dimensions["ParamGroup"],
+        "gateway.operation": dimensions["Operation"],
+    }
 
 
 def test_record_metrics_sums_counters_and_averages_latency(capsys):
@@ -171,12 +211,66 @@ def test_inflight_metrics_use_high_resolution(capsys):
     ]
 
 
+def test_record_gateway_phase_emits_without_env_gate(capsys, monkeypatch):
+    monkeypatch.delenv("GATEWAY_DIAGNOSTICS_ENABLED", raising=False)
+
+    metrics.record_gateway_phase(
+        operation="query",
+        provider="openai",
+        phase="provider_call",
+        outcome="success",
+        latency_ms=12.5,
+    )
+
+    assert metrics.flush_metrics() == 1
+    payload = _last_emf(capsys)
+    assert payload["Operation"] == "query"
+    assert payload["Provider"] == "openai"
+    assert payload["Phase"] == "provider_call"
+    assert payload["Outcome"] == "success"
+    assert payload["GatewayPhaseCount"] == 1
+    assert payload["GatewayPhaseLatencyMs"] == 12.5
+
+
 @pytest.mark.asyncio
 async def test_inflight_adjustment_never_goes_negative():
-    current = await metrics.get_inflight()
-    if current:
-        await metrics.adjust_inflight(-current)
+    await _reset_inflight()
 
     assert await metrics.adjust_inflight(1) == 1
     assert await metrics.adjust_inflight(-1) == 0
     assert await metrics.adjust_inflight(-1) == 0
+
+
+@pytest.mark.asyncio
+async def test_metrics_middleware_counts_inflight_only_for_query(capsys, monkeypatch):
+    await _reset_inflight()
+    monkeypatch.setattr(
+        metrics.telemetry, "should_trace_http_route", lambda _route: False
+    )
+    middleware = metrics.create_metrics_middleware()
+
+    async def call_next(_request):
+        return Response(status_code=200)
+
+    token_count_request = SimpleNamespace(
+        url=SimpleNamespace(path="/tokens/count"),
+        method="POST",
+    )
+    response = await middleware(token_count_request, call_next)  # pyright: ignore[reportArgumentType]
+    assert response.status_code == 200
+    assert await metrics.get_inflight() == 0
+    assert metrics.flush_metrics() == 1
+    token_payloads = _emf_payloads(capsys)
+    assert any(payload.get("Route") == "/tokens/count" for payload in token_payloads)
+    assert all("InFlightRequests" not in payload for payload in token_payloads)
+
+    query_request = SimpleNamespace(url=SimpleNamespace(path="/query"), method="POST")
+    response = await middleware(query_request, call_next)  # pyright: ignore[reportArgumentType]
+    assert response.status_code == 200
+    assert await metrics.get_inflight() == 0
+    assert metrics.flush_metrics() == 2
+    query_payloads = _emf_payloads(capsys)
+    assert any(
+        payload.get("Route") == "/query" and "InFlightRequests" in payload
+        for payload in query_payloads
+    )

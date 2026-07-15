@@ -18,16 +18,21 @@ from model_library.exceptions import (
     BackoffRetryException,
     BadInputError,
     ContentFilterError,
+    GatewayMethodNotSupported,
     ImmediateRetryException,
     ImmediateRetryExhaustedError,
+    InvalidStructuredOutputError,
     MaxContextWindowExceededError,
     MaxOutputTokensExceededError,
     ModelNoOutputError,
+    NoMatchingToolCallError,
     RateLimitException,
     RetryException,
     ToolCallingNotSupportedError,
-    is_retriable_error,
+    UnexpectedSystemInputError,
+    exception_to_provider_error,
     handle_empty_response,
+    is_retriable_error,
 )
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, retry_decorator
@@ -38,6 +43,71 @@ from model_library.retriers.utils import jitter
 def mock_asyncio_sleep():
     with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
         yield mock_sleep
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RateLimitException(),
+        MaxOutputTokensExceededError(),
+        MaxContextWindowExceededError(),
+        ContentFilterError(),
+        ModelNoOutputError(),
+        InvalidStructuredOutputError(),
+        ToolCallingNotSupportedError(),
+        BadInputError(),
+        UnexpectedSystemInputError(),
+        GatewayMethodNotSupported(),
+        NoMatchingToolCallError(),
+    ],
+)
+def test_model_library_exceptions_serialize_to_provider_errors(exc: Exception):
+    payload = exception_to_provider_error(exc)
+
+    assert payload["message"] == str(exc)
+    assert payload["exception_type"] == type(exc).__name__
+
+
+def test_provider_error_serialization_redacts_raw_context_when_default_exists():
+    exc = ContentFilterError(
+        "{'finish_reason': 'content_filter', 'response': 'SECRET_MODEL_OUTPUT_SHOULD_NOT_LEAK'}"
+    )
+
+    payload = exception_to_provider_error(exc)
+
+    assert payload == {
+        "message": ContentFilterError.DEFAULT_MESSAGE,
+        "exception_type": "ContentFilterError",
+    }
+
+
+def test_provider_error_serialization_unwraps_immediate_retry_exhaustion():
+    original = ModelNoOutputError("model returned empty response")
+    exc = ImmediateRetryExhaustedError(10, 10, original)
+
+    payload = exception_to_provider_error(exc)
+
+    assert payload == {
+        "message": "model returned empty response",
+        "exception_type": "ModelNoOutputError",
+    }
+
+
+def test_provider_error_serialization_best_effort_for_unknown_exceptions():
+    class ProviderStatusError(Exception):
+        code = "rate_limit_exceeded"
+        status_code = 429
+
+    payload = exception_to_provider_error(
+        ProviderStatusError("provider says slow down")
+    )
+
+    assert payload == {
+        "message": "provider says slow down",
+        "exception_type": "ProviderStatusError",
+        "code": "rate_limit_exceeded",
+        "status_code": 429,
+    }
 
 
 async def test_jitter():

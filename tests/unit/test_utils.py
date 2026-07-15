@@ -2,11 +2,15 @@
 
 from pathlib import Path
 
+import httpx
+import pytest
+
 from model_library.agent.agent import AgentResult
 from model_library.agent.conductor.metadata import ConductorResult, ConductorStopReason
 from model_library.agent.config import TimeLimit
 from model_library.base.output import QueryResultMetadata
 from model_library.retriers.token.utils import InflightRequest
+from model_library import utils as model_utils
 from model_library.utils import ValsModel, get_context_window_for_model
 
 
@@ -82,3 +86,109 @@ def test_get_context_window_for_nonexistent_model():
     """Test that None is returned for a model that doesn't exist."""
     context_window = get_context_window_for_model("nonexistent/fake-model-xyz")
     assert context_window is None
+
+
+def _assert_provider_timeout(timeout: httpx.Timeout):
+    assert timeout.connect == model_utils.PROVIDER_CONNECT_TIMEOUT_SECONDS
+    assert timeout.read == model_utils.PROVIDER_READ_TIMEOUT_SECONDS
+    assert timeout.write == model_utils.PROVIDER_WRITE_TIMEOUT_SECONDS
+    assert timeout.pool == model_utils.PROVIDER_POOL_TIMEOUT_SECONDS
+
+
+async def test_default_aiohttp_httpx_client_uses_provider_timeout():
+    client = model_utils.default_aiohttp_httpx_client()
+    try:
+        _assert_provider_timeout(client.timeout)
+    finally:
+        await client.aclose()
+
+
+async def test_default_httpx_client_uses_provider_timeout():
+    client = model_utils.default_httpx_client()
+    try:
+        _assert_provider_timeout(client.timeout)
+    finally:
+        await client.aclose()
+
+
+async def test_gateway_httpx_client_uses_gateway_timeout():
+    client = model_utils.gateway_httpx_client(headers={"Authorization": "Bearer test"})
+    try:
+        assert (
+            client.timeout.connect == model_utils.GATEWAY_CLIENT_CONNECT_TIMEOUT_SECONDS
+        )
+        assert client.timeout.read == model_utils.GATEWAY_CLIENT_READ_TIMEOUT_SECONDS
+        assert client.timeout.write == model_utils.GATEWAY_CLIENT_WRITE_TIMEOUT_SECONDS
+        assert client.timeout.pool == model_utils.GATEWAY_CLIENT_POOL_TIMEOUT_SECONDS
+    finally:
+        await client.aclose()
+
+
+async def test_openai_client_uses_provider_timeout():
+    client = model_utils.create_openai_client_with_defaults(api_key="sk-test")
+    try:
+        assert isinstance(client.timeout, httpx.Timeout)
+        _assert_provider_timeout(client.timeout)
+    finally:
+        await client.close()
+
+
+async def test_openai_client_uses_aiohttp_httpx_client_factory(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls: list[dict[str, str] | None] = []
+
+    def fake_default_aiohttp_httpx_client(
+        *, dns_resolve: dict[str, str] | None = None
+    ) -> httpx.AsyncClient:
+        calls.append(dns_resolve)
+        return httpx.AsyncClient()
+
+    monkeypatch.setattr(
+        model_utils,
+        "default_aiohttp_httpx_client",
+        fake_default_aiohttp_httpx_client,
+    )
+
+    client = model_utils.create_openai_client_with_defaults(
+        api_key="sk-test", dns_resolve={"api.openai.com": "127.0.0.1"}
+    )
+    try:
+        assert calls == [{"api.openai.com": "127.0.0.1"}]
+    finally:
+        await client.close()
+
+
+async def test_anthropic_client_uses_provider_timeout():
+    client = model_utils.create_anthropic_client_with_defaults(api_key="sk-test")
+    try:
+        assert isinstance(client.timeout, httpx.Timeout)
+        _assert_provider_timeout(client.timeout)
+    finally:
+        await client.close()
+
+
+async def test_anthropic_client_uses_aiohttp_httpx_client_factory(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    calls = 0
+
+    def fake_default_aiohttp_httpx_client(
+        *, dns_resolve: dict[str, str] | None = None
+    ) -> httpx.AsyncClient:
+        nonlocal calls
+        assert dns_resolve is None
+        calls += 1
+        return httpx.AsyncClient()
+
+    monkeypatch.setattr(
+        model_utils,
+        "default_aiohttp_httpx_client",
+        fake_default_aiohttp_httpx_client,
+    )
+
+    client = model_utils.create_anthropic_client_with_defaults(api_key="sk-test")
+    try:
+        assert calls == 1
+    finally:
+        await client.close()

@@ -2,8 +2,8 @@
 --- OUTPUT ---
 """
 
-from enum import Enum
 from collections.abc import Generator
+from enum import Enum
 from typing import Any, cast
 
 from pydantic import (
@@ -12,6 +12,7 @@ from pydantic import (
     JsonValue,
     computed_field,
     field_validator,
+    model_validator,
 )
 from typing_extensions import override
 
@@ -59,6 +60,9 @@ class FinishReason(str, Enum):
     MALFORMED_TOOL_CALL = "malformed_tool_call"
     """Model attempted a tool call but it was malformed or unexpected."""
 
+    PAUSED = "paused"
+    """Provider paused mid-turn to run a server-side tool; replay history to resume."""
+
     ERROR = "error"
     """An error occurred during generation."""
 
@@ -86,7 +90,18 @@ class Citation(ValsModel):
 class QueryResultExtras(ValsModel):
     citations: list[Citation] = Field(default_factory=list)
     search_results: JsonValue | None = None
+    # Deprecated compatibility field for provider response/body IDs.
     response_id: str | None = None
+    provider_response_id: str | None = None
+    provider_request_id: str | None = None
+
+    @model_validator(mode="after")
+    def _sync_legacy_response_id(self) -> "QueryResultExtras":
+        if self.provider_response_id is None and self.response_id is not None:
+            self.provider_response_id = self.response_id
+        elif self.response_id is None and self.provider_response_id is not None:
+            self.response_id = self.provider_response_id
+        return self
 
 
 class QueryResultCost(ValsModel):
@@ -233,14 +248,14 @@ class QueryResultMetadata(ValsModel):
 
     cost: QueryResultCost | None = None  # set post query
     duration_seconds: SecondsMetric | None = None  # set post query; rounded to ms
-    performance: QueryResultPerformance = Field(default_factory=QueryResultPerformance)
+    performance: QueryResultPerformance | None = None
     in_tokens: int = 0
 
     out_tokens: int = 0
     reasoning_tokens: int | None = None
     cache_read_tokens: int | None = None
     cache_write_tokens: int | None = None
-    extra: dict[str, Any] = {}
+    extra: dict[str, Any] = Field(default_factory=dict)
 
     @property
     def default_duration_seconds(self) -> float:
@@ -306,6 +321,29 @@ class ProviderToolEvent(ValsModel):
     output: JsonValue | None = None
     sequence: int | None = None
 
+    @classmethod
+    def web_search(
+        cls,
+        *,
+        provider: str,
+        kind: str,
+        query: str,
+        sequence: int,
+        sources: list[JsonValue] | None = None,
+        id: str | None = None,
+        status: str | None = None,
+    ) -> "ProviderToolEvent":
+        return cls(
+            id=id,
+            provider=provider,
+            type=kind,
+            name="web_search",
+            status=status,
+            input=query,
+            output=sources,
+            sequence=sequence,
+        )
+
 
 class QueryResult(ValsModel):
     """
@@ -329,9 +367,13 @@ class QueryResult(ValsModel):
     def output_text_str(self) -> str:
         return self.output_text or ""
 
+    @field_validator("output_text", mode="before")
+    def default_output_text(cls, v: str | None):
+        return None if v == "" else v
+
     @field_validator("reasoning", mode="before")
     def default_reasoning(cls, v: str | None):
-        return None if not v else v  # make reasoning None if empty
+        return None if v == "" else v
 
     @property
     def search_results(self) -> Any | None:

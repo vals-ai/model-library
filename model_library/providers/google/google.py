@@ -17,6 +17,8 @@ from google.genai.types import (
     GenerateContentConfig,
     GenerateContentResponse,
     GenerateContentResponseUsageMetadata,
+    GoogleSearch,
+    GroundingMetadata,
     HarmBlockThreshold,
     HarmCategory,
     HttpOptions,
@@ -25,11 +27,12 @@ from google.genai.types import (
     ThinkingConfig,
     ThinkingLevel,
     Tool,
+    ToolConfig,
     ToolListUnion,
     UploadFileConfig,
 )
 from google.oauth2 import service_account
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, JsonValue, SecretStr
 from typing_extensions import deprecated, override
 
 from model_library import model_library_settings
@@ -48,6 +51,7 @@ from model_library.base import (
     PydanticT,
     QueryResult,
     QueryResultCost,
+    QueryResultExtras,
     QueryResultMetadata,
     RawInput,
     RawResponse,
@@ -58,9 +62,11 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.output.result import ProviderToolEvent
 from model_library.base import (
     FinishReason as StandardFinishReason,
 )
+from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.input import normalize_query_input
 from model_library.exceptions import (
     BadInputError,
@@ -73,6 +79,7 @@ from model_library.exceptions import (
 )
 from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.providers.openai import OpenAIModel
+from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 from model_library.utils import make_aiohttp_session
 
@@ -334,11 +341,19 @@ class GoogleModel(LLM):
     async def parse_image(self, image: FileInput) -> Part:
         return await self.parse_file(image)
 
+    @property
+    @override
+    def search_tool(self) -> Tool:
+        return Tool(google_search=GoogleSearch())
+
     @override
     async def parse_tools(self, tools: list[ToolDefinition]) -> list[Tool]:
         parsed_tools: list[Tool] = []
         for tool in tools:
             body = tool.body
+            if is_native_web_search(body):
+                parsed_tools.append(self.search_tool)
+                continue
             if isinstance(body, Tool):
                 parsed_tools.append(body)
                 continue
@@ -431,6 +446,10 @@ class GoogleModel(LLM):
 
         if tools:
             generation_config.tools = cast(ToolListUnion, await self.parse_tools(tools))
+            if any(is_native_web_search(t.body) for t in tools):
+                generation_config.tool_config = ToolConfig(
+                    include_server_side_tool_invocations=True
+                )
 
         if output_schema is not None:
             if isinstance(output_schema, dict):
@@ -473,12 +492,12 @@ class GoogleModel(LLM):
             input, tools=tools, output_schema=output_schema, **kwargs
         )
 
-        text: str = ""
-        reasoning: str = ""
+        result_builder = QueryResultBuilder()
         tool_calls: list[ToolCall] = []
 
         metadata: GenerateContentResponseUsageMetadata | None = None
         response_id: str | None = None
+        grounding_metadata: GroundingMetadata | None = None
 
         stream = await self.get_client().aio.models.generate_content_stream(**body)
         contents: list[Content | None] = []
@@ -505,6 +524,7 @@ class GoogleModel(LLM):
                             raise Exception(f"Invalid function call: {part}")
 
                         call_args = part.function_call.args or {}
+                        result_builder.start_tool_call_segment().record_tool_call_delta()
                         tool_calls.append(
                             # Weirdly, id is not required. If not provided, we generate one.
                             ToolCall(
@@ -514,14 +534,14 @@ class GoogleModel(LLM):
                                 args=call_args,
                             )
                         )
-                    if not part.text:
+                    if part.text is None:
                         continue
                     if part.thought:
                         meaningful_content = True
-                        reasoning += part.text
+                        result_builder.append_reasoning_delta(part.text)
                     else:
                         meaningful_content = True
-                        text += part.text
+                        result_builder.append_content_delta(part.text)
 
             if chunk.usage_metadata:
                 metadata = chunk.usage_metadata
@@ -529,6 +549,8 @@ class GoogleModel(LLM):
                 contents.append(content)
             if candidates[0].finish_reason:
                 finish_reason = candidates[0].finish_reason
+            if candidates[0].grounding_metadata:
+                grounding_metadata = candidates[0].grounding_metadata
 
         if finish_reason != FinishReason.STOP:
             query_logger.error(
@@ -543,32 +565,58 @@ class GoogleModel(LLM):
             query_logger.error("The function call was malformed")
             raise RetryException("The function call was malformed")
 
+        provider_tool_events: list[ProviderToolEvent] = []
+        if grounding_metadata and grounding_metadata.web_search_queries:
+            sources: list[JsonValue] = [
+                chunk.web.uri
+                for chunk in (grounding_metadata.grounding_chunks or [])
+                if chunk.web and chunk.web.uri
+            ]
+            queries = grounding_metadata.web_search_queries
+            n = len(queries)
+            for i, query in enumerate(queries):
+                provider_tool_events.append(
+                    ProviderToolEvent.web_search(
+                        provider="google",
+                        kind="google_search_call",
+                        query=query,
+                        sources=sources,
+                        sequence=i - n,  # negative: sorts before function tool calls
+                    )
+                )
+
         mapped_finish_reason = map_google_finish_reason(
             finish_reason, has_tool_calls=bool(tool_calls)
         )
-        if not text and not reasoning and not tool_calls:
+        if (
+            not result_builder.has_output_text
+            and not result_builder.has_reasoning
+            and not tool_calls
+            and not provider_tool_events
+        ):
             query_logger.error(f"Empty response. Chunks: {chunks}")
             handle_empty_response(mapped_finish_reason, {"metadata": metadata})
 
-        result = QueryResult(
-            output_text=text,
-            reasoning=reasoning,
-            finish_reason=mapped_finish_reason,
-            history=[*input, RawResponse(response=contents)],
-            tool_calls=tool_calls,
-        )
-
+        result_metadata = QueryResultMetadata()
         if metadata:
             # see _calculate_cost
             cache_read_tokens = metadata.cached_content_token_count or 0
-            result.metadata = QueryResultMetadata(
+            result_metadata = QueryResultMetadata(
                 in_tokens=(metadata.prompt_token_count or 0) - cache_read_tokens,
                 out_tokens=metadata.candidates_token_count or 0,
                 reasoning_tokens=metadata.thoughts_token_count or 0,
                 cache_read_tokens=cache_read_tokens,
             )
-        result.extras.response_id = response_id
-        return result
+        return result_builder.build(
+            finish_reason=mapped_finish_reason,
+            history=[*input, RawResponse(response=contents)],
+            tool_calls=tool_calls,
+            provider_tool_events=provider_tool_events,
+            metadata=result_metadata,
+            extras=QueryResultExtras(
+                provider_response_id=response_id,
+            ),
+        )
 
     @override
     async def count_tokens(

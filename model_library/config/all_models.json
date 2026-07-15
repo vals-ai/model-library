@@ -1,4 +1,322 @@
 {
+    "anthropic/claude-sonnet-5-xhigh": {
+        "company": "Anthropic",
+        "label": "Claude Sonnet 5 (Extra High Effort)",
+        "release_date": "2026-06-30",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-01",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "write": 3.75,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "xhigh"
+        },
+        "provider_endpoint": "claude-sonnet-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-xhigh",
+        "slug": "anthropic_claude-sonnet-5-xhigh"
+    },
+    "anthropic/claude-sonnet-5-medium": {
+        "company": "Anthropic",
+        "label": "Claude Sonnet 5 (Medium Effort)",
+        "release_date": "2026-06-30",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-01",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "write": 3.75,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "medium"
+        },
+        "provider_endpoint": "claude-sonnet-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-medium",
+        "slug": "anthropic_claude-sonnet-5-medium"
+    },
+    "anthropic/claude-sonnet-5-low": {
+        "company": "Anthropic",
+        "label": "Claude Sonnet 5 (Low Effort)",
+        "release_date": "2026-06-30",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-01",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "write": 3.75,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "low"
+        },
+        "provider_endpoint": "claude-sonnet-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-low",
+        "slug": "anthropic_claude-sonnet-5-low"
+    },
+    "anthropic/claude-sonnet-5-high": {
+        "company": "Anthropic",
+        "label": "Claude Sonnet 5 (High Effort)",
+        "release_date": "2026-06-30",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-01",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "write": 3.75,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "high"
+        },
+        "provider_endpoint": "claude-sonnet-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-high",
+        "slug": "anthropic_claude-sonnet-5-high"
+    },
+    "anthropic/claude-sonnet-5": {
+        "company": "Anthropic",
+        "label": "Claude Sonnet 5",
+        "release_date": "2026-06-30",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-01",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "write": 3.75,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [
+            {
+                "anthropic/claude-sonnet-5-low": {
+                    "label": "Claude Sonnet 5 (Low Effort)",
+                    "default_parameters": {
+                        "compute_effort": "low"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-sonnet-5-medium": {
+                    "label": "Claude Sonnet 5 (Medium Effort)",
+                    "default_parameters": {
+                        "compute_effort": "medium"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-sonnet-5-high": {
+                    "label": "Claude Sonnet 5 (High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "high"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-sonnet-5-xhigh": {
+                    "label": "Claude Sonnet 5 (Extra High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "xhigh"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-sonnet-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5",
+        "slug": "anthropic_claude-sonnet-5"
+    },
     "zai/glm-5.2-max-tokens-64k-top-p-1": {
         "company": "zAI",
         "label": "GLM 5.2",
@@ -233,6 +551,58 @@
         "full_key": "zai/glm-5.2",
         "slug": "zai_glm-5.2"
     },
+    "fireworks/glm-5p2": {
+        "company": "zAI",
+        "label": "GLM 5.2 (Fireworks)",
+        "release_date": "2026-06-13",
+        "open_source": true,
+        "documentation_url": "https://docs.z.ai/",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.4,
+            "output": 4.4,
+            "cache": {
+                "read": 0.14,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "glm-5p2",
+        "provider_name": "fireworks",
+        "full_key": "fireworks/glm-5p2",
+        "slug": "fireworks_glm-5p2"
+    },
     "kimi/kimi-k2.7-code": {
         "company": "Moonshot AI",
         "label": "Kimi K2.7 Code",
@@ -397,7 +767,7 @@
         "supports": {
             "images": true,
             "videos": true,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -491,7 +861,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -622,6 +992,58 @@
         "provider_name": "alibaba",
         "full_key": "alibaba/qwen3.7-max",
         "slug": "alibaba_qwen3.7-max"
+    },
+    "google/gemini-3.5-flash": {
+        "company": "Google",
+        "label": "Gemini 3.5 Flash",
+        "release_date": "2026-05-19",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 65536,
+            "training_cutoff": "2025-01",
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.5,
+            "output": 9.0,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-3.5-flash",
+        "provider_name": "google",
+        "full_key": "google/gemini-3.5-flash",
+        "slug": "google_gemini-3.5-flash"
     },
     "cursor/composer-2.5-fast": {
         "company": "Cursor",
@@ -2320,7 +2742,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -2579,7 +3001,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -3282,7 +3704,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -3331,7 +3753,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -3815,7 +4237,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -4605,7 +5027,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -4658,7 +5080,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -4904,7 +5326,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -5929,7 +6351,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -5977,7 +6399,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -6028,7 +6450,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -7601,7 +8023,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -7923,7 +8345,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -7976,7 +8398,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -8029,7 +8451,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -8080,7 +8502,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -8131,7 +8553,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -8185,7 +8607,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -8239,7 +8661,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -8293,7 +8715,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -8345,7 +8767,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -8397,7 +8819,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -8449,7 +8871,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -8497,7 +8919,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -8545,7 +8967,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -8593,7 +9015,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -8641,7 +9063,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -8689,7 +9111,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": false,
             "temperature": true,
             "tools": true,
@@ -8827,7 +9249,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -8880,7 +9302,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -8931,7 +9353,7 @@
         "supports": {
             "images": false,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -9022,7 +9444,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -9076,7 +9498,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -9127,7 +9549,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": false,
             "tools": true,
@@ -9355,7 +9777,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -9409,7 +9831,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -9461,7 +9883,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -9513,7 +9935,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -9565,7 +9987,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -9619,7 +10041,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -9671,7 +10093,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,
@@ -9723,7 +10145,7 @@
         "supports": {
             "images": true,
             "videos": false,
-            "files": false,
+            "files": true,
             "batch": true,
             "temperature": true,
             "tools": true,

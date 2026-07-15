@@ -6,8 +6,11 @@ from typing import Any, Literal, Sequence, cast
 
 from anthropic import APIConnectionError, AsyncAnthropic, transform_schema
 from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
+from anthropic.types.beta.beta_web_search_tool_result_block import (
+    BetaWebSearchToolResultBlock,
+)
 from anthropic.types.beta.parsed_beta_message import ParsedBetaMessage
-from pydantic import BaseModel, Field, SecretStr, model_validator
+from pydantic import BaseModel, Field, JsonValue, SecretStr, model_validator
 from typing_extensions import override
 
 from model_library import model_library_settings
@@ -39,7 +42,9 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.input import normalize_query_input
+from model_library.base.output.result import ProviderToolEvent
 from model_library.exceptions import (
     ImmediateRetryException,
     NoMatchingToolCallError,
@@ -48,6 +53,7 @@ from model_library.exceptions import (
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.providers.openai import OpenAIModel
+from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 from model_library.utils import (
     create_anthropic_client_with_defaults,
@@ -94,7 +100,7 @@ def map_anthropic_finish_reason(
         case "tool_use":
             reason = FinishReason.TOOL_CALLS
         case "pause_turn":
-            reason = FinishReason.STOP
+            reason = FinishReason.PAUSED
         case "refusal":
             reason = FinishReason.CONTENT_FILTER
         case _:
@@ -239,7 +245,9 @@ class AnthropicBatchMixin(LLMBatchMixin):
                     metadata=metadata,
                     tool_calls=tool_calls,
                     history=[],  # History not available in batch results
-                    extras=QueryResultExtras(response_id=message_data.get("id")),
+                    extras=QueryResultExtras(
+                        provider_response_id=message_data.get("id"),
+                    ),
                 )
 
                 batch_results.append(
@@ -405,6 +413,16 @@ class AnthropicModel(LLM):
         tool_call_ids.extend([x.id for x in calls])
         return tool_call_ids
 
+    def _last_container_id(self, input: Sequence[InputItem]) -> str | None:
+        """Most recent code-execution container id in history, needed to resume a paused turn."""
+        for item in reversed(input):
+            if not isinstance(item, RawResponse):
+                continue
+            container = getattr(item.response, "container", None)
+            if container is not None:
+                return getattr(container, "id", None)
+        return None
+
     @override
     async def parse_input(
         self,
@@ -559,6 +577,11 @@ class AnthropicModel(LLM):
                     },
                 }
 
+    @property
+    @override
+    def search_tool(self) -> dict[str, str]:
+        return {"type": "web_search_20260209", "name": "web_search"}
+
     @override
     async def parse_tools(
         self,
@@ -567,6 +590,9 @@ class AnthropicModel(LLM):
         parsed_tools: list[dict[str, Any]] = []
         for tool in tools:
             body = tool.body
+            if is_native_web_search(body):
+                parsed_tools.append(self.search_tool)
+                continue
             if not isinstance(body, ToolBody):
                 parsed_tools.append(body)
                 continue
@@ -627,6 +653,10 @@ class AnthropicModel(LLM):
             "model": self.model_name,
             "messages": await self.parse_input(input),
         }
+
+        container_id = self._last_container_id(input)
+        if container_id is not None:
+            body["container"] = container_id
 
         if system_text is not None:
             body["system"] = [
@@ -737,36 +767,111 @@ class AnthropicModel(LLM):
 
             stream_kwargs["betas"] = betas
 
+        result_builder = QueryResultBuilder()
+
         try:
             async with client.beta.messages.stream(
                 **stream_kwargs,
             ) as stream:  # pyright: ignore[reportAny]
+                async for event in stream:
+                    event_type = getattr(event, "type", None)
+                    if event_type == "content_block_start":
+                        content_block = getattr(event, "content_block", None)
+                        if getattr(content_block, "type", None) == "tool_use":
+                            result_builder.start_tool_call_segment().record_tool_call_ready()
+                    elif event_type == "content_block_delta":
+                        delta = getattr(event, "delta", None)
+                        delta_type = getattr(delta, "type", None)
+                        match delta_type:
+                            case "thinking_delta":
+                                result_builder.append_reasoning_delta(
+                                    getattr(delta, "thinking", None)
+                                )
+                            case "text_delta":
+                                result_builder.append_content_delta(
+                                    getattr(delta, "text", None)
+                                )
+                            case "input_json_delta":
+                                if getattr(delta, "partial_json", None):
+                                    result_builder.record_tool_call_delta()
+                            case _:
+                                pass
+                    elif event_type == "content_block_stop":
+                        result_builder.finish_current_segment()
                 message = await stream.get_final_message()
             query_logger.debug(f"Anthropic Response finished: {message.id}")
         except APIConnectionError:
             raise ImmediateRetryException("Failed to connect to Anthropic")
 
-        text = ""
-        reasoning = ""
+        text_parts: list[str] = []
+        reasoning_parts: list[str] = []
         tool_calls: list[ToolCall] = []
-        for content in message.content:
+        provider_tool_events: list[ProviderToolEvent] = []
+        web_search_queries: dict[str, str] = {}
+        for i, content in enumerate(message.content):
             if content.type == "text":
-                text += content.text
-            if content.type == "thinking":
-                reasoning += content.thinking
-            if content.type == "tool_use":
+                text_parts.append(content.text)
+            elif content.type == "thinking":
+                reasoning_parts.append(content.thinking)
+            elif content.type == "tool_use":
                 tool_calls.append(
                     ToolCall(
                         id=content.id,
                         name=content.name,
                         args=cast(Any, content.input),
+                        sequence=i,
                     )
                 )
+            if (
+                content.type == "server_tool_use"
+                and cast(Any, content).name == "web_search"
+            ):
+                web_search_queries[cast(Any, content).id] = cast(Any, content).input[
+                    "query"
+                ]
+            if isinstance(content, BetaWebSearchToolResultBlock):
+                if isinstance(content.content, list):
+                    sources: list[JsonValue] = [block.url for block in content.content]
+                    provider_tool_events.append(
+                        ProviderToolEvent.web_search(
+                            provider="anthropic",
+                            kind="web_search_tool_result",
+                            query=web_search_queries[content.tool_use_id],
+                            sources=sources,
+                            sequence=i,
+                            id=content.tool_use_id,
+                        )
+                    )
+                else:
+                    provider_tool_events.append(
+                        ProviderToolEvent(
+                            provider="anthropic",
+                            type="web_search_tool_result",
+                            name="web_search",
+                            status="error",
+                            input=web_search_queries[content.tool_use_id],
+                            output=content.content.error_code,
+                            sequence=i,
+                            id=content.tool_use_id,
+                        )
+                    )
 
-        no_useful_content = not text and not reasoning and not tool_calls
+        text = "".join(text_parts)
+        reasoning = "".join(reasoning_parts)
         mapped_finish_reason = map_anthropic_finish_reason(message.stop_reason)
 
-        if no_useful_content:
+        if text_parts:
+            result_builder.set_output_text(text)
+        if reasoning:
+            result_builder.set_reasoning(reasoning)
+
+        has_observed_output = (
+            result_builder.has_output_text
+            or result_builder.has_reasoning
+            or bool(tool_calls)
+            or bool(provider_tool_events)
+        )
+        if not has_observed_output:
             handle_empty_response(mapped_finish_reason, {"raw": str(message)})
 
         usage = message.usage
@@ -782,9 +887,7 @@ class AnthropicModel(LLM):
             ):
                 metadata_extra["fallback"] = True
 
-        return QueryResult(
-            output_text=text,
-            reasoning=reasoning,
+        return result_builder.build(
             finish_reason=mapped_finish_reason,
             metadata=QueryResultMetadata(
                 # see _calculate_cost
@@ -794,8 +897,12 @@ class AnthropicModel(LLM):
                 cache_write_tokens=usage.cache_creation_input_tokens,
                 extra=metadata_extra,
             ),
-            extras=QueryResultExtras(response_id=message.id),
+            extras=QueryResultExtras(
+                provider_response_id=message.id,
+                provider_request_id=getattr(message, "_request_id", None),
+            ),
             tool_calls=tool_calls,
+            provider_tool_events=provider_tool_events,
             history=[*input, RawResponse(response=message)],
         )
 

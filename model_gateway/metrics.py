@@ -20,8 +20,6 @@ from threading import Lock
 from typing import Any, cast
 
 from fastapi import Request
-from pydantic import BaseModel as PydanticBaseModel
-
 import model_library.telemetry as telemetry
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
@@ -30,6 +28,7 @@ NAMESPACE = "ModelProxy/Gateway"
 DEFAULT_SERVICE = "gateway"
 DEFAULT_STAGE = "unknown"
 METRICS_FLUSH_INTERVAL_SECONDS = 10
+QUERY_INFLIGHT_PATH = "/query"
 
 MetricValue = int | float
 MetricSpec = tuple[MetricValue, str]
@@ -43,12 +42,18 @@ _GAUGE_METRICS = {
     "GatewayDemand",
     "MaxActiveRequests",
     "MaxQueuedRequests",
+    "UsageLedgerSqsActiveBatchSends",
+    "UsageLedgerSqsPendingBytes",
+    "UsageLedgerSqsPendingMessages",
 }
 _HIGH_RESOLUTION_METRICS = {
     "InFlightRequests",
     "ActiveRequests",
     "QueuedRequests",
     "GatewayDemand",
+    "UsageLedgerSqsActiveBatchSends",
+    "UsageLedgerSqsPendingBytes",
+    "UsageLedgerSqsPendingMessages",
 }
 
 _inflight_requests = 0
@@ -88,85 +93,48 @@ class Bucket:
     units: dict[str, str] = field(default_factory=dict)
 
 
-def _stage() -> str:
-    return os.environ.get("GATEWAY_STAGE", DEFAULT_STAGE)
-
-
-def _service() -> str:
-    return os.environ.get("GATEWAY_SERVICE", DEFAULT_SERVICE)
-
-
-def _dimension_value(value: object) -> str:
-    if value is None:
-        return "none"
-    text = str(value)
-    return text[:1024]
+def _dimension_value(value: str) -> str:
+    return value[:1024]
 
 
 def provider_endpoint_bucket(config: Mapping[str, Any]) -> str:
     return "custom" if config.get("custom_endpoint") else "default"
 
 
-def _safe_json_value(value: Any) -> Any:
-    if isinstance(value, PydanticBaseModel):
-        return _safe_json_value(value.model_dump(mode="json"))
+def _param_group_value(value: object) -> object:
     if isinstance(value, Mapping):
         mapping = cast(Mapping[object, object], value)
-        safe_mapping: dict[str, Any] = {}
-        for key, item in sorted(mapping.items(), key=lambda entry: str(entry[0])):
-            text_key = str(key)
-            if text_key == "custom_endpoint":
-                safe_mapping[text_key] = "custom" if item else "default"
-            elif not _exclude_param_group_key(text_key):
-                safe_mapping[text_key] = _safe_json_value(item)
+        keys = list(mapping)
+        if not all(isinstance(key, str) for key in keys):
+            raise TypeError("Param group mappings must use string keys")
+        string_keys = cast(list[str], keys)
+        safe_mapping: dict[str, object] = {}
+        for key in sorted(string_keys):
+            item = mapping[key]
+            if key == "custom_endpoint":
+                safe_mapping[key] = "custom" if item else "default"
+            elif (
+                key not in telemetry.CONFIG_FINGERPRINT_EXCLUDED_PARAM_KEYS
+                and telemetry.is_safe_config_attribute_key(key)
+            ):
+                safe_mapping[key] = _param_group_value(item)
         return safe_mapping
-    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
-        sequence = cast(Sequence[object], value)
-        return [_safe_json_value(v) for v in sequence]
+    if isinstance(value, list):
+        items = cast(list[object], value)
+        return [_param_group_value(item) for item in items]
     if isinstance(value, str | int | float | bool) or value is None:
         return value
-    return str(value)
+    raise TypeError(f"Unsupported param group value: {type(value).__name__}")
 
 
-def _exclude_param_group_key(key: str) -> bool:
-    lowered = key.lower().replace("-", "_")
-    if lowered in telemetry.CONTENT_SAFE_ATTRIBUTE_KEYS or lowered.endswith(
-        telemetry.CONTENT_SAFE_SUFFIXES
-    ):
-        return False
-    tokens = set(lowered.split("_"))
-    content_tokens = {
-        "body",
-        "content",
-        "input",
-        "json",
-        "message",
-        "messages",
-        "output",
-        "payload",
-        "raw",
-        "system",
-        "text",
-        "user",
-    }
-    prompt_like = bool(
-        tokens & {"prompt", "request", "response"} and tokens & content_tokens
-    )
-    return (
-        key in telemetry.CONFIG_FINGERPRINT_EXCLUDED_PARAM_KEYS
-        or telemetry.is_sensitive_key(key)
-        or prompt_like
-    )
-
-
-def param_group(*parts: Any) -> str:
+def param_group(*parts: object) -> str:
     """Group request params into a stable low-length dimension value."""
     safe_parts: list[object] = []
     for part in parts:
-        if part in ({}, None):
+        if part is None:
             continue
-        safe_part = _safe_json_value(part)
-        if safe_part in ({}, [], None):
+        safe_part = _param_group_value(part)
+        if safe_part in ({}, []):
             continue
         safe_parts.append(safe_part)
     if not safe_parts:
@@ -181,12 +149,11 @@ def model_dimensions(
     model: str,
     config: Mapping[str, Any],
     params: Mapping[str, Any] | None = None,
-    token_retry_params: Any | None = None,
+    token_retry_params: Mapping[str, object] | None = None,
 ) -> dict[str, str]:
     provider = model.partition("/")[0]
     return {
-        "Stage": _stage(),
-        "Service": _service(),
+        **service_dimensions(),
         "Operation": operation,
         "Provider": provider or "unknown",
         "Model": model,
@@ -196,7 +163,81 @@ def model_dimensions(
 
 
 def service_dimensions() -> dict[str, str]:
-    return {"Stage": _stage(), "Service": _service()}
+    return {
+        "Stage": os.environ.get("GATEWAY_STAGE", DEFAULT_STAGE),
+        "Service": os.environ.get("GATEWAY_SERVICE", DEFAULT_SERVICE),
+    }
+
+
+def _usage_ledger_sqs_dimensions(**extra: str) -> dict[str, str]:
+    return {
+        **service_dimensions(),
+        "Ledger": "usage_ledger",
+        "Transport": "sqs",
+        **extra,
+    }
+
+
+_SERVICE_DIMENSION_SET: DimensionSet = ("Stage", "Service")
+_USAGE_LEDGER_SQS_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Ledger",
+    "Transport",
+)
+_USAGE_LEDGER_SQS_OPERATION_OUTCOME_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Ledger",
+    "Transport",
+    "Operation",
+    "Outcome",
+)
+_USAGE_LEDGER_SQS_OPERATION_ERROR_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Ledger",
+    "Transport",
+    "Operation",
+    "Outcome",
+    "ErrorType",
+)
+_USAGE_LEDGER_SQS_PHASE_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Ledger",
+    "Transport",
+    "Operation",
+    "Phase",
+)
+_USAGE_LEDGER_SQS_PHASE_OUTCOME_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Ledger",
+    "Transport",
+    "Operation",
+    "Phase",
+    "Outcome",
+)
+_USAGE_LEDGER_SQS_ATTEMPT_OUTCOME_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Ledger",
+    "Transport",
+    "Operation",
+    "AttemptOutcome",
+)
+_USAGE_LEDGER_SQS_ATTEMPT_DETAIL_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Ledger",
+    "Transport",
+    "Operation",
+    "AttemptNumber",
+    "AttemptOutcome",
+    "HttpStatusCode",
+    "ErrorType",
+)
 
 
 def _normalize_dimensions(dimensions: Mapping[str, str]) -> dict[str, str]:
@@ -348,6 +389,206 @@ def record_rejection(reason: str) -> None:
     )
 
 
+def record_runtime(snapshot: Mapping[str, int]) -> None:
+    """Record low-cardinality per-process runtime diagnostics."""
+    record_metrics(
+        {
+            **service_dimensions(),
+            "WorkerId": str(snapshot["pid"]),
+        },
+        {
+            "ThreadCount": (snapshot["thread_count"], "Count"),
+            "AsyncioTaskCount": (snapshot["asyncio_task_count"], "Count"),
+            "OpenFileDescriptors": (snapshot["open_fd_count"], "Count"),
+            "InboundSocketCount": (snapshot["inbound_socket_count"], "Count"),
+            "OutboundSocketCount": (snapshot["outbound_socket_count"], "Count"),
+            "RssBytes": (snapshot["rss_bytes"], "Bytes"),
+            "EventLoopLagMs": (snapshot["event_loop_lag_ms"], "Milliseconds"),
+        },
+        dimension_sets=[
+            ["Stage", "Service"],
+            ["Stage", "Service", "WorkerId"],
+        ],
+    )
+
+
+def record_usage_ledger_sqs_pending(
+    *, pending_messages: int, pending_bytes: int, active_batch_sends: int
+) -> None:
+    """Record local SQS writer pressure for the usage ledger."""
+    record_metrics(
+        _usage_ledger_sqs_dimensions(),
+        {
+            "UsageLedgerSqsPendingMessages": (pending_messages, "Count"),
+            "UsageLedgerSqsPendingBytes": (pending_bytes, "Bytes"),
+            "UsageLedgerSqsActiveBatchSends": (active_batch_sends, "Count"),
+        },
+        dimension_sets=[
+            _SERVICE_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_DIMENSION_SET,
+        ],
+    )
+
+
+def record_usage_ledger_sqs_write(
+    *, outcome: str, latency_ms: float, error_type: str = "none"
+) -> None:
+    """Record local enqueue/drop outcomes for SQS usage ledger writes."""
+    write_metrics: dict[str, MetricSpec] = {
+        "UsageLedgerSqsWriteCount": (1, "Count"),
+        "UsageLedgerSqsWriteLatencyMs": (latency_ms, "Milliseconds"),
+    }
+    if outcome == "dropped":
+        write_metrics["UsageLedgerSqsDroppedMessageCount"] = (1, "Count")
+    record_metrics(
+        _usage_ledger_sqs_dimensions(
+            Operation="write_success",
+            Outcome=outcome,
+            ErrorType=error_type,
+        ),
+        write_metrics,
+        dimension_sets=[
+            _SERVICE_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_OPERATION_OUTCOME_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_OPERATION_ERROR_DIMENSION_SET,
+        ],
+    )
+
+
+def record_usage_ledger_sqs_batch_send(
+    *,
+    outcome: str,
+    latency_ms: float,
+    message_count: int,
+    failed_message_count: int,
+    retried_message_count: int = 0,
+    error_type: str = "none",
+) -> None:
+    """Record one SQS SendMessageBatch attempt for the usage ledger."""
+    batch_metrics: dict[str, MetricSpec] = {
+        "UsageLedgerSqsBatchSendCount": (1, "Count"),
+        "UsageLedgerSqsBatchSendLatencyMs": (latency_ms, "Milliseconds"),
+        "UsageLedgerSqsBatchMessageCount": (message_count, "Count"),
+        "UsageLedgerSqsBatchFailedMessageCount": (failed_message_count, "Count"),
+    }
+    if retried_message_count:
+        batch_metrics["UsageLedgerSqsRetriedMessageCount"] = (
+            retried_message_count,
+            "Count",
+        )
+    record_metrics(
+        _usage_ledger_sqs_dimensions(
+            Operation="send_message_batch",
+            Outcome=outcome,
+            ErrorType=error_type,
+        ),
+        batch_metrics,
+        dimension_sets=[
+            _SERVICE_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_OPERATION_OUTCOME_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_OPERATION_ERROR_DIMENSION_SET,
+        ],
+    )
+
+
+def record_usage_ledger_sqs_phase(
+    *, phase: str, outcome: str, latency_ms: float
+) -> None:
+    """Record app-level SQS writer phase timing."""
+    phase_metrics: dict[str, MetricSpec] = {
+        "UsageLedgerSqsPhaseCount": (1, "Count"),
+        "UsageLedgerSqsPhaseLatencyMs": (latency_ms, "Milliseconds"),
+    }
+    record_metrics(
+        _usage_ledger_sqs_dimensions(
+            Operation="send_message_batch",
+            Phase=phase,
+            Outcome=outcome,
+        ),
+        phase_metrics,
+        dimension_sets=[
+            _SERVICE_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_PHASE_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_PHASE_OUTCOME_DIMENSION_SET,
+        ],
+    )
+
+
+def record_usage_ledger_sqs_sdk_attempt(
+    *,
+    attempt_number: int,
+    outcome: str,
+    http_status_code: str,
+    error_type: str,
+    latency_ms: float,
+    wire_latency_ms: float,
+) -> None:
+    """Record one SDK-level SQS attempt observed by botocore events."""
+    record_metrics(
+        _usage_ledger_sqs_dimensions(
+            Operation="send_message_batch",
+            AttemptNumber=str(attempt_number),
+            AttemptOutcome=outcome,
+            HttpStatusCode=http_status_code,
+            ErrorType=error_type,
+        ),
+        {
+            "UsageLedgerSqsSdkAttemptCount": (1, "Count"),
+            "UsageLedgerSqsSdkAttemptLatencyMs": (latency_ms, "Milliseconds"),
+            "UsageLedgerSqsSdkWireLatencyMs": (wire_latency_ms, "Milliseconds"),
+        },
+        dimension_sets=[
+            _SERVICE_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_ATTEMPT_OUTCOME_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_ATTEMPT_DETAIL_DIMENSION_SET,
+        ],
+    )
+
+
+def record_usage_ledger_sqs_sdk_call(*, outcome: str, retry_count: int) -> None:
+    """Record SDK retry count for one completed SendMessageBatch call."""
+    record_metrics(
+        _usage_ledger_sqs_dimensions(
+            Operation="send_message_batch",
+            Outcome=outcome,
+        ),
+        {"UsageLedgerSqsSdkRetryCount": (retry_count, "Count")},
+        dimension_sets=[
+            _SERVICE_DIMENSION_SET,
+            _USAGE_LEDGER_SQS_OPERATION_OUTCOME_DIMENSION_SET,
+        ],
+    )
+
+
+def record_gateway_phase(
+    *,
+    operation: str,
+    provider: str | None,
+    phase: str,
+    outcome: str,
+    latency_ms: float,
+) -> None:
+    """Record low-cardinality phase latency metrics."""
+    record_metrics(
+        {
+            **service_dimensions(),
+            "Operation": operation,
+            "Provider": provider or "unknown",
+            "Phase": phase,
+            "Outcome": outcome,
+        },
+        {
+            "GatewayPhaseCount": (1, "Count"),
+            "GatewayPhaseLatencyMs": (latency_ms, "Milliseconds"),
+        },
+        dimension_sets=[
+            ["Stage", "Service", "Operation", "Provider", "Phase", "Outcome"],
+            ["Stage", "Service", "Operation", "Phase", "Outcome"],
+            ["Stage", "Service"],
+        ],
+    )
+
+
 async def publish_metrics_periodically(
     stop_event: asyncio.Event,
     publishers: Sequence[MetricPublisher] = (),
@@ -377,7 +618,7 @@ def create_metrics_middleware() -> Callable[
     async def metrics_middleware(
         request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        route = request.url.path or "/"
+        route = request.url.path
         method = request.method
         status_code = 500
         start = time.perf_counter()
@@ -395,23 +636,28 @@ def create_metrics_middleware() -> Callable[
             if trace_route
             else nullcontext()
         )
+        tracks_query_inflight = route == QUERY_INFLIGHT_PATH
+        current_inflight = await get_inflight()
         with span_context:
             if trace_route:
                 telemetry.add_event("gateway.http_request.start")
-            record_inflight(await adjust_inflight(1))
+            if tracks_query_inflight:
+                current_inflight = await adjust_inflight(1)
+                record_inflight(current_inflight)
             try:
                 response = await call_next(request)
                 status_code = response.status_code
                 return response
             finally:
-                current = await adjust_inflight(-1)
+                if tracks_query_inflight:
+                    current_inflight = await adjust_inflight(-1)
                 latency_ms = (time.perf_counter() - start) * 1000
                 if trace_route:
                     telemetry.set_attributes(
                         {
                             "http.response.status_code": status_code,
                             "gateway.http_latency_ms": latency_ms,
-                            "gateway.inflight.current": current,
+                            "gateway.inflight.current": current_inflight,
                         }
                     )
                     if status_code >= 500:
@@ -426,13 +672,15 @@ def create_metrics_middleware() -> Callable[
                     "StatusCode": str(status_code),
                     "StatusClass": f"{status_code // 100}xx",
                 }
+                http_metrics: dict[str, MetricSpec] = {
+                    "HttpRequestCount": (1, "Count"),
+                    "HttpLatencyMs": (latency_ms, "Milliseconds"),
+                }
+                if tracks_query_inflight:
+                    http_metrics["InFlightRequests"] = (current_inflight, "Count")
                 record_metrics(
                     dimensions,
-                    {
-                        "HttpRequestCount": (1, "Count"),
-                        "HttpLatencyMs": (latency_ms, "Milliseconds"),
-                        "InFlightRequests": (current, "Count"),
-                    },
+                    http_metrics,
                     dimension_sets=[
                         ["Stage", "Service", "Route", "Method", "StatusCode"],
                         ["Stage", "Service", "Route", "Method", "StatusClass"],

@@ -4,7 +4,7 @@ base-config:
   open_source: true
   supports:
     images: false
-    files: false
+    files: true
     tools: true
     temperature: true
   properties:
@@ -17,7 +17,6 @@ m3-models:
     supports:
       images: true
       videos: true
-      files: false
     properties:
       reasoning_model: true
       context_window: 1_000_000
@@ -75,7 +74,6 @@ m2-models:
       - minimax/MiniMax-M2.5-Lightning: # faster!
           costs_per_million_token:
             output: 2.40
-
 
   minimax/MiniMax-M2.1:
     label: MiniMax-M2.1

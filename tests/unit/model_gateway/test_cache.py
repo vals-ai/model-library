@@ -1,3 +1,4 @@
+import model_gateway.cache as cache_module
 from model_gateway.cache import ModelCache
 
 
@@ -46,6 +47,88 @@ def test_model_cache_evicts_least_recently_used_entry():
     second = cache.get_or_create("model/b", {}, factory)
     assert cache.get_or_create("model/a", {}, factory) is first
 
-    third = cache.get_or_create("model/c", {}, factory)
-    assert third is not second
+    cache.get_or_create("model/c", {}, factory)
+    assert cache.get_or_create("model/b", {}, factory) is not second
+
+
+def test_model_cache_expires_idle_entries(monkeypatch):
+    now = 1000.0
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: now)
+    cache = ModelCache(ttl_seconds=60)
+    created: list[object] = []
+
+    def factory(_model: str, _config: dict[str, object]) -> object:
+        instance = object()
+        created.append(instance)
+        return instance
+
+    first = cache.get_or_create("model/a", {}, factory)
+    now += 60
+    second = cache.get_or_create("model/a", {}, factory)
+
+    assert second is not first
+    assert created == [first, second]
+
+
+def test_model_cache_ttl_extends_on_access(monkeypatch):
+    now = 1000.0
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: now)
+    cache = ModelCache(ttl_seconds=60)
+    created: list[object] = []
+
+    def factory(_model: str, _config: dict[str, object]) -> object:
+        instance = object()
+        created.append(instance)
+        return instance
+
+    first = cache.get_or_create("model/a", {}, factory)
+    now += 59
+    assert cache.get_or_create("model/a", {}, factory) is first
+    now += 59
+    assert cache.get_or_create("model/a", {}, factory) is first
+
+    assert created == [first]
+
+
+def test_model_cache_starts_ttl_after_factory_returns(monkeypatch):
+    now = 1000.0
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: now)
+    cache = ModelCache(ttl_seconds=60)
+    created: list[object] = []
+
+    def factory(_model: str, _config: dict[str, object]) -> object:
+        nonlocal now
+        now += 61
+        instance = object()
+        created.append(instance)
+        return instance
+
+    first = cache.get_or_create("model/a", {}, factory)
+
+    assert cache.get_or_create("model/a", {}, factory) is first
+    assert created == [first]
+
+
+def test_model_cache_prunes_expired_lru_entries_without_dropping_refreshed_entries(
+    monkeypatch,
+):
+    now = 1000.0
+    monkeypatch.setattr(cache_module.time, "monotonic", lambda: now)
+    cache = ModelCache(maxsize=3, ttl_seconds=60)
+    created: list[object] = []
+
+    def factory(_model: str, _config: dict[str, object]) -> object:
+        instance = object()
+        created.append(instance)
+        return instance
+
+    first = cache.get_or_create("model/a", {}, factory)
+    second = cache.get_or_create("model/b", {}, factory)
+    now += 59
+    assert cache.get_or_create("model/a", {}, factory) is first
+
+    now += 2
+    cache.get_or_create("model/c", {}, factory)
+
+    assert cache.get_or_create("model/a", {}, factory) is first
     assert cache.get_or_create("model/b", {}, factory) is not second

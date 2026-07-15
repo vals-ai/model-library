@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-import os
 import time
-import uuid
 from typing import Any
 from collections import deque
 from collections.abc import Awaitable, Callable
@@ -22,14 +20,16 @@ from starlette.responses import Response
 
 from model_gateway.metrics import record_capacity, record_rejection
 
-DEFAULT_MAX_ACTIVE_REQUESTS = 1000
-DEFAULT_MAX_QUEUED_REQUESTS = 250
-DEFAULT_QUEUE_TIMEOUT_SECONDS = 30.0
-DEFAULT_REQUEST_TIMEOUT_SECONDS = 540.0
+MAX_ACTIVE_REQUESTS_PER_WORKER = 225
+MAX_QUEUED_REQUESTS_PER_WORKER = 250
+QUEUE_TIMEOUT_SECONDS = 10
+# Leave 60 seconds after the application timeout for best-effort response handling
+# before the 3,600-second target deregistration window closes.
+REQUEST_TIMEOUT_SECONDS = 3540
 MAX_CAPACITY_IDENTITY_BODY_BYTES = 64 * 1024
 
 T = TypeVar("T")
-MODEL_CALL_PATHS = frozenset({"/query", "/files/upload", "/embeddings", "/moderation"})
+MODEL_CALL_PATHS = frozenset({"/query"})
 
 
 class CapacityRejectedError(Exception):
@@ -62,20 +62,11 @@ class GatewayCapacityLimiter:
     def __init__(
         self,
         *,
-        max_active: int = DEFAULT_MAX_ACTIVE_REQUESTS,
-        max_queued: int = DEFAULT_MAX_QUEUED_REQUESTS,
-        queue_timeout_seconds: float = DEFAULT_QUEUE_TIMEOUT_SECONDS,
-        request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT_SECONDS,
+        max_active: int = MAX_ACTIVE_REQUESTS_PER_WORKER,
+        max_queued: int = MAX_QUEUED_REQUESTS_PER_WORKER,
+        queue_timeout_seconds: float = QUEUE_TIMEOUT_SECONDS,
+        request_timeout_seconds: float = REQUEST_TIMEOUT_SECONDS,
     ) -> None:
-        if max_active < 1:
-            raise ValueError("max_active must be at least 1")
-        if max_queued < 0:
-            raise ValueError("max_queued must be non-negative")
-        if queue_timeout_seconds <= 0:
-            raise ValueError("queue_timeout_seconds must be positive")
-        if request_timeout_seconds <= 0:
-            raise ValueError("request_timeout_seconds must be positive")
-
         self.max_active = max_active
         self.max_queued = max_queued
         self.queue_timeout_seconds = queue_timeout_seconds
@@ -84,27 +75,6 @@ class GatewayCapacityLimiter:
         self._queued = 0
         self._waiters: deque[object] = deque()
         self._condition = asyncio.Condition()
-
-    @classmethod
-    def from_env(cls) -> "GatewayCapacityLimiter":
-        return cls(
-            max_active=_env_int(
-                "GATEWAY_MAX_ACTIVE_REQUESTS_PER_WORKER",
-                DEFAULT_MAX_ACTIVE_REQUESTS,
-            ),
-            max_queued=_env_int(
-                "GATEWAY_MAX_QUEUED_REQUESTS_PER_WORKER",
-                DEFAULT_MAX_QUEUED_REQUESTS,
-            ),
-            queue_timeout_seconds=_env_float(
-                "GATEWAY_QUEUE_TIMEOUT_SECONDS",
-                DEFAULT_QUEUE_TIMEOUT_SECONDS,
-            ),
-            request_timeout_seconds=_env_float(
-                "GATEWAY_REQUEST_TIMEOUT_SECONDS",
-                DEFAULT_REQUEST_TIMEOUT_SECONDS,
-            ),
-        )
 
     def snapshot(self) -> CapacitySnapshot:
         return CapacitySnapshot(
@@ -156,6 +126,12 @@ class GatewayCapacityLimiter:
                     f"Gateway request exceeded {self.request_timeout_seconds:g}s timeout"
                 )
             return await task
+        except BaseException:
+            if not task.done():
+                task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await task
+            raise
         finally:
             await self._release(wait_ms)
 
@@ -342,10 +318,6 @@ async def _attach_request_identity(request: Request) -> None:
         "identity": body_mapping.get("identity"),
         "in_agent": body_mapping.get("in_agent"),
     }
-    if path == "/query":
-        query_id = run_params.get("query_id")
-        query_id_text = str(query_id).strip() if query_id is not None else None
-        run_params["query_id"] = query_id_text or uuid.uuid4().hex[:14]
     attrs.update(telemetry.run_attributes(run_params))
     telemetry.set_attributes(attrs)
 
@@ -367,17 +339,3 @@ def _operation_for_path(path: str) -> str:
         "/embeddings": "embeddings",
         "/moderation": "moderation",
     }.get(path, path)
-
-
-def _env_int(name: str, default: int) -> int:
-    raw = os.environ.get(name)
-    if raw is None or raw == "":
-        return default
-    return int(raw)
-
-
-def _env_float(name: str, default: float) -> float:
-    raw = os.environ.get(name)
-    if raw is None or raw == "":
-        return default
-    return float(raw)

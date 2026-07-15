@@ -6,8 +6,9 @@ import asyncio
 import base64
 import io
 import json
+import logging
 import random
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from typing import Any, Literal, NoReturn, cast
 
 import httpx
@@ -25,6 +26,11 @@ from model_library.base.base import (
     dump_gateway_config,
 )
 from model_library.base.query_ids import resolve_query_ids
+from model_library.base.query_logging import (
+    log_query_completed,
+    log_query_started,
+    scoped_query_logger,
+)
 from model_library.base.input import (
     FileInput,
     FileWithId,
@@ -37,18 +43,20 @@ from model_library.base.input import (
 )
 from model_library.base.output import (
     FinishReasonInfo,
+    ProviderToolEvent,
     QueryResult,
     QueryResultExtras,
     QueryResultMetadata,
     RateLimit,
 )
 from model_library.exceptions import GatewayMethodNotSupported, GatewayProviderError
-from model_library.utils import default_httpx_client
+from model_library.utils import gateway_httpx_client
 
 
-GATEWAY_HTTP_MAX_ATTEMPTS = 3
+GATEWAY_HTTP_MAX_ATTEMPTS = 8
 GATEWAY_HTTP_RETRY_INITIAL_SECONDS = 0.5
-GATEWAY_HTTP_RETRY_MAX_SECONDS = 5.0
+GATEWAY_HTTP_RETRY_MAX_SECONDS = 30.0
+GATEWAY_RETRY_LOGGER = logging.getLogger("llm.gateway")
 
 
 def _dump_items(items: Sequence[InputItem]) -> list[dict[str, Any]]:
@@ -105,6 +113,28 @@ def _dump_request(request: BaseModel) -> dict[str, Any]:
     return data
 
 
+def _gateway_correlation_headers(body: Mapping[str, Any]) -> dict[str, str]:
+    return {
+        "X-Run-Id": str(body["run_id"])[:128],
+        "X-Question-Id": str(body["question_id"])[:128],
+        "X-Query-Id": str(body["query_id"])[:128],
+    }
+
+
+def _gateway_retry_log_ids(
+    body: Mapping[str, Any],
+) -> tuple[str | None, str | None, str | None, str | None]:
+    identity = body.get("identity")
+    return (
+        _clean_optional(body.get("run_id")),
+        _clean_optional(body.get("question_id")),
+        _clean_optional(body.get("query_id")),
+        json.dumps(identity, sort_keys=True, separators=(",", ":"))
+        if identity is not None
+        else None,
+    )
+
+
 def _gateway_error_detail(resp: httpx.Response) -> str:
     detail = resp.text
     try:
@@ -147,16 +177,26 @@ def _raise_for_gateway_error_envelope(data: dict[str, Any]) -> None:
     raw_code = error.get("code")
     raw_message = error.get("message")
     raw_provider = error.get("provider")
+    raw_exception_type = error.get("exception_type")
+    raw_status_code = error.get("status_code")
     error_type = raw_type if isinstance(raw_type, str) else "GatewayError"
-    code = raw_code if isinstance(raw_code, str) else "unknown"
+    code = raw_code if isinstance(raw_code, str) else None
     message = raw_message if isinstance(raw_message, str) else "Unknown gateway error"
     provider = raw_provider if isinstance(raw_provider, str) else None
+    exception_type = raw_exception_type if isinstance(raw_exception_type, str) else None
+    status_code = (
+        raw_status_code
+        if isinstance(raw_status_code, int) and not isinstance(raw_status_code, bool)
+        else None
+    )
     raise GatewayProviderError(
         error_type=error_type,
         code=code,
         message=message,
         provider=provider,
         raw_error=error,
+        exception_type=exception_type,
+        status_code=status_code,
     )
 
 
@@ -210,6 +250,10 @@ def _parse_query_result(
         "output_parsed": output_parsed,
         "reasoning": data.get("reasoning"),
         "tool_calls": [ToolCall(**tc) for tc in data.get("tool_calls", [])],
+        "provider_tool_events": [
+            ProviderToolEvent.model_validate(e)
+            for e in data.get("provider_tool_events", [])
+        ],
         "history": history_items,
         "metadata": QueryResultMetadata(**data.get("metadata", {})),
         "extras": QueryResultExtras(**data.get("extras", {})),
@@ -226,12 +270,23 @@ def _parse_query_result(
     return QueryResult(**result_kwargs)
 
 
-async def _sleep_before_gateway_retry(attempt: int) -> None:
+def _gateway_retry_delay_seconds(attempt: int) -> float:
     capped = min(
         GATEWAY_HTTP_RETRY_INITIAL_SECONDS * (2**attempt),
         GATEWAY_HTTP_RETRY_MAX_SECONDS,
     )
-    await asyncio.sleep(random.uniform(0, capped))
+    return random.uniform(0, capped)
+
+
+async def _sleep_before_gateway_retry(
+    attempt: int, *, delay_seconds: float | None = None
+) -> None:
+    delay = (
+        _gateway_retry_delay_seconds(attempt)
+        if delay_seconds is None
+        else delay_seconds
+    )
+    await asyncio.sleep(delay)
 
 
 class GatewayUnsupportedBatch:
@@ -264,7 +319,7 @@ class GatewayLLM(LLM):
         if not self.has_client():
             assert api_key
             self.assign_client(
-                default_httpx_client(
+                gateway_httpx_client(
                     headers={
                         "Authorization": f"Bearer {api_key}",
                         "Content-Type": "application/json",
@@ -277,9 +332,7 @@ class GatewayLLM(LLM):
         self._gateway_metadata_loaded = True
         self._override_config = kwargs.get("config")
         init_kwargs = dict(kwargs)
-        init_config = self._override_config
-        if isinstance(init_config, LLMConfig):
-            init_kwargs["config"] = LLMConfig(**dump_gateway_config(init_config))
+        init_kwargs.pop("config", None)
         super().__init__(model_name, provider, **init_kwargs)
         self._gateway_metadata_loaded = False
         self.token_retry_params: TokenRetryParams | None = None
@@ -307,24 +360,57 @@ class GatewayLLM(LLM):
         client: httpx.AsyncClient = self.get_client()
         url = f"{model_library.model_library_settings.MODEL_GATEWAY_URL.rstrip('/')}{path}"
 
+        headers = _gateway_correlation_headers(body) if path == "/query" else None
+        run_id, question_id, query_id, identity = _gateway_retry_log_ids(body)
         for attempt in range(GATEWAY_HTTP_MAX_ATTEMPTS):
             is_last_attempt = attempt == GATEWAY_HTTP_MAX_ATTEMPTS - 1
             try:
                 resp = await client.post(
                     url,
                     content=json.dumps(body, default=str),
+                    headers=headers,
                 )
-            except httpx.TransportError:
+            except httpx.TransportError as exc:
                 if is_last_attempt:
                     raise
-                await _sleep_before_gateway_retry(attempt)
+                delay = _gateway_retry_delay_seconds(attempt)
+                GATEWAY_RETRY_LOGGER.warning(
+                    "gateway_http_retry path=%s attempt=%s max_attempts=%s "
+                    "run_id=%s question_id=%s query_id=%s identity=%s "
+                    "error_type=%s retry_after_s=%.3f",
+                    path,
+                    attempt + 1,
+                    GATEWAY_HTTP_MAX_ATTEMPTS,
+                    run_id,
+                    question_id,
+                    query_id,
+                    identity,
+                    type(exc).__name__,
+                    delay,
+                )
+                await _sleep_before_gateway_retry(attempt, delay_seconds=delay)
                 continue
 
             if resp.status_code == 200:
                 return _decode_gateway_success(resp)
 
             if _is_retryable_gateway_response(resp) and not is_last_attempt:
-                await _sleep_before_gateway_retry(attempt)
+                delay = _gateway_retry_delay_seconds(attempt)
+                GATEWAY_RETRY_LOGGER.warning(
+                    "gateway_http_retry path=%s attempt=%s max_attempts=%s "
+                    "run_id=%s question_id=%s query_id=%s identity=%s "
+                    "status_code=%s retry_after_s=%.3f",
+                    path,
+                    attempt + 1,
+                    GATEWAY_HTTP_MAX_ATTEMPTS,
+                    run_id,
+                    question_id,
+                    query_id,
+                    identity,
+                    resp.status_code,
+                    delay,
+                )
+                await _sleep_before_gateway_retry(attempt, delay_seconds=delay)
                 continue
 
             detail = _gateway_error_detail(resp)
@@ -400,6 +486,7 @@ class GatewayLLM(LLM):
         history: Sequence[InputItem] = [],
         tools: list[ToolDefinition] = [],
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
+        logger: logging.Logger | None = None,
         **kwargs: object,
     ) -> QueryResult:
         if self.custom_retrier is not None:
@@ -408,7 +495,6 @@ class GatewayLLM(LLM):
                 "retries run server-side."
             )
 
-        kwargs.pop("logger", None)
         identity = kwargs.pop("identity", None)
         raw_identity = _clean_optional(
             model_library.model_library_settings.get("IDENTITY", None)
@@ -426,7 +512,15 @@ class GatewayLLM(LLM):
         )
         in_agent = bool(kwargs.pop("in_agent", False))
 
-        all_input = normalize_query_input(input, history=history, kwargs=kwargs)
+        base_logger = logger or self.instance_logger.getChild(f"<run={run_id}>")
+        query_logger = scoped_query_logger(
+            base_logger,
+            question_id=question_id,
+            query_id=query_id,
+            in_agent=in_agent,
+        )
+        current_input = normalize_query_input(input, kwargs=kwargs)
+        all_input = normalize_query_input(current_input, history=history)
 
         schema_model: type[BaseModel] | None = (
             output_schema
@@ -445,9 +539,18 @@ class GatewayLLM(LLM):
             **kwargs,
         )
 
+        log_query_started(
+            query_logger,
+            input=current_input,
+            all_input=all_input,
+            history=history,
+            tools=tools,
+            kwargs=kwargs,
+        )
         data = await self._post_gateway("/query", request_body)
-
-        return _parse_query_result(data, schema_model)
+        result = _parse_query_result(data, schema_model)
+        log_query_completed(query_logger, result)
+        return result
 
     @override
     async def init_token_retry(self, token_retry_params: TokenRetryParams) -> None:

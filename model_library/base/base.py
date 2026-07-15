@@ -41,7 +41,6 @@ from model_library.base.input import (
     RawResponse,
     SystemInput,
     ToolDefinition,
-    ToolResult,
     normalize_query_input,
 )
 from model_library.base.output import (
@@ -50,20 +49,20 @@ from model_library.base.output import (
     QueryResultMetadata,
     RateLimit,
 )
-from model_library.base.query_ids import resolve_query_ids
-from model_library.base.utils import (
-    get_pretty_input_types,
-    serialize_for_tokenizing,
+from model_library.base.query_ids import resolve_query_ids, scoped_query_ids
+from model_library.base.query_logging import (
+    log_query_completed,
+    log_query_started,
+    scoped_query_logger,
 )
+from model_library.base.utils import serialize_for_tokenizing
 from model_library.exceptions import InvalidStructuredOutputError
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
 from model_library.retriers.token import TokenRetrier
 from model_library.utils import (
-    MAX_LOG_HISTORY,
     ValsModel,
     round_to_milliseconds,
-    truncate_str,
 )
 
 if TYPE_CHECKING:
@@ -116,17 +115,6 @@ class LLMConfig(ValsModel):
     custom_endpoint: str | None = None
 
 
-GATEWAY_CONFIG_EXCLUDED_FIELDS = frozenset(
-    {
-        "custom_api_key",
-        "custom_endpoint",
-        "native",
-        "provider_config",
-        "registry_key",
-    }
-)
-
-
 def dump_llm_config(config: LLMConfig | None) -> dict[str, Any]:
     if config is None:
         return {}
@@ -147,14 +135,11 @@ def dump_gateway_config(
     if config is None:
         return {}
 
-    data = config.model_dump(
+    return config.model_dump(
         exclude_none=exclude_none,
         exclude_unset=exclude_unset,
         mode=mode,
     )
-    for field in GATEWAY_CONFIG_EXCLUDED_FIELDS:
-        data.pop(field, None)
-    return data
 
 
 def normalize_llm_config_for_model(
@@ -467,58 +452,30 @@ class LLM(ABC):
 
         _base_logger = logger or self.instance_logger.getChild(f"<run={run_id}>")
 
-        # verbose on debug
-        child_name = (
-            f"<query={query_id}>"
-            if in_agent
-            else f"<question={question_id}><query={query_id}>"
+        query_logger = scoped_query_logger(
+            _base_logger,
+            question_id=question_id,
+            query_id=query_id,
+            in_agent=in_agent,
         )
-        query_logger = _base_logger.getChild(child_name)
-        if in_agent:
-            query_logger.setLevel(logging.WARNING)
-
         info_enabled = query_logger.isEnabledFor(logging.INFO)
         debug_enabled = query_logger.isEnabledFor(logging.DEBUG)
 
-        input = normalize_query_input(input, kwargs=kwargs)
-
-        item_info = ""
-        tool_info = ""
-        short_kwargs = ""
-        if info_enabled:
-            # format input info
-            item_info = f"--- input ({len(input)}): {get_pretty_input_types(input, debug_enabled)}\n"
-            if history:
-                logged_history = (
-                    history if debug_enabled else history[-MAX_LOG_HISTORY:]
-                )
-                item_info += f"--- history({len(history)}): {get_pretty_input_types(logged_history, debug_enabled)}\n"
-
-            # format tool info
-            tool_results = [t for t in input if isinstance(t, ToolResult)]
-            tool_names = [tool.name for tool in tools or []]
-
-            tool_info = (
-                f"--- tools ({len(tools)}): {tool_names}\n"
-                + f"--- tool results ({len(tool_results)}): "
-                + f"{[{tool.tool_call.name: truncate_str(str(tool.result))} for tool in tool_results]}\n"
-                if tools
-                else ""
-            )
-
-            short_kwargs = {k: truncate_str(repr(v)) for k, v in kwargs.items()}
+        current_input = normalize_query_input(input, kwargs=kwargs)
 
         # join input with history and validate SystemInput placement
-        input = normalize_query_input(input, history=history)
+        input = normalize_query_input(current_input, history=history)
 
-        if info_enabled:
-            query_logger.info(
-                "Query started:\n"
-                + item_info
-                + tool_info
-                + f"--- kwargs: {short_kwargs}\n"
-            )
-            query_logger.debug([repr(item) for item in input])
+        log_query_started(
+            query_logger,
+            input=current_input,
+            all_input=input,
+            history=history,
+            tools=tools,
+            kwargs=kwargs,
+            info_enabled=info_enabled,
+            debug_enabled=debug_enabled,
+        )
 
         async def query_func() -> QueryResult:
             with telemetry.start_span(
@@ -541,13 +498,18 @@ class LLM(ABC):
                 },
                 kind="client",
             ):
-                return await self._query_impl(
-                    input,
-                    tools=tools,
-                    query_logger=query_logger,
-                    output_schema=output_schema,
-                    **kwargs,
-                )
+                with scoped_query_ids(
+                    run_id=run_id,
+                    question_id=question_id,
+                    query_id=query_id,
+                ):
+                    return await self._query_impl(
+                        input,
+                        tools=tools,
+                        query_logger=query_logger,
+                        output_schema=output_schema,
+                        **kwargs,
+                    )
 
         async def timed_query() -> tuple[QueryResult, float]:
             return await LLM.timer_wrapper(query_func)
@@ -622,13 +584,12 @@ class LLM(ABC):
             if parser_error_type is not None:
                 raise InvalidStructuredOutputError(parser_error_type=parser_error_type)
 
-        if info_enabled:
-            max_string = None if debug_enabled else 400
-            query_logger.info(
-                f"Query completed: {pretty_repr(output, max_string=max_string)}"
-            )
-        if debug_enabled:
-            query_logger.debug(repr(output))
+        log_query_completed(
+            query_logger,
+            output,
+            info_enabled=info_enabled,
+            debug_enabled=debug_enabled,
+        )
 
         telemetry.add_event(
             "model_library.query.done",
@@ -738,6 +699,12 @@ class LLM(ABC):
     async def parse_file(self, file: FileInput) -> Any:
         """Parse a file into the appropriate format for the model"""
         ...
+
+    @property
+    def search_tool(self) -> Any:
+        raise NotImplementedError(
+            f"Native web search is not supported by {type(self).__name__}"
+        )
 
     @abstractmethod
     async def parse_tools(self, tools: list[ToolDefinition]) -> Any:

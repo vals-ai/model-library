@@ -20,8 +20,35 @@ from openai import RateLimitError as OpenAIRateLimitError
 from openai import UnprocessableEntityError as OpenAIUnprocessableEntityError
 
 
+ProviderErrorPayload = dict[str, str | int]
+
+
+class ModelLibraryException(Exception):
+    """Base for model-library exceptions that can safely describe themselves."""
+
+    def _provider_error_message(self) -> str:
+        message = str(self)
+        default_message = getattr(type(self), "DEFAULT_MESSAGE", None)
+        if isinstance(default_message, str) and message.lstrip().startswith(("{", "[")):
+            return default_message
+        return message
+
+    def to_provider_error(self) -> ProviderErrorPayload:
+        payload: ProviderErrorPayload = {
+            "message": self._provider_error_message(),
+            "exception_type": type(self).__name__,
+        }
+        code = getattr(self, "code", None)
+        if isinstance(code, str) and code:
+            payload["code"] = code
+        status_code = getattr(self, "status_code", None)
+        if isinstance(status_code, int) and not isinstance(status_code, bool):
+            payload["status_code"] = status_code
+        return payload
+
+
 # Base class for a retryable exception
-class RetryException(Exception): ...
+class RetryException(ModelLibraryException): ...
 
 
 # Exception to be retried immediately
@@ -33,7 +60,7 @@ class BackoffRetryException(RetryException): ...
 
 
 # Base class for a non-retryable exception
-class NoRetryException(Exception): ...
+class NoRetryException(ModelLibraryException): ...
 
 
 class ImmediateRetryExhaustedError(NoRetryException):
@@ -49,6 +76,9 @@ class ImmediateRetryExhaustedError(NoRetryException):
         super().__init__(
             f"[Immediate Retry Max] | {retries}/{max_retries} | Exception {exception_message(original)}"
         )
+
+    def to_provider_error(self) -> ProviderErrorPayload:
+        return exception_to_provider_error(self.original)
 
 
 class RateLimitException(BackoffRetryException):
@@ -186,7 +216,7 @@ class InvalidStructuredOutputError(ImmediateRetryException):
         super().__init__(InvalidStructuredOutputError.DEFAULT_MESSAGE)
 
 
-class ToolCallingNotSupportedError(Exception):
+class ToolCallingNotSupportedError(ModelLibraryException):
     """
     Raised when the model does not support tool calling
     """
@@ -200,7 +230,7 @@ class ToolCallingNotSupportedError(Exception):
         super().__init__(message or ToolCallingNotSupportedError.DEFAULT_MESSAGE)
 
 
-class BadInputError(Exception):
+class BadInputError(ModelLibraryException):
     """
     Raised when the input is not supported by the model.
     """
@@ -211,16 +241,19 @@ class BadInputError(Exception):
         super().__init__(message or BadInputError.DEFAULT_MESSAGE)
 
 
-class UnexpectedSystemInputError(Exception):
+class UnexpectedSystemInputError(ModelLibraryException):
     """
     Raised when a SystemInput is encountered inside parse_input.
     SystemInput must be at position 0 and is consumed by build_body before parse_input is called.
     """
 
-    ...
+    DEFAULT_MESSAGE: str = "Unexpected system input encountered."
+
+    def __init__(self, message: str | None = None):
+        super().__init__(message or UnexpectedSystemInputError.DEFAULT_MESSAGE)
 
 
-class GatewayMethodNotSupported(Exception):
+class GatewayMethodNotSupported(ModelLibraryException):
     """
     Raised when a provider-specific method is called on GatewayLLM.
     """
@@ -238,20 +271,27 @@ class GatewayProviderError(NoRetryException):
         self,
         *,
         error_type: str,
-        code: str,
+        code: str | None,
         message: str,
         provider: str | None,
         raw_error: object,
+        exception_type: str | None = None,
+        status_code: int | None = None,
     ):
         self.error_type = error_type
         self.code = code
         self.message = message
         self.provider = provider
         self.raw_error = raw_error
-        super().__init__(f"{error_type} ({code}): {message}")
+        self.exception_type = exception_type
+        self.status_code = status_code
+        if code is None:
+            super().__init__(f"{error_type}: {message}")
+        else:
+            super().__init__(f"{error_type} ({code}): {message}")
 
 
-class NoMatchingToolCallError(Exception):
+class NoMatchingToolCallError(ModelLibraryException):
     """
     Raised when a tool call result is provided with no matching tool call
     """
@@ -328,6 +368,23 @@ def is_retriable_error(e: Exception) -> bool:
     # check error message
     error_message = str(e).lower()
     return any(code in error_message for code in RETRIABLE_EXCEPTION_CODES)
+
+
+def exception_to_provider_error(exception: Exception) -> ProviderErrorPayload:
+    if isinstance(exception, ModelLibraryException):
+        return exception.to_provider_error()
+
+    payload: ProviderErrorPayload = {
+        "message": str(exception),
+        "exception_type": type(exception).__name__,
+    }
+    code = getattr(exception, "code", None)
+    if isinstance(code, str) and code:
+        payload["code"] = code
+    status_code = getattr(exception, "status_code", None)
+    if isinstance(status_code, int) and not isinstance(status_code, bool):
+        payload["status_code"] = status_code
+    return payload
 
 
 def exception_message(exception: Exception | Any) -> str:

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, Literal, Sequence
 
@@ -71,24 +72,31 @@ class KimiModel(DelegateOnly):
         uploaded via the files API, text is extracted, and injected as plain
         text so the delegate never sees file items.
         """
-        preprocessed: list[InputItem] = []
-        for item in input:
-            if isinstance(item, FileWithId):
-                assert self.delegate
-                response = await self.delegate.get_client().files.content(
-                    file_id=item.file_id
-                )
-                preprocessed.append(
-                    RawInput(
-                        input={
-                            "role": "system",
-                            "content": response.text,
-                        }
-                    )
-                )
-            else:
-                preprocessed.append(item)
-        return preprocessed
+
+        async def preprocess_item(item: InputItem) -> InputItem:
+            if not isinstance(item, FileWithId):
+                return item
+
+            assert self.delegate
+            response = await self.delegate.get_client().files.content(
+                file_id=item.file_id
+            )
+            return RawInput(
+                input={
+                    "role": "system",
+                    "content": response.text,
+                }
+            )
+
+        tasks = [asyncio.create_task(preprocess_item(item)) for item in input]
+        try:
+            return list(await asyncio.gather(*tasks))
+        except BaseException:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            raise
 
     @override
     async def _query_impl(

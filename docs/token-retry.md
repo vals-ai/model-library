@@ -18,7 +18,7 @@ For multi-process benchmarks where each question spawns a separate process (new 
 
 `TokenRetrier` detects whether a run is part of a benchmark queue by checking Redis (`LPOS`) on first use — no contextvar needed.
 
-```
+```text
 App calls model.init_token_retry(params)
   → spawns background_loops (refill + correction + cleanup + heartbeat + watchdog)
 
@@ -33,7 +33,7 @@ App calls model.query(input, run_id=..., question_id=...)
 
 Benchmark runs wrap all of the above:
   async with benchmark_queue(model_key, run_id, ...):
-      → enqueues run_id in Redis LIST, blocks until head
+      → enqueues run_id in Redis LIST, blocks until admitted to active_heads
       → yield (app dispatches requests, passing run_id explicitly)
       → TokenRetrier detects queue membership via lpos
       → early release when dispatched count hits total_requests
@@ -60,7 +60,7 @@ Benchmark runs wrap all of the above:
 
 1. Sets token count in Redis via `INIT_TOKENS_LUA` (only resets if limit changed or key missing)
 2. Stores config hash (limit, tokens_per_second, burst_limit, initialized_at)
-3. Checks `task:active` key — if an active loop exists with the same config, starts in standby; if config changed or no active loop, starts active
+3. Checks `task:active`: unchanged duplicate config starts in standby; changed config replaces a same-process loop immediately, but a different process keeps ownership until it releases the key or its TTL expires
 4. Spawns one `background_loops` coroutine (in `background.py`) managing a TaskGroup with:
    - **Refill loop** — every 1s, adds `limit / limit_refresh_seconds` tokens (capped at limit) and updates 2-minute and 15-second EWMAs of remaining-token ratio for queue admission
    - **Correction loop** — every 20s, reads provider rate-limit headers and corrects token count down if it's too high
@@ -68,7 +68,11 @@ Benchmark runs wrap all of the above:
    - **Heartbeat** — refreshes `task:active` key and per-worker alive markers only while required workers (`refill`, `reaper`) are alive
    - **Watchdog** — detects if another loop took the active key or heartbeat detected a dead required worker, raises `_Demoted`
 
-**Standby/takeover**: No loop ever dies permanently. On `_Demoted` (watchdog or idle shutdown), loops go to standby. Standby polls every 10s (`LOOP_POLL_INTERVAL`) for `task:active` key expiry. On takeover, re-reads config from Redis.
+**Standby/takeover**: No loop dies permanently. On `_Demoted` or idle shutdown,
+the loop releases any ownership it still holds and enters standby. Standby polls
+every 10 seconds (`LOOP_POLL_INTERVAL`) and atomically claims `task:active` only
+when it is absent or already owned by the same loop ID. On takeover, it reloads
+the latest config from Redis.
 
 The cleanup loop reaps stale entries every 30s:
 
@@ -115,7 +119,7 @@ On each retry, priority increments by 1 (toward MIN). A request waits if any low
 
 1. Compute actual tokens: `total_input + total_output - cache_read`
 2. Difference: `estimated - actual`
-3. Refill difference via `REFILL_TOKENS_LUA` (can be negative = debt)
+3. Apply the difference through `REFILL_TOKENS_LUA`; an underestimated request can make the increment negative, but the stored count is clamped to zero rather than preserving negative debt
 4. Update dynamic estimate ratio via `ADJUST_RATIO_LUA`
 
 ### Dynamic Token Estimation
@@ -146,7 +150,7 @@ Each model has a Redis LIST of run IDs plus an `active_heads` ZSET. Runs may dis
 
 ### Slot Lifecycle
 
-```
+```text
 benchmark_queue(model_key, run_id, total_requests=N, early_release=True):
   1. Set alive_key with TTL=300s
   2. Store per-run metadata hash (total_requests, enqueued_at)
@@ -183,17 +187,12 @@ After early release, the popped run's requests are still inflight. `TokenRetrier
 
 This gives stragglers highest priority so they finish quickly.
 
-### early_release Parameter
+### `early_release` decision
 
-`benchmark_queue(..., early_release=True)` (default):
-
-- Heartbeat checks dispatched count and releases slot early
-- After all requests are dispatched, waits `EARLY_RELEASE_GRACE_PERIOD` (5s) before releasing — gives fast-failing requests time to retry at normal priority instead of becoming stragglers
-
-`benchmark_queue(..., early_release=False)`:
-
-- Slot held until the context manager exits (all work done)
-- Use for agentic runs where dispatched count hits total_requests immediately (all questions start their first query near-simultaneously)
+| Value | Slot release | Retry/straggler behavior | Use for |
+| --- | --- | --- | --- |
+| `benchmark_queue(..., early_release=True)` (default) | Five seconds after all requests are dispatched | Fast failures can retry during the grace period; later retries become highest-priority stragglers after release | Non-agentic batches where dispatch completion closely tracks finished work |
+| `benchmark_queue(..., early_release=False)` | When the context manager exits | The run retains its active-head slot until all managed work finishes | Agentic runs, where every question can dispatch its first query long before all turns finish |
 
 ---
 
@@ -208,7 +207,8 @@ Prefix: `model_library` (`KEY_PREFIX`). Identifiers: `{P}` = provider.model_name
 | `{P}:{K}:tokens`                                 | STRING | —      | Remaining token count                                               |
 | `{P}:{K}:tokens:limit`                           | STRING | —      | Token limit                                                         |
 | `{P}:{K}:tokens:burst`                           | STRING | 1s TTL | Per-second burst counter (auto-expires)                             |
-| `{P}:{K}:tokens:config`                          | HASH   | —      | Init config (limit, tokens_per_second, burst_limit, initialized_at) |
+| `{P}:{K}:tokens:config`                          | HASH   | —      | Init config (limit, refresh window, tokens/second, burst limit, initialization time) |
+| `{P}:{K}:tokens:last_header`                     | HASH   | 60s    | Most recent provider rate-limit header stored for status visibility |
 | `{P}:{K}:tokens:task:active`                     | STRING | 30s    | Active loop owner (loop_id UUID), refreshed by heartbeat            |
 | `{P}:{K}:tokens:task:refill`                     | STRING | 30s    | Refill loop alive marker                                            |
 | `{P}:{K}:tokens:task:correction`                 | STRING | 30s    | Correction loop alive marker                                        |
@@ -241,7 +241,7 @@ Prefix: `model_library` (`KEY_PREFIX`). Identifiers: `{P}` = provider.model_name
 | `{P}:{K}:benchmark:active_head_window`   | STRING | —    | Desired active-head concurrency window                                                    |
 | `{P}:{K}:benchmark:last_scale_up_at`     | STRING | —    | Last scale-up timestamp for global scale-up throttle                                      |
 | `{P}:{K}:benchmark:unhealthy_since`      | STRING | —    | Timestamp when token health first fell below scale-down threshold                         |
-| `{P}:{K}:benchmark:queue:evict`          | LOCK   | 5s   | Dead head eviction lock                                                                   |
+| `{P}:{K}:benchmark:queue:evict`          | LOCK   | 2s   | Dead head eviction lock; timeout equals `HEARTBEAT_INTERVAL`                              |
 | `{P}:{K}:benchmark:alive:{RUN}`          | STRING | 300s | Run heartbeat                                                                             |
 | `{P}:{K}:benchmark:notify:{RUN}`         | LIST   | 24h  | Notification channel polled by waiters                                                    |
 | `{P}:{K}:benchmark:run:{RUN}`            | HASH   | 24h  | Per-run metadata (enqueued_at, slot_acquired_at, popped_at, completed_at, total_requests) |
@@ -256,7 +256,7 @@ All scripts run atomically in Redis (no interleaving with other commands).
 | Script                        | Keys                           | Args                               | Returns                                                              | Purpose                                                    |
 | ----------------------------- | ------------------------------ | ---------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
 | `DEDUCT_TOKENS_LUA`           | token_key, burst_key           | required_tokens, burst_limit       | 1/0                                                                  | Check-and-deduct tokens with per-second burst cap          |
-| `REFILL_TOKENS_LUA`           | token_key                      | amount, cap                        | new_count                                                            | Refill with cap                                            |
+| `REFILL_TOKENS_LUA`           | token_key                      | amount, cap                        | new_count                                                            | Apply positive or negative adjustment, clamped to `[0, cap]` |
 | `CORRECT_TOKENS_LUA`          | token_key                      | adjusted                           | [corrected, current, adjusted]                                       | Correct down from headers                                  |
 | `ADJUST_RATIO_LUA`            | ratio_key                      | observed, alpha                    | [old, new]                                                           | EMA ratio update                                           |
 | `HAS_LOWER_PRIORITY_LUA`      | —                              | base, current_p, min_p             | 1/0                                                                  | Check for lower-priority waiters                           |
@@ -273,7 +273,7 @@ All scripts run atomically in Redis (no interleaving with other commands).
 | Field                   | Type  | Default  | Purpose                                |
 | ----------------------- | ----- | -------- | -------------------------------------- |
 | `limit`                 | int   | required | Total tokens per refresh window        |
-| `limit_refresh_seconds` | int   | 60       | Refresh window (always 60 = 1 minute)  |
+| `limit_refresh_seconds` | `Literal[60]` | 60 | Fixed one-minute refresh window |
 | `input_modifier`        | float | required | Scale factor for input token estimate  |
 | `output_modifier`       | float | required | Scale factor for output token estimate |
 | `use_dynamic_estimate`  | bool  | True     | Enable EMA ratio learning              |
@@ -392,16 +392,22 @@ response = await self._llm.query(
 
 ### Server restart
 
-- `init_remaining_tokens` checks `task:active` — if config unchanged, new loops start in standby; if config changed, new loops take over immediately
-- Old loops detect new `task:active` owner via watchdog → go to standby
-- Token count preserved in Redis (not reset unless limit changed)
-- Queue entries idempotent (lpos check before rpush)
+- `init_remaining_tokens` checks `task:active`; unchanged duplicate config starts
+  in standby.
+- Changed config replaces a loop in the same process after cancelling it and
+  releasing its key. A different process cannot overwrite the current owner;
+  takeover waits for owner release or TTL expiry and the next standby poll.
+- Old loops that observe a different owner demote themselves to standby.
+- Redis preserves the token count unless the configured limit changes.
+- Queue insertion remains idempotent through the `LPOS` check before `RPUSH`.
 
-### Token debt (negative count)
+### Underestimated token usage
 
-- Allowed by design — represents overuse beyond estimate
-- All requests wait until refill loop brings count positive
-- Correction loop prevents sustained drift
+- `_post_function` can pass a negative adjustment when actual usage exceeded the
+  estimate.
+- `REFILL_TOKENS_LUA` clamps the resulting token count to zero; negative debt is
+  not stored.
+- New requests wait until refill or header correction restores enough tokens.
 
 ### Stale dispatched data
 

@@ -9,7 +9,7 @@ from collections.abc import Callable, Coroutine
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import fakeredis.aioredis
+import fakeredis
 import pytest
 
 from model_library.base.output import QueryResult, QueryResultMetadata
@@ -42,17 +42,27 @@ def mock_background_loops():
 @pytest.fixture(autouse=True)
 def clear_background_loop_registry():
     token_module._BACKGROUND_LOOP_TASKS.clear()  # pyright: ignore[reportPrivateUsage]
+    getattr(token_module, "_BACKGROUND_LOOP_LOCKS", {}).clear()
     yield
     token_module._BACKGROUND_LOOP_TASKS.clear()  # pyright: ignore[reportPrivateUsage]
+    getattr(token_module, "_BACKGROUND_LOOP_LOCKS", {}).clear()
 
 
 class _FakeTask:
     def __init__(self) -> None:
         self.callbacks: list[Callable[["_FakeTask"], None]] = []
         self._done = False
+        self._cancelled = False
 
     def done(self) -> bool:
         return self._done
+
+    def cancelled(self) -> bool:
+        return self._cancelled
+
+    def cancel(self) -> None:
+        self._cancelled = True
+        self.finish()
 
     def add_done_callback(self, callback: Callable[["_FakeTask"], None]) -> None:
         self.callbacks.append(callback)
@@ -61,6 +71,12 @@ class _FakeTask:
         self._done = True
         for callback in self.callbacks:
             callback(self)
+
+    def __await__(self):
+        async def _wait() -> None:
+            return None
+
+        return _wait().__await__()
 
 
 def _fake_create_task_factory(
@@ -92,7 +108,7 @@ def _close_created_task(coro):
 
 @pytest.fixture
 def redis():
-    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    client = fakeredis.FakeAsyncRedis(decode_responses=True)
     client.lock = lambda *args, **kwargs: _FakeLock()  # pyright: ignore[reportAttributeAccessIssue]
     set_redis_client(client)
     return client
@@ -671,6 +687,68 @@ async def test_waiting_metadata_hash_has_ttl(redis):
             await task
 
 
+async def test_pre_function_pipelines_waiting_registration(redis, monkeypatch):
+    """Waiting registration writes happen in one ordered Redis pipeline."""
+    await _init_tokens(redis, value=1000)
+    retrier = _make_retrier(question_id="q-pipeline")
+    original_pipeline = redis.pipeline
+    original_srem = redis.srem
+    operations: list[str] = []
+    pipelines: list[list[str]] = []
+    executed_pipelines: list[list[str]] = []
+
+    class RecordingPipeline:
+        def __init__(self, pipe):
+            self._pipe = pipe
+            self.commands: list[str] = []
+            pipelines.append(self.commands)
+
+        async def __aenter__(self):
+            await self._pipe.__aenter__()
+            return self
+
+        async def __aexit__(self, *args):
+            return await self._pipe.__aexit__(*args)
+
+        def zadd(self, *args, **kwargs):
+            self.commands.append("zadd")
+            return self._pipe.zadd(*args, **kwargs)
+
+        def hset(self, *args, **kwargs):
+            self.commands.append("hset")
+            return self._pipe.hset(*args, **kwargs)
+
+        def expire(self, *args, **kwargs):
+            self.commands.append("expire")
+            return self._pipe.expire(*args, **kwargs)
+
+        def sadd(self, *args, **kwargs):
+            self.commands.append("sadd")
+            return self._pipe.sadd(*args, **kwargs)
+
+        async def execute(self):
+            operations.append("execute")
+            executed_pipelines.append(self.commands.copy())
+            return await self._pipe.execute()
+
+    async def recording_srem(*args, **kwargs):
+        operations.append("srem")
+        return await original_srem(*args, **kwargs)
+
+    def recording_pipeline(*args, **kwargs):
+        operations.append("pipeline")
+        return RecordingPipeline(original_pipeline(*args, **kwargs))
+
+    monkeypatch.setattr(redis, "srem", recording_srem)
+    monkeypatch.setattr(redis, "pipeline", recording_pipeline)
+
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    assert operations[:3] == ["srem", "pipeline", "execute"]
+    assert pipelines[0] == ["zadd", "hset", "expire"]
+    assert executed_pipelines[0] == ["zadd", "hset", "expire"]
+
+
 # ── Per-run dispatched counter ────────────────────────────────────────
 
 
@@ -917,6 +995,94 @@ async def test_init_with_changed_config_starts_active(redis):
     assert mock_bg.call_count == 2
     _, second_kwargs = mock_bg.call_args_list[1]
     assert second_kwargs["standby"] is False
+
+
+async def test_init_with_changed_config_cancels_existing_background_loop(redis):
+    key_tuple = ("p", "m")
+    key = f"{KEY_PREFIX}:p:m:tokens"
+    started_limits: list[int] = []
+    started = asyncio.Event()
+    release = asyncio.Event()
+    cancelled_limits: list[int] = []
+
+    async def fake_background_loops(cfg, get_rate_limit_func, logger, standby=False):
+        _ = get_rate_limit_func, logger, standby
+        started_limits.append(cfg.limit)
+        started.set()
+        try:
+            await release.wait()
+        except asyncio.CancelledError:
+            cancelled_limits.append(cfg.limit)
+            raise
+
+    with patch(
+        "model_library.retriers.token.background.background_loops",
+        new=fake_background_loops,
+    ):
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=key_tuple,
+            limit=3000,
+            limit_refresh_seconds=60,
+            logger=logging.getLogger("test"),
+            get_rate_limit_func=AsyncMock(),
+        )
+        await asyncio.wait_for(started.wait(), timeout=1)
+        first_task = token_module._BACKGROUND_LOOP_TASKS[key]
+
+        await redis.set(f"{key}:task:active", "some-task-id")
+        await redis.hset(
+            f"{key}:config",
+            mapping={"limit": "3000", "tokens_per_second": "50", "burst_limit": "2400"},
+        )
+
+        started.clear()
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=key_tuple,
+            limit=5000,
+            limit_refresh_seconds=60,
+            logger=logging.getLogger("test"),
+            get_rate_limit_func=AsyncMock(),
+        )
+        await asyncio.wait_for(started.wait(), timeout=1)
+        second_task = token_module._BACKGROUND_LOOP_TASKS[key]
+
+        assert first_task is not second_task
+        assert cancelled_limits == [3000]
+        assert started_limits == [3000, 5000]
+
+        release.set()
+        await asyncio.gather(second_task, return_exceptions=True)
+
+
+async def test_completed_background_loop_removes_task_and_lock(redis):
+    key_tuple = ("p", "m")
+    key = f"{KEY_PREFIX}:p:m:tokens"
+    fake_task = _FakeTask()
+
+    with (
+        patch(
+            "model_library.retriers.token.background.background_loops",
+            new_callable=AsyncMock,
+        ),
+        patch(
+            "asyncio.create_task", side_effect=_fake_create_task_factory([fake_task])
+        ),
+    ):
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=key_tuple,
+            limit=3000,
+            limit_refresh_seconds=60,
+            logger=logging.getLogger("test"),
+            get_rate_limit_func=AsyncMock(),
+        )
+
+    assert key in token_module._BACKGROUND_LOOP_TASKS
+    assert key in token_module._BACKGROUND_LOOP_LOCKS
+
+    fake_task.finish()
+
+    assert key not in token_module._BACKGROUND_LOOP_TASKS
+    assert key not in token_module._BACKGROUND_LOOP_LOCKS
 
 
 async def test_init_with_same_config_reuses_existing_background_loop(redis):

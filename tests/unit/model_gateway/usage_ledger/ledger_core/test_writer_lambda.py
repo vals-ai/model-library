@@ -42,7 +42,7 @@ def _usage_event() -> dict[str, object]:
     return build_success_usage_event(
         body=request,
         config=request.config_dict(),
-        query_params={"query_id": request.query_id},
+        query_params={},
         dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
         result=QueryResult(output_text="ok", history=[]),
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
@@ -54,12 +54,14 @@ def _sqs_record(message_id: str, body: str) -> dict[str, str]:
 
 
 def test_usage_ledger_lambda_writes_valid_sqs_message(monkeypatch: Any):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     event = _usage_event()
+    emitted: list[dict[str, tuple[float, str]]] = []
     monkeypatch.setenv("GATEWAY_USAGE_LEDGER_TABLE_NAME", "usage-table")
     monkeypatch.setattr(lambda_handler, "_dynamodb_client", lambda: client)
+    monkeypatch.setattr(lambda_handler, "emit_usage_ledger_metrics", emitted.append)
 
     response = lambda_handler.handler(
         {"Records": [_sqs_record("message-1", serialize_usage_event_message(event))]},
@@ -70,12 +72,13 @@ def test_usage_ledger_lambda_writes_valid_sqs_message(monkeypatch: Any):
     assert len(client.put_calls) == 1
     assert client.put_calls[0]["TableName"] == "usage-table"
     assert client.put_calls[0]["ConditionExpression"] == "attribute_not_exists(PK)"
+    assert emitted == [{"UsageLedgerRawRowsWritten": (1, "Count")}]
 
 
 def test_usage_ledger_lambda_returns_partial_batch_failure_for_bad_message(
     monkeypatch: Any,
 ):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     event = _usage_event()
@@ -99,7 +102,7 @@ def test_usage_ledger_lambda_returns_partial_batch_failure_for_bad_message(
 def test_usage_ledger_lambda_fails_only_invalid_numeric_record_in_mixed_batch(
     monkeypatch: Any,
 ):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     bad_event = _usage_event()
@@ -126,7 +129,7 @@ def test_usage_ledger_lambda_fails_only_invalid_numeric_record_in_mixed_batch(
 def test_usage_ledger_lambda_fails_only_unsupported_schema_version_in_mixed_batch(
     monkeypatch: Any,
 ):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     event = _usage_event()
@@ -153,7 +156,7 @@ def test_usage_ledger_lambda_fails_only_unsupported_schema_version_in_mixed_batc
 def test_usage_ledger_lambda_rejects_json_valid_event_with_disallowed_fields(
     monkeypatch: Any,
 ):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     event = _usage_event()
@@ -173,7 +176,7 @@ def test_usage_ledger_lambda_rejects_json_valid_event_with_disallowed_fields(
 def test_usage_ledger_lambda_rejects_json_valid_event_missing_required_fields(
     monkeypatch: Any,
 ):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     event = _usage_event()
@@ -191,7 +194,7 @@ def test_usage_ledger_lambda_rejects_json_valid_event_missing_required_fields(
 
 
 def test_usage_ledger_lambda_missing_table_name_fails_before_writes(monkeypatch: Any):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     monkeypatch.delenv("GATEWAY_USAGE_LEDGER_TABLE_NAME", raising=False)
@@ -199,7 +202,13 @@ def test_usage_ledger_lambda_missing_table_name_fails_before_writes(monkeypatch:
 
     try:
         lambda_handler.handler(
-            {"Records": [_sqs_record("message-1", serialize_usage_event_message(_usage_event()))]},
+            {
+                "Records": [
+                    _sqs_record(
+                        "message-1", serialize_usage_event_message(_usage_event())
+                    )
+                ]
+            },
             None,
         )
     except ValueError as exc:
@@ -212,7 +221,7 @@ def test_usage_ledger_lambda_missing_table_name_fails_before_writes(monkeypatch:
 def test_usage_ledger_lambda_isolates_dynamodb_failure_in_mixed_batch(
     monkeypatch: Any,
 ):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     first = _usage_event()
@@ -243,7 +252,7 @@ def test_usage_ledger_lambda_isolates_dynamodb_failure_in_mixed_batch(
 def test_usage_ledger_lambda_treats_duplicate_same_usage_event_as_success(
     monkeypatch: Any,
 ):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     event = _usage_event()
@@ -254,8 +263,10 @@ def test_usage_ledger_lambda_treats_duplicate_same_usage_event_as_success(
     client.get_item_response = {
         "Item": {"usage_event_id": {"S": str(event["usage_event_id"])}}
     }
+    emitted: list[dict[str, tuple[float, str]]] = []
     monkeypatch.setenv("GATEWAY_USAGE_LEDGER_TABLE_NAME", "usage-table")
     monkeypatch.setattr(lambda_handler, "_dynamodb_client", lambda: client)
+    monkeypatch.setattr(lambda_handler, "emit_usage_ledger_metrics", emitted.append)
 
     response = lambda_handler.handler(
         {"Records": [_sqs_record("message-1", serialize_usage_event_message(event))]},
@@ -266,12 +277,13 @@ def test_usage_ledger_lambda_treats_duplicate_same_usage_event_as_success(
     assert len(client.put_calls) == 1
     assert len(client.get_calls) == 1
     assert client.get_calls[0]["ConsistentRead"] is True
+    assert emitted == []
 
 
 def test_usage_ledger_lambda_retries_conditional_failure_for_different_event(
     monkeypatch: Any,
 ):
-    from model_gateway.usage_ledger import lambda_handler
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     event = _usage_event()

@@ -12,7 +12,7 @@ from pydantic import (
 )
 
 from model_library import telemetry
-from model_library.base.base import LLMConfig, TokenRetryParams, dump_llm_config
+from model_library.base import LLMConfig, TokenRetryParams, dump_llm_config
 from model_library.base.input import FileWithId, InputItem, ToolDefinition
 from model_library.base.output import QueryResult
 
@@ -95,10 +95,6 @@ class TokenCountRequest(GatewayRequestBase):
     tools: list[ToolDefinition] = Field(default_factory=list)
 
 
-class TokenCountResponse(BaseModel):
-    tokens: int
-
-
 class RateLimitRequest(GatewayRequestBase):
     pass
 
@@ -121,9 +117,11 @@ class ModelResolveResponse(BaseModel):
 
 class ProviderError(BaseModel):
     type: Literal["ProviderError"] = "ProviderError"
-    code: str
     message: str
     provider: str | None = None
+    code: str | None = None
+    exception_type: str | None = None
+    status_code: int | None = None
 
 
 class GatewayResponse(BaseModel):
@@ -139,6 +137,10 @@ class GatewayResponse(BaseModel):
                 "Gateway response must contain exactly one of error or payload"
             )
         return self
+
+
+class TokenCountResponse(GatewayResponse):
+    tokens: int | None = None
 
 
 def query_result_response_body(

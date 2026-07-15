@@ -7,7 +7,6 @@ from model_library.base.output.performance import (
     QueryPerformanceTimelineEntry,
     QueryResultPerformance,
     QueryTimeToFirstToken,
-    QueryTokensPerSecond,
 )
 from model_library.base.output.result import (
     Citation,
@@ -26,7 +25,6 @@ __all__ = [
     "QueryPerformanceEventType",
     "QueryPerformanceEvent",
     "QueryTimeToFirstToken",
-    "QueryTokensPerSecond",
     "QueryPerformanceTimelineEntry",
     "QueryResultPerformance",
     "FinishReason",

@@ -2,19 +2,13 @@
 
 import time
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any
 
 import model_library.telemetry as telemetry
-from model_library.base import GATEWAY_CONFIG_EXCLUDED_FIELDS, LLMConfig
 
 from model_gateway.errors import ErrorResponse
 from model_gateway.metrics import param_group, provider_endpoint_bucket
 from model_gateway.types import QueryRequest
-
-
-_SEARCHABLE_LLM_CONFIG_KEYS = frozenset(LLMConfig.model_fields) - frozenset(
-    {"provider_config", *GATEWAY_CONFIG_EXCLUDED_FIELDS}
-)
 
 
 def latency_ms(start: float) -> float:
@@ -22,48 +16,29 @@ def latency_ms(start: float) -> float:
 
 
 def query_config_params(config: Mapping[str, Any]) -> dict[str, object]:
-    params: dict[str, object] = {}
-    for key in _SEARCHABLE_LLM_CONFIG_KEYS:
-        value = config.get(key)
-        if value is not None:
-            params[key] = value
-    return params
+    return {key: value for key, value in config.items() if value is not None}
 
 
 def llm_config_telemetry_attributes(
     config: Mapping[str, Any],
 ) -> dict[str, object | None]:
-    attrs: dict[str, object | None] = {}
-    for key in _SEARCHABLE_LLM_CONFIG_KEYS:
-        value = config.get(key)
-        if value is None:
-            continue
-        attr_key = f"llm.config.{key}"
-        if isinstance(value, bool):
-            attrs[f"{attr_key}.mode"] = telemetry.mode_attribute(value)
-        else:
-            attrs[attr_key] = value
-
-    provider_config = config.get("provider_config")
-    if isinstance(provider_config, Mapping):
-        provider_config_map = cast(Mapping[str, Any], provider_config)
-        for key, value in provider_config_map.items():
-            if value is None or not telemetry.is_safe_config_attribute_key(key):
-                continue
-            attr_key = f"llm.config.provider_config.{key}"
-            if isinstance(value, bool):
-                attrs[f"{attr_key}.mode"] = telemetry.mode_attribute(value)
-            elif isinstance(value, str | int | float):
-                attrs[attr_key] = value
-    return attrs
+    return {
+        f"llm.config.{key}": telemetry.json_attribute(value)
+        for key, value in config.items()
+        if value is not None
+    }
 
 
 def query_telemetry_attributes(
-    body: QueryRequest, config: Mapping[str, Any]
+    body: QueryRequest,
+    config: Mapping[str, Any],
+    *,
+    config_query_params: Mapping[str, object | None],
+    token_retry_params: object | None,
 ) -> dict[str, object | None]:
     attrs: dict[str, object | None] = {
-        f"gen_ai.request.{key}": value
-        for key, value in query_config_params(config).items()
+        f"gen_ai.request.{key}": telemetry.json_attribute(value)
+        for key, value in config_query_params.items()
     }
     attrs.update(llm_config_telemetry_attributes(config))
     attrs.update(
@@ -79,7 +54,9 @@ def query_telemetry_attributes(
             "model.registry_key": body.model,
             "model.provider_endpoint": provider_endpoint_bucket(config),
             "model.param_group": param_group(
-                config, query_config_params(config), body.token_retry_params
+                config,
+                config_query_params,
+                token_retry_params,
             ),
         }
     )
@@ -105,9 +82,9 @@ def dimension_telemetry_attributes(
     dimensions: Mapping[str, str],
 ) -> dict[str, object | None]:
     return {
-        "model.provider_endpoint": dimensions.get("ProviderEndpoint"),
-        "model.param_group": dimensions.get("ParamGroup"),
-        "gateway.operation": dimensions.get("Operation"),
+        "model.provider_endpoint": dimensions["ProviderEndpoint"],
+        "model.param_group": dimensions["ParamGroup"],
+        "gateway.operation": dimensions["Operation"],
     }
 
 

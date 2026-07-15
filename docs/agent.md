@@ -47,7 +47,7 @@ Returns lean summaries in memory — full raw data is written to disk per-turn.
 | `final_aggregated_metadata`        | `QueryResultMetadata`            | Sum of query `metadata` across agent turns only — task cost (tool sub-LLM metadata available per `ToolCallSummary.metadata`)     |
 | `final_compaction_metadata`        | `QueryResultMetadata`            | Sum of query `metadata` across history compaction calls — overhead. Sum with `final_aggregated_metadata` for the true bill.      |
 
-Query-level metadata, including `QueryResultMetadata.performance`, is documented in [Query Results](result.md). Agent aggregate metadata sums token, cost, and duration totals only; performance telemetry remains per-query and is not aggregated.
+Query-level metadata, including `QueryResultMetadata.performance`, is documented in [Query Results](result.md).
 
 State is not returned — the caller owns it by reference:
 
@@ -59,18 +59,18 @@ print(state["counter"])  # mutated by tools during execution
 
 ### TurnSummary
 
-Lean per-turn metadata (content replaced with lengths). When the provider exposes a stable response/message/request ID, it is available as `QueryResult.extras.response_id`.
+Lean per-turn metadata (content replaced with lengths).
 
-| Field                        | Type                    |
-| ---------------------------- | ----------------------- |
-| `output_text_length`         | `int`                   |
-| `reasoning_length`           | `int`                   |
-| `finish_reason`              | `FinishReasonInfo`      |
-| `metadata`                   | `QueryResultMetadata`   |
-| `tool_calls`                 | `list[ToolCallSummary]` |
-| `duration_seconds`           | `float`                 |
-| `retry_overhead_seconds`     | `float`                 |
-| `effective_duration_seconds` | `float` (computed)      |
+| Field                        | Type                       |
+| ---------------------------- | -------------------------- |
+| `output_text_length`         | `int`                      |
+| `reasoning_length`           | `int`                      |
+| `finish_reason`              | `FinishReasonInfo`         |
+| `metadata`                   | `QueryResultMetadata`      |
+| `tool_calls`                 | `list[ToolCallSummary]`    |
+| `duration_seconds`           | `float`                    |
+| `retry_overhead_seconds`     | `float`                    |
+| `effective_duration_seconds` | `float` (computed)         |
 
 ### ToolCallSummary
 
@@ -111,12 +111,12 @@ consumed the compacted history).
 
 All hooks receive raw types (`AgentTurn`, `ToolCallRecord`), not summaries. All hook invocations are DEBUG-logged.
 
-| Hook               | Signature                                            | Default                            |
-| ------------------ | ---------------------------------------------------- | ---------------------------------- |
-| `before_query`     | `(history, last_error) → history`                    | Re-raises errors                   |
-| `should_stop`      | `(TurnResult) → bool`                                | Stop on text-only response         |
-| `on_tool_result`   | `(ToolCallRecord, state) → None`                     | No-op                              |
-| `determine_answer` | `(state, list[AgentTurn \| ErrorTurn], error) → str` | Done tool output → LLM text → `""` |
+| Hook               | Signature                                            | Default                                                                   |
+| ------------------ | ---------------------------------------------------- | ------------------------------------------------------------------------- |
+| `before_query`     | `(history, last_error) → history`                    | Re-raises errors                                                          |
+| `should_stop`      | `(TurnResult) → bool`                                | Continue only for local tool calls or a paused provider turn; otherwise stop |
+| `on_tool_result`   | `(ToolCallRecord, state) → None`                     | No-op                                                                     |
+| `determine_answer` | `(state, list[AgentTurn \| ErrorTurn], error) → str` | Done tool output → LLM text → `""`                                        |
 
 Optional per-turn message hooks on limits:
 
@@ -130,7 +130,7 @@ Optional per-turn message hooks on limits:
 The loop stops when any of these occur:
 
 - A tool returns `done=True`
-- `should_stop` hook returns `True` (default: text-only response)
+- `should_stop` hook returns `True`. By default, the loop continues only when it must execute local tool calls or resume a provider turn with `finish_reason == PAUSED`; every other response is terminal.
 - `turn_limit.max_turns` reached → `MaxTurnsExceeded` error
 - `time_limit.max_seconds` exceeded → `MaxTimeExceeded` error
 - `before_query` hook re-raises a query error (default behavior)
@@ -290,8 +290,9 @@ the first call, after an error turn, and on `max_context`. Cheap
 estimators can use it; tokenizer-accurate ones can ignore it and analyze
 `history` directly.
 
-`tools` is the agent's full tool-definition list. The default LLM compactor
-passes it through unchanged; custom hooks may pass, filter, or ignore it.
+`tools` is the agent's full tool-definition list supplied to the hook. The
+default hook intentionally ignores it and calls the compaction LLM with
+`tools=[]`; custom hooks may pass, filter, or ignore the definitions.
 
 ```python
 from model_library.agent import (
@@ -343,7 +344,7 @@ The agent builds a timestamped run directory: `log_dir/<name>/<model_name>/<time
 
 ### Directory Structure
 
-```
+```text
 logs/finance_agent/gpt-4o/2024-01-01_12-00-00_abc123/
 ├── question_1/
 │   ├── agent.log              # full text log (turns, hooks, errors)

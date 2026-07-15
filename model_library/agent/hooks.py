@@ -15,6 +15,7 @@ from model_library.agent.metadata import (
 )
 from model_library.base.base import LLM
 from model_library.base.input import InputItem, ToolCall
+from model_library.base.output.result import FinishReason, ProviderToolEvent
 
 
 @dataclass
@@ -36,6 +37,14 @@ class TurnResult:
     @property
     def tool_calls(self) -> list[ToolCall]:
         return self.turn.query_result.tool_calls
+
+    @property
+    def provider_tool_events(self) -> list[ProviderToolEvent]:
+        return self.turn.query_result.provider_tool_events
+
+    @property
+    def finish_reason(self) -> FinishReason:
+        return self.turn.query_result.finish_reason.reason
 
 
 class BeforeQueryHook(Protocol):
@@ -79,16 +88,27 @@ class ShouldStopHook(Protocol):
     """Called after each turn (both tool-call and text-only turns)
 
     Return True to stop the agent loop.
-    Default: stops on text-only responses (no tool calls).
+    Default: stops unless there are local tool calls or a paused provider turn
+    (finish_reason == PAUSED); everything else is terminal.
     """
 
     def __call__(self, turn_result: TurnResult) -> bool: ...
 
 
 def default_should_stop(turn_result: TurnResult) -> bool:
-    """Stop when the LLM responds with text only (no tool calls)"""
+    """Stop unless the model needs another turn.
 
-    return not turn_result.tool_calls
+    Continue on local tool calls (we execute and feed results back) or a paused
+    provider turn (the provider ran a server-side tool and paused before emitting
+    the answer — replaying history resumes it). Everything else is terminal:
+    inline provider searches (e.g. OpenAI/Google/xAI) return their answer text in
+    the same response, so they stop here.
+    """
+    if turn_result.tool_calls:
+        return False
+    if turn_result.finish_reason == FinishReason.PAUSED:
+        return False
+    return True
 
 
 class OnToolResultHook(Protocol):

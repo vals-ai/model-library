@@ -12,7 +12,7 @@ pickled RawResponse/RawInput fields are signed and verified.
 
 from collections.abc import Sequence
 
-from model_library.base.base import LLM
+from model_library.base import LLM
 from model_library.base.input import InputItem
 
 

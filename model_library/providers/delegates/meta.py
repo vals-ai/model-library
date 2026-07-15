@@ -12,12 +12,15 @@ from model_library.base import (
     LLMConfig,
     ProviderConfig,
 )
+from model_library.base.query_ids import PromptCacheKeyMode
+from model_library.providers.openai import OpenAIConfig
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
 
 
 class MetaConfig(ProviderConfig):
     use_responses: bool = False
+    prompt_cache_key: PromptCacheKeyMode | None = None
 
 
 @register_provider("meta")
@@ -41,6 +44,9 @@ class MetaModel(DelegateOnly):
                 "custom_endpoint": config.custom_endpoint or base_url,
                 "custom_api_key": config.custom_api_key
                 or SecretStr(model_library_settings.META_API_KEY),
+                "provider_config": OpenAIConfig(
+                    prompt_cache_key=self.provider_config.prompt_cache_key,
+                ),
             }
         )
 

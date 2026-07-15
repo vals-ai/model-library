@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 from contextlib import asynccontextmanager, suppress
+from functools import partial
 
 import redis.asyncio as async_redis
 from dotenv import load_dotenv
@@ -17,6 +18,7 @@ from model_library import model_library_settings
 from model_library.registry_utils import get_model_names
 from model_library.retriers.token import set_redis_client
 
+from model_gateway.asgi_observability import GatewayObservabilityMiddleware
 from model_gateway.auth import create_auth_middleware
 from model_gateway.cache import ModelCache
 from model_gateway.capacity import GatewayCapacityLimiter, create_capacity_middleware
@@ -24,6 +26,12 @@ from model_gateway.errors import ErrorBody, ErrorResponse
 from model_gateway.metrics import (
     create_metrics_middleware,
     publish_metrics_periodically,
+    record_runtime,
+)
+from model_gateway.observability import (
+    install_loop_exception_handler,
+    log_process_lifecycle,
+    runtime_snapshot,
 )
 from model_gateway.routes.health import register_health_routes
 from model_gateway.routes.models import register_model_routes
@@ -49,6 +57,15 @@ def env_flag(name: str, *, default: bool = False) -> bool:
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
+async def _record_runtime_current(loop: asyncio.AbstractEventLoop) -> None:
+    lag_start = loop.time()
+    await asyncio.sleep(0)
+    event_loop_lag_ms = int((loop.time() - lag_start) * 1000)
+    snapshot = runtime_snapshot()
+    snapshot["event_loop_lag_ms"] = event_loop_lag_ms
+    record_runtime(snapshot)
+
+
 def create_app() -> FastAPI:
     api_keys = model_library_settings.get("MODEL_GATEWAY_API_KEYS", None)
     if not isinstance(api_keys, str):
@@ -62,14 +79,17 @@ def create_app() -> FastAPI:
         raise RuntimeError("MODEL_GATEWAY_HMAC_SECRET must be set")
     hmac_secret = hmac_secret_value.encode()
     cache = ModelCache()
-    capacity_limiter = GatewayCapacityLimiter.from_env()
+    capacity_limiter = GatewayCapacityLimiter()
     startup_canary_enabled = env_flag("GATEWAY_STARTUP_CANARY_ENABLED")
     usage_ledger = create_usage_ledger_from_env()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        loop = asyncio.get_running_loop()
+        previous_exception_handler = install_loop_exception_handler(loop)
         model_count = len(get_model_names())
         logger.info("Loaded gateway model registry with %s models", model_count)
+        log_process_lifecycle("gateway.process.startup")
         telemetry.configure_telemetry(app)
 
         redis_client: async_redis.Redis | None = None
@@ -91,16 +111,20 @@ def create_app() -> FastAPI:
         app.state.hmac_secret = hmac_secret
         app.state.capacity_limiter = capacity_limiter
         app.state.usage_ledger = usage_ledger
+
         metrics_stop = asyncio.Event()
         metrics_task = asyncio.create_task(
             publish_metrics_periodically(
                 metrics_stop,
-                publishers=[capacity_limiter.record_current],
+                publishers=[
+                    capacity_limiter.record_current,
+                    partial(_record_runtime_current, loop),
+                ],
             )
         )
         usage_ledger_started = False
         canary_task: asyncio.Task[None] | None = None
-        if startup_canary_enabled and valid_keys and hmac_secret:
+        if startup_canary_enabled:
             canary_task = asyncio.create_task(
                 run_startup_canary(app, sorted(valid_keys)[0])
             )
@@ -109,6 +133,7 @@ def create_app() -> FastAPI:
             usage_ledger_started = True
             yield
         finally:
+            log_process_lifecycle("gateway.process.shutdown_start")
             if canary_task is not None and not canary_task.done():
                 canary_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -128,6 +153,8 @@ def create_app() -> FastAPI:
                 except Exception:
                     logger.exception("Gateway Redis close failed during shutdown")
             telemetry.shutdown_telemetry()
+            loop.set_exception_handler(previous_exception_handler)
+            log_process_lifecycle("gateway.process.shutdown_done")
 
     app = FastAPI(title="Model Proxy", lifespan=lifespan)
     app.state.cache = cache
@@ -138,6 +165,7 @@ def create_app() -> FastAPI:
     app.middleware("http")(create_capacity_middleware())
     app.middleware("http")(create_metrics_middleware())
     app.middleware("http")(create_auth_middleware(valid_keys))
+    app.add_middleware(GatewayObservabilityMiddleware)
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(

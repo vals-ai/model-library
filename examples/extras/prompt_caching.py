@@ -46,7 +46,9 @@ def _run_report(label: str, result: QueryResult) -> dict[str, object]:
         },
         "cost": metadata.cost.model_dump(mode="json") if metadata.cost else None,
         "duration_seconds": metadata.duration_seconds,
-        "performance": metadata.performance.model_dump(mode="json"),
+        "performance": metadata.performance.model_dump(mode="json")
+        if metadata.performance
+        else None,
         "metadata_extra": metadata.extra,
     }
 

@@ -104,6 +104,34 @@ async def test_query_child_logger_derives_from_custom_logger():
     assert "<query=" in query_logger.name
 
 
+async def test_query_completion_logging_uses_start_level_when_logger_changes(caplog):
+    custom = logging.getLogger("test.direct.level_change")
+    caplog.set_level(logging.DEBUG)
+    custom.setLevel(logging.INFO)
+    MockLLM = _make_mock_llm_class()
+    llm = MockLLM("gpt-4o", "openai")
+
+    async def query_impl(*_args: Any, **_kwargs: Any) -> QueryResult:
+        custom.setLevel(logging.DEBUG)
+        return QueryResult(output_text="x" * 1000)
+
+    llm._query_impl = AsyncMock(side_effect=query_impl)  # pyright: ignore[reportPrivateUsage]
+
+    try:
+        await llm.query("Test input", logger=custom)
+    finally:
+        custom.setLevel(logging.NOTSET)
+
+    records = [
+        record
+        for record in caplog.records
+        if record.name.startswith("test.direct.level_change")
+    ]
+    messages = [record.getMessage() for record in records]
+    assert any(message.startswith("Query completed:") for message in messages)
+    assert not any(record.levelno == logging.DEBUG for record in records)
+
+
 # ── Agent logger tests ────────────────────────────────────────────────
 
 

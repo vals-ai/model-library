@@ -57,7 +57,10 @@ _ALLOWED_USAGE_EVENT_FIELDS = frozenset(
         "identity",
         ledger_schema.IDENTITY_BENCHMARK_NAME,
         ledger_schema.IDENTITY_AGENT_NAME,
+        ledger_schema.IDENTITY_EMAIL,
         "api_key_fingerprint",
+        "provider_response_id",
+        "provider_request_id",
         "provider_endpoint",
         "param_group",
         "config_hash",
@@ -67,6 +70,8 @@ _ALLOWED_USAGE_EVENT_FIELDS = frozenset(
         "metadata_json_truncated",
         "finish_reason_json",
         "finish_reason_json_truncated",
+        "performance_json",
+        "performance_json_truncated",
         ledger_schema.RUN_INDEX_PK,
         ledger_schema.RUN_INDEX_SK,
         ledger_schema.QUERY_INDEX_PK,
@@ -110,8 +115,8 @@ def put_usage_event_sync(
     client: SyncDynamoDbClient,
     table_name: str,
     event: Mapping[str, object],
-) -> None:
-    """Write a usage event synchronously, accepting duplicate same-event writes."""
+) -> bool:
+    """Write a usage event synchronously; return False for duplicate same-event writes."""
     validate_usage_event(event)
     try:
         client.put_item(
@@ -119,13 +124,14 @@ def put_usage_event_sync(
             Item=serialize_item(event),
             ConditionExpression="attribute_not_exists(PK)",
         )
+        return True
     except ClientError as exc:
         if is_conditional_check_failed(exc) and is_duplicate_event_sync(
             client=client,
             table_name=table_name,
             event=event,
         ):
-            return
+            return False
         raise
 
 

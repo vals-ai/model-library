@@ -47,7 +47,7 @@ from model_library.agent.metadata import (
     ToolCallSummary,
     TurnSummary,
 )
-from model_library.agent.tool import Tool, ToolOutput
+from model_library.agent.tool import NativeWebSearch, Tool, ToolOutput
 from model_library.atif import ATIFTrajectory
 
 __all__ = [
@@ -81,6 +81,7 @@ __all__ = [
     "llm_summary_compactor",
     "resolve_threshold_tokens",
     "SerializableException",
+    "NativeWebSearch",
     "Tool",
     "ToolCallRecord",
     "ToolCallSummary",

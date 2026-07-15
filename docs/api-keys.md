@@ -1,5 +1,7 @@
 # Provider API Keys
 
+## Credential sources
+
 Model provider credentials are read from environment variables or from
 `model_library_settings.set(...)` using the same names. Gateway servers keep
 these provider keys server-side; gateway clients authenticate with
@@ -10,6 +12,8 @@ for a single model call. `custom_endpoint` is for caller-supplied,
 provider-compatible URLs. Requests that set `custom_endpoint` must also set
 `custom_api_key`; the gateway uses that caller-supplied key for the custom URL
 and never sends server-held provider keys to arbitrary endpoints.
+
+## Provider mapping
 
 | Model prefix | Provider | Settings |
 | --- | --- | --- |
@@ -37,10 +41,12 @@ and never sends server-held provider keys to arbitrary endpoints.
 | `xiaomi/*` | Xiaomi | `XIAOMI_API_KEY` |
 | `zai/*` | ZhipuAI / Z.ai | `ZAI_API_KEY` |
 
+## Amazon Bedrock
+
 Amazon Bedrock can also use the default boto3 credential chain when
 `AWS_ACCESS_KEY_ID` is not set, and it does not support per-request
 `custom_api_key`.
-Other settings:
+## Gateway settings
 
 - `MODEL_GATEWAY_API_KEYS`: comma-separated server-side gateway client keys.
 - `MODEL_GATEWAY_API_KEY`: single client key used to call a gateway server.

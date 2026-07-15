@@ -2,15 +2,22 @@
 
 import io
 import json
+import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
 from pydantic import BaseModel, SecretStr, ValidationError
 
-from model_library.base.base import LLM, LLMConfig, TokenRetryParams
+from model_library.base.base import (
+    LLM,
+    LLMConfig,
+    ProviderConfig,
+    TokenRetryParams,
+    dump_gateway_config,
+)
 from model_library.base.gateway import GatewayLLM
 from model_library.registry_utils import (
     get_model_cost,
@@ -27,7 +34,12 @@ from model_library.base.input import (
     SystemInput,
     TextInput,
 )
-from model_library.base.output import FinishReason, FinishReasonInfo, QueryResult
+from model_library.base.output import (
+    FinishReason,
+    FinishReasonInfo,
+    ProviderToolEvent,
+    QueryResult,
+)
 from model_library.exceptions import (
     GatewayMethodNotSupported,
     GatewayProviderError,
@@ -35,7 +47,7 @@ from model_library.exceptions import (
 )
 from model_library.providers.openai import OpenAIConfig
 from model_gateway.history import sign_history
-from model_gateway import app as gateway_app
+import model_gateway.app as gateway_app
 from model_gateway import model_helpers
 
 PROXY_ENV = {
@@ -76,6 +88,28 @@ def _registry_config_dict(model: str = "openai/gpt-4o") -> dict[str, Any]:
     from model_library.register_models import get_model_registry
 
     return get_model_registry()[model].model_dump(mode="json")
+
+
+def test_dump_gateway_config_keeps_explicit_overrides_and_masks_secret():
+    data = dump_gateway_config(
+        LLMConfig(
+            max_tokens=16,
+            custom_api_key=SecretStr("provider-key"),
+            custom_endpoint="https://provider.example/v1",
+            provider_config={"example": "provider-specific"},
+            registry_key="openai/gpt-4o",
+            native=False,
+        )
+    )
+
+    assert data == {
+        "max_tokens": 16,
+        "native": False,
+        "provider_config": {"example": "provider-specific"},
+        "registry_key": "openai/gpt-4o",
+        "custom_api_key": "**********",
+        "custom_endpoint": "https://provider.example/v1",
+    }
 
 
 # --- GatewayLLM ---
@@ -266,10 +300,245 @@ async def test_gateway_query_accepts_client_side_logger_kwarg():
         new_callable=AsyncMock,
         return_value=response,
     ) as mock_post:
-        await llm.query("hi", logger=object())
+        await llm.query("hi", logger=logging.getLogger("test.gateway.local"))
 
     body = json.loads(mock_post.call_args[1]["content"])
     assert "logger" not in body
+
+
+async def test_gateway_query_logs_started_and_completed_locally(caplog):
+    llm = _make_gateway()
+    logger = logging.getLogger("test.gateway.local")
+    response = httpx.Response(
+        200,
+        json={
+            "output_text": "ok",
+            "tool_calls": [],
+            "signed_history": None,
+            "metadata": {},
+        },
+    )
+
+    with (
+        caplog.at_level(logging.INFO, logger=logger.name),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=response,
+        ) as mock_post,
+    ):
+        await llm.query(
+            "hi", logger=logger, run_id="run", question_id="q", query_id="qry"
+        )
+
+    body = json.loads(mock_post.call_args[1]["content"])
+    messages = [record.getMessage() for record in caplog.records]
+    assert "logger" not in body
+    assert any(
+        record.name == "test.gateway.local.<question=q><query=qry>"
+        for record in caplog.records
+    )
+    assert any(message.startswith("Query started:") for message in messages)
+    assert any(message.startswith("Query completed:") for message in messages)
+
+
+async def test_gateway_query_http_retry_log_includes_run_question_query_and_identity(
+    caplog, monkeypatch: pytest.MonkeyPatch
+):
+    llm = _make_gateway()
+    identity = {"team": "evals", "user": "person@example.com"}
+    retry_response = httpx.Response(429, json={"detail": "busy"})
+    success_response = httpx.Response(
+        200,
+        json={
+            "output_text": "ok",
+            "tool_calls": [],
+            "signed_history": None,
+            "metadata": {},
+        },
+    )
+
+    async def no_sleep(*args: object, **kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr("model_library.base.gateway.random.uniform", lambda a, b: 0.0)
+    monkeypatch.setattr(
+        "model_library.base.gateway._sleep_before_gateway_retry", no_sleep
+    )
+    with (
+        caplog.at_level(logging.WARNING, logger="llm.gateway"),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            side_effect=[retry_response, success_response],
+        ),
+    ):
+        await llm.query(
+            "hi",
+            run_id="run",
+            question_id="q",
+            query_id="qry",
+            identity=identity,
+        )
+
+    retry_messages = [
+        record.getMessage() for record in caplog.records if record.name == "llm.gateway"
+    ]
+    assert retry_messages == [
+        "gateway_http_retry path=/query attempt=1 max_attempts=8 "
+        'run_id=run question_id=q query_id=qry identity={"team":"evals","user":"person@example.com"} '
+        "status_code=429 retry_after_s=0.000"
+    ]
+
+
+async def test_gateway_query_transport_retry_log_includes_run_question_query_and_identity(
+    caplog, monkeypatch: pytest.MonkeyPatch
+):
+    llm = _make_gateway()
+    identity = {"team": "evals", "user": "person@example.com"}
+    success_response = httpx.Response(
+        200,
+        json={
+            "output_text": "ok",
+            "tool_calls": [],
+            "signed_history": None,
+            "metadata": {},
+        },
+    )
+
+    async def no_sleep(*args: object, **kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr("model_library.base.gateway.random.uniform", lambda a, b: 0.0)
+    monkeypatch.setattr(
+        "model_library.base.gateway._sleep_before_gateway_retry", no_sleep
+    )
+    with (
+        caplog.at_level(logging.WARNING, logger="llm.gateway"),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            side_effect=[httpx.ReadError("read failed"), success_response],
+        ),
+    ):
+        await llm.query(
+            "hi",
+            run_id="run",
+            question_id="q",
+            query_id="qry",
+            identity=identity,
+        )
+
+    retry_messages = [
+        record.getMessage() for record in caplog.records if record.name == "llm.gateway"
+    ]
+    assert retry_messages == [
+        "gateway_http_retry path=/query attempt=1 max_attempts=8 "
+        'run_id=run question_id=q query_id=qry identity={"team":"evals","user":"person@example.com"} '
+        "error_type=ReadError retry_after_s=0.000"
+    ]
+
+
+async def test_gateway_query_in_agent_suppresses_local_info_logs(caplog):
+    llm = _make_gateway()
+    logger = logging.getLogger("test.gateway.agent")
+    response = httpx.Response(
+        200,
+        json={
+            "output_text": "ok",
+            "tool_calls": [],
+            "signed_history": None,
+            "metadata": {},
+        },
+    )
+
+    with (
+        caplog.at_level(logging.INFO, logger=logger.name),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=response,
+        ),
+    ):
+        await llm.query("hi", logger=logger, in_agent=True, query_id="qry")
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert not any(message.startswith("Query started:") for message in messages)
+    assert not any(message.startswith("Query completed:") for message in messages)
+
+
+async def test_gateway_query_logs_history_separately_and_omits_identity(caplog):
+    llm = _make_gateway()
+    logger = logging.getLogger("test.gateway.history")
+    response = httpx.Response(
+        200,
+        json={
+            "output_text": "ok",
+            "tool_calls": [],
+            "signed_history": None,
+            "metadata": {},
+        },
+    )
+
+    with (
+        caplog.at_level(logging.INFO, logger=logger.name),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=response,
+        ),
+    ):
+        await llm.query(
+            "current",
+            history=[TextInput(text="previous")],
+            logger=logger,
+            identity={"email": "user@example.com"},
+            run_id="run",
+            question_id="q",
+            query_id="qry",
+        )
+
+    start_messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.getMessage().startswith("Query started:")
+    ]
+    assert len(start_messages) == 1
+    start_message = start_messages[0]
+    assert "--- input (1):" in start_message
+    assert "--- history(1):" in start_message
+    assert "identity" not in start_message
+    assert "user@example.com" not in start_message
+
+
+async def test_gateway_query_logs_start_but_not_completion_on_parse_failure(caplog):
+    llm = _make_gateway()
+    logger = logging.getLogger("test.gateway.failure")
+    response = httpx.Response(
+        200,
+        json={
+            "output_text": "ok",
+            "tool_calls": [],
+            "signed_history": None,
+            "metadata": {},
+            "finish_reason": "invalid",
+        },
+    )
+
+    with (
+        caplog.at_level(logging.INFO, logger=logger.name),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=response,
+        ),
+        pytest.raises(TypeError, match="Gateway finish_reason must be an object"),
+    ):
+        await llm.query("hi", logger=logger)
+
+    messages = [record.getMessage() for record in caplog.records]
+    assert any(message.startswith("Query started:") for message in messages)
+    assert not any(message.startswith("Query completed:") for message in messages)
 
 
 async def test_gateway_query_prepends_system_prompt_without_leaking_kwarg():
@@ -438,10 +707,13 @@ def test_gateway_config_roundtrips_all_provider_configs(model_key: str):
     assert rebuilt.custom_api_key is not None
     assert rebuilt.custom_api_key.get_secret_value() == "provider-key"
     assert rebuilt.custom_endpoint == "https://provider.test/v1"
-    assert rebuilt.provider_config is not None
+    assert isinstance(rebuilt.provider_config, ProviderConfig)
     assert isinstance(rebuilt.provider_config, type(provider_config_template))
     assert config.provider_config is not None
-    assert rebuilt.provider_config.model_dump() == config.provider_config.model_dump()
+    assert (
+        cast(Any, rebuilt.provider_config).model_dump()
+        == cast(Any, config.provider_config).model_dump()
+    )
 
 
 # --- proxy query flow ---
@@ -559,21 +831,18 @@ async def test_gateway_init_token_retry_only_stores_params_and_query_sends_them(
     }
 
 
-async def test_gateway_token_count_and_rate_limit_call_reserved_endpoints():
+async def test_gateway_token_count_forwards_request_and_returns_count():
     llm = _make_gateway()
-    response = httpx.Response(
-        501,
-        json={"detail": "Gateway token retry use only"},
-    )
+    response = httpx.Response(200, json={"tokens": 42})
 
     with patch(
         "httpx.AsyncClient.post",
         new_callable=AsyncMock,
         return_value=response,
     ) as mock_post:
-        with pytest.raises(Exception, match="Gateway token retry use only"):
-            await llm.count_tokens([TextInput(text="hi")], system_prompt="policy")
+        tokens = await llm.count_tokens([TextInput(text="hi")], system_prompt="policy")
 
+    assert tokens == 42
     assert mock_post.call_args[0][0].endswith("/tokens/count")
     body = json.loads(mock_post.call_args[1]["content"])
     assert body["model"] == "openai/gpt-4o"
@@ -581,6 +850,14 @@ async def test_gateway_token_count_and_rate_limit_call_reserved_endpoints():
         {"kind": "system", "text": "policy"},
         {"kind": "text", "text": "hi"},
     ]
+
+
+async def test_gateway_rate_limit_calls_reserved_endpoint():
+    llm = _make_gateway()
+    response = httpx.Response(
+        501,
+        json={"detail": "Gateway token retry use only"},
+    )
 
     with patch(
         "httpx.AsyncClient.post",
@@ -798,7 +1075,13 @@ async def test_proxy_query_treats_blank_settings_ids_as_absent():
         json.dumps({"value": float("nan")}),
         json.dumps({"large": "x" * 4097}),
         json.dumps(
-            {"d1": {"d2": {"d3": {"d4": {"d5": {"d6": {"d7": {"d8": {"d9": "too-deep"}}}}}}}}}
+            {
+                "d1": {
+                    "d2": {
+                        "d3": {"d4": {"d5": {"d6": {"d7": {"d8": {"d9": "too-deep"}}}}}}
+                    }
+                }
+            }
         ),
     ],
 )
@@ -1018,7 +1301,7 @@ async def test_proxy_query_explicit_none_ids_use_settings_ids():
     ],
 )
 async def test_proxy_query_rejects_blank_explicit_ids(
-    kwargs: dict[str, str], match: str
+    kwargs: dict[str, Any], match: str
 ):
     llm = GatewayLLM("gpt-4o", "openai")
 
@@ -1033,7 +1316,7 @@ async def test_proxy_query_rejects_blank_explicit_ids(
         ),
         pytest.raises(ValueError, match=match),
     ):
-        await llm.query([TextInput(text="hi")], **kwargs)
+        await llm.query([TextInput(text="hi")], **cast(dict[str, Any], kwargs))
 
 
 @pytest.mark.parametrize(
@@ -1046,12 +1329,14 @@ async def test_proxy_query_rejects_blank_explicit_ids(
     ],
 )
 async def test_gateway_build_body_rejects_blank_explicit_run_and_question_ids(
-    kwargs: dict[str, str], match: str
+    kwargs: dict[str, Any], match: str
 ):
     llm = GatewayLLM("gpt-4o", "openai")
 
     with pytest.raises(ValueError, match=match):
-        await llm.build_body([TextInput(text="hi")], tools=[], **kwargs)
+        await llm.build_body(
+            [TextInput(text="hi")], tools=[], **cast(dict[str, Any], kwargs)
+        )
 
 
 async def test_proxy_query_explicit_ids_override_settings_ids():
@@ -1090,6 +1375,37 @@ async def test_proxy_query_explicit_ids_override_settings_ids():
     assert body["run_id"] == "run-explicit"
     assert body["question_id"] == "question-explicit"
     assert body["query_id"] == "query-explicit"
+    assert mock_post.call_args[1]["headers"] == {
+        "X-Run-Id": "run-explicit",
+        "X-Question-Id": "question-explicit",
+        "X-Query-Id": "query-explicit",
+    }
+
+
+async def test_proxy_query_bounds_correlation_headers():
+    llm = GatewayLLM("gpt-4o", "openai")
+    response = httpx.Response(
+        200,
+        json={"output_text": "ok", "tool_calls": [], "metadata": {}},
+    )
+
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        return_value=response,
+    ) as mock_post:
+        await llm.query(
+            [TextInput(text="hi")],
+            run_id="r" * 200,
+            question_id="q" * 200,
+            query_id="z" * 200,
+        )
+
+    assert mock_post.call_args[1]["headers"] == {
+        "X-Run-Id": "r" * 128,
+        "X-Question-Id": "q" * 128,
+        "X-Query-Id": "z" * 128,
+    }
 
 
 @pytest.mark.parametrize("query_id", ["", " ", "\t"])
@@ -1255,10 +1571,9 @@ async def test_gateway_moderate_content_forwards_request_and_parses_response():
             ),
             "/files/upload",
         ),
+        (lambda llm: llm.count_tokens([TextInput(text="hi")]), "/tokens/count"),
         (
-            lambda llm: llm.get_embedding(
-                "embed this", model="text-embedding-3-large"
-            ),
+            lambda llm: llm.get_embedding("embed this", model="text-embedding-3-large"),
             "/embeddings",
         ),
         (lambda llm: llm.moderate_content("check this"), "/moderation"),
@@ -1293,6 +1608,74 @@ async def test_gateway_non_query_methods_raise_provider_error_envelope(
     err = exc_info.value
     assert err.code == "provider_auth_error"
     assert err.provider == "openai"
+    assert err.exception_type is None
+    assert err.status_code is None
+    assert not is_retriable_error(err)
+
+
+async def test_gateway_provider_error_envelope_code_is_optional():
+    llm = _make_gateway()
+    response = httpx.Response(
+        200,
+        json={
+            "error": {
+                "type": "ProviderError",
+                "message": "provider failed",
+                "provider": "openai",
+                "exception_type": "RuntimeError",
+            }
+        },
+    )
+
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        return_value=response,
+    ):
+        with pytest.raises(GatewayProviderError) as exc_info:
+            await llm.query([TextInput(text="hi")])
+
+    err = exc_info.value
+    assert err.error_type == "ProviderError"
+    assert err.code is None
+    assert err.message == "provider failed"
+    assert err.provider == "openai"
+    assert err.exception_type == "RuntimeError"
+    assert err.status_code is None
+    assert err.raw_error == response.json()["error"]
+    assert str(err) == "ProviderError: provider failed"
+    assert not is_retriable_error(err)
+
+
+async def test_gateway_provider_error_envelope_exposes_raw_code_and_status():
+    llm = _make_gateway()
+    response = httpx.Response(
+        200,
+        json={
+            "error": {
+                "type": "ProviderError",
+                "code": "rate_limit_exceeded",
+                "message": "provider says slow down",
+                "provider": "openai",
+                "exception_type": "ProviderRateLimitError",
+                "status_code": 429,
+            }
+        },
+    )
+
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        return_value=response,
+    ):
+        with pytest.raises(GatewayProviderError) as exc_info:
+            await llm.query([TextInput(text="hi")])
+
+    err = exc_info.value
+    assert err.code == "rate_limit_exceeded"
+    assert err.exception_type == "ProviderRateLimitError"
+    assert err.status_code == 429
+    assert str(err) == "ProviderError (rate_limit_exceeded): provider says slow down"
     assert not is_retriable_error(err)
 
 
@@ -1375,7 +1758,7 @@ async def test_gateway_client_to_server_contract_with_mock_model():
             pass
 
     provider_obj = {"role": "assistant", "content": "provider object"}
-    calls: list[tuple[list[InputItem], dict[str, object]]] = []
+    calls: list[tuple[list[InputItem], dict[str, Any]]] = []
     seen: dict[str, object] = {}
 
     class FakeLLM:
@@ -1400,7 +1783,9 @@ async def test_gateway_client_to_server_contract_with_mock_model():
 
     with (
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
-        patch.object(model_helpers, "get_registry_model", side_effect=fake_get_registry_model),
+        patch.object(
+            model_helpers, "get_registry_model", side_effect=fake_get_registry_model
+        ),
     ):
         app = main.create_app()
         async with httpx.AsyncClient(
@@ -1414,7 +1799,7 @@ async def test_gateway_client_to_server_contract_with_mock_model():
             with (
                 patch("model_library.model_library_settings", GatewaySettings()),
                 patch(
-                    "model_library.base.gateway.default_httpx_client",
+                    "model_library.base.gateway.gateway_httpx_client",
                     return_value=client,
                 ),
             ):
@@ -1444,7 +1829,9 @@ async def test_gateway_client_to_server_contract_with_mock_model():
     assert first.output_parsed == Answer(value=7)
     assert second.output_text == "done"
     assert len(calls) == 2
-    assert calls[0][1]["output_schema"]["title"] == "Answer"
+    output_schema = calls[0][1]["output_schema"]
+    assert isinstance(output_schema, dict)
+    assert output_schema["title"] == "Answer"
     assert isinstance(first.history[1], RawResponse)
     assert isinstance(first.history[1].response, dict)
     assert "pickle" in first.history[1].response
@@ -1604,8 +1991,10 @@ async def test_raw_response_echoed_as_blob():
 )
 async def test_proxy_mode_retries_retryable_gateway_failures(
     side_effect: list[httpx.Response | Exception],
+    caplog: pytest.LogCaptureFixture,
 ):
     llm = _make_gateway()
+    caplog.set_level(logging.WARNING, logger="llm.gateway")
 
     with (
         patch(
@@ -1619,6 +2008,9 @@ async def test_proxy_mode_retries_retryable_gateway_failures(
 
     assert result.output_text == "ok"
     assert mock_post.await_count == 2
+    assert len(caplog.records) == 1
+    assert caplog.records[0].name == "llm.gateway"
+    assert "gateway_http_retry path=/query attempt=1 max_attempts=8" in caplog.text
 
 
 async def test_proxy_mode_200_provider_error_envelope_does_not_retry():
@@ -1648,6 +2040,8 @@ async def test_proxy_mode_200_provider_error_envelope_does_not_retry():
     assert err.error_type == "ProviderError"
     assert err.code == "provider_auth_error"
     assert err.provider == "openai"
+    assert err.exception_type is None
+    assert err.status_code is None
     assert err.raw_error == provider_error.json()["error"]
     assert str(err) == "ProviderError (provider_auth_error): invalid provider key"
     assert not is_retriable_error(err)
@@ -1843,6 +2237,7 @@ def test_deserialize_from_bytes():
     serialized = LLM.serialize_input(items)
     restored = LLM.deserialize_input(serialized.encode())
     assert len(restored) == 1
+    assert isinstance(restored[0], TextInput)
     assert restored[0].text == "hello"
 
 
@@ -1853,6 +2248,7 @@ def test_deserialize_from_file(tmp_path):
     path.write_text(serialized)
     restored = LLM.deserialize_input(path)
     assert len(restored) == 1
+    assert isinstance(restored[0], TextInput)
     assert restored[0].text == "hello"
 
 
@@ -1883,6 +2279,8 @@ def test_restore_raw_fields_with_hmac():
     adapter = TypeAdapter(list[InputItem])
     parsed = list(adapter.validate_json(serialized))
 
+    assert isinstance(parsed[0], RawResponse)
+    assert isinstance(parsed[1], TextInput)
     # Raw field is still a blob
     assert isinstance(parsed[0].response, dict)
 
@@ -1910,3 +2308,49 @@ def test_restore_raw_fields_rejects_tampered():
 
     with pytest.raises(ValueError, match="HMAC verification failed"):
         LLM.restore_raw_fields(parsed, secret=secret)
+
+
+@pytest.mark.anyio
+async def test_gateway_query_preserves_provider_tool_events():
+    llm = _make_gateway()
+    event = {
+        "provider": "anthropic",
+        "type": "web_search_tool_result",
+        "name": "web_search",
+        "status": "error",
+        "input": "current AAPL stock price",
+        "output": "unavailable",
+        "sequence": 0,
+        "id": "tu_abc123",
+    }
+    response = httpx.Response(
+        200,
+        json={
+            "output_text": None,
+            "tool_calls": [],
+            "provider_tool_events": [event],
+            "metadata": {},
+        },
+    )
+
+    with (
+        patch(
+            "model_library.model_library_settings",
+            _GatewaySettings(**PROXY_ENV),
+        ),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=response,
+        ),
+    ):
+        result = await llm.query("hi")
+
+    assert len(result.provider_tool_events) == 1
+    e = result.provider_tool_events[0]
+    assert isinstance(e, ProviderToolEvent)
+    assert e.provider == "anthropic"
+    assert e.name == "web_search"
+    assert e.status == "error"
+    assert e.input == "current AAPL stock price"
+    assert e.output == "unavailable"

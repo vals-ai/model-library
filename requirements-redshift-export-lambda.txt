@@ -1,0 +1,2 @@
+pyarrow==22.0.0 \
+    --hash=sha256:c6c791b09c57ed76a18b03f2631753a4960eefbbca80f846da8baefc6491fcfe

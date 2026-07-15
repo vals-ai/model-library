@@ -1,0 +1,15 @@
+ARG LAMBDA_PYTHON_IMAGE=public.ecr.aws/lambda/python:3.12@sha256:2403867b308249173afa78a91834fc4ca197025af6653033321c0ed0703b5ead
+FROM ${LAMBDA_PYTHON_IMAGE}
+
+COPY requirements-redshift-export-lambda.txt ${LAMBDA_TASK_ROOT}/
+RUN python -m pip install \
+    --no-cache-dir \
+    --require-hashes \
+    --only-binary=:all: \
+    --requirement ${LAMBDA_TASK_ROOT}/requirements-redshift-export-lambda.txt \
+    --target ${LAMBDA_TASK_ROOT}
+
+COPY model_gateway/__init__.py ${LAMBDA_TASK_ROOT}/model_gateway/__init__.py
+COPY model_gateway/usage_ledger/ ${LAMBDA_TASK_ROOT}/model_gateway/usage_ledger/
+
+CMD ["model_gateway.usage_ledger.redshift_export_job.handler"]

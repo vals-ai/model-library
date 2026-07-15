@@ -1,7 +1,7 @@
 # ruff: noqa: E402
 # Allow path execution (`uv run python examples/...`) from a source checkout.
-from pathlib import Path as _Path
 import sys as _sys
+from pathlib import Path as _Path
 
 if __package__ in {None, ""}:
     _sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))
@@ -19,22 +19,27 @@ from typing import Literal, cast
 from pydantic import BaseModel, Field
 from rich.console import Console
 
+from examples.inputs import (
+    file_base64,
+    file_id,
+    file_url,
+    image_base64,
+    image_id,
+    image_url,
+)
+from examples.quickstart import basic_agent
+from examples.setup import setup, sync_model_metadata
 from model_library.agent import AgentResult
 from model_library.base import LLM, SystemInput, TextInput
 from model_library.base.delegate_only import DelegateOnlyException
 from model_library.base.output import QueryResult, QueryResultMetadata, RateLimit
+
 from model_library.exceptions import (
     BadInputError,
     GatewayMethodNotSupported,
     ToolCallingNotSupportedError,
 )
-
 from model_library.registry_utils import get_registry_model
-
-from examples.quickstart import basic_agent
-from examples.inputs import file_base64, file_id, file_url
-from examples.inputs import image_base64, image_id, image_url
-from examples.setup import setup, sync_model_metadata
 
 Status = Literal["pass", "fail", "warn", "skip"]
 Observed = Literal[
@@ -42,18 +47,17 @@ Observed = Literal[
     "no_result",
     "errored",
     "semantic_mismatch",
-    "not_run",
     "not_supported",
 ]
 ReasonCode = Literal[
     "ok",
     "unsupported_explicit",
     "unsupported_ambiguous",
+    "config_mismatch",
     "provider_error",
     "timeout",
     "no_result",
     "diagnostic_missing",
-    "prerequisite_failed",
     "semantic_mismatch",
 ]
 Expected = Literal[
@@ -91,7 +95,7 @@ class ValidationCase:
     name: str
     expected: Expected
     severity: Severity
-    runner: Probe | None
+    runner: Probe
     predicate: Predicate
     declared: bool | None = None
     skip_reason: str | None = None
@@ -256,6 +260,23 @@ def _reasoning_evidence_seen(result: ProbeValue) -> tuple[bool, str | None]:
     return not errors, detail if not errors else _detail(errors)
 
 
+def _no_undeclared_reasoning(result: ProbeValue) -> tuple[bool, str | None]:
+    errors = _query_result_errors(result)
+    detail: str | None = None
+    if isinstance(result, QueryResult):
+        query_result = cast(QueryResult, result)  # pyright: ignore[reportUnnecessaryCast]
+        reasoning = (query_result.reasoning or "").strip()
+        reasoning_tokens = query_result.metadata.reasoning_tokens or 0
+        detail = (
+            f"reasoning_tokens={reasoning_tokens}; reasoning_chars={len(reasoning)}"
+        )
+        if reasoning or reasoning_tokens > 0:
+            errors.append(
+                f"model emitted reasoning but reasoning_model is false; {detail}"
+            )
+    return not errors, detail if not errors else _detail(errors)
+
+
 def _cache_read_detail(
     *,
     total_input_tokens: int,
@@ -360,20 +381,11 @@ def _is_explicit_unsupported(exc: Exception) -> bool:
     return False
 
 
-async def _run_case(case: ValidationCase) -> ValidationResult:
-    if case.runner is None:
-        return ValidationResult(
-            section=case.section,
-            name=case.name,
-            expected=case.expected,
-            declared=case.declared,
-            status="skip",
-            observed="not_supported",
-            reason_code="prerequisite_failed",
-            duration=0,
-            detail=case.skip_reason or "not declared supported",
-        )
+def _declared_false_detail(case: ValidationCase) -> str:
+    return case.skip_reason or "declared support is false"
 
+
+async def _run_case(case: ValidationCase) -> ValidationResult:
     t0 = time.monotonic()
     try:
         result = await case.runner()
@@ -399,6 +411,20 @@ async def _run_case(case: ValidationCase) -> ValidationResult:
         rate_limit = _rate_limit_from_probe(result)
         passed, detail = case.predicate(result)
         if passed:
+            if case.expected == "not_declared":
+                return ValidationResult(
+                    section=case.section,
+                    name=case.name,
+                    expected=case.expected,
+                    declared=case.declared,
+                    status="fail" if case.severity == "fail" else "warn",
+                    observed="worked",
+                    reason_code="config_mismatch",
+                    duration=duration,
+                    detail=f"{_declared_false_detail(case)}, but example worked",
+                    metadata=metadata,
+                    rate_limit=rate_limit,
+                )
             return ValidationResult(
                 section=case.section,
                 name=case.name,
@@ -413,6 +439,20 @@ async def _run_case(case: ValidationCase) -> ValidationResult:
                 rate_limit=rate_limit,
             )
 
+        if case.expected == "not_declared":
+            return ValidationResult(
+                section=case.section,
+                name=case.name,
+                expected=case.expected,
+                declared=case.declared,
+                status="pass",
+                observed="not_supported",
+                reason_code="unsupported_ambiguous",
+                duration=duration,
+                detail=f"{_declared_false_detail(case)}; example did not work: {detail}",
+                metadata=metadata,
+                rate_limit=rate_limit,
+            )
         return ValidationResult(
             section=case.section,
             name=case.name,
@@ -429,6 +469,23 @@ async def _run_case(case: ValidationCase) -> ValidationResult:
     except Exception as e:
         duration = time.monotonic() - t0
         if _is_explicit_unsupported(e):
+            if case.expected == "not_declared":
+                return ValidationResult(
+                    section=case.section,
+                    name=case.name,
+                    expected=case.expected,
+                    declared=case.declared,
+                    status="pass",
+                    observed="not_supported",
+                    reason_code="ok",
+                    duration=duration,
+                    detail=(
+                        f"{_declared_false_detail(case)} "
+                        "and example reported unsupported"
+                    ),
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                )
             return ValidationResult(
                 section=case.section,
                 name=case.name,
@@ -446,6 +503,20 @@ async def _run_case(case: ValidationCase) -> ValidationResult:
                 error_message=str(e),
             )
 
+        if case.expected == "not_declared":
+            return ValidationResult(
+                section=case.section,
+                name=case.name,
+                expected=case.expected,
+                declared=case.declared,
+                status="pass",
+                observed="not_supported",
+                reason_code="unsupported_ambiguous",
+                duration=duration,
+                detail=f"{_declared_false_detail(case)} and example errored",
+                error_type=type(e).__name__,
+                error_message=str(e),
+            )
         return ValidationResult(
             section=case.section,
             name=case.name,
@@ -488,15 +559,17 @@ def _capability_case(
             declared=declared,
             skip_explicit_unsupported=skip_explicit_unsupported,
         )
+    skip_reason = f"{capability_name or f'supports_{section.lower()}'} is false"
     return ValidationCase(
         section=section,
         name=name,
         expected="not_declared",
         severity=severity,
-        runner=None,
+        runner=runner,
         predicate=predicate,
         declared=declared,
-        skip_reason=f"{capability_name or f'supports_{section.lower()}'} is false",
+        skip_reason=skip_reason,
+        skip_explicit_unsupported=skip_explicit_unsupported,
     )
 
 
@@ -547,6 +620,7 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
         declared: bool,
         runner: Probe,
         expected_text: str,
+        capability_name: str | None = None,
         skip_explicit_unsupported: bool = False,
     ) -> ValidationCase:
         return _capability_case(
@@ -556,6 +630,7 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
             severity="fail",
             runner=runner,
             predicate=_text_contains(expected_text),
+            capability_name=capability_name,
             skip_explicit_unsupported=skip_explicit_unsupported,
         )
 
@@ -617,6 +692,7 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
                 logger=QUIET_QUERY_LOGGER,
             ),
             expected_text="pineapple",
+            capability_name="supports.files",
         ),
         semantic_transport_case(
             section="Files",
@@ -629,6 +705,7 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
                 logger=QUIET_QUERY_LOGGER,
             ),
             expected_text="pineapple",
+            capability_name="supports.files",
             skip_explicit_unsupported=True,
         ),
         semantic_transport_case(
@@ -642,6 +719,7 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
                 logger=QUIET_QUERY_LOGGER,
             ),
             expected_text="sample",
+            capability_name="supports.files",
             skip_explicit_unsupported=True,
         ),
         _capability_case(
@@ -662,18 +740,21 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
         ),
     ]
 
-    if model.reasoning:
-        cases.append(
-            ValidationCase(
-                section="Reasoning",
-                name="evidence",
-                expected="required",
-                severity="fail",
-                runner=reasoning_probe,
-                predicate=_reasoning_evidence_seen,
-                declared=model.reasoning,
-            )
+    cases.append(
+        ValidationCase(
+            section="Reasoning",
+            name="evidence" if model.reasoning else "undeclared reasoning",
+            expected="required",
+            severity="fail",
+            runner=reasoning_probe,
+            predicate=(
+                _reasoning_evidence_seen
+                if model.reasoning
+                else _no_undeclared_reasoning
+            ),
+            declared=model.reasoning,
         )
+    )
 
     cases.extend(
         [
@@ -806,7 +887,10 @@ def _safe_dump(value: object) -> object:
 def _model_info(model_key: str, model: LLM) -> dict[str, object]:
     metadata = model.metadata
     registry_key = cast(object, getattr(model, "registry_key", None))
-    provider_config = cast(object, model.provider_config)
+    try:
+        provider_config = cast(object, model.provider_config)
+    except AttributeError:
+        provider_config = None
     return {
         "requested_key": model_key,
         "registry_key": registry_key,
@@ -849,9 +933,10 @@ def _print_report(report: ValidationReport, model: LLM) -> None:
         timing = f" [dim]({result.duration:.1f}s)[/dim]" if result.duration > 0 else ""
         message = result.detail or result.error_message or result.reason_code
         inline_reason = " ".join(message.split())
-        inline_message = (
-            f" - {inline_reason}" if result.status in {"fail", "warn"} else ""
+        show_inline_message = result.status in {"fail", "warn"} or (
+            result.expected == "not_declared" and result.detail is not None
         )
+        inline_message = f" - {inline_reason}" if show_inline_message else ""
         single_row_section = section_counts[result.section] == 1
         if single_row_section:
             console.print()
@@ -894,7 +979,14 @@ def _print_report(report: ValidationReport, model: LLM) -> None:
             )
     else:
         console.print()
-        if any(result.status == "skip" for result in report.results):
+        if any(
+            result.reason_code == "unsupported_ambiguous" for result in report.results
+        ):
+            console.print(
+                "[bold yellow]No capability mismatches found, but some undeclared "
+                "capability probes were inconclusive.[/bold yellow]"
+            )
+        elif any(result.status == "skip" for result in report.results):
             console.print("[bold green]No warnings or failures.[/bold green]")
         else:
             console.print("[bold green]All validation checks passed.[/bold green]")

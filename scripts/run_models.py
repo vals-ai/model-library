@@ -164,7 +164,11 @@ async def process_model(model_str: str, provider_name: str):
         running_models[provider_name].pop(model_str, None)
 
 
-MODEL_OVERRIDES: list[str] = []
+MODEL_OVERRIDES: list[str] = [
+    "poolside/laguna-xs.2:fast",
+    "poolside/laguna-xs.2",
+]
+ignored_models: list[str] = []
 ERROR_OVERRIDES = [
     "overloaded",
     "rate limit",
@@ -196,7 +200,7 @@ async def main():
             continue
         if config.metadata.internal_only:
             continue
-        if key in IGNORED_MODELS:
+        if key in ignored_models:
             continue
 
         tasks.append(process_model(key, config.provider_name))

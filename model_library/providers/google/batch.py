@@ -53,9 +53,7 @@ def parse_predictions_jsonl(jsonl: str) -> list[BatchResult]:
         if "response" in data:
             response = data["response"]
             text, reasoning = extract_text_from_json_response(response)
-            output = QueryResult()
-            output.output_text = text
-            output.reasoning = reasoning
+            output = QueryResult(output_text=text, reasoning=reasoning)
             if "usageMetadata" in response:
                 output.metadata.in_tokens = response["usageMetadata"].get(
                     "promptTokenCount", 0
@@ -63,9 +61,9 @@ def parse_predictions_jsonl(jsonl: str) -> list[BatchResult]:
                 output.metadata.out_tokens = response["usageMetadata"].get(
                     "candidatesTokenCount", 0
                 )
-            output.extras.response_id = response.get("responseId") or response.get(
-                "response_id"
-            )
+            response_id = response.get("responseId") or response.get("response_id")
+            output.extras.response_id = response_id
+            output.extras.provider_response_id = response_id
             results.append(BatchResult(custom_id=custom_id, output=output))
         else:
             error = data.get("error", {}).get("message", "Unknown error")

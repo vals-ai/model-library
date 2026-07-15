@@ -39,27 +39,46 @@ The gateway server uses server-side auth/signing config. Do not set `MODEL_GATEW
 
 #### Capacity and timeouts
 
-- `GATEWAY_MAX_ACTIVE_REQUESTS_PER_WORKER` (**optional**): per-uvicorn-worker active model-call cap.
-- `GATEWAY_MAX_QUEUED_REQUESTS_PER_WORKER` (**optional**): per-uvicorn-worker queued model-call cap.
-- `GATEWAY_QUEUE_TIMEOUT_SECONDS` (**optional**): maximum time to wait for an active slot before returning `429`. Keep this short so gateway saturation fails fast instead of holding caller connections.
-- `GATEWAY_REQUEST_TIMEOUT_SECONDS` (**optional**): maximum model-call execution time after admission before returning `504`. Configure upstream idle timeouts to be greater than this value.
+| Contract | Behavior |
+| --- | --- |
+| Admission | Application code bounds active calls, queue size, and queue wait before request-body parsing. |
+| Timeout ordering | The application timeout stays below target drain; caller and ALB timeouts stay above the gateway timeout; Uvicorn keepalive stays above the ALB idle timeout. |
+| Provider timeout | Provider read timeouts may fire before the outer gateway cap. |
+| Ownership | Deployment infrastructure supplies worker/process settings; keep those values consistent with the application limits above. |
+
+#### Deployments
+
+Deployment and drain behavior is infrastructure-specific. Drain is best-effort,
+not durable work preservation: queue wait, cancellation cleanup, client
+disconnects, task crashes, and provider behavior can interrupt or delay work.
+Do not assume every accepted HTTP connection will return before a deployment
+drain closes.
 
 #### Startup canary
 
-- `GATEWAY_STARTUP_CANARY_ENABLED` (**optional**): when enabled, the gateway performs one authenticated local `/query` canary after startup. `/health/ready` returns `503` until it passes, so deployment health checks can fail and roll back broken query-path deploys.
-- `GATEWAY_STARTUP_CANARY_MODEL` (**optional**): model used by the startup `/query` canary.
-- `GATEWAY_STARTUP_CANARY_MAX_TOKENS` (**optional**): max output tokens for the startup canary.
-- `GATEWAY_STARTUP_CANARY_REASONING_EFFORT` (**optional**): reasoning effort for the startup canary.
-- `GATEWAY_STARTUP_CANARY_TIMEOUT_SECONDS` (**optional**): timeout for the startup canary `/query` request.
-- `GATEWAY_STARTUP_CANARY_WAIT_TIMEOUT_SECONDS` (**optional**): time to wait for the local server `/health/live` endpoint before issuing the one startup canary `/query`.
+`GATEWAY_STARTUP_CANARY_ENABLED` enables one authenticated local `/query` and
+keeps `/health/ready` at `503` until it passes.
 
 #### Usage ledger
 
-- `GATEWAY_USAGE_LEDGER_MODE` (**optional**): durable successful-query usage ledger mode: `disabled`, `shadow`, or `enforced`. Use `enforced` when a successful `/query` must durably hand off its usage event before returning.
-- `GATEWAY_USAGE_LEDGER_QUEUE_URL` (**required when gateway ledger is enabled**): SQS queue for successful completed `/query` usage events. When set, the gateway awaits SQS `SendMessage` and a consumer can write the DynamoDB ledger row asynchronously.
+- `GATEWAY_USAGE_LEDGER_MODE` (**optional**): successful-query usage ledger mode: `disabled`, `shadow`, or `enforced`. Defaults to `shadow`. In current SQS mode, `/query` locally queues the usage event before returning and SQS send/retry runs in the background, every 10 seconds for up to 20 minutes. Synchronous SQS durable acceptance is intentionally not implemented; see the usage-ledger rationale below.
+- `GATEWAY_USAGE_LEDGER_QUEUE_URL` (**required when gateway ledger is enabled**): SQS queue for successful completed `/query` usage events. When set, the gateway sends successful usage events through SQS and a consumer can write the DynamoDB ledger row asynchronously.
 - `GATEWAY_USAGE_LEDGER_TABLE_NAME` (**required when DynamoDB writer is enabled**): DynamoDB table for successful completed `/query` usage events. Set this for DynamoDB writers; local/direct gateway DynamoDB mode can also set it when no queue URL is configured.
-- `GATEWAY_USAGE_LEDGER_SHARDS` (**optional**): number of write shards for day-partitioned DynamoDB usage events and run/key/benchmark/agent GSIs. Readers must use the configured shard count.
+- `GATEWAY_USAGE_LEDGER_SHARDS` (**optional**): number of write shards for day-partitioned DynamoDB usage events and run/key/benchmark/agent GSIs. Readers and the Redshift export Lambda must use the configured shard count.
 - `GATEWAY_USAGE_LEDGER_MAX_POOL_CONNECTIONS` (**optional**): aiobotocore HTTP connection pool size for the per-process async ledger client. Increase only with matching request concurrency and AWS account limits.
+
+#### Redshift usage export
+
+Set these variables for the scheduled Redshift export job. The job also uses
+`GATEWAY_USAGE_LEDGER_TABLE_NAME` and `GATEWAY_USAGE_LEDGER_SHARDS` from the
+usage-ledger section.
+
+- `GATEWAY_USAGE_REDSHIFT_WORKGROUP_NAME`: shared Redshift Serverless workgroup for Data API COPY, MERGE, and aggregate refresh.
+- `GATEWAY_USAGE_REDSHIFT_DATABASE_NAME`: shared Redshift database name.
+- `GATEWAY_USAGE_REDSHIFT_SCHEMA_NAME`: destination schema, for example `gateway_usage`.
+- `GATEWAY_USAGE_REDSHIFT_LANDING_BUCKET_NAME`: shared S3 bucket where the export Lambda writes Parquet parts and COPY manifests.
+- `GATEWAY_USAGE_REDSHIFT_EXPORT_PREFIX`: S3 prefix for exported usage data, for example `gateway-usage/{stage}/raw`.
+- `GATEWAY_USAGE_REDSHIFT_COPY_ROLE_ARN`: IAM role that Redshift assumes to read the landing bucket during COPY.
 
 #### Telemetry
 
@@ -88,9 +107,11 @@ Attribution behavior:
 - Identity keys are caller-defined.
 - Identity values are preserved as provided.
 - Identity is emitted/stored as raw caller metadata for debugging and ledger attribution.
-- Do not put PII, secrets, provider API keys, or bearer tokens in identity. `IDENTITY` is persisted in usage ledger and operational metadata.
-- `benchmark_name` and `agent_name` are recognized usage-ledger lookup keys when their values are strings that trim to non-empty values no larger than 512 UTF-8 bytes.
-- Benchmark/agent ledger lookup keys are exact-match and forward-only: rows written before those indexes existed are excluded unless backfilled.
+- `IDENTITY` is persisted in usage ledger and operational metadata, so do not put secrets, provider API keys, bearer tokens, or other credentials in identity. PII is allowed when needed for attribution/analytics.
+- `benchmark_name`, `agent_name`, and `email` are recognized usage-ledger analytics keys when their values are strings that trim to non-empty values no larger than 512 UTF-8 bytes.
+- `email` must be email-shaped and is stored as canonical lowercased `identity_email` for exact Redshift filtering.
+- Benchmark and agent raw-ledger lookup keys are exact-match and forward-only. Email analytics are available through Redshift; there is no raw-ledger email lookup or substring search path.
+- Rows written before those fields, indexes, or mart columns existed are excluded unless backfilled.
 - Invalid `IDENTITY` settings are omitted by the client:
   - non-object
   - non-finite
@@ -112,9 +133,10 @@ Attribution behavior:
 Gateway client HTTP retry policy:
 
 - Gateway-mode `LLM.query()` does not use the normal model/provider retry wrapper; provider retries happen inside the gateway server.
-- Provider-call failures from `/query`, `/files/upload`, `/embeddings`, and `/moderation` return HTTP `200` with a top-level `error` envelope such as `{"error":{"type":"ProviderError","code":"provider_rate_limit","message":"..."}}`.
+- Provider-call failures from `/query`, `/tokens/count`, `/files/upload`, `/embeddings`, and `/moderation` return HTTP `200` with a top-level `error` envelope such as `{"error":{"type":"ProviderError","message":"...","exception_type":"RateLimitError"}}`.
 - The client raises HTTP `200` error envelopes as `GatewayProviderError` without retrying.
-- Provider-error responses do not include `signed_history`, pickled exception objects, or raw provider exception transport.
+- Provider-error envelopes include the provider-operation exception type and sanitized message. They include `code` and `status_code` only when the provider/library exception already exposes those fields; the gateway does not synthesize mapped provider codes or mapped provider status codes for the response body.
+- Provider-error responses do not include `signed_history`, pickled exception objects, tracebacks, or raw provider exception transport.
 - The client retries gateway HTTP transport failures, actual HTTP `429`, and actual HTTP `5xx` responses.
 - The client does not retry actual HTTP `4xx` responses except `429`.
 
@@ -133,7 +155,7 @@ For deployed environments, keep server and client Secrets Manager entries separa
 | GET    | `/registry`           | Yes  | Return the full model registry snapshot for discovery clients              |
 | POST   | `/models/resolve`     | Yes  | Resolve server-side effective config and full registry entry for one model |
 | POST   | `/query`              | Yes  | Execute an LLM query                                                       |
-| POST   | `/tokens/count`       | Yes  | Reserved endpoint; currently rejects with `Gateway token retry use only`   |
+| POST   | `/tokens/count`       | Yes  | Count input tokens by using the gateway-side model implementation          |
 | POST   | `/rate-limit`         | Yes  | Reserved endpoint; currently rejects with `Gateway token retry use only`   |
 | GET    | `/token-retry/status` | Yes  | Return 1s-cached Redis token retry and benchmark queue status              |
 | POST   | `/files/upload`       | Yes  | Upload a provider file and return a `FileWithId`                           |
@@ -217,7 +239,7 @@ Client (get_model_registry / get_registry_model)
      - token retry params, when token retry is active
    - Registry/config changes are not hot-reloaded into existing cached provider models.
    - Restart or cache invalidation is required to pick up registry/config changes.
-   - Invalid structured-output JSON from a provider is surfaced as `provider_bad_response` instead of a generic gateway internal error.
+   - Provider-call failures are surfaced as HTTP `200` `ProviderError` envelopes with provider/library exception information instead of gateway-mapped error codes.
 
 5. **Server restores Raw fields**
 

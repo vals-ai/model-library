@@ -31,7 +31,9 @@ async def test_anthropic_finish_reason_all_values():
 
     stop_reason_type = Message.__annotations__["stop_reason"]
     stop_reasons = [
-        x for x in typing.get_args(typing.get_args(stop_reason_type)[0]) if x is not None
+        x
+        for x in typing.get_args(typing.get_args(stop_reason_type)[0])
+        if x is not None
     ]
 
     expected: dict[str, FinishReason] = {
@@ -39,7 +41,7 @@ async def test_anthropic_finish_reason_all_values():
         "max_tokens": FinishReason.MAX_TOKENS,
         "stop_sequence": FinishReason.STOP_SEQUENCE,
         "tool_use": FinishReason.TOOL_CALLS,
-        "pause_turn": FinishReason.STOP,
+        "pause_turn": FinishReason.PAUSED,
         "refusal": FinishReason.CONTENT_FILTER,
     }
 
@@ -121,9 +123,7 @@ async def test_openai_responses_finish_reason_all_values():
                     ("max_output_tokens", FinishReason.MAX_TOKENS),
                     ("content_filter", FinishReason.CONTENT_FILTER),
                 ):
-                    info = map_openai_responses_finish_reason(
-                        status, incomplete_reason
-                    )
+                    info = map_openai_responses_finish_reason(status, incomplete_reason)
                     _assert_finish_reason_info(
                         info,
                         expected_reason=expected_reason,
@@ -278,7 +278,9 @@ async def test_xai_finish_reason_all_values():
 
 async def test_mistral_finish_reason_all_values():
     pytest.importorskip("mistralai")
-    from mistralai.client.models import ChatCompletionChoiceFinishReason as MistralFinishReason
+    from mistralai.client.models import (
+        ChatCompletionChoiceFinishReason as MistralFinishReason,
+    )
 
     union_args = typing.get_args(MistralFinishReason)
     literal_values = list(typing.get_args(union_args[0]))
@@ -325,4 +327,3 @@ async def test_ai21_finish_reason_all_values():
         expected_reason=FinishReason.TOOL_CALLS,
         expected_raw="stop",
     )
-

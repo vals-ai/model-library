@@ -121,6 +121,46 @@ claude-sonnet-models:
     supports:
       batch: true
 
+  anthropic/claude-sonnet-5:
+    label: Claude Sonnet 5
+    release_date: 2026-06-30
+    properties:
+      context_window: 1_000_000
+      max_tokens: 128_000
+      reasoning_model: true
+      training_cutoff: "2026-01"
+    costs_per_million_token:
+      input: 3
+      output: 15
+      cache:
+        read: 0.3
+        write: 3.75
+    provider_properties:
+      supports_auto_thinking: true
+      supports_compute_effort: true
+    default_parameters:
+      max_tokens: 128_000
+      compute_effort: "max"
+    metadata:
+      available_as_evaluator: true
+    alternative_keys:
+      - anthropic/claude-sonnet-5-low:
+          label: Claude Sonnet 5 (Low Effort)
+          default_parameters:
+            compute_effort: "low"
+      - anthropic/claude-sonnet-5-medium:
+          label: Claude Sonnet 5 (Medium Effort)
+          default_parameters:
+            compute_effort: "medium"
+      - anthropic/claude-sonnet-5-high:
+          label: Claude Sonnet 5 (High Effort)
+          default_parameters:
+            compute_effort: "high"
+      - anthropic/claude-sonnet-5-xhigh:
+          label: Claude Sonnet 5 (Extra High Effort)
+          default_parameters:
+            compute_effort: "xhigh"
+
   anthropic/claude-sonnet-4-6:
     label: Claude Sonnet 4.6
     release_date: 2026-02-17

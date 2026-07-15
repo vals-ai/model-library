@@ -13,7 +13,7 @@ import time as real_time_module
 from types import ModuleType
 from unittest.mock import AsyncMock, patch
 
-import fakeredis.aioredis
+import fakeredis
 import pytest
 
 bg_module = importlib.import_module("model_library.retriers.token.background")
@@ -139,7 +139,7 @@ async def _keep_active_run(redis, clock, run_id: str = "run-active") -> None:
 
 @pytest.fixture
 def redis():
-    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    client = fakeredis.FakeAsyncRedis(decode_responses=True)
     set_redis_client(client)
     return client
 
@@ -1222,9 +1222,59 @@ async def test_heartbeat_cancelled_on_exit(redis, clock):
         for p in reversed(patches):
             p.stop()
 
-    # after exit, heartbeat should be cancelled; no more writes
-    await redis.delete(f"{TOKEN_KEY}:task:active")
+    # after exit, the owned active key should be removed and heartbeat should not rewrite it
+    assert await redis.get(f"{TOKEN_KEY}:task:active") is None
     await _yield(10)
+    assert await redis.get(f"{TOKEN_KEY}:task:active") is None
+
+
+async def test_background_loops_removes_active_key_after_heartbeat_failure(
+    redis, clock
+):
+    await _init_redis(redis)
+    cfg = _cfg()
+    heartbeat_failed = asyncio.Event()
+    refresh_calls = 0
+    original_refresh = bg_module._refresh_active_key_if_unowned_or_owned
+    task: asyncio.Task[None] | None = None
+
+    async def refresh_once_then_fail(active_key: str, loop_id: str, ttl: int) -> bool:
+        nonlocal refresh_calls
+        refresh_calls += 1
+        if refresh_calls == 1:
+            return await original_refresh(active_key, loop_id, ttl)
+        heartbeat_failed.set()
+        raise RuntimeError("heartbeat failed")
+
+    patches = _make_patches(
+        clock, LOOP_POLL_INTERVAL=1.0, FULL_TOKENS_SHUTDOWN=1_000_000
+    )
+    patches.append(
+        patch.object(
+            bg_module,
+            "_refresh_active_key_if_unowned_or_owned",
+            new=refresh_once_then_fail,
+        )
+    )
+    for p in patches:
+        p.start()
+    try:
+        task = asyncio.create_task(
+            background_loops(cfg, AsyncMock(return_value=None), logger)
+        )
+        await asyncio.wait_for(heartbeat_failed.wait(), timeout=1)
+        assert await redis.get(f"{TOKEN_KEY}:task:active") is not None
+
+        task.cancel()
+        with pytest.raises(RuntimeError, match="heartbeat failed"):
+            await task
+    finally:
+        if task is not None and not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        for p in reversed(patches):
+            p.stop()
+
     assert await redis.get(f"{TOKEN_KEY}:task:active") is None
 
 

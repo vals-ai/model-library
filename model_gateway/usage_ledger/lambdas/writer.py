@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import os
+import time
 from collections.abc import Mapping
-from typing import Any, cast
+from typing import Any, TypeAlias, cast
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -22,6 +24,12 @@ from model_gateway.usage_ledger.message import (
 
 logger = logging.getLogger(__name__)
 
+MetricValue: TypeAlias = int | float
+MetricSpec: TypeAlias = tuple[MetricValue, str]
+
+NAMESPACE = "ModelProxy/Gateway"
+DEFAULT_STAGE = "unknown"
+DEFAULT_SERVICE = "gateway"
 
 _client: SyncDynamoDbClient | None = None
 
@@ -43,11 +51,13 @@ def handler(
         try:
             body = _message_body(record)
             usage_event = deserialize_usage_event_message(body)
-            put_usage_event_sync(
+            inserted = put_usage_event_sync(
                 client=client,
                 table_name=table_name,
                 event=usage_event,
             )
+            if inserted:
+                _emit_raw_row_written_metric()
         except (
             BotoCoreError,
             ClientError,
@@ -61,6 +71,35 @@ def handler(
             )
             failures.append({"itemIdentifier": message_id})
     return {"batchItemFailures": failures}
+
+
+def _emit_raw_row_written_metric() -> None:
+    emit_usage_ledger_metrics({"UsageLedgerRawRowsWritten": (1, "Count")})
+
+
+def emit_usage_ledger_metrics(metrics: Mapping[str, MetricSpec]) -> None:
+    if not metrics:
+        return
+    payload: dict[str, object] = {
+        "_aws": {
+            "Timestamp": int(time.time() * 1000),
+            "CloudWatchMetrics": [
+                {
+                    "Namespace": NAMESPACE,
+                    "Dimensions": [["Stage", "Service"]],
+                    "Metrics": [
+                        {"Name": name, "Unit": unit}
+                        for name, (_value, unit) in metrics.items()
+                    ],
+                }
+            ],
+        },
+        "Stage": os.environ.get("GATEWAY_STAGE", DEFAULT_STAGE),
+        "Service": os.environ.get("GATEWAY_SERVICE", DEFAULT_SERVICE),
+    }
+    for name, (value, _unit) in metrics.items():
+        payload[name] = value
+    print(json.dumps(payload, sort_keys=True))
 
 
 def _dynamodb_client() -> SyncDynamoDbClient:

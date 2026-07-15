@@ -8,19 +8,20 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Literal, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import httpx
+import httpx  # pyright: ignore[reportMissingImports]
 import pytest
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 from redis.exceptions import TimeoutError as RedisTimeoutError
 from starlette.testclient import TestClient
 
-from model_gateway import app as gateway_app
-from model_gateway import model_helpers
+import model_gateway.app as gateway_app
+import model_gateway.model_helpers as model_helpers
 from model_gateway import startup_canary
 from model_gateway import telemetry_helpers
+from model_library.base import LLMConfig, TextInput, dump_gateway_config
 
 
-def _make_client():
+def _make_client(*, client: tuple[str, int] = ("testclient", 50000)):
     from model_gateway import main
 
     class ServerSettings:
@@ -35,7 +36,7 @@ def _make_client():
 
     with patch.object(gateway_app, "model_library_settings", ServerSettings()):
         app = main.create_app()
-        return TestClient(app)
+        return TestClient(app, client=client)
 
 
 HEADERS = {"Authorization": "Bearer sk-test"}
@@ -117,9 +118,7 @@ def test_llm_config_telemetry_attributes_keeps_arbitrary_safe_provider_config_ke
     )
 
     assert attrs == {
-        "llm.config.provider_config.new_boolean.mode": "enabled",
-        "llm.config.provider_config.new_limit": 3,
-        "llm.config.provider_config.new_mode": "fast",
+        "llm.config.provider_config": '{"api_key":"<redacted>","nested":{"value":"not scalar"},"new_boolean":true,"new_limit":3,"new_mode":"fast","prompt":"raw prompt"}'
     }
 
 
@@ -127,20 +126,30 @@ def test_query_telemetry_buckets_custom_endpoint_without_raw_url():
     from model_gateway.types import QueryRequest
 
     raw_endpoint = "https://private-provider.example.internal/v1"
+    config = dump_gateway_config(
+        LLMConfig(
+            custom_endpoint=raw_endpoint,
+            custom_api_key=SecretStr("sk-provider"),
+        )
+    )
     attrs = telemetry_helpers.query_telemetry_attributes(
         QueryRequest(
             model="openai/gpt-4o",
-            inputs=[{"kind": "text", "text": "hi"}],
-            config={
-                "custom_endpoint": raw_endpoint,
-                "custom_api_key": "sk-provider",
-            },
+            inputs=[TextInput(text="hi")],
+            config=LLMConfig(
+                custom_endpoint=raw_endpoint,
+                custom_api_key=SecretStr("sk-provider"),
+            ),
         ),
-        {"custom_endpoint": raw_endpoint, "custom_api_key": "sk-provider"},
+        config,
+        config_query_params=telemetry_helpers.query_config_params(config),
+        token_retry_params=None,
     )
 
     assert attrs["model.provider_endpoint"] == "custom"
-    assert raw_endpoint not in attrs.values()
+    assert attrs["llm.config.custom_endpoint"] == f'"{raw_endpoint}"'
+    assert attrs["llm.config.custom_api_key"] == '"**********"'
+    assert "sk-provider" not in attrs.values()
 
 
 def test_health_live_no_auth():
@@ -257,7 +266,6 @@ def test_lifespan_survives_malformed_otel_env():
 
 
 async def test_startup_canary_executes_authenticated_local_query():
-    from model_gateway import main
 
     requests: list[httpx.Request] = []
 
@@ -294,8 +302,35 @@ async def test_startup_canary_executes_authenticated_local_query():
     assert body["run_id"] == "gateway-startup-canary"
 
 
+async def test_run_startup_canary_uses_doubled_output_budget():
+    app = MagicMock()
+    app.state.startup_canary = {
+        "enabled": True,
+        "status": "pending",
+        "error": "",
+    }
+
+    with (
+        patch.dict(os.environ, {"GATEWAY_PORT": "8123"}),
+        patch.object(
+            startup_canary, "execute_startup_canary", new_callable=AsyncMock
+        ) as execute,
+    ):
+        await startup_canary.run_startup_canary(app, "sk-test")
+
+    execute.assert_awaited_once_with(
+        api_key="sk-test",
+        base_url="http://127.0.0.1:8123",
+        model="openai/gpt-5.4-nano-2026-03-17",
+        max_tokens=32,
+        timeout_seconds=30,
+        reasoning_effort="low",
+        wait_timeout_seconds=30,
+    )
+    assert app.state.startup_canary["status"] == "passed"
+
+
 async def test_startup_canary_fails_without_signed_history():
-    from model_gateway import main
 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path == "/health/live":
@@ -379,7 +414,8 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     config = MagicMock()
     config.model_dump.return_value = {"full_key": "openai/gpt-4o"}
     with patch(
-        "model_gateway.routes.models.get_model_registry", return_value={"openai/gpt-4o": config}
+        "model_gateway.routes.models.get_model_registry",
+        return_value={"openai/gpt-4o": config},
     ):
         resp = client.get("/registry", headers=HEADERS)
 
@@ -412,23 +448,142 @@ def test_model_resolve_requires_auth_and_returns_effective_and_registry_config()
     assert "default_parameters" not in data
     assert data["effective_config"]["max_tokens"] == 123
     assert data["effective_config"]["supports_batch"] is True
-    assert "custom_api_key" not in data["effective_config"]
+    assert data["effective_config"]["custom_api_key"] == "**********"
     assert data["registry_config"]["full_key"] == "openai/gpt-4o"
 
 
-def test_token_count_and_rate_limit_endpoints_are_token_retry_only():
-    client = _make_client()
+def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
+    from model_library.base.base import LLM
+    from model_library.base.input import RawInput, TextInput
 
+    seen: dict[str, object] = {}
+    signed_inputs = LLM.serialize_input(
+        [
+            RawInput(input={"messages": [{"role": "user", "content": "hi"}]}),
+            TextInput(text="count this"),
+        ],
+        secret=b"test-secret",
+    )
+
+    class FakeLLM:
+        async def count_tokens(self, inputs, *, tools, **kwargs):
+            seen["inputs"] = inputs
+            seen["tools"] = tools
+            seen["kwargs"] = kwargs
+            return 17
+
+    def fake_get_registry_model(model, config):
+        seen["model"] = model
+        seen["max_tokens"] = config.max_tokens
+        return FakeLLM()
+
+    client = _make_client()
     token_body = {
         "model": "openai/gpt-4o",
-        "inputs": [{"kind": "text", "text": "hi"}],
-        "tools": [],
-        "config": {},
+        "inputs": json.loads(signed_inputs),
+        "tools": [
+            {
+                "name": "lookup",
+                "body": {
+                    "name": "lookup",
+                    "description": "Lookup a value",
+                    "properties": {},
+                    "required": [],
+                },
+            }
+        ],
+        "config": {"max_tokens": 7},
     }
     assert client.post("/tokens/count", json=token_body).status_code == 401
-    token_resp = client.post("/tokens/count", headers=HEADERS, json=token_body)
-    assert token_resp.status_code == 501
-    assert token_resp.json() == {"detail": "Gateway token retry use only"}
+
+    with patch.object(
+        model_helpers, "get_registry_model", side_effect=fake_get_registry_model
+    ):
+        token_resp = client.post("/tokens/count", headers=HEADERS, json=token_body)
+
+    assert token_resp.status_code == 200
+    assert token_resp.json() == {"tokens": 17}
+    assert seen["model"] == "openai/gpt-4o"
+    assert seen["max_tokens"] == 7
+    seen_inputs = cast(list[object], seen["inputs"])
+    assert isinstance(seen_inputs[0], RawInput)
+    assert seen_inputs[0].input == {"messages": [{"role": "user", "content": "hi"}]}
+    assert isinstance(seen_inputs[1], TextInput)
+    assert seen_inputs[1].text == "count this"
+    assert len(cast(list[object], seen["tools"])) == 1
+    assert seen["kwargs"] == {}
+
+
+def test_token_count_is_not_rejected_by_query_capacity_limit():
+    from model_gateway.capacity import GatewayCapacityLimiter
+
+    class FakeLLM:
+        async def count_tokens(self, inputs, *, tools, **kwargs):
+            return 7
+
+    client = _make_client()
+    limiter = GatewayCapacityLimiter(
+        max_active=1,
+        max_queued=0,
+        queue_timeout_seconds=1,
+        request_timeout_seconds=1,
+    )
+    limiter._active = 1  # pyright: ignore[reportPrivateUsage]
+    cast(Any, client.app).state.capacity_limiter = limiter
+
+    with patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()):
+        resp = client.post(
+            "/tokens/count",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+                "tools": [],
+                "config": {},
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"tokens": 7}
+
+
+def test_token_count_rejects_malformed_raw_history_with_400():
+    class FakeLLM:
+        async def count_tokens(self, inputs, *, tools, **kwargs):
+            raise AssertionError("count_tokens should not be called")
+
+    client = _make_client()
+    with (
+        patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+        patch.object(gateway_app.telemetry, "record_exception") as record_exception,
+    ):
+        resp = client.post(
+            "/tokens/count",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [
+                    {
+                        "kind": "raw_input",
+                        "input": {"messages": [{"role": "user", "content": "hi"}]},
+                    }
+                ],
+                "tools": [],
+                "config": {},
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "hmac_verification_failed"
+    record_exception.assert_called_once()
+    error_attrs = record_exception.call_args.args[1]
+    assert error_attrs["gateway.error.code"] == "hmac_verification_failed"
+    assert error_attrs["gateway.error.phase"] == "restore_history"
+    assert error_attrs["http.response.status_code"] == 400
+
+
+def test_rate_limit_endpoint_is_token_retry_only():
+    client = _make_client()
 
     rate_body = {"model": "openai/gpt-4o", "config": {}}
     assert client.post("/rate-limit", json=rate_body).status_code == 401
@@ -444,7 +599,10 @@ def test_token_retry_status_requires_auth_and_returns_redis_status():
     status = MagicMock()
     status.model_dump.return_value = {"models": []}
     with (
-        patch("model_gateway.routes.token_retry.validate_redis_client", new_callable=AsyncMock),
+        patch(
+            "model_gateway.routes.token_retry.validate_redis_client",
+            new_callable=AsyncMock,
+        ),
         patch(
             "model_gateway.routes.token_retry.get_token_retry_status",
             new_callable=AsyncMock,
@@ -463,7 +621,10 @@ def test_token_retry_status_is_cached_briefly_per_process():
     status = MagicMock()
     status.model_dump.return_value = {"models": []}
     with (
-        patch("model_gateway.routes.token_retry.validate_redis_client", new_callable=AsyncMock),
+        patch(
+            "model_gateway.routes.token_retry.validate_redis_client",
+            new_callable=AsyncMock,
+        ),
         patch(
             "model_gateway.routes.token_retry.get_token_retry_status",
             new_callable=AsyncMock,
@@ -575,7 +736,9 @@ def test_lifespan_starts_and_closes_usage_ledger():
     fake_ledger = FakeUsageLedger()
     with (
         patch.dict(os.environ, {"GATEWAY_STARTUP_CANARY_ENABLED": "false"}),
-        patch.object(gateway_app, "create_usage_ledger_from_env", return_value=fake_ledger),
+        patch.object(
+            gateway_app, "create_usage_ledger_from_env", return_value=fake_ledger
+        ),
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
     ):
@@ -634,7 +797,9 @@ def test_lifespan_close_continues_after_usage_ledger_close_failure():
             "create_usage_ledger_from_env",
             return_value=FailingCloseUsageLedger(),
         ),
-        patch.object(gateway_app.telemetry, "shutdown_telemetry") as mock_shutdown_telemetry,
+        patch.object(
+            gateway_app.telemetry, "shutdown_telemetry"
+        ) as mock_shutdown_telemetry,
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
     ):
@@ -697,9 +862,10 @@ def test_auth_failure_trace_paths_match_protected_routes():
     from model_gateway import auth
 
     client = _make_client()
+    app = cast(Any, client.app)
     protected_routes = {
         route.path
-        for route in client.app.routes
+        for route in app.routes
         if isinstance(route, APIRoute) and route.path not in auth.EXEMPT_PATHS
     }
 
@@ -712,9 +878,10 @@ def test_http_trace_allowed_routes_match_protected_routes():
     from model_gateway import auth
 
     client = _make_client()
+    app = cast(Any, client.app)
     protected_routes = {
         route.path
-        for route in client.app.routes
+        for route in app.routes
         if isinstance(route, APIRoute) and route.path not in auth.EXEMPT_PATHS
     }
 
@@ -788,7 +955,6 @@ def test_query_request_config_is_llm_config():
 
 
 def test_query_request_config_rejects_unknown_fields():
-    from model_gateway import main
 
     client = _make_client()
 
@@ -838,9 +1004,192 @@ def test_query_maps_provider_quota_errors_to_429():
     assert err.body.provider == "openai"
 
 
-def test_query_maps_invalid_structured_output_to_provider_bad_response():
+@pytest.mark.parametrize(
+    "exc",
+    [
+        pytest.param(
+            "direct_no_output",
+            id="direct-model-no-output",
+        ),
+        pytest.param(
+            "exhausted_no_output",
+            id="exhausted-model-no-output",
+        ),
+    ],
+)
+def test_query_returns_provider_exception_envelope_without_gateway_mapping(exc: str):
+    from model_library.exceptions import (
+        ImmediateRetryExhaustedError,
+        ModelNoOutputError,
+    )
+
+    original = ModelNoOutputError("model returned empty response")
+
+    class FakeLLM:
+        async def query(self, inputs, **kwargs):
+            _ = inputs, kwargs
+            if exc == "exhausted_no_output":
+                raise ImmediateRetryExhaustedError(10, 10, original)
+            raise original
+
+    client = _make_client()
+    with patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()):
+        resp = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "error": {
+            "type": "ProviderError",
+            "message": "model returned empty response",
+            "provider": "openai",
+            "exception_type": "ModelNoOutputError",
+        }
+    }
+
+
+def test_query_provider_exception_envelope_preserves_raw_code_and_status_when_present():
+    class ProviderStatusError(Exception):
+        code = "rate_limit_exceeded"
+        status_code = 429
+
+    class FakeLLM:
+        async def query(self, inputs, **kwargs):
+            _ = inputs, kwargs
+            raise ProviderStatusError("provider says slow down")
+
+    client = _make_client()
+    with patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()):
+        resp = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "error": {
+            "type": "ProviderError",
+            "code": "rate_limit_exceeded",
+            "message": "provider says slow down",
+            "provider": "openai",
+            "exception_type": "ProviderStatusError",
+            "status_code": 429,
+        }
+    }
+
+
+def test_query_provider_exception_envelope_does_not_copy_alias_code_or_status():
+    class ProviderAliasError(Exception):
+        error_code = "rate_limit_exceeded"
+        status = 429
+        http_status = 429
+
+    class FakeLLM:
+        async def query(self, inputs, **kwargs):
+            _ = inputs, kwargs
+            raise ProviderAliasError("provider alias attrs")
+
+    client = _make_client()
+    with patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()):
+        resp = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "error": {
+            "type": "ProviderError",
+            "message": "provider alias attrs",
+            "provider": "openai",
+            "exception_type": "ProviderAliasError",
+        }
+    }
+
+
+@pytest.mark.parametrize(
+    ("exc_cls", "expected_message"),
+    [
+        pytest.param(
+            "ModelNoOutputError",
+            "Model failed to produce any output. This may indicate an issue with the model or input.",
+            id="model-no-output",
+        ),
+        pytest.param(
+            "MaxContextWindowExceededError",
+            "Context window exceeded the maximum allowed context window. Consider reducing the context window size.",
+            id="context-window",
+        ),
+        pytest.param(
+            "MaxOutputTokensExceededError",
+            "Output exceeded max tokens limit and model produced no useful content.",
+            id="max-output-tokens",
+        ),
+        pytest.param(
+            "ContentFilterError",
+            "Model's content filter triggered",
+            id="content-filter",
+        ),
+    ],
+)
+def test_query_provider_exception_envelope_redacts_raw_finish_reason_context(
+    exc_cls: str, expected_message: str
+):
+    from model_library import exceptions
+
+    exception_type = getattr(exceptions, exc_cls)
+
+    class FakeLLM:
+        async def query(self, inputs, **kwargs):
+            _ = inputs, kwargs
+            raise exception_type(
+                "{'finish_reason': 'stop', 'response': 'SECRET_MODEL_OUTPUT_SHOULD_NOT_LEAK'}"
+            )
+
+    client = _make_client()
+    with (
+        patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+        patch.object(gateway_app.telemetry, "record_exception") as record_exception,
+    ):
+        resp = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "error": {
+            "type": "ProviderError",
+            "message": expected_message,
+            "provider": "openai",
+            "exception_type": exc_cls,
+        }
+    }
+    assert "SECRET_MODEL_OUTPUT_SHOULD_NOT_LEAK" not in resp.text
+    recorded_exc = record_exception.call_args.args[0]
+    assert "SECRET_MODEL_OUTPUT_SHOULD_NOT_LEAK" not in str(recorded_exc)
+
+
+def test_query_returns_invalid_structured_output_provider_exception_envelope():
     from model_library.exceptions import InvalidStructuredOutputError
-    from model_gateway import main
 
     secret_output = "SECRET_MODEL_OUTPUT_SHOULD_NOT_LEAK"
 
@@ -875,18 +1224,23 @@ def test_query_maps_invalid_structured_output_to_provider_bad_response():
     assert body == {
         "error": {
             "type": "ProviderError",
-            "code": "provider_bad_response",
             "message": InvalidStructuredOutputError.DEFAULT_MESSAGE,
             "provider": "openai",
+            "exception_type": "InvalidStructuredOutputError",
         }
     }
     assert secret_output not in resp.text
     captured_exc = record_exception.call_args.args[0]
     assert secret_output not in str(captured_exc)
     error_attrs = record_exception.call_args.args[1]
+    assert error_attrs["gateway.error.code"] == "provider_error"
     assert error_attrs["gateway.error.provider"] == "openai"
+    assert (
+        error_attrs["gateway.provider_error.exception_type"]
+        == "InvalidStructuredOutputError"
+    )
     assert error_attrs["http.response.status_code"] == 200
-    assert error_attrs["gateway.provider_error.status_code"] == 502
+    assert "gateway.provider_error.status_code" not in error_attrs
 
 
 def test_query_provider_config_for_unknown_provider_returns_invalid_model():
@@ -907,8 +1261,7 @@ def test_query_provider_config_for_unknown_provider_returns_invalid_model():
     assert "unknown-provider/new-model" in resp.json()["message"]
 
 
-def test_query_maps_unsupported_structured_output_to_client_error():
-    from model_gateway import main
+def test_query_returns_unsupported_structured_output_provider_exception_envelope():
 
     class FakeLLM:
         async def query(self, inputs, **kwargs):
@@ -935,15 +1288,14 @@ def test_query_maps_unsupported_structured_output_to_client_error():
     assert resp.json() == {
         "error": {
             "type": "ProviderError",
-            "code": "structured_output_unsupported",
             "message": "openai/gpt-4o does not support structured outputs",
             "provider": "openai",
+            "exception_type": "Exception",
         }
     }
 
 
 def test_query_provider_error_returns_200_error_envelope_with_searchable_phase():
-    from model_gateway import main
 
     class FakeLLM:
         async def query(self, inputs, **kwargs):
@@ -969,18 +1321,22 @@ def test_query_provider_error_returns_200_error_envelope_with_searchable_phase()
     assert resp.json() == {
         "error": {
             "type": "ProviderError",
-            "code": "provider_rate_limit",
             "message": "OpenAI rate limit",
             "provider": "openai",
+            "exception_type": "RuntimeError",
         }
     }
     record_exception.assert_called_once()
+    captured_exc = record_exception.call_args.args[0]
+    assert str(captured_exc) == "Provider call failed"
+    assert "OpenAI rate limit" not in str(captured_exc)
     error_attrs = record_exception.call_args.args[1]
-    assert error_attrs["gateway.error.code"] == "provider_rate_limit"
+    assert error_attrs["gateway.error.code"] == "provider_error"
     assert error_attrs["gateway.error.phase"] == "provider_call"
     assert error_attrs["gateway.error.provider"] == "openai"
+    assert error_attrs["gateway.provider_error.exception_type"] == "RuntimeError"
     assert error_attrs["http.response.status_code"] == 200
-    assert error_attrs["gateway.provider_error.status_code"] == 429
+    assert "gateway.provider_error.status_code" not in error_attrs
 
 
 def test_query_rejects_custom_endpoint_without_custom_api_key():
@@ -999,7 +1355,7 @@ def test_query_rejects_custom_endpoint_without_custom_api_key():
 
 
 def test_query_returns_429_when_gateway_capacity_is_full(capsys):
-    from model_gateway import capacity, main, metrics
+    from model_gateway import capacity, metrics
     from model_gateway.capacity import GatewayCapacityLimiter
 
     metrics.flush_metrics()
@@ -1037,6 +1393,7 @@ def test_query_returns_429_when_gateway_capacity_is_full(capsys):
                 "inputs": [{"kind": "text", "text": "hi"}],
                 "run_id": "run-a",
                 "question_id": "q-a",
+                "query_id": "query-a",
             },
             headers=HEADERS,
         )
@@ -1046,8 +1403,7 @@ def test_query_returns_429_when_gateway_capacity_is_full(capsys):
     identity_attrs = telemetry_attrs[0]
     assert identity_attrs["run_id"] == "run-a"
     assert identity_attrs["question_id"] == "q-a"
-    assert isinstance(identity_attrs["query_id"], str)
-    assert len(cast(str, identity_attrs["query_id"])) == 14
+    assert identity_attrs["query_id"] == "query-a"
     assert identity_attrs["gen_ai.request.model"] == "openai/gpt-4o"
     assert identity_attrs["gateway.operation"] == "query"
     error_attrs = next(
@@ -1073,7 +1429,7 @@ def test_query_returns_429_when_gateway_capacity_is_full(capsys):
 
 def test_query_metrics_param_group_uses_bounded_config_and_request_context(capsys):
     from model_library.base.output import QueryResult
-    from model_gateway import main, metrics
+    from model_gateway import metrics
 
     class FakeLLM:
         async def query(self, inputs: Any, **kwargs: Any):
@@ -1130,7 +1486,6 @@ def test_query_rejects_extra_params():
 
 def test_query_does_not_compute_config_fingerprint_when_otel_is_not_recording():
     from model_library.base.output import QueryResult
-    from model_gateway import main
 
     class FakeLLM:
         async def query(self, inputs, **kwargs):
@@ -1162,7 +1517,6 @@ def test_query_does_not_compute_config_fingerprint_when_otel_is_not_recording():
 
 def test_query_telemetry_response_capture_does_not_break_success():
     from model_library.base.output import QueryResult
-    from model_gateway import main
 
     class UnserializableQueryResult(QueryResult):
         def model_dump(self, *args: object, **kwargs: object) -> dict[str, object]:
@@ -1286,7 +1640,9 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
                 clear=True,
             ),
             patch.object(gateway_app, "model_library_settings", ServerSettings()),
-            patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
+            patch.object(
+                gateway_app, "get_model_names", return_value=["openai/gpt-4o"]
+            ),
             patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
         ):
             app = main.create_app()
@@ -1303,7 +1659,7 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
                         },
                         "run_id": "run-a",
                         "question_id": "question-a",
-                        "query_id": "   ",
+                        "query_id": "query-a",
                         "identity": {
                             "email": "user@example.com",
                             "benchmark_name": "swebench",
@@ -1320,8 +1676,7 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
         telemetry.shutdown_telemetry()
 
     assert resp.status_code == 200
-    assert isinstance(seen_kwargs["query_id"], str)
-    assert len(seen_kwargs["query_id"]) == 14
+    assert seen_kwargs["query_id"] == "query-a"
     assert "identity" not in seen_kwargs
     assert bodies
     assert b"gateway.request_json" not in b"".join(bodies)
@@ -1373,24 +1728,23 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
     assert ("gateway.retry_queue.mode", "disabled") in mode_attrs
     assert ("gateway.output_schema.mode", "disabled") in mode_attrs
     assert ("retry_queue.mode", "disabled") in mode_attrs
-    assert ("llm.config.max_tokens", 7) in llm_config_attrs
-    assert ("llm.config.temperature", 0.0) in llm_config_attrs
-    assert (
-        "llm.config.provider_config.prompt_cache_retention",
-        "24h",
-    ) in llm_config_attrs
+    assert ("llm.config.max_tokens", "7") in llm_config_attrs
+    assert ("llm.config.temperature", "0.0") in llm_config_attrs
     assert param_groups and all(group != "none" for group in param_groups)
     assert config_seen_payloads
     payload = json.loads(str(config_seen_payloads[-1]["model.config_redacted_json"]))
     assert payload["config"]["provider_config"]["prompt_cache_retention"] == "24h"
-    assert payload["params"] == {"max_tokens": 7, "temperature": 0}
+    assert payload["params"] == {
+        "max_tokens": 7,
+        "temperature": 0,
+        "provider_config": {"prompt_cache_retention": "24h"},
+    }
     assert config_seen_payloads[-1]["model.config_redacted_json_truncated"] is False
 
 
 def test_query_forwards_custom_endpoint_with_custom_api_key():
     from model_library.base import LLMConfig
     from model_library.base.output import QueryResult
-    from model_gateway import main
 
     seen: dict[str, object] = {}
 
@@ -1403,7 +1757,9 @@ def test_query_forwards_custom_endpoint_with_custom_api_key():
         return FakeLLM()
 
     client = _make_client()
-    with patch.object(model_helpers, "get_registry_model", side_effect=fake_get_registry_model):
+    with patch.object(
+        model_helpers, "get_registry_model", side_effect=fake_get_registry_model
+    ):
         resp = client.post(
             "/query",
             json={
@@ -1436,7 +1792,6 @@ def test_models_returns_list():
 
 def test_upload_file_success_uses_config_and_returns_file_id():
     from model_library.base.input import FileWithId
-    from model_gateway import main
 
     seen: dict[str, object] = {}
 
@@ -1468,7 +1823,9 @@ def test_upload_file_success_uses_config_and_returns_file_id():
     set_attributes = MagicMock()
     start_span = MagicMock(return_value=nullcontext())
     with (
-        patch.object(model_helpers, "get_registry_model", side_effect=fake_get_registry_model),
+        patch.object(
+            model_helpers, "get_registry_model", side_effect=fake_get_registry_model
+        ),
         patch.object(gateway_app.telemetry, "is_recording", return_value=True),
         patch.object(gateway_app.telemetry, "set_attributes", set_attributes),
         patch.object(gateway_app.telemetry, "start_span", start_span),
@@ -1521,7 +1878,6 @@ def test_upload_file_success_uses_config_and_returns_file_id():
 
 
 def test_upload_file_invalid_base64_returns_client_error():
-    from model_gateway import main
 
     client = _make_client()
     with patch.object(gateway_app.telemetry, "record_exception") as record_exception:
@@ -1564,6 +1920,16 @@ def test_upload_file_invalid_base64_returns_client_error():
             "OpenAI file upload failed",
         ),
         (
+            "/tokens/count",
+            {
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+                "tools": [],
+                "config": {},
+            },
+            "OpenAI token count failed",
+        ),
+        (
             "/embeddings",
             {
                 "model": "openai/gpt-4o",
@@ -1597,6 +1963,9 @@ def test_provider_operation_provider_errors_return_200_error_envelope(
         ):
             raise RuntimeError("OpenAI file upload failed")
 
+        async def count_tokens(self, inputs, *, tools, **kwargs) -> int:
+            raise RuntimeError("OpenAI token count failed")
+
         async def get_embedding(
             self, text: str, model: str = "text-embedding-3-small"
         ) -> list[float]:
@@ -1616,17 +1985,19 @@ def test_provider_operation_provider_errors_return_200_error_envelope(
     assert resp.json() == {
         "error": {
             "type": "ProviderError",
-            "code": "internal_error",
             "message": expected_message,
             "provider": "openai",
+            "exception_type": "RuntimeError",
         }
     }
     record_exception.assert_called_once()
-    assert record_exception.call_args.args[1]["gateway.error.phase"] == "provider_call"
+    error_attrs = record_exception.call_args.args[1]
+    assert error_attrs["gateway.error.phase"] == "provider_call"
+    assert error_attrs["gateway.error.code"] == "provider_error"
+    assert error_attrs["gateway.provider_error.exception_type"] == "RuntimeError"
 
 
 def test_embeddings_success_uses_config_and_returns_embedding():
-    from model_gateway import main
 
     seen: dict[str, object] = {}
 
@@ -1647,7 +2018,9 @@ def test_embeddings_success_uses_config_and_returns_embedding():
     set_attributes = MagicMock()
     start_span = MagicMock(return_value=nullcontext())
     with (
-        patch.object(model_helpers, "get_registry_model", side_effect=fake_get_registry_model),
+        patch.object(
+            model_helpers, "get_registry_model", side_effect=fake_get_registry_model
+        ),
         patch.object(gateway_app.telemetry, "is_recording", return_value=True),
         patch.object(gateway_app.telemetry, "set_attributes", set_attributes),
         patch.object(gateway_app.telemetry, "start_span", start_span),
@@ -1688,7 +2061,6 @@ def test_embeddings_success_uses_config_and_returns_embedding():
 
 
 def test_moderation_success_uses_config_and_returns_response():
-    from model_gateway import main
 
     seen: dict[str, object] = {}
 
@@ -1706,7 +2078,9 @@ def test_moderation_success_uses_config_and_returns_response():
     set_attributes = MagicMock()
     start_span = MagicMock(return_value=nullcontext())
     with (
-        patch.object(model_helpers, "get_registry_model", side_effect=fake_get_registry_model),
+        patch.object(
+            model_helpers, "get_registry_model", side_effect=fake_get_registry_model
+        ),
         patch.object(gateway_app.telemetry, "is_recording", return_value=True),
         patch.object(gateway_app.telemetry, "set_attributes", set_attributes),
         patch.object(gateway_app.telemetry, "start_span", start_span),
@@ -1751,7 +2125,6 @@ def test_moderation_success_uses_config_and_returns_response():
 
 def test_query_initializes_token_retry_on_server_side_and_reuses_token_model():
     from model_library.base.output import QueryResult
-    from model_gateway import main
 
     created_models: list[Any] = []
 
@@ -1788,7 +2161,9 @@ def test_query_initializes_token_retry_on_server_side_and_reuses_token_model():
         "run_id": "run",
         "question_id": "question",
     }
-    with patch.object(model_helpers, "get_registry_model", side_effect=fake_get_registry_model):
+    with patch.object(
+        model_helpers, "get_registry_model", side_effect=fake_get_registry_model
+    ):
         first = client.post("/query", json=body, headers=HEADERS)
         second = client.post("/query", json=body, headers=HEADERS)
 
@@ -1803,7 +2178,6 @@ def test_query_initializes_token_retry_on_server_side_and_reuses_token_model():
 
 
 def test_query_rejects_malformed_raw_history_with_400():
-    from model_gateway import main
 
     client = _make_client()
     with patch.object(gateway_app.telemetry, "record_exception") as record_exception:
@@ -1829,6 +2203,96 @@ def test_query_rejects_malformed_raw_history_with_400():
     assert error_attrs["http.response.status_code"] == 400
 
 
+def test_query_marks_sign_history_phase_when_signing_fails():
+    from model_library.base.output import QueryResult, QueryResultMetadata
+
+    class FakeLLM:
+        async def query(self, inputs, **kwargs):
+            return QueryResult(
+                output_text="ok",
+                history=[],
+                metadata=QueryResultMetadata(in_tokens=1, out_tokens=2),
+            )
+
+    client = _make_client()
+    with (
+        patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+        patch(
+            "model_gateway.routes.query.sign_history", side_effect=RuntimeError("boom")
+        ),
+        patch.object(gateway_app.telemetry, "record_exception") as record_exception,
+    ):
+        resp = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+                "run_id": "run-a",
+                "question_id": "q-a",
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 500
+    assert resp.json()["code"] == "internal_error"
+    record_exception.assert_called_once()
+    error_attrs = record_exception.call_args.args[1]
+    assert error_attrs["gateway.error.code"] == "internal_error"
+    assert error_attrs["gateway.error.phase"] == "sign_history"
+    assert error_attrs["http.response.status_code"] == 500
+
+
+def test_query_sign_history_failure_does_not_write_usage_ledger():
+    from model_library.base.output import QueryResult, QueryResultMetadata
+
+    class FakeUsageLedger:
+        enabled = True
+
+        def __init__(self) -> None:
+            self.events: list[dict[str, object]] = []
+
+        async def start(self) -> None:
+            return
+
+        async def close(self) -> None:
+            return
+
+        async def write_success(self, event: dict[str, object]) -> None:
+            self.events.append(event)
+
+    class FakeLLM:
+        async def query(self, inputs, **kwargs):
+            return QueryResult(
+                output_text="ok",
+                history=[],
+                metadata=QueryResultMetadata(in_tokens=1, out_tokens=2),
+            )
+
+    fake_ledger = FakeUsageLedger()
+    with (
+        patch.object(
+            gateway_app, "create_usage_ledger_from_env", return_value=fake_ledger
+        ),
+        patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+        patch(
+            "model_gateway.routes.query.sign_history", side_effect=RuntimeError("boom")
+        ),
+    ):
+        client = _make_client()
+        resp = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 500
+    assert resp.json()["code"] == "internal_error"
+    assert fake_ledger.events == []
+
+
 def test_query_success_uses_config_restores_raw_history_and_returns_metadata():
     from model_library.base.base import LLM
     from model_library.base.input import RawInput, TextInput
@@ -1839,7 +2303,6 @@ def test_query_success_uses_config_restores_raw_history_and_returns_metadata():
         QueryResultExtras,
         QueryResultMetadata,
     )
-    from model_gateway import main
 
     seen: dict[str, object] = {}
     signed_inputs = LLM.serialize_input(
@@ -1865,7 +2328,9 @@ def test_query_success_uses_config_restores_raw_history_and_returns_metadata():
         return FakeLLM()
 
     client = _make_client()
-    with patch.object(model_helpers, "get_registry_model", side_effect=fake_get_registry_model):
+    with patch.object(
+        model_helpers, "get_registry_model", side_effect=fake_get_registry_model
+    ):
         resp = client.post(
             "/query",
             json={

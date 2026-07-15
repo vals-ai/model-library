@@ -7,3 +7,4 @@ model_library.egg-info
 .scratch/
 /build/lib/server
 /build/lib/model_gateway
+results-*.json

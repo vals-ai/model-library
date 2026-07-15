@@ -1,7 +1,7 @@
 import base64
 import io
 import logging
-from typing import Any, Literal, Sequence
+from typing import Any, Literal, Sequence, cast
 
 from pydantic import BaseModel, SecretStr
 from typing_extensions import override
@@ -12,6 +12,7 @@ from xai_sdk.chat import file as xai_file
 from xai_sdk.chat import image as xai_image
 from xai_sdk.chat import tool as xai_tool
 from xai_sdk.proto.v6.chat_pb2 import Message, Tool
+from xai_sdk.tools import get_tool_call_type, web_search
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -38,14 +39,17 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.output.builder import QueryResultBuilder
+from model_library.base.output.result import ProviderToolEvent
 from model_library.exceptions import (
     ImmediateRetryException,
     ModelNoOutputError,
     NoMatchingToolCallError,
-    handle_empty_response,
     UnexpectedSystemInputError,
+    handle_empty_response,
 )
 from model_library.providers.openai import OpenAIModel
+from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 
 
@@ -236,6 +240,11 @@ class XAIModel(LLM):
                     mime_type=file.mime,
                 )
 
+    @property
+    @override
+    def search_tool(self) -> Tool:
+        return web_search()
+
     @override
     async def parse_tools(
         self,
@@ -244,6 +253,9 @@ class XAIModel(LLM):
         parsed_tools: list[Tool] = []
         for tool in tools:
             body = tool.body
+            if is_native_web_search(body):
+                parsed_tools.append(self.search_tool)
+                continue
             if not isinstance(body, ToolBody):
                 parsed_tools.append(body)
                 continue
@@ -337,9 +349,18 @@ class XAIModel(LLM):
         chat: Chat = self.get_client().chat.create(**body)
 
         latest_response: Response | None = None
+        result_builder = QueryResultBuilder()
         try:
-            async for response, _ in chat.stream():
+            async for response, chunk in chat.stream():
                 latest_response = response
+                chunk_reasoning = cast(
+                    str | None, getattr(chunk, "reasoning_content", None)
+                )
+                chunk_content = cast(str | None, getattr(chunk, "content", None))
+                result_builder.append_reasoning_delta(chunk_reasoning)
+                result_builder.append_content_delta(chunk_content)
+                for index, _tool_call in enumerate(chunk.tool_calls):
+                    result_builder.record_tool_call_delta(index)
         except OSError as e:
             # Transient gRPC C-core OSError (e.g. [Errno 2]) not caught by retry logic.
             raise ImmediateRetryException(str(e)) from e
@@ -348,27 +369,51 @@ class XAIModel(LLM):
             raise ModelNoOutputError("Model failed to produce a response")
 
         tool_calls: list[ToolCall] = []
-        for tool_call in latest_response.tool_calls:
+        provider_tool_events: list[ProviderToolEvent] = []
+        for i, tool_call in enumerate(latest_response.tool_calls):
+            if get_tool_call_type(tool_call) == "web_search_tool":
+                provider_tool_events.append(
+                    ProviderToolEvent.web_search(
+                        provider="xai",
+                        kind="web_search_tool",
+                        query=tool_call.function.arguments,
+                        sequence=i,
+                        id=tool_call.id,
+                    )
+                )
+                continue
             tool_calls.append(
                 ToolCall(
                     id=tool_call.id,
                     name=tool_call.function.name,
                     args=tool_call.function.arguments,
+                    sequence=i,
                 )
             )
 
-        content = latest_response.content
-        reasoning = latest_response.reasoning_content
+        content = cast(str | None, getattr(latest_response, "content", None))
+        reasoning = cast(
+            str | None, getattr(latest_response, "reasoning_content", None)
+        )
         finish_reason = latest_response.finish_reason
 
-        no_useful_content = not content and not reasoning and not tool_calls
         mapped_finish_reason = map_xai_finish_reason(finish_reason)
-        if no_useful_content:
+
+        if content is not None and (content or not result_builder.has_output_text):
+            result_builder.set_output_text(content)
+        if reasoning:
+            result_builder.set_reasoning(reasoning)
+
+        has_observed_output = (
+            result_builder.has_output_text
+            or result_builder.has_reasoning
+            or bool(tool_calls)
+            or bool(provider_tool_events)
+        )
+        if not has_observed_output:
             handle_empty_response(mapped_finish_reason, {"raw": latest_response})
 
-        return QueryResult(
-            output_text=content,
-            reasoning=reasoning,
+        return result_builder.build(
             finish_reason=mapped_finish_reason,
             metadata=QueryResultMetadata(
                 # see _calculate_cost
@@ -383,8 +428,11 @@ class XAIModel(LLM):
                 reasoning_tokens=latest_response.usage.reasoning_tokens,
                 cache_read_tokens=latest_response.usage.cached_prompt_text_tokens,
             ),
-            extras=QueryResultExtras(response_id=latest_response.id),
+            extras=QueryResultExtras(
+                provider_response_id=getattr(latest_response, "id", None),
+            ),
             tool_calls=tool_calls,
+            provider_tool_events=provider_tool_events,
             history=[*input, RawResponse(response=latest_response)],
         )
 

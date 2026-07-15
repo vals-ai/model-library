@@ -336,6 +336,7 @@ gpt-4.1-models:
     release_date: 2025-04-14
     supports:
       images: true
+      files: true
     properties:
       context_window: 1_047_576
       max_tokens: 32_768
@@ -442,6 +443,7 @@ deep-research-models:
 o-series-models:
   base-config:
     supports:
+      files: true
       tools: true
     properties:
       reasoning_model: true
@@ -564,6 +566,8 @@ o-series-models:
 gpt-4o-models:
   base-config:
     documentation_url: https://platform.openai.com/docs/models#gpt-4o
+    supports:
+      files: true
     properties:
       context_window: 128_000
       max_tokens: 16_384
@@ -635,6 +639,8 @@ gpt-4o-models:
 gpt-4o-mini-models:
   base-config:
     documentation_url: https://platform.openai.com/docs/models#gpt-4o-mini
+    supports:
+      files: true
     properties:
       context_window: 128_000
       max_tokens: 16_384

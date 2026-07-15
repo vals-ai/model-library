@@ -12,6 +12,10 @@ from model_gateway.capacity import (
 )
 
 
+def test_capacity_middleware_is_query_only():
+    assert capacity.MODEL_CALL_PATHS == frozenset({"/query"})
+
+
 @pytest.mark.asyncio
 async def test_capacity_attach_request_identity_sets_searchable_fields(monkeypatch):
     seen: dict[str, object | None] = {}
@@ -45,66 +49,6 @@ async def test_capacity_attach_request_identity_sets_searchable_fields(monkeypat
     assert seen["gen_ai.request.model"] == "openai/gpt-4o"
     assert seen["gateway.operation"] == "query"
     assert "gateway.request_json" not in seen
-
-
-@pytest.mark.asyncio
-async def test_capacity_attach_request_identity_generates_missing_query_id(monkeypatch):
-    seen: dict[str, object | None] = {}
-
-    class FakeRequest:
-        url = SimpleNamespace(path="/query")
-        headers: dict[str, str] = {}
-
-        async def json(self):
-            return {
-                "model": "openai/gpt-4o",
-                "inputs": [{"kind": "text", "text": "hello"}],
-                "run_id": "run-a",
-                "question_id": "q1",
-            }
-
-    monkeypatch.setattr(capacity.telemetry, "is_recording", lambda: True)
-    monkeypatch.setattr(capacity.telemetry, "set_attributes", seen.update)
-
-    await capacity._attach_request_identity(FakeRequest())  # pyright: ignore[reportPrivateUsage, reportArgumentType]
-
-    assert seen["run_id"] == "run-a"
-    assert seen["question_id"] == "q1"
-    assert isinstance(seen["query_id"], str)
-    assert len(seen["query_id"]) == 14
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("query_id", ["", " ", "\t"])
-async def test_capacity_attach_request_identity_generates_blank_query_id(
-    monkeypatch, query_id: str
-):
-    seen: dict[str, object | None] = {}
-
-    class FakeRequest:
-        url = SimpleNamespace(path="/query")
-        headers: dict[str, str] = {}
-
-        async def json(self):
-            return {
-                "model": "openai/gpt-4o",
-                "inputs": [{"kind": "text", "text": "hello"}],
-                "run_id": "run-a",
-                "question_id": "q1",
-                "query_id": query_id,
-            }
-
-    monkeypatch.setattr(capacity.telemetry, "is_recording", lambda: True)
-    monkeypatch.setattr(capacity.telemetry, "set_attributes", seen.update)
-
-    await capacity._attach_request_identity(FakeRequest())  # pyright: ignore[reportPrivateUsage, reportArgumentType]
-
-    assert seen["run_id"] == "run-a"
-    assert seen["question_id"] == "q1"
-    assert isinstance(seen["query_id"], str)
-    assert seen["query_id"].strip()
-    assert len(seen["query_id"]) == 14
-    assert seen["query_id"] != query_id
 
 
 @pytest.mark.asyncio
@@ -283,3 +227,63 @@ async def test_capacity_request_timeout_cancels_slow_operation():
         await limiter.run(slow_operation)
     assert cancelled
     metrics.flush_metrics()
+
+
+@pytest.mark.asyncio
+async def test_capacity_outer_cancellation_cancels_inflight_operation_before_release():
+    limiter = GatewayCapacityLimiter(
+        max_active=1,
+        max_queued=1,
+        queue_timeout_seconds=1,
+        request_timeout_seconds=10,
+    )
+    started = asyncio.Event()
+    operation_can_finish = asyncio.Event()
+    cancellation_started = asyncio.Event()
+    finish_cancellation = asyncio.Event()
+    second_started = asyncio.Event()
+    second_task: asyncio.Task[str] | None = None
+
+    async def slow_operation():
+        started.set()
+        try:
+            await operation_can_finish.wait()
+        except asyncio.CancelledError:
+            cancellation_started.set()
+            await finish_cancellation.wait()
+            raise
+
+    async def second_operation():
+        second_started.set()
+        return "second"
+
+    outer_task = asyncio.create_task(limiter.run(slow_operation))
+    try:
+        await asyncio.wait_for(started.wait(), timeout=1)
+
+        outer_task.cancel()
+        await asyncio.wait_for(cancellation_started.wait(), timeout=1)
+        assert limiter.snapshot().active == 1
+
+        second_task = asyncio.create_task(limiter.run(second_operation))
+        await asyncio.sleep(0)
+        assert not second_started.is_set()
+        assert limiter.snapshot().queued == 1
+
+        finish_cancellation.set()
+        with pytest.raises(asyncio.CancelledError):
+            await outer_task
+
+        assert await second_task == "second"
+        assert second_started.is_set()
+        assert limiter.snapshot().active == 0
+        assert limiter.snapshot().queued == 0
+    finally:
+        operation_can_finish.set()
+        finish_cancellation.set()
+        tasks = [outer_task, *([second_task] if second_task is not None else [])]
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        metrics.flush_metrics()

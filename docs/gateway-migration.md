@@ -42,7 +42,14 @@ Do not instantiate provider classes or use `get_raw_model()` for gateway-routed 
 
 Gateway requests send the model key plus the explicit `LLMConfig` override. The gateway server merges that override with its server-side registry entry before constructing the provider model.
 
-Use this pattern for agent/provider runtime parameters:
+| Need | Put it in | Constraint |
+| --- | --- | --- |
+| Agent/provider runtime parameter | Top-level `LLMConfig` fields | Pass the config to `get_registry_model(..., override_config=config)`. |
+| Provider-specific parameter | `LLMConfig.provider_config` | Use the typed provider config. |
+| Bring your own key or endpoint | `LLMConfig.custom_api_key` and `LLMConfig.custom_endpoint` | `custom_endpoint` requires `custom_api_key`; the gateway must not send server-held provider keys to caller-selected endpoints. |
+| Query attribution | `query(...)` fields | Keep `identity`, `run_id`, `question_id`, and `query_id` out of `LLMConfig`. |
+
+Agent/provider runtime parameters:
 
 ```python
 from model_library.base import LLMConfig
@@ -110,6 +117,12 @@ Do not pass provider parameters such as `temperature`, `top_p`, `max_tokens`, `s
 
 In gateway mode, request execution is server-authoritative. `get_registry_model()` does not load capabilities, costs, or registry metadata during construction.
 
+| Need | Use | Do not use |
+| --- | --- | --- |
+| One model's capabilities, costs, registry metadata, or context window | `await model.ensure_metadata_loaded()`, then `model.metadata` or `model.input_context_window` | Local-registry helpers |
+| Full registry for intentional bulk discovery | `get_model_registry()` and the gateway `/registry` snapshot | Implicit full-registry loading during model construction |
+| Request execution | The unsynced `GatewayLLM`; the server resolves authoritative config | Client-side registry state |
+
 Preferred single-model metadata flow:
 
 ```python
@@ -130,50 +143,54 @@ They are local-registry helpers and raise when `MODEL_GATEWAY_URL` is set. Use `
 
 ## Attribution and IDs
 
-Optional attribution settings:
+### Identity
 
-- `IDENTITY` setting/env var must be a JSON-encoded object string with caller-defined keys, for example `{"user_id":"user_123","benchmark_name":"swebench"}`.
-- Explicit `query(identity=...)` takes a Python mapping/object.
-- Do not put PII, secrets, provider API keys, or bearer tokens in identity. `IDENTITY` is persisted in usage ledger and operational metadata.
-- Invalid `IDENTITY` settings are omitted by the client:
-  - non-object
-  - non-finite
-  - larger than 4 KiB
-  - deeper than 8 levels
-- Identity values are preserved as provided.
-- Identity is emitted/stored as raw caller metadata for debugging and ledger attribution.
-- `benchmark_name` and `agent_name` string identity values are queryable usage-ledger dimensions for rows written after those indexes ship when they trim to non-empty values no larger than 512 UTF-8 bytes; use `--start`/`--end` bounds for read-time aggregation over these dimension indexes.
-- Other caller-defined identity fields are stored on base usage-event rows but do not have dedicated ledger query indexes unless a future index/query path is added.
-- `GatewayLLM` attaches identity to gateway query telemetry and usage ledger rows.
-- Explicit non-`None` `query(identity=...)` overrides the `IDENTITY` setting.
-- `query(identity=None)` falls back to the `IDENTITY` setting.
-- Invalid explicit `query(identity=...)` values raise validation errors before the request is sent.
-- `RUN_ID`, `QUESTION_ID`, and `TASK_ID` are read through `model_library_settings`.
-- `RUN_ID`, `QUESTION_ID`, and `TASK_ID` apply to all `LLM.query()` calls.
+| Source or use | Contract |
+| --- | --- |
+| `IDENTITY` setting/env var | JSON-encoded object string with caller-defined keys, for example `{"user_id":"user_123","benchmark_name":"swebench"}`. |
+| Explicit `query(identity=...)` | Takes a Python mapping/object. A non-`None` value overrides `IDENTITY`; `None` falls back to `IDENTITY`. Invalid explicit values raise validation errors before the request is sent. |
+| Storage and telemetry | `GatewayLLM` attaches identity to gateway query telemetry and usage ledger rows. Values are preserved as provided and emitted/stored as raw caller metadata for debugging and ledger attribution. |
+| Security | `IDENTITY` persists in usage ledger and operational metadata. Do not include secrets, provider API keys, bearer tokens, or other credentials. PII is allowed when needed for attribution/analytics. |
+| `benchmark_name` analytics | Recognized for rows written after the field/index exists when it trims to a non-empty value no larger than 512 UTF-8 bytes. Has a raw-ledger lookup path. |
+| `agent_name` analytics | Recognized for rows written after the field/index exists when it trims to a non-empty value no larger than 512 UTF-8 bytes. Has a raw-ledger lookup path. |
+| `email` analytics | Recognized when it is a valid email-shaped string no larger than 512 UTF-8 bytes. Stored as canonical lowercased `identity_email` for exact Redshift filtering. |
+| Other fields | Stored on base usage-event rows, without dedicated ledger query indexes or Redshift dimensions unless a future query path is added. |
+
+Invalid `IDENTITY` settings are omitted by the client when they are:
+
+- non-object;
+- non-finite;
+- larger than 4 KiB;
+- deeper than 8 levels.
+
+### Request IDs
+
+| Field | Resolution and validation |
+| --- | --- |
+| `run_id` | When explicit `query(run_id=...)` is absent or `None`, use `RUN_ID`, then a generated ID. Explicit blank or whitespace-only values are rejected. |
+| `question_id` | When explicit `query(question_id=...)` is absent or `None`, use `QUESTION_ID`, then `TASK_ID` only when `QUESTION_ID` is unset or blank, then a generated ID. Explicit blank or whitespace-only values are rejected. |
+| `query_id` | Generated per query unless passed explicitly. There is no `QUERY_ID` env/settings fallback. Direct blank values are treated as absent. |
+
+- `RUN_ID`, `QUESTION_ID`, and `TASK_ID` are read through `model_library_settings` and apply to all `LLM.query()` calls.
 - `RUN_ID` and `QUESTION_ID` stay separate top-level gateway fields.
-- When `query(run_id=...)` is absent or `None`, `GatewayLLM` uses `RUN_ID` before falling back to a generated ID.
-- When `query(question_id=...)` is absent or `None`, `GatewayLLM` uses `QUESTION_ID` before falling back to a generated ID.
 - `TASK_ID` is an alias fallback for `QUESTION_ID`.
-- `TASK_ID` is used only when `QUESTION_ID` is unset or blank.
 - Blank or whitespace-only `RUN_ID`, `QUESTION_ID`, and `TASK_ID` env values are ignored.
-- Explicit blank or whitespace-only `run_id` and `question_id` values are rejected.
-- There is no `QUERY_ID` env/settings fallback.
-- Per-query IDs are generated unless passed explicitly.
-- Direct blank `query_id` values are treated as absent.
 
 ## Runtime model-config overrides
 
-For agent runtime model-config overrides:
+1. Expose typed runtime kwargs for model config.
+2. Pass those kwargs into your agent command.
+3. Convert them to `LLMConfig` before calling `get_registry_model()`.
+4. Call `get_registry_model(model_key, override_config=config)`.
 
-- Expose typed runtime kwargs for model config.
-- Pass those kwargs into your agent command.
-- Convert them to `LLMConfig` before calling `get_registry_model()`.
-- Use plain `get_registry_model(model_key)` when the run has no model-config overrides.
-- Keep attribution fields out of `LLMConfig`:
-  - `identity`
-  - `run_id`
-  - `question_id`
-  - `query_id`
+When the run has no model-config overrides, use plain `get_registry_model(model_key)`.
+
+Keep attribution fields out of `LLMConfig`:
+
+- `identity`
+- `run_id`
+- `question_id`
+- `query_id`
 
 ```yaml
 run_cmd: >-
@@ -202,11 +219,14 @@ model = get_registry_model(args.model, override_config=config)
 - [ ] BYOK/custom-endpoint migrations explicitly account for `custom_api_key` and `custom_endpoint` as caller-supplied provider credentials.
 - [ ] `query()` calls do not pass provider-specific kwargs.
 - [ ] Code that reads metadata uses `await model.ensure_metadata_loaded()` or intentional `get_model_registry()` bulk discovery.
-- [ ] Code does not rely on gateway-unsupported `count_tokens()`, `get_rate_limit()`, batch, or custom retrier paths.
+- [ ] Code does not rely on gateway-unsupported `get_rate_limit()`, batch, or custom retrier paths.
 
 ## Unsupported or special paths
 
-- Client-side custom retriers are not supported in gateway mode; retries run server-side.
-- Client-side gateway batch calls raise until gateway batch endpoints exist.
-- `/tokens/count` and `/rate-limit` are reserved gateway endpoints today. Agents that call `count_tokens()` or `get_rate_limit()` directly need explicit validation before migration.
-- Raw provider responses/history are HMAC-signed by the gateway and echoed by the client; do not deserialize or mutate raw blobs client-side.
+| Path | Migration decision |
+| --- | --- |
+| Client-side custom retriers | Unsupported in gateway mode; retries run server-side. |
+| Client-side batch calls | Raise until gateway batch endpoints exist. |
+| `/tokens/count` | Supported through the gateway-side model implementation. |
+| `/rate-limit` or direct `get_rate_limit()` | `/rate-limit` remains reserved today; validate agents that call `get_rate_limit()` directly before migration. |
+| Raw provider responses/history | HMAC-signed by the gateway and echoed by the client; do not deserialize or mutate raw blobs client-side. |

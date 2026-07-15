@@ -1,47 +1,44 @@
-"""Agent example: OpenAI built-in web search across five turns.
+"""Agent example: native web search across five turns.
 
-Demonstrates using OpenAI's server-side web_search tool in a multi-turn
-conversation where each turn builds on what was found before.
+Demonstrates using NativeWebSearch — a provider-agnostic tool that maps to
+each provider's native server-side search implementation. Pass any supported
+model name as the first argument.
 
-Built-in web search differs from function-call search:
+Built-in search differs from function-call search:
 - The model searches internally within a single API call (no round-trip)
 - Search calls surface as ProviderToolEvents on QueryResult
-- The full web_search_call history is preserved across turns via RawResponse
+- The full search history is preserved across turns via RawResponse
 
 Sample output from a real run:
 
     === Turn 1: Who is the current CEO of Apple? ===
     INFO Turn 1/5 | 1 tool calls | in: 15551, out: 560
-    INFO   ✓ submit (0.0s)
     INFO   ✓ web_search [web_search_call] (provider)
+    INFO   ✓ submit (0.0s)
     Answer 1: The current CEO of Apple is Tim Cook...
     Searches: 1, Turns: 1
 
-    === Turn 5: Summarize everything you found... ===
-    INFO Turn 1/5 | 1 tool calls | in: 49986, out: 3783
-    INFO   ✓ submit (0.0s)
-    INFO   ✓ web_search [web_search_call] (provider)
-    INFO   ✓ web_search [web_search_call] (provider)
-    INFO   ✓ web_search [web_search_call] (provider)
-    INFO   ✓ web_search [web_search_call] (provider)
-    Answer 5: As of June 19 2026, Apple's CEO is Tim Cook...
-    Searches: 4, Turns: 1
-
 Note: web_search duration is not shown — the search happens
 server-side inside the API call, not via a local execute().
+
+Usage:
+    python -m examples.agent.builtin_web_search openai/gpt-5.5
+    python -m examples.agent.builtin_web_search anthropic/claude-sonnet-4-6
+    python -m examples.agent.builtin_web_search google/gemini-3-flash-preview
 """
 
+import argparse
 import asyncio
 
 from model_library.agent import (
     Agent,
     AgentConfig,
     AgentHooks,
+    NativeWebSearch,
     TimeLimit,
     TurnLimit,
     TurnSummary,
 )
-from model_library.agent.tool import ProviderTool
 from model_library.agent.tools.submit import SubmitTool
 from model_library.base.input import InputItem, SystemInput, TextInput
 from model_library.registry_utils import get_registry_model
@@ -52,8 +49,16 @@ from ..setup import console_log, setup
 async def main() -> None:
     setup()
 
-    llm = get_registry_model("openai/gpt-5.5")
-    tools = [ProviderTool(name="web_search", body={"type": "web_search"}), SubmitTool()]
+    parser = argparse.ArgumentParser(description="Run native web search agent")
+    parser.add_argument(
+        "model",
+        help="Model endpoint",
+    )
+    args = parser.parse_args()
+
+    llm = get_registry_model(args.model)
+
+    tools = [NativeWebSearch(), SubmitTool()]
     config = AgentConfig(
         turn_limit=TurnLimit(max_turns=5), time_limit=TimeLimit(max_seconds=120)
     )
@@ -71,7 +76,7 @@ async def main() -> None:
             text=(
                 "You are a research assistant. For every question, you MUST call the submit tool with your final answer. "
                 "Use web search if needed, but always end by calling submit — never respond in text alone. "
-                "Limit yourself to two web search per question."
+                "Limit yourself to two web searches per question."
             )
         ),
     ]

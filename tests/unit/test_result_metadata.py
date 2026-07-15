@@ -7,8 +7,68 @@ from model_library.base import (
     QueryResultMetadata,
     QueryResultPerformance,
     QueryPerformanceTimelineEntry,
-    QueryTokensPerSecond,
 )
+from model_library.base.output.result import (
+    QueryResultExtras,
+)
+
+
+def _require_performance(metadata: QueryResultMetadata) -> QueryResultPerformance:
+    performance = metadata.performance
+    assert performance is not None
+    return performance
+
+
+def _content_performance() -> QueryResultPerformance:
+    return QueryResultPerformance(
+        timeline=[
+            QueryPerformanceTimelineEntry(
+                channel="content",
+                index=0,
+                events=[
+                    QueryPerformanceEvent(type="content_started", timestamp_ms=0),
+                    QueryPerformanceEvent(type="content_delta", timestamp_ms=100),
+                    QueryPerformanceEvent(type="content_finished", timestamp_ms=600),
+                ],
+            )
+        ]
+    )
+
+
+@pytest.mark.parametrize(
+    ("data", "response_id", "provider_response_id"),
+    [
+        ({"response_id": "legacy-response"}, "legacy-response", "legacy-response"),
+        (
+            {"provider_response_id": "provider-response"},
+            "provider-response",
+            "provider-response",
+        ),
+        (
+            {
+                "response_id": "legacy-response",
+                "provider_response_id": "provider-response",
+            },
+            "legacy-response",
+            "provider-response",
+        ),
+    ],
+)
+def test_query_result_extras_response_id_hydration(
+    data: dict[str, str], response_id: str, provider_response_id: str
+):
+    extras = QueryResultExtras.model_validate(data)
+
+    assert extras.response_id == response_id
+    assert extras.provider_response_id == provider_response_id
+
+
+def test_query_result_extras_provider_request_id_does_not_hydrate_response_ids():
+    extras = QueryResultExtras(provider_request_id="provider-request")
+
+    assert extras.response_id is None
+    assert extras.provider_response_id is None
+    assert extras.provider_request_id == "provider-request"
 
 
 class TestQueryResultCostAddition:
@@ -115,11 +175,6 @@ class TestQueryResultPerformance:
         metadata = QueryResultMetadata.model_validate(
             {
                 "performance": {
-                    "tokens_per_second": {
-                        "reasoning": 7.8912,
-                        "content": 12.3456,
-                        "tool_call": None,
-                    },
                     "timeline": [
                         {
                             "channel": "content",
@@ -164,22 +219,12 @@ class TestQueryResultPerformance:
             }
         )
 
-        assert metadata.performance.time_to_first_token_ms.any == 760
-        assert metadata.performance.time_to_first_token_ms.answer == 760
-        assert metadata.performance.time_to_first_token_ms.reasoning is None
-        assert metadata.performance.time_to_first_token_ms.content == 760
-        assert metadata.performance.time_to_first_token_ms.tool_call == 1580
-        assert metadata.performance.tokens_per_second == QueryTokensPerSecond(
-            reasoning=7.891,
-            content=12.346,
-            tool_call=None,
-        )
+        assert _require_performance(metadata).time_to_first_token_ms.any == 760
+        assert _require_performance(metadata).time_to_first_token_ms.answer == 760
+        assert _require_performance(metadata).time_to_first_token_ms.reasoning is None
+        assert _require_performance(metadata).time_to_first_token_ms.content == 760
+        assert _require_performance(metadata).time_to_first_token_ms.tool_call == 1580
         assert metadata.model_dump()["performance"] == {
-            "tokens_per_second": {
-                "reasoning": 7.891,
-                "content": 12.346,
-                "tool_call": None,
-            },
             "timeline": [
                 {
                     "channel": "content",
@@ -236,9 +281,10 @@ class TestQueryResultPerformance:
 
     async def test_metadata_addition_does_not_aggregate_query_performance(self):
         meta1 = QueryResultMetadata(
+            out_tokens=40,
+            reasoning_tokens=20,
             duration_seconds=1.0,
             performance=QueryResultPerformance(
-                tokens_per_second=QueryTokensPerSecond(content=10.0),
                 timeline=[
                     QueryPerformanceTimelineEntry(
                         channel="content",
@@ -256,12 +302,28 @@ class TestQueryResultPerformance:
                 ],
             ),
         )
-        meta2 = QueryResultMetadata(duration_seconds=2.0)
+        meta2 = QueryResultMetadata(
+            out_tokens=60,
+            reasoning_tokens=10,
+            duration_seconds=2.0,
+        )
 
         result = meta1 + meta2
 
         assert result.duration_seconds == 3.0
-        assert result.performance == QueryResultPerformance()
+        assert result.out_tokens == 100
+        assert result.reasoning_tokens == 30
+        assert result.performance is None
+
+    async def test_missing_performance_serializes_as_null_or_absent(self):
+        metadata = QueryResultMetadata(in_tokens=1)
+
+        default_dump = metadata.model_dump(mode="json")
+        exclude_none_dump = metadata.model_dump(mode="json", exclude_none=True)
+
+        assert default_dump["performance"] is None
+        assert "performance" not in exclude_none_dump
+        assert exclude_none_dump["in_tokens"] == 1
 
     async def test_output_package_exports_public_result_and_performance_types(self):
         from model_library.base.output import (
@@ -284,6 +346,53 @@ class TestQueryResultPerformance:
         with pytest.raises(ValidationError, match="Input should be"):
             QueryPerformanceEvent.model_validate(
                 {"type": "answer_started", "timestamp_ms": 0}
+            )
+
+    async def test_text_offsets_round_trip_only_on_text_delta_events(self):
+        event = QueryPerformanceEvent(
+            type="content_delta",
+            timestamp_ms=1,
+            channel_text_start_char=2,
+            channel_text_end_char=7,
+        )
+        started_event = QueryPerformanceEvent(type="content_started", timestamp_ms=1)
+
+        assert event.model_dump(mode="json") == {
+            "type": "content_delta",
+            "timestamp_ms": 1,
+            "channel_text_start_char": 2,
+            "channel_text_end_char": 7,
+        }
+        assert started_event.model_dump(mode="json") == {
+            "type": "content_started",
+            "timestamp_ms": 1,
+        }
+        assert QueryPerformanceEvent.model_validate(event.model_dump()) == event
+
+    async def test_text_offsets_must_be_valid_for_text_delta_events(self):
+        with pytest.raises(
+            ValidationError, match="text offset fields must be set together"
+        ):
+            QueryPerformanceEvent(
+                type="content_delta",
+                timestamp_ms=1,
+                channel_text_start_char=0,
+            )
+
+        with pytest.raises(ValidationError, match="text offsets are only valid"):
+            QueryPerformanceEvent(
+                type="content_started",
+                timestamp_ms=1,
+                channel_text_start_char=0,
+                channel_text_end_char=1,
+            )
+
+        with pytest.raises(ValidationError, match="channel_text_end_char must be >="):
+            QueryPerformanceEvent(
+                type="content_delta",
+                timestamp_ms=1,
+                channel_text_start_char=2,
+                channel_text_end_char=1,
             )
 
     async def test_timeline_accepts_zero_timestamp_started_event(self):
@@ -317,7 +426,9 @@ class TestQueryResultPerformance:
         assert entry.end_ms == 10
         assert entry.duration_ms == 10
 
-    async def test_tool_call_ready_counts_as_first_token_without_args_delta(self):
+    async def test_tool_call_ready_sets_ready_ms_without_args_delta(
+        self,
+    ):
         performance = QueryResultPerformance(
             timeline=[
                 QueryPerformanceTimelineEntry(
@@ -338,33 +449,15 @@ class TestQueryResultPerformance:
 
         entry = performance.timeline[0]
         assert entry.ready_ms == 120
-        assert entry.first_token_ms == 120
-        assert performance.time_to_first_token_ms.tool_call == 120
-        assert performance.time_to_first_token_ms.answer == 120
-        assert performance.time_to_first_token_ms.any == 120
-
-    async def test_performance_metadata_rejects_flat_performance_payload(self):
-        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
-            QueryResultMetadata.model_validate(
-                {
-                    "performance": {
-                        "time_to_first_token_seconds": 0.1234,
-                        "time_to_first_content_token_seconds": 0.4567,
-                        "output_tokens_per_second": 12.3456,
-                        "reasoning_tokens_per_second": 7.89,
-                    }
-                }
-            )
+        assert entry.first_token_ms is None
+        assert performance.time_to_first_token_ms.tool_call is None
+        assert performance.time_to_first_token_ms.answer is None
+        assert performance.time_to_first_token_ms.any is None
 
     async def test_performance_rollups_reject_negative_values(self):
         with pytest.raises(ValidationError, match="greater than or equal to 0"):
             QueryResultPerformance.model_validate(
                 {"time_to_first_token_ms": {"any": -1}}
-            )
-
-        with pytest.raises(ValidationError, match="greater than or equal to 0"):
-            QueryResultPerformance.model_validate(
-                {"tokens_per_second": {"content": -3.5}}
             )
 
     async def test_performance_timeline_rejects_unordered_entries(self):
@@ -436,8 +529,8 @@ class TestQueryResultPerformance:
         reparsed = QueryResultMetadata.model_validate(metadata.model_dump())
 
         assert reparsed == metadata
-        assert reparsed.performance.timeline[0].duration_ms == 100
-        assert reparsed.performance.time_to_first_token_ms.content == 120
+        assert _require_performance(reparsed).timeline[0].duration_ms == 100
+        assert _require_performance(reparsed).time_to_first_token_ms.content == 120
 
     async def test_timeline_timing_fields_are_derived_from_events(self):
         entry = QueryPerformanceTimelineEntry(
@@ -462,6 +555,41 @@ class TestQueryResultPerformance:
             QueryResultPerformance(timeline=[entry]).time_to_first_token_ms.content
             == 120
         )
+
+    async def test_tool_call_ready_without_args_delta_does_not_count_as_token(self):
+        entry = QueryPerformanceTimelineEntry(
+            channel="tool_call",
+            index=0,
+            events=[
+                QueryPerformanceEvent(type="tool_call_started", timestamp_ms=100),
+                QueryPerformanceEvent(type="tool_call_ready", timestamp_ms=120),
+                QueryPerformanceEvent(type="tool_call_finished", timestamp_ms=130),
+            ],
+        )
+        performance = QueryResultPerformance(timeline=[entry])
+
+        assert entry.ready_ms == 120
+        assert entry.first_token_ms is None
+        assert performance.time_to_first_token_ms.tool_call is None
+        assert performance.time_to_first_token_ms.answer is None
+
+    async def test_tool_call_ready_before_args_delta_keeps_delta_as_first_token(self):
+        entry = QueryPerformanceTimelineEntry(
+            channel="tool_call",
+            index=0,
+            events=[
+                QueryPerformanceEvent(type="tool_call_started", timestamp_ms=100),
+                QueryPerformanceEvent(type="tool_call_ready", timestamp_ms=120),
+                QueryPerformanceEvent(type="tool_call_delta", timestamp_ms=150),
+                QueryPerformanceEvent(type="tool_call_finished", timestamp_ms=160),
+            ],
+        )
+        performance = QueryResultPerformance(timeline=[entry])
+
+        assert entry.ready_ms == 120
+        assert entry.first_token_ms == 150
+        assert performance.time_to_first_token_ms.tool_call == 150
+        assert performance.time_to_first_token_ms.answer == 150
 
     async def test_timeline_validates_segment_ordering_and_event_channel(self):
         with pytest.raises(ValidationError, match="timeline entry must include events"):
@@ -602,6 +730,18 @@ class TestQueryResultMetadataAddition:
         result = meta1 + meta2
 
         assert result.cost is None
+
+    async def test_add_metadata_drops_per_query_extra(self):
+        meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50)
+        meta1.extra["model"] = "provider/model-a"
+        meta2 = QueryResultMetadata(in_tokens=200, out_tokens=100)
+        meta2.extra["fallback"] = "provider/model-b"
+
+        result = meta1 + meta2
+
+        assert result.in_tokens == 300
+        assert result.out_tokens == 150
+        assert result.extra == {}
 
     async def test_add_metadata_default_duration(self):
         meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50, duration_seconds=None)

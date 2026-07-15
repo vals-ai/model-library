@@ -62,3 +62,28 @@ kimi-models:
     documentation_url: https://www.kimi.com/
     supports:
       images: false
+
+zai-models:
+  base-config:
+    company: zAI
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    supports:
+      images: false
+      temperature: true
+
+  fireworks/glm-5p2:
+    label: GLM 5.2 (Fireworks)
+    release_date: 2026-06-13
+    properties:
+      context_window: 1_000_000
+      max_tokens: 131_072
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.40
+      output: 4.40
+      cache:
+        read: 0.14
+    default_parameters:
+      temperature: 1
+      top_p: 0.95

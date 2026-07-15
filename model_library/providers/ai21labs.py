@@ -34,6 +34,7 @@ from model_library.exceptions import (
     UnexpectedSystemInputError,
     handle_empty_response,
 )
+from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
 
@@ -148,6 +149,9 @@ class AI21LabsModel(LLM):
         parsed_tools: list[dict[str, Any]] = []
         for tool in tools:
             body = tool.body
+            if is_native_web_search(body):
+                parsed_tools.append(self.search_tool)
+                continue
             if not isinstance(body, ToolBody):
                 parsed_tools.append(body)
                 continue
@@ -252,7 +256,9 @@ class AI21LabsModel(LLM):
                 in_tokens=response.usage.prompt_tokens,
                 out_tokens=response.usage.completion_tokens,
             ),
-            extras=QueryResultExtras(response_id=response.id),
+            extras=QueryResultExtras(
+                provider_response_id=response.id,
+            ),
             tool_calls=tool_calls,
         )
 

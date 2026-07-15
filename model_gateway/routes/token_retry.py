@@ -13,12 +13,7 @@ from model_library.retriers.token.utils import (
     validate_redis_client,
 )
 
-from model_gateway.types import (
-    RateLimitRequest,
-    RateLimitResponse,
-    TokenCountRequest,
-    TokenCountResponse,
-)
+from model_gateway.types import RateLimitRequest, RateLimitResponse
 
 TOKEN_RETRY_STATUS_CACHE_SECONDS = 1.0
 
@@ -27,10 +22,6 @@ def register_token_retry_routes(app: FastAPI) -> None:
     token_retry_status_cache: dict[str, Any] | None = None
     token_retry_status_cache_expires_at = 0.0
     token_retry_status_cache_lock = asyncio.Lock()
-
-    @app.post("/tokens/count")
-    async def count_tokens(_body: TokenCountRequest) -> TokenCountResponse:
-        raise HTTPException(status_code=501, detail="Gateway token retry use only")
 
     @app.post("/rate-limit")
     async def rate_limit(_body: RateLimitRequest) -> RateLimitResponse:

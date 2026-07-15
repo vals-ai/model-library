@@ -2,7 +2,11 @@
 
 from typing import Literal, cast
 
-from pydantic import ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    ConfigDict,
+    Field,
+    model_validator,
+)
 from typing_extensions import Self
 
 from model_library.utils import ValsModel
@@ -12,12 +16,12 @@ __all__ = [
     "QueryPerformanceEventType",
     "QueryPerformanceEvent",
     "QueryTimeToFirstToken",
-    "QueryTokensPerSecond",
     "QueryPerformanceTimelineEntry",
     "QueryResultPerformance",
 ]
 
 QueryPerformanceChannel = Literal["reasoning", "content", "tool_call"]
+QueryPerformanceEventKind = Literal["started", "delta", "ready", "finished"]
 
 QueryPerformanceEventType = Literal[
     "reasoning_started",
@@ -31,6 +35,28 @@ QueryPerformanceEventType = Literal[
     "tool_call_ready",
     "tool_call_finished",
 ]
+
+_QUERY_PERFORMANCE_EVENT_TYPES: dict[
+    QueryPerformanceChannel,
+    dict[QueryPerformanceEventKind, QueryPerformanceEventType],
+] = {
+    "reasoning": {
+        "started": "reasoning_started",
+        "delta": "reasoning_delta",
+        "finished": "reasoning_finished",
+    },
+    "content": {
+        "started": "content_started",
+        "delta": "content_delta",
+        "finished": "content_finished",
+    },
+    "tool_call": {
+        "started": "tool_call_started",
+        "delta": "tool_call_delta",
+        "ready": "tool_call_ready",
+        "finished": "tool_call_finished",
+    },
+}
 
 
 def _event_belongs_to_channel(
@@ -51,6 +77,57 @@ class QueryPerformanceEvent(ValsModel):
         ge=0,
         description="Monotonic elapsed milliseconds from query start.",
     )
+    channel_text_start_char: int | None = Field(
+        default=None,
+        ge=0,
+        exclude_if=lambda value: value is None,
+        description="Inclusive character offset into the channel's final text for text delta events.",
+    )
+    channel_text_end_char: int | None = Field(
+        default=None,
+        ge=0,
+        exclude_if=lambda value: value is None,
+        description="Exclusive character offset into the channel's final text for text delta events.",
+    )
+
+    @model_validator(mode="after")
+    def validate_text_offsets(self) -> Self:
+        has_start = self.channel_text_start_char is not None
+        has_end = self.channel_text_end_char is not None
+        if has_start != has_end:
+            raise ValueError("text offset fields must be set together")
+        if has_start and self.type not in ("content_delta", "reasoning_delta"):
+            raise ValueError("text offsets are only valid for text delta events")
+        if (
+            self.channel_text_start_char is not None
+            and self.channel_text_end_char is not None
+            and self.channel_text_end_char < self.channel_text_start_char
+        ):
+            raise ValueError("channel_text_end_char must be >= channel_text_start_char")
+        return self
+
+
+def create_query_performance_event(
+    channel: QueryPerformanceChannel,
+    kind: QueryPerformanceEventKind,
+    timestamp_ms: int,
+    *,
+    channel_text_start_char: int | None = None,
+    channel_text_end_char: int | None = None,
+) -> QueryPerformanceEvent:
+    """Create a typed performance event for a channel/kind pair."""
+    try:
+        event_type = _QUERY_PERFORMANCE_EVENT_TYPES[channel][kind]
+    except KeyError as exc:
+        raise ValueError(
+            f"{kind} is not valid for {channel} performance events"
+        ) from exc
+    return QueryPerformanceEvent(
+        type=event_type,
+        timestamp_ms=timestamp_ms,
+        channel_text_start_char=channel_text_start_char,
+        channel_text_end_char=channel_text_end_char,
+    )
 
 
 class QueryTimeToFirstToken(ValsModel):
@@ -61,55 +138,28 @@ class QueryTimeToFirstToken(ValsModel):
     any: int | None = Field(
         default=None,
         ge=0,
-        description="First generated token/signal across reasoning, content, or tool_call.",
+        description="First generated token/delta across reasoning, content, or tool_call.",
     )
     answer: int | None = Field(
         default=None,
         ge=0,
-        description="First non-reasoning token/signal: min(content, tool_call).",
+        description="First non-reasoning token/delta: min(content, tool_call).",
     )
     reasoning: int | None = Field(
         default=None,
         ge=0,
-        description="First reasoning/thinking token/signal.",
+        description="First reasoning/thinking token/delta.",
     )
     content: int | None = Field(
         default=None,
         ge=0,
-        description="First assistant text token/signal.",
+        description="First assistant text token/delta.",
     )
     tool_call: int | None = Field(
         default=None,
         ge=0,
-        description="First tool-call token/signal.",
+        description="First tool-call token/delta.",
     )
-
-
-class QueryTokensPerSecond(ValsModel):
-    """Aggregate channel throughput, populated only when token attribution is safe."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    reasoning: float | None = Field(
-        default=None,
-        ge=0,
-        description="reasoning_tokens / active reasoning duration, only when provider reasoning token count is reliable.",
-    )
-    content: float | None = Field(
-        default=None,
-        ge=0,
-        description="Content output tokens / active content duration, only when content token attribution is reliable.",
-    )
-    tool_call: float | None = Field(
-        default=None,
-        ge=0,
-        description="Tool-call argument tokens/sec; usually null because providers rarely report tool-call tokens separately.",
-    )
-
-    @field_validator("*", mode="after")
-    @classmethod
-    def _round_rates(cls, value: float | None) -> float | None:
-        return round(value, 3) if value is not None else None
 
 
 class QueryPerformanceTimelineEntry(ValsModel):
@@ -132,7 +182,7 @@ class QueryPerformanceTimelineEntry(ValsModel):
     first_token_ms: int | None = Field(
         default=None,
         ge=0,
-        description="Derived from events: first *_delta timestamp, or tool_call_ready for ready-only tool calls.",
+        description="Derived from events: first *_delta timestamp.",
     )
     ready_ms: int | None = Field(
         default=None,
@@ -222,8 +272,7 @@ class QueryPerformanceTimelineEntry(ValsModel):
         ready_ms = (
             first_timestamp("tool_call_ready") if channel == "tool_call" else None
         )
-        delta_ms = first_timestamp(f"{channel}_delta")
-        first_token_ms = delta_ms if delta_ms is not None else ready_ms
+        first_token_ms = first_timestamp(f"{channel}_delta")
         started_ms = first_timestamp(f"{channel}_started")
         start_ms = (
             started_ms
@@ -302,17 +351,17 @@ class QueryPerformanceTimelineEntry(ValsModel):
 
 
 class QueryResultPerformance(ValsModel):
-    """Structured per-query performance telemetry."""
+    """Structured per-query performance telemetry.
+
+    Token throughput is intentionally not derived per query here. Compute
+    aggregate TPS from tokens, durations, and internal data
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     time_to_first_token_ms: QueryTimeToFirstToken = Field(
         default_factory=QueryTimeToFirstToken,
         description="First-token latency rollups derived from timeline events.",
-    )
-    tokens_per_second: QueryTokensPerSecond = Field(
-        default_factory=QueryTokensPerSecond,
-        description="Aggregate channel speeds; null unless token attribution is defensible.",
     )
     timeline: list[QueryPerformanceTimelineEntry] = Field(
         default_factory=list,

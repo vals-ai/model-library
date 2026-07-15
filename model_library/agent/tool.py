@@ -1,6 +1,6 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from pydantic import computed_field
 from typing_extensions import override
@@ -100,6 +100,49 @@ class Tool(ABC):
                 required=self.required,
             ),
         )
+
+
+class NativeWebSearch(Tool):
+    """Provider-agnostic native web search tool.
+
+    Each provider maps this to its native implementation via search_tool.
+    Raises NotImplementedError for providers that don't support native search.
+    """
+
+    execution_type = "provider"
+    name = "web_search"
+    description = ""
+    parameters: dict[str, Any] = {}
+    required: list[str] = []
+
+    @property
+    @override
+    def definition(self) -> ToolDefinition:
+        return ToolDefinition(name=self.name, body=_NATIVE_WEB_SEARCH_SENTINEL)
+
+    async def execute(
+        self, args: dict[str, Any], state: dict[str, Any], logger: logging.Logger
+    ) -> ToolOutput:
+        raise RuntimeError("NativeWebSearch is executed by the provider, not the agent")
+
+
+class NativeWebSearchSentinel(ValsModel):
+    type: Literal["native_web_search"] = "native_web_search"
+
+
+_NATIVE_WEB_SEARCH_SENTINEL = NativeWebSearchSentinel()
+
+
+def is_native_web_search(body: Any) -> bool:
+    """Return True if body represents a NativeWebSearch tool.
+
+    Matches both the live instance (direct path) and the JSON sentinel
+    (gateway path, where model_dump() has flattened the body to a dict).
+    """
+    return isinstance(body, (NativeWebSearch, NativeWebSearchSentinel)) or (
+        isinstance(body, dict)
+        and cast("dict[str, Any]", body).get("type") == "native_web_search"
+    )
 
 
 class ProviderTool(Tool):

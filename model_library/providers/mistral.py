@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import io
 import logging
-from collections.abc import Sequence
+from collections.abc import Hashable, Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel
@@ -31,18 +31,28 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.output.builder import QueryResultBuilder
 from model_library.exceptions import (
     BadInputError,
     UnexpectedSystemInputError,
     handle_empty_response,
 )
 from model_library.file_utils import trim_images
+from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
 
 if TYPE_CHECKING:
     from mistralai.client import Mistral
     from mistralai.client.models.toolcall import ToolCall as MistralToolCall
+
+
+def _mistral_tool_call_event_key(tool_call: MistralToolCall) -> Hashable | None:
+    if "index" in tool_call.model_fields_set and tool_call.index is not None:
+        return ("index", tool_call.index)
+    if tool_call.id and tool_call.id != "null":
+        return tool_call.id
+    return None
 
 
 def map_mistral_finish_reason(
@@ -191,6 +201,9 @@ class MistralModel(LLM):
         parsed_tools: list[dict[str, Any]] = []
         for tool in tools:
             body = tool.body
+            if is_native_web_search(body):
+                parsed_tools.append(self.search_tool)
+                continue
             if not isinstance(body, ToolBody):
                 parsed_tools.append(body)
                 continue
@@ -287,14 +300,13 @@ class MistralModel(LLM):
             input, tools=tools, output_schema=output_schema, **kwargs
         )
 
+        result_builder = QueryResultBuilder()
         response = await self.get_client().chat.stream_async(
             **body,  # pyright: ignore[reportAny]
         )
 
         # Read the content, reasoning, and usage from the streamed chunks.
         # The chunk can be a ThinkChunk (reasoning), TextChunk or str (content), or may contain usage.
-        reasoning: str = ""
-        text: str = ""
         in_tokens = 0
         out_tokens = 0
         finish_reason = None
@@ -304,7 +316,7 @@ class MistralModel(LLM):
         try:
             async for chunk in response:
                 data = chunk.data
-                if data.id:
+                if data.id is not None:
                     response_id = data.id
                 for choice in data.choices:
                     delta = choice.delta
@@ -313,15 +325,23 @@ class MistralModel(LLM):
                             if isinstance(content_item, ThinkChunk):
                                 for text_chunk in content_item.thinking:
                                     if isinstance(text_chunk, TextChunk):
-                                        reasoning += text_chunk.text
+                                        result_builder.append_reasoning_delta(
+                                            text_chunk.text
+                                        )
                             elif isinstance(content_item, TextChunk):
-                                text += content_item.text
+                                result_builder.append_content_delta(content_item.text)
 
                     elif isinstance(delta.content, str):
-                        text += delta.content
+                        result_builder.append_content_delta(delta.content)
 
                     if delta.tool_calls:
-                        raw_tool_calls.extend(delta.tool_calls)
+                        for tool_call in delta.tool_calls:
+                            tool_call_key = _mistral_tool_call_event_key(tool_call)
+                            if tool_call_key is None:
+                                result_builder.start_tool_call_segment().record_tool_call_delta()
+                            else:
+                                result_builder.record_tool_call_delta(tool_call_key)
+                            raw_tool_calls.append(tool_call)
                     if choice.finish_reason:
                         finish_reason = choice.finish_reason
 
@@ -333,7 +353,11 @@ class MistralModel(LLM):
             query_logger.error(f"Error: {e}", exc_info=True)
             raise e
 
-        no_useful_content = not text and not reasoning and not raw_tool_calls
+        no_useful_content = (
+            not result_builder.has_output_text
+            and not result_builder.has_reasoning
+            and not raw_tool_calls
+        )
         mapped_finish_reason = map_mistral_finish_reason(finish_reason)
         if no_useful_content:
             handle_empty_response(
@@ -355,6 +379,8 @@ class MistralModel(LLM):
                 )
             )
 
+        output_text = result_builder.output_text
+        reasoning = result_builder.reasoning
         content: list[ContentChunk] = []
         if reasoning:
             content.append(
@@ -369,19 +395,17 @@ class MistralModel(LLM):
                     type="thinking",
                 )
             )
-        if text:
+        if output_text:
             content.append(
                 TextChunk(
-                    text=text,
+                    text=output_text,
                     type="text",
                 )
             )
 
         message = AssistantMessage(tool_calls=raw_tool_calls, content=content)
 
-        return QueryResult(
-            output_text=text,
-            reasoning=reasoning or None,
+        return result_builder.build(
             finish_reason=mapped_finish_reason,
             history=[*input, RawResponse(response=message)],
             tool_calls=tool_calls,
@@ -390,5 +414,7 @@ class MistralModel(LLM):
                 out_tokens=out_tokens,
                 # Reasoning tokens are not supported by Mistral 09/22/25
             ),
-            extras=QueryResultExtras(response_id=response_id),
+            extras=QueryResultExtras(
+                provider_response_id=response_id,
+            ),
         )

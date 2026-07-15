@@ -35,6 +35,7 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.output.builder import QueryResultBuilder
 from model_library.exceptions import (
     BadInputError,
     NoMatchingToolCallError,
@@ -42,6 +43,7 @@ from model_library.exceptions import (
     handle_empty_response,
 )
 from model_library.model_utils import get_default_budget_tokens
+from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 
 
@@ -257,6 +259,9 @@ class AmazonModel(LLM):
         parsed_tools: list[dict[str, Any]] = []
         for tool in tools:
             body = tool.body
+            if is_native_web_search(body):
+                parsed_tools.append(self.search_tool)
+                continue
             if not isinstance(body, ToolBody):
                 parsed_tools.append(body)
                 continue
@@ -353,6 +358,7 @@ class AmazonModel(LLM):
     async def stream_response(
         self,
         response: Any,
+        result_builder: QueryResultBuilder | None = None,
     ):
         text_response = ""
         reasoning_content = ""
@@ -362,6 +368,7 @@ class AmazonModel(LLM):
         messages: dict[str, Any] = {"content": []}
         stop_reason: str = ""
         metadata = QueryResultMetadata()
+        result_builder = result_builder or QueryResultBuilder()
 
         for chunk in response["stream"]:
             key = list(chunk.keys())[0]
@@ -374,6 +381,7 @@ class AmazonModel(LLM):
                     start_key = list(start.keys())[0]
                     if start_key == "toolUse":
                         tool = start["toolUse"]
+                        result_builder.start_tool_call_segment().record_tool_call_ready()
                         tool_calls["toolUseId"] = tool["toolUseId"]
                         tool_calls["name"] = tool["name"]
 
@@ -383,17 +391,24 @@ class AmazonModel(LLM):
                     match delta_key:
                         case "reasoningContent":
                             if "text" in delta["reasoningContent"]:
-                                reasoning_content += delta["reasoningContent"]["text"]
+                                reasoning_delta = delta["reasoningContent"]["text"]
+                                reasoning_content += reasoning_delta
+                                result_builder.append_reasoning_delta(reasoning_delta)
                             if "signature" in delta["reasoningContent"]:
                                 reasoning_signature = delta["reasoningContent"][
                                     "signature"
                                 ]
                         case "text":
-                            text_response += delta["text"]
+                            text_delta = delta["text"]
+                            text_response += text_delta
+                            result_builder.append_content_delta(text_delta)
                         case "toolUse":
                             if "input" not in tool_calls:
                                 tool_calls["input"] = ""
-                            tool_calls["input"] += delta["toolUse"]["input"]
+                            tool_input_delta = delta["toolUse"]["input"]
+                            tool_calls["input"] += tool_input_delta
+                            if tool_input_delta:
+                                result_builder.record_tool_call_delta()
 
                 case "metadata":
                     metadata = QueryResultMetadata(
@@ -408,8 +423,10 @@ class AmazonModel(LLM):
                     )
 
                 case "contentBlockStop":
+                    result_builder.finish_current_segment()
                     if tool_calls:
-                        tool_calls["input"] = json.loads(tool_calls["input"])
+                        raw_tool_input = tool_calls.get("input") or "{}"
+                        tool_calls["input"] = json.loads(raw_tool_input)
                         messages["content"].append({"toolUse": tool_calls})
                         tool_calls = {}
                     if text_response:
@@ -431,7 +448,7 @@ class AmazonModel(LLM):
                 case "messageStop":
                     stop_reason = value["stopReason"]
 
-        return messages, stop_reason, metadata
+        return messages, stop_reason, metadata, result_builder
 
     # https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/bedrock-runtime/client/converse.html#
     @override
@@ -448,53 +465,60 @@ class AmazonModel(LLM):
             input, tools=tools, output_schema=output_schema, **kwargs
         )
 
+        result_builder = QueryResultBuilder()
         response = await asyncio.to_thread(
             self.get_client().converse_stream,  # pyright: ignore[reportUnknownArgumentType, reportUnknownMemberType]
             **body,
         )
 
-        response_id = None
+        request_id = None
         if response_metadata := response.get("ResponseMetadata"):
-            response_id = response_metadata.get("RequestId")
+            request_id = response_metadata.get("RequestId")
 
-        messages, stop_reason, metadata = await self.stream_response(response)
-
-        text = " ".join([i["text"] for i in messages["content"] if "text" in i])
-        reasoning = " ".join(
-            [
-                i["reasoningContent"]["reasoningText"]["text"]
-                for i in messages["content"]
-                if "reasoningContent" in i
-            ]
+        messages, stop_reason, metadata, result_builder = await self.stream_response(
+            response, result_builder
         )
 
-        tool_calls: list[ToolCall] = []
-        if stop_reason:
-            match stop_reason:
-                case "tool_use":
-                    _tool_calls = [
-                        i["toolUse"] for i in messages["content"] if "toolUse" in i
-                    ]
-                    for tool in _tool_calls:
-                        tool_calls.append(
-                            ToolCall(
-                                id=tool["toolUseId"],
-                                name=tool["name"],
-                                args=tool["input"],
-                            )
-                        )
+        text_blocks = [i["text"] for i in messages["content"] if "text" in i]
+        text = " ".join(text for text in text_blocks if text)
+        reasoning_blocks = [
+            i["reasoningContent"]["reasoningText"]["text"]
+            for i in messages["content"]
+            if "reasoningContent" in i
+        ]
+        reasoning = " ".join(reasoning_blocks)
 
-        no_useful_content = not text and not reasoning and not tool_calls
+        tool_calls: list[ToolCall] = []
+        if stop_reason == "tool_use":
+            for item in messages["content"]:
+                if "toolUse" not in item:
+                    continue
+                tool = item["toolUse"]
+                tool_calls.append(
+                    ToolCall(
+                        id=tool["toolUseId"],
+                        name=tool["name"],
+                        args=tool["input"],
+                    )
+                )
+
         mapped_finish_reason = map_amazon_finish_reason(stop_reason)
+        no_useful_content = not text_blocks and not reasoning and not tool_calls
         if no_useful_content:
             handle_empty_response(mapped_finish_reason, {"metadata": metadata})
 
-        return QueryResult(
-            output_text=text,
-            reasoning=reasoning,
+        if text_blocks:
+            result_builder.set_output_text(text)
+        if reasoning_blocks:
+            result_builder.set_reasoning(reasoning)
+
+        return result_builder.build(
             finish_reason=mapped_finish_reason,
             metadata=metadata,
-            extras=QueryResultExtras(response_id=response_id),
+            extras=QueryResultExtras(
+                provider_response_id=request_id,
+                provider_request_id=request_id,
+            ),
             tool_calls=tool_calls,
             history=[*input, RawResponse(response=messages)],
         )

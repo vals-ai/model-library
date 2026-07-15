@@ -8,7 +8,6 @@ base-config:
     tools: true
   properties:
     reasoning_model: false
-
 grok-4.3-models:
   base-config:
     supports:
@@ -50,6 +49,7 @@ grok-4.3-models:
 grok-4.20-models:
   base-config:
     supports:
+      files: true
       temperature: true
     costs_per_million_token:
       cache:
@@ -87,8 +87,6 @@ grok-4.20-models:
       max_tokens: 2_000_000
       training_cutoff: null
       reasoning_model: true
-    supports:
-        files: true
     costs_per_million_token:
       input: 2.00
       output: 6.00
@@ -104,6 +102,7 @@ grok-4.20-models:
 grok-4-models:
   base-config:
     supports:
+      files: true
       temperature: true
     costs_per_million_token:
       cache:
@@ -116,8 +115,6 @@ grok-4-models:
     label: Grok 4
     release_date: 2025-07-09
     documentation_url: https://docs.x.ai/docs/models/grok-4-0709
-    supports:
-      files: true
     properties:
       context_window: 256_000
       max_tokens: 128_000
@@ -140,8 +137,6 @@ grok-4-models:
     label: Grok 4 Fast (Reasoning)
     release_date: 2025-09-19
     documentation_url: https://docs.x.ai/docs/models/grok-4-fast-reasoning
-    supports:
-      files: true
     properties:
       context_window: 2_000_000
       max_tokens: 2_000_000
@@ -201,8 +196,6 @@ grok-4-models:
     label: Grok 4 Fast (Non-Reasoning)
     release_date: 2025-09-19
     documentation_url: https://docs.x.ai/docs/models/grok-4-fast-non-reasoning
-    supports:
-      files: true
     properties:
       context_window: 2_000_000
       max_tokens: 2_000_000
@@ -222,6 +215,7 @@ grok-4-models:
 grok-code-models:
   base-config:
     supports:
+      files: true
       temperature: true
     costs_per_million_token:
       cache:
@@ -252,6 +246,7 @@ grok-code-models:
 grok-build-models:
   base-config:
     supports:
+      files: true
       temperature: true
     costs_per_million_token:
       cache:
@@ -284,6 +279,7 @@ grok-build-models:
 grok-3-models:
   base-config:
     supports:
+      files: true
       temperature: true
     costs_per_million_token:
       cache:

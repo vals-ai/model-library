@@ -15,6 +15,20 @@ from rich.pretty import pretty_repr
 
 MAX_LLM_LOG_LENGTH = 100
 MAX_LOG_HISTORY = 20  # number of history items to log
+PROVIDER_CONNECT_TIMEOUT_SECONDS = 5.0
+PROVIDER_WRITE_TIMEOUT_SECONDS = 60.0
+PROVIDER_POOL_TIMEOUT_SECONDS = 60.0
+GATEWAY_REQUEST_TIMEOUT_SECONDS = 3540.0
+# Preserve the existing provider-side silent-stall timeout while shortening the
+# gateway request cap for deploy-drain slack.
+PROVIDER_READ_TIMEOUT_SECONDS = 3400.0
+GATEWAY_CLIENT_CONNECT_TIMEOUT_SECONDS = 30.0
+GATEWAY_CLIENT_READ_TIMEOUT_SLACK_SECONDS = 60.0
+GATEWAY_CLIENT_READ_TIMEOUT_SECONDS = (
+    GATEWAY_REQUEST_TIMEOUT_SECONDS + GATEWAY_CLIENT_READ_TIMEOUT_SLACK_SECONDS
+)
+GATEWAY_CLIENT_WRITE_TIMEOUT_SECONDS = 60.0
+GATEWAY_CLIENT_POOL_TIMEOUT_SECONDS = 60.0
 logger = logging.getLogger("llm")
 
 
@@ -192,17 +206,40 @@ def default_aiohttp_httpx_client(
         transport=AiohttpTransport(
             client=lambda: make_aiohttp_session(dns_resolve=dns_resolve)
         ),
-        timeout=httpx.Timeout(None),
+        timeout=httpx.Timeout(
+            connect=PROVIDER_CONNECT_TIMEOUT_SECONDS,
+            read=PROVIDER_READ_TIMEOUT_SECONDS,
+            write=PROVIDER_WRITE_TIMEOUT_SECONDS,
+            pool=PROVIDER_POOL_TIMEOUT_SECONDS,
+        ),
     )
 
 
 def default_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncClient:
     """Fallback httpx client without aiohttp (used when aiohttp is not available)."""
     return httpx.AsyncClient(
-        timeout=httpx.Timeout(None),
+        timeout=httpx.Timeout(
+            connect=PROVIDER_CONNECT_TIMEOUT_SECONDS,
+            read=PROVIDER_READ_TIMEOUT_SECONDS,
+            write=PROVIDER_WRITE_TIMEOUT_SECONDS,
+            pool=PROVIDER_POOL_TIMEOUT_SECONDS,
+        ),
         limits=httpx.Limits(
             max_connections=2000, max_keepalive_connections=300
         ),  # TODO: increase, but make sure prod enough sockets to not hit file descriptor limit
+        headers=headers,
+    )
+
+
+def gateway_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncClient:
+    return httpx.AsyncClient(
+        timeout=httpx.Timeout(
+            connect=GATEWAY_CLIENT_CONNECT_TIMEOUT_SECONDS,
+            read=GATEWAY_CLIENT_READ_TIMEOUT_SECONDS,
+            write=GATEWAY_CLIENT_WRITE_TIMEOUT_SECONDS,
+            pool=GATEWAY_CLIENT_POOL_TIMEOUT_SECONDS,
+        ),
+        limits=httpx.Limits(max_connections=2000, max_keepalive_connections=300),
         headers=headers,
     )
 

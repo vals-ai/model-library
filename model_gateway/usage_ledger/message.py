@@ -60,12 +60,14 @@ def deserialize_usage_event_message(message: str) -> dict[str, object]:
 
 
 def _serialize_envelope(event: Mapping[str, object]) -> str:
-    envelope = {"schema_version": MESSAGE_SCHEMA_VERSION, "event": event}
+    envelope = {
+        "schema_version": MESSAGE_SCHEMA_VERSION,
+        "event": _message_json_safe(event),
+    }
     return json.dumps(
         envelope,
         sort_keys=True,
         separators=(",", ":"),
-        default=_json_default,
         allow_nan=False,
     )
 
@@ -87,10 +89,21 @@ def _summarize_bulky_fields(event: Mapping[str, object]) -> dict[str, object]:
     return summarized
 
 
-def _json_default(value: object) -> object:
+def _message_json_safe(value: object, *, key_name: str | None = None) -> object:
     if isinstance(value, Decimal):
+        if key_name == ledger_schema.COST_USD_FIELD:
+            return ledger_schema.format_cost_usd_decimal(value)
         return str(value)
-    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
+    if isinstance(value, Mapping):
+        mapping = cast(Mapping[object, object], value)
+        return {
+            str(key): _message_json_safe(item, key_name=str(key))
+            for key, item in mapping.items()
+        }
+    if isinstance(value, list):
+        items = cast(list[object], value)
+        return [_message_json_safe(item, key_name=key_name) for item in items]
+    return value
 
 
 def _restore_event_types(event: dict[str, object]) -> dict[str, object]:

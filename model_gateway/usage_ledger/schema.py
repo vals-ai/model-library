@@ -7,6 +7,8 @@ same persisted attribute names without importing gateway services.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from decimal import Decimal, localcontext
+import re
 from typing import Final, cast
 
 DEFAULT_SHARD_COUNT: Final = 16
@@ -37,8 +39,12 @@ AGENT_INDEX_SK: Final = "GSI5SK"
 
 IDENTITY_BENCHMARK_NAME: Final = "benchmark_name"
 IDENTITY_AGENT_NAME: Final = "agent_name"
+IDENTITY_EMAIL: Final = "identity_email"
+EMAIL_IDENTITY_KEY: Final = "email"
+_EMAIL_RE: Final = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 REQUEST_COUNT_FIELD: Final = "request_count"
+COST_USD_FIELD: Final = "cost_usd"
 NUMERIC_LEDGER_FIELDS: Final = (
     "input_tokens",
     "output_tokens",
@@ -48,9 +54,25 @@ NUMERIC_LEDGER_FIELDS: Final = (
     "total_input_tokens",
     "total_output_tokens",
     "duration_seconds",
-    "cost_usd",
+    COST_USD_FIELD,
 )
 NUMBER_FIELDS: Final = (REQUEST_COUNT_FIELD, *NUMERIC_LEDGER_FIELDS)
+COST_USD_DECIMAL_PLACES: Final = 12
+COST_USD_DECIMAL_QUANTUM: Final = Decimal("0.000000000001")
+
+
+def normalize_cost_usd_decimal(value: Decimal) -> Decimal:
+    with localcontext() as context:
+        context.prec = max(len(value.as_tuple().digits) + COST_USD_DECIMAL_PLACES, 28)
+        return value.quantize(COST_USD_DECIMAL_QUANTUM)
+
+
+def format_cost_usd_decimal(value: Decimal) -> str:
+    formatted = format(normalize_cost_usd_decimal(value), "f")
+    if "." not in formatted:
+        return formatted
+    return formatted.rstrip("0").rstrip(".") or "0"
+
 
 COMMON_PROJECTION_FIELDS: Final = (
     "usage_event_id",
@@ -69,7 +91,7 @@ INDEX_PROJECTION_FIELDS: Final = (
     "output_tokens",
     "total_input_tokens",
     "total_output_tokens",
-    "cost_usd",
+    COST_USD_FIELD,
 )
 
 DIMENSION_PROJECTION_FIELDS: Final = (
@@ -100,6 +122,7 @@ BULKY_LEDGER_FIELDS: Final = (
     "config_redacted_json",
     "metadata_json",
     "finish_reason_json",
+    "performance_json",
 )
 
 
@@ -163,3 +186,23 @@ def identity_dimension_value(
     if len(normalized.encode("utf-8")) > MAX_DIMENSION_VALUE_BYTES:
         return None
     return normalized
+
+
+def canonical_email_value(value: object) -> str | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().lower()
+    if not normalized:
+        return None
+    if len(normalized.encode("utf-8")) > MAX_DIMENSION_VALUE_BYTES:
+        return None
+    if _EMAIL_RE.fullmatch(normalized) is None:
+        return None
+    return normalized
+
+
+def identity_email_value(identity: object) -> str | None:
+    if not isinstance(identity, Mapping):
+        return None
+    identity_mapping = cast(Mapping[object, object], identity)
+    return canonical_email_value(identity_mapping.get(EMAIL_IDENTITY_KEY))
