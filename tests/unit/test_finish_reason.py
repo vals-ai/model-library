@@ -39,7 +39,7 @@ async def test_anthropic_finish_reason_all_values():
         "max_tokens": FinishReason.MAX_TOKENS,
         "stop_sequence": FinishReason.STOP_SEQUENCE,
         "tool_use": FinishReason.TOOL_CALLS,
-        "pause_turn": FinishReason.STOP,
+        "pause_turn": FinishReason.PAUSED,
         "refusal": FinishReason.CONTENT_FILTER,
     }
 
@@ -325,4 +325,3 @@ async def test_ai21_finish_reason_all_values():
         expected_reason=FinishReason.TOOL_CALLS,
         expected_raw="stop",
     )
-

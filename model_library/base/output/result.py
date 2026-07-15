@@ -12,6 +12,7 @@ from pydantic import (
     JsonValue,
     computed_field,
     field_validator,
+    model_validator,
 )
 from typing_extensions import override
 
@@ -59,6 +60,9 @@ class FinishReason(str, Enum):
     MALFORMED_TOOL_CALL = "malformed_tool_call"
     """Model attempted a tool call but it was malformed or unexpected."""
 
+    PAUSED = "paused"
+    """Provider paused mid-turn to run a server-side tool; replay history to resume."""
+
     ERROR = "error"
     """An error occurred during generation."""
 
@@ -87,6 +91,14 @@ class QueryResultExtras(ValsModel):
     citations: list[Citation] = Field(default_factory=list)
     search_results: JsonValue | None = None
     response_id: str | None = None
+    provider_response_id: str | None = None
+    provider_request_id: str | None = None
+
+    @model_validator(mode="after")
+    def _sync_legacy_response_id(self) -> "QueryResultExtras":
+        if self.response_id is None and self.provider_response_id is not None:
+            self.response_id = self.provider_response_id
+        return self
 
 
 class QueryResultCost(ValsModel):

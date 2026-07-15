@@ -94,7 +94,7 @@ def map_anthropic_finish_reason(
         case "tool_use":
             reason = FinishReason.TOOL_CALLS
         case "pause_turn":
-            reason = FinishReason.STOP
+            reason = FinishReason.PAUSED
         case "refusal":
             reason = FinishReason.CONTENT_FILTER
         case _:

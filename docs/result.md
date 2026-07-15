@@ -12,7 +12,9 @@
 | `metadata` | `QueryResultMetadata`: token usage, cost, duration, and per-query performance telemetry |
 | `tool_calls` | Normalized tool calls returned by the model |
 | `history` | Provider-ready conversation history for follow-up calls |
-| `extras.response_id` | Stable provider response/message/request ID, when available |
+| `extras.response_id` | Legacy response ID, populated from `provider_response_id` when present |
+| `extras.provider_response_id` | Provider response or message ID, when available |
+| `extras.provider_request_id` | Provider request ID, when available |
 
 ## QueryResultMetadata
 
@@ -57,7 +59,12 @@ performance.tokens_per_second.content  # null unless token attribution is defens
       "duration_ms": 600,
       "events": [
         {"type": "content_started", "timestamp_ms": 700},
-        {"type": "content_delta", "timestamp_ms": 760},
+        {
+          "type": "content_delta",
+          "timestamp_ms": 760,
+          "channel_text_start_char": 0,
+          "channel_text_end_char": 2
+        },
         {"type": "content_finished", "timestamp_ms": 1300}
       ]
     }
@@ -68,6 +75,8 @@ performance.tokens_per_second.content  # null unless token attribution is defens
 Supported channels are `reasoning`, `content`, and `tool_call`. Supported event names are `reasoning_started`, `reasoning_delta`, `reasoning_finished`, `content_started`, `content_delta`, `content_finished`, `tool_call_started`, `tool_call_delta`, `tool_call_ready`, and `tool_call_finished`.
 
 Timeline timestamps and derived segment durations are integer milliseconds from query start. A timeline can contain repeated segments for the same channel; `index` is zero-based and contiguous within each channel. `ready_ms` is only valid for `tool_call` segments.
+
+Text delta events may include inclusive/exclusive character offsets into the channel's final text.
 
 `time_to_first_token_ms` is derived from timeline segment `first_token_ms` values. `any` is the first generated reasoning/content/tool-call token or signal, and `answer` is the first non-reasoning output: `min(content, tool_call)`. `tokens_per_second` stores aggregate channel speeds only when token attribution is defensible.
 

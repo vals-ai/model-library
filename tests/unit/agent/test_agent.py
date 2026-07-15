@@ -27,6 +27,7 @@ from model_library.agent import (
     TurnLimit,
     TurnResult,
     TurnSummary,
+    default_should_stop,
     llm_summary_compactor,
     truncate_oldest,
 )
@@ -41,7 +42,13 @@ from model_library.base.input import (
     ToolCall,
     ToolResult,
 )
-from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
+from model_library.base.output import (
+    FinishReason,
+    FinishReasonInfo,
+    QueryResult,
+    QueryResultCost,
+    QueryResultMetadata,
+)
 from model_library.exceptions import MaxContextWindowExceededError
 
 
@@ -1163,6 +1170,18 @@ class TestModels:
 
         assert tr.response_text == "hello"
         assert tr.tool_calls == [tc]
+
+    def test_default_should_stop_continues_paused_turn(self):
+        qr = QueryResult(
+            finish_reason=FinishReasonInfo(
+                reason=FinishReason.PAUSED,
+                raw="pause_turn",
+            )
+        )
+        turn = AgentTurn(duration_seconds=0.0, query_result=qr)
+        tr = TurnResult(turn_number=1, turn=turn, state={}, elapsed_seconds=0.5)
+
+        assert default_should_stop(tr) is False
 
     def test_agent_result_repr(self):
         result = AgentResult(

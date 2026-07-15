@@ -15,6 +15,7 @@ from model_library.agent.metadata import (
 )
 from model_library.base.base import LLM
 from model_library.base.input import InputItem, ToolCall
+from model_library.base.output.result import FinishReason
 
 
 @dataclass
@@ -79,16 +80,18 @@ class ShouldStopHook(Protocol):
     """Called after each turn (both tool-call and text-only turns)
 
     Return True to stop the agent loop.
-    Default: stops on text-only responses (no tool calls).
+    Default: stops unless the model called a local tool or paused mid-turn.
     """
 
     def __call__(self, turn_result: TurnResult) -> bool: ...
 
 
 def default_should_stop(turn_result: TurnResult) -> bool:
-    """Stop when the LLM responds with text only (no tool calls)"""
+    """Stop unless the model needs another turn."""
 
-    return not turn_result.tool_calls
+    if turn_result.tool_calls:
+        return False
+    return turn_result.turn.query_result.finish_reason.reason != FinishReason.PAUSED
 
 
 class OnToolResultHook(Protocol):
