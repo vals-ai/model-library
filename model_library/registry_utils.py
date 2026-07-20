@@ -1,9 +1,11 @@
 import logging
 from functools import cache
+from inspect import getattr_static
 from pathlib import Path
-from typing import TypedDict
+from typing import cast, TypedDict
 
 from model_library.base import (
+    GatewayLLM,
     LLM,
     LLMConfig,
     ProviderConfig,
@@ -30,21 +32,23 @@ def _gateway_url() -> str | None:
 def _raise_gateway_metadata_helper_error(helper_name: str) -> None:
     raise RuntimeError(
         f"{helper_name}() is local-registry only when MODEL_GATEWAY_URL is set. "
-        "Use get_registry_model() and await model.ensure_metadata_loaded() for "
-        "authoritative gateway metadata, or get_model_registry() only for "
+        "Use metadata from get_registry_model(), or get_model_registry() for "
         "explicit bulk discovery snapshots."
     )
 
 
 def create_config(
-    registry_config: ModelConfig, override_config: LLMConfig | None
+    registry_config: ModelConfig,
+    override_config: LLMConfig | None,
+    *,
+    resolve_provider_config: bool = True,
 ) -> LLMConfig:
     """
     Converts a model registry entry to the necessary LLMConfig.
     May optionally override the config with a provided override_config,
     only set fields will be used to override.
     """
-    config: object = {}
+    config: dict[str, object] = {}
 
     properties = registry_config.properties
     supports = registry_config.supports
@@ -58,6 +62,7 @@ def create_config(
     if supports:
         config["supports_images"] = supports.images
         config["supports_files"] = supports.files
+        config["supports_audio"] = supports.audio
         config["supports_videos"] = supports.videos
         config["supports_batch"] = supports.batch
         config["supports_temperature"] = supports.temperature
@@ -67,21 +72,20 @@ def create_config(
         raise Exception(f"{registry_config.label} has no supports")
 
     # load provider config with correct type
-    if provider_properties:
+    if provider_properties and resolve_provider_config:
         ModelClass: type[LLM] = get_provider_registry()[registry_config.provider_name]
-        if hasattr(ModelClass, "provider_config"):
-            ProviderConfigClass: type[ProviderConfig] = type(ModelClass.provider_config)  # type: ignore
-            provider_config: ProviderConfig = ProviderConfigClass.model_validate(
+        provider_config_template = getattr_static(ModelClass, "provider_config", None)
+        if isinstance(provider_config_template, ProviderConfig):
+            config["provider_config"] = type(provider_config_template).model_validate(
                 provider_properties.model_dump(
                     exclude_unset=True, exclude_defaults=True
                 )
             )
-            config["provider_config"] = provider_config
 
     # load defaults
     config.update(defaults.model_dump(exclude_unset=True))
 
-    loaded_config = LLMConfig(**config)
+    loaded_config = LLMConfig.model_validate(config)
 
     # override only with explicitly set fields from override_config
     if override_config:
@@ -98,30 +102,43 @@ def create_config(
 def _get_model_from_registry(
     registry_config: ModelConfig,
     override_config: LLMConfig | None,
+    identity: object | None = None,
 ) -> LLM:
     """
     Utility to return a model class from a registry entry.
     """
-    model_config: LLMConfig = create_config(registry_config, override_config)
+    gateway_url = _gateway_url()
+    model_config = create_config(
+        registry_config,
+        override_config,
+        resolve_provider_config=not gateway_url,
+    )
     model_config.registry_key = registry_config.full_key
 
     provider_name: str = registry_config.provider_name
     provider_endpoint: str = registry_config.provider_endpoint
-    ModelClass: type[LLM] = get_provider_registry()[provider_name]
-
-    llm = ModelClass(
-        model_name=provider_endpoint,
-        provider=registry_config.provider_name,
-        config=model_config,
-    )
+    if gateway_url:
+        llm: LLM = GatewayLLM(
+            model_name=provider_endpoint,
+            provider=registry_config.provider_name,
+            config=model_config,
+            identity=identity,
+        )
+    else:
+        ModelClass = get_provider_registry()[provider_name]
+        llm = ModelClass(
+            model_name=provider_endpoint,
+            provider=registry_config.provider_name,
+            config=model_config,
+        )
     llm._metadata = registry_config.model_copy(deep=True)  # pyright: ignore[reportPrivateUsage]
+    if gateway_url:
+        gateway_llm = cast(GatewayLLM, llm)
+        gateway_llm.gateway_config = override_config or LLMConfig()
     return llm
 
 
 def get_registry_config(model_str: str) -> ModelConfig | None:
-    if _gateway_url():
-        _raise_gateway_metadata_helper_error("get_registry_config")
-
     config = get_model_registry().get(model_str, None)
     if config is not None:
         return config
@@ -137,24 +154,18 @@ def get_registry_config(model_str: str) -> ModelConfig | None:
 def get_registry_model(
     model_str: str,
     override_config: LLMConfig | None = None,
+    identity: object | None = None,
 ) -> LLM:
-    """Get a model including default config.
+    """Get a registry-configured model.
 
-    If MODEL_GATEWAY_URL is set, returns an unsynced GatewayLLM that routes through the gateway server.
-    Gateway mode does not require client-side registry knowledge. Call
-    await model.ensure_metadata_loaded() before reading gateway metadata fields.
+    When MODEL_GATEWAY_URL is set, the normal registry construction path creates
+    a GatewayLLM with immediately available metadata and capabilities.
     """
-    from model_library import model_library_settings
-
-    gateway_url = model_library_settings.get("MODEL_GATEWAY_URL", None)
+    gateway_url = _gateway_url()
     if gateway_url:
-        from model_library.base.gateway import GatewayLLM
-
         logger.info(
             "MODEL_GATEWAY_URL is set, routing through gateway: %s", gateway_url
         )
-        provider, model_name = model_str.split("/", 1)
-        return GatewayLLM(model_name, provider, config=override_config)
 
     registry_config = get_registry_config(model_str)
     if not registry_config:
@@ -165,7 +176,7 @@ def get_registry_model(
             f"Model {model_str} is only available through {registry_config.company} CLI"
         )
 
-    return _get_model_from_registry(registry_config, override_config)
+    return _get_model_from_registry(registry_config, override_config, identity)
 
 
 def get_raw_model(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping
 from decimal import Decimal
 from typing import Any, Protocol, cast
@@ -10,10 +11,17 @@ from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
 
 import model_gateway.usage_ledger.schema as ledger_schema
+from model_gateway.usage_ledger.message import (
+    PreparedUsageEvent,
+    UsageLedgerMessageTooLarge,
+    prepare_usage_event_message,
+)
+
+logger = logging.getLogger("model_proxy_server.usage_ledger")
 
 
-class UsageLedgerEventValidationError(ValueError):
-    """Raised when a usage ledger event is not safe to persist."""
+class _DynamoDbItemTooLarge(ValueError):
+    """Raised when a serialized event exceeds DynamoDB's item limit."""
 
 
 class AsyncDynamoDbClient(Protocol):
@@ -25,65 +33,40 @@ class AsyncDynamoDbClient(Protocol):
 class SyncDynamoDbClient(Protocol):
     def put_item(self, **kwargs: object) -> Mapping[str, object]: ...
 
-    def get_item(self, **kwargs: object) -> Mapping[str, object]: ...
+    def get_item(self, **kwargs: object) -> Mapping[str, Any]: ...
 
 
 _serializer = cast(Any, TypeSerializer())
+_DYNAMODB_ITEM_MAX_BYTES = 400 * 1024
 
-_REQUIRED_USAGE_EVENT_FIELDS = frozenset(
-    {
-        ledger_schema.BASE_PK,
-        ledger_schema.BASE_SK,
-        "entity_type",
-        "usage_event_id",
-        "model",
-        "provider",
-        "completed_at",
-        "day",
-        "usage_shard",
-        "schema_version",
-        "metadata_schema_version",
-        "normalization_version",
-        *ledger_schema.NUMERIC_LEDGER_FIELDS,
-    }
-)
 
-_ALLOWED_USAGE_EVENT_FIELDS = frozenset(
-    {
-        *_REQUIRED_USAGE_EVENT_FIELDS,
-        "run_id",
-        "question_id",
-        "query_id",
-        "identity",
-        ledger_schema.IDENTITY_BENCHMARK_NAME,
-        ledger_schema.IDENTITY_AGENT_NAME,
-        ledger_schema.IDENTITY_EMAIL,
-        "api_key_fingerprint",
-        "provider_response_id",
-        "provider_request_id",
-        "provider_endpoint",
-        "param_group",
-        "config_hash",
-        "config_redacted_json",
-        "config_redacted_json_truncated",
-        "metadata_json",
-        "metadata_json_truncated",
-        "finish_reason_json",
-        "finish_reason_json_truncated",
-        "performance_json",
-        "performance_json_truncated",
-        ledger_schema.RUN_INDEX_PK,
-        ledger_schema.RUN_INDEX_SK,
-        ledger_schema.QUERY_INDEX_PK,
-        ledger_schema.QUERY_INDEX_SK,
-        ledger_schema.API_KEY_DAY_INDEX_PK,
-        ledger_schema.API_KEY_DAY_INDEX_SK,
-        ledger_schema.BENCHMARK_INDEX_PK,
-        ledger_schema.BENCHMARK_INDEX_SK,
-        ledger_schema.AGENT_INDEX_PK,
-        ledger_schema.AGENT_INDEX_SK,
-    }
-)
+def prepare_usage_event_for_write(
+    event: Mapping[str, object],
+) -> PreparedUsageEvent:
+    """Normalize a producer event, truncating details only for hard size limits."""
+    try:
+        return _prepare_with_size_limits(event)
+    except (UsageLedgerMessageTooLarge, _DynamoDbItemTooLarge):
+        truncated = dict(event)
+        truncated[ledger_schema.DETAILS_FIELD] = {
+            "truncated": True,
+            "request": {},
+            "result": {"metadata": {"performance": None}},
+        }
+        prepared = _prepare_with_size_limits(truncated)
+        logger.warning("Gateway usage ledger replaced oversized details")
+        return prepared
+
+
+def _prepare_with_size_limits(event: Mapping[str, object]) -> PreparedUsageEvent:
+    prepared = prepare_usage_event_message(event)
+    item_bytes = _dynamodb_item_size(serialize_item(prepared.event))
+    if item_bytes > _DYNAMODB_ITEM_MAX_BYTES:
+        raise _DynamoDbItemTooLarge(
+            f"Usage ledger DynamoDB item is {item_bytes} bytes; "
+            f"max is {_DYNAMODB_ITEM_MAX_BYTES} bytes"
+        )
+    return prepared
 
 
 async def put_usage_event_async(
@@ -92,8 +75,7 @@ async def put_usage_event_async(
     table_name: str,
     event: Mapping[str, object],
 ) -> None:
-    """Write a usage event asynchronously, accepting duplicate same-event writes."""
-    validate_usage_event(event)
+    """Write an event asynchronously, accepting idempotent retries."""
     try:
         await client.put_item(
             TableName=table_name,
@@ -116,8 +98,7 @@ def put_usage_event_sync(
     table_name: str,
     event: Mapping[str, object],
 ) -> bool:
-    """Write a usage event synchronously; return False for duplicate same-event writes."""
-    validate_usage_event(event)
+    """Write an event synchronously; return False for an idempotent retry."""
     try:
         client.put_item(
             TableName=table_name,
@@ -135,53 +116,44 @@ def put_usage_event_sync(
         raise
 
 
-def validate_usage_event(event: Mapping[str, object]) -> None:
-    """Validate that a queued usage event has the current durable ledger shape."""
-    missing = sorted(
-        field for field in _REQUIRED_USAGE_EVENT_FIELDS if field not in event
-    )
-    if missing:
-        raise UsageLedgerEventValidationError(
-            f"Usage ledger event is missing required field(s): {', '.join(missing)}"
-        )
-
-    unknown = sorted(set(event) - _ALLOWED_USAGE_EVENT_FIELDS)
-    if unknown:
-        raise UsageLedgerEventValidationError(
-            f"Usage ledger event has unsupported field(s): {', '.join(unknown)}"
-        )
-
-    required_non_null = (
-        ledger_schema.BASE_PK,
-        ledger_schema.BASE_SK,
-        "entity_type",
-        "usage_event_id",
-        "model",
-        "provider",
-        "completed_at",
-        "day",
-        "usage_shard",
-    )
-    null_required = sorted(
-        field for field in required_non_null if event.get(field) is None
-    )
-    if null_required:
-        raise UsageLedgerEventValidationError(
-            f"Usage ledger event has null required field(s): {', '.join(null_required)}"
-        )
-
-    if event.get("entity_type") != "usage_event":
-        raise UsageLedgerEventValidationError(
-            "Usage ledger event entity_type is invalid"
-        )
-
-
 def serialize_item(item: Mapping[str, object]) -> dict[str, dict[str, Any]]:
     return {
         key: cast(dict[str, Any], _serializer.serialize(to_dynamodb_value(value)))
         for key, value in item.items()
         if value is not None
     }
+
+
+def _dynamodb_item_size(item: Mapping[str, dict[str, Any]]) -> int:
+    return sum(
+        len(name.encode("utf-8")) + _dynamodb_attribute_value_size(value)
+        for name, value in item.items()
+    )
+
+
+def _dynamodb_attribute_value_size(attribute: dict[str, Any]) -> int:
+    attribute_type, value = next(iter(attribute.items()))
+    if attribute_type == "S":
+        return len(value.encode("utf-8"))
+    if attribute_type == "N":
+        digits = Decimal(value).as_tuple().digits
+        first = 0
+        last = len(digits)
+        while first < last - 1 and digits[first] == 0:
+            first += 1
+        while last > first + 1 and digits[last - 1] == 0:
+            last -= 1
+        significant_digits = last - first
+        return (significant_digits + 1) // 2 + 1
+    if attribute_type in {"BOOL", "NULL"}:
+        return 1
+    if attribute_type == "M":
+        return 3 + len(value) + _dynamodb_item_size(value)
+    if attribute_type == "L":
+        return (
+            3 + len(value) + sum(_dynamodb_attribute_value_size(item) for item in value)
+        )
+    raise TypeError(f"Cannot size DynamoDB attribute type {attribute_type!r}")
 
 
 def to_dynamodb_value(value: object) -> object:
@@ -236,16 +208,11 @@ def is_duplicate_event_sync(
     return stored_usage_event_id(response) == event.get("usage_event_id")
 
 
-def stored_usage_event_id(response: Mapping[str, object]) -> object | None:
-    item = response.get("Item")
-    if not isinstance(item, Mapping):
+def stored_usage_event_id(response: Mapping[str, Any]) -> object | None:
+    item: dict[str, dict[str, object]] | None = response.get("Item")
+    if item is None:
         return None
-    item_mapping = cast(Mapping[str, object], item)
-    usage_event_id = item_mapping.get("usage_event_id")
-    if isinstance(usage_event_id, Mapping):
-        usage_event_id_mapping = cast(Mapping[str, object], usage_event_id)
-        return usage_event_id_mapping.get("S")
-    return usage_event_id
+    return item["usage_event_id"]["S"]
 
 
 def is_conditional_check_failed(exc: ClientError) -> bool:

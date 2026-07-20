@@ -37,6 +37,13 @@ def test_package_discovery_pattern_includes_runtime_subpackages() -> None:
         assert any(fnmatchcase(package, pattern) for pattern in include_patterns)
 
 
+def test_package_data_includes_deprecated_registry_configs() -> None:
+    pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())
+    package_data = pyproject["tool"]["setuptools"]["package-data"]["model_library"]
+
+    assert "config/deprecated/*.yaml" in package_data
+
+
 def _active_registry_configs() -> list[ModelConfig]:
     return list(get_model_registry().values())
 
@@ -90,6 +97,7 @@ def test_active_registry_defaults_round_trip_to_llm_config() -> None:
         assert llm_config.reasoning is registry_config.properties.reasoning_model
         assert llm_config.supports_images is registry_config.supports.images
         assert llm_config.supports_files is registry_config.supports.files
+        assert llm_config.supports_audio is registry_config.supports.audio
         assert llm_config.supports_videos is registry_config.supports.videos
         assert llm_config.supports_batch is registry_config.supports.batch
         assert llm_config.supports_temperature is registry_config.supports.temperature

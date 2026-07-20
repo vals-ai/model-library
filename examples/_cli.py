@@ -57,7 +57,9 @@ COMMANDS = [
         "minimal text query and system prompt",
     ),
     Command(
-        "Starter demos", "uv run python examples/inputs.py", "image and file inputs"
+        "Starter demos",
+        "uv run python examples/inputs.py",
+        "image, file, and audio inputs",
     ),
     Command(
         "One-off feature examples",

@@ -23,6 +23,7 @@ from openai.types.responses.response_function_tool_call import ResponseFunctionT
 
 from model_library.base import FinishReason, LLMConfig
 from model_library.base.input import (
+    FileWithBase64,
     RawResponse,
     SystemInput,
     TextInput,
@@ -36,6 +37,7 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
 )
+from model_library.providers.delegates.kimi import KimiModel
 from model_library.providers.openai import (
     OpenAIConfig,
     OpenAIModel,
@@ -43,6 +45,28 @@ from model_library.providers.openai import (
 )
 
 _INPUT = [TextInput(text="")]
+
+
+@pytest.mark.parametrize("mime", ["png", "image/png"])
+@pytest.mark.parametrize("use_completions", [False, True])
+async def test_base64_image_mime_is_normalized(mime: str, use_completions: bool):
+    model = OpenAIModel(
+        "test-model",
+        config=LLMConfig(custom_api_key=SecretStr("test-key")),
+        use_completions=use_completions,
+    )
+
+    parsed = await model.parse_image(
+        FileWithBase64(
+            type="image",
+            name="test.png",
+            mime=mime,
+            base64="dGVzdA==",
+        )
+    )
+
+    image_url = parsed["image_url"]["url"] if use_completions else parsed["image_url"]
+    assert image_url == "data:image/png;base64,dGVzdA=="
 
 
 def _response_output_text_message(text: str) -> ResponseOutputMessage:
@@ -357,6 +381,48 @@ async def test_deepseek_reasoning_keeps_max_tokens():
     body = await model.build_body(_INPUT, tools=[])
     assert body.get("max_tokens") == 8192
     assert "max_completion_tokens" not in body
+async def test_kimi_k3_public_reasoning_uses_max_completion_tokens():
+    model = OpenAIModel(
+        "kimi-k3",
+        provider="kimi",
+        config=LLMConfig(reasoning=True, reasoning_effort="max", max_tokens=256 * 1024),
+        use_completions=True,
+    )
+    body = await model.build_body(_INPUT, tools=[])
+    assert body.get("max_completion_tokens") == 256 * 1024
+    assert "max_tokens" not in body
+    assert body["reasoning_effort"] == "max"
+
+
+def test_kimi_k3_public_route_uses_standard_key():
+    model = KimiModel("kimi-k3")
+    expected_key = "mock_ENV_KIMI_API_KEY"
+    assert model.delegate is not None
+    assert model.delegate.custom_endpoint == "https://api.moonshot.ai/v1/"
+    assert model._default_api_key() == expected_key  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_plain_text_string_serialization_is_kimi_only():
+    kimi = OpenAIModel(
+        "kimi-k3",
+        provider="kimi",
+        config=LLMConfig(),
+        use_completions=True,
+    )
+    openai = OpenAIModel(
+        "gpt-4o",
+        provider="openai",
+        config=LLMConfig(),
+        use_completions=True,
+    )
+
+    kimi_body = await kimi.build_body(_INPUT, tools=[])
+    openai_body = await openai.build_body(_INPUT, tools=[])
+
+    assert kimi_body["messages"] == [{"role": "user", "content": ""}]
+    assert openai_body["messages"] == [
+        {"role": "user", "content": [{"type": "text", "text": ""}]}
+    ]
 
 
 async def test_google_delegate_thinking_config():
@@ -611,6 +677,41 @@ async def test_non_streaming_completions_query_parses_response():
     assert result.metadata.performance is None
 
 
+async def test_non_streaming_kimi_parses_top_level_cached_tokens():
+    model = OpenAIModel(
+        "kimi-k3",
+        provider="kimi",
+        config=LLMConfig(provider_config=OpenAIConfig(stream_completions=False)),
+        use_completions=True,
+    )
+    usage = CompletionUsage(
+        completion_tokens=5,
+        prompt_tokens=10,
+        total_tokens=15,
+    )
+    object.__setattr__(usage, "cached_tokens", 4)
+    response = ChatCompletion(
+        id="cmpl_kimi_cached",
+        created=0,
+        model="kimi-k3",
+        object="chat.completion",
+        choices=[
+            Choice(
+                finish_reason="stop",
+                index=0,
+                message=ChatCompletionMessage(role="assistant", content="hello"),
+            )
+        ],
+        usage=usage,
+    )
+
+    result = await _query_completions(model, response)
+
+    assert result.metadata.in_tokens == 6
+    assert result.metadata.out_tokens == 5
+    assert result.metadata.cache_read_tokens == 4
+
+
 async def test_non_streaming_completions_empty_output_text_raises_no_output():
     model = OpenAIModel(
         "gpt-4o-mini",
@@ -746,6 +847,62 @@ async def test_non_streaming_completions_tool_only_uses_none_for_absent_or_empty
     assert isinstance(final_message, RawResponse)
     assert isinstance(final_message.response, ChatCompletionMessage)
     assert final_message.response.content is None
+
+
+@pytest.mark.parametrize(
+    ("model_name", "expects_reasoning_content"),
+    [
+        ("kimi-k3", True),
+        ("kimi-k2.6", False),
+    ],
+)
+async def test_kimi_k3_only_preserves_empty_reasoning_content(
+    model_name: str,
+    expects_reasoning_content: bool,
+):
+    model = OpenAIModel(
+        model_name,
+        provider="kimi",
+        config=LLMConfig(
+            reasoning=True,
+            provider_config=OpenAIConfig(stream_completions=False),
+        ),
+        use_completions=True,
+    )
+    response = ChatCompletion(
+        id="cmpl_kimi_tool_only",
+        created=0,
+        model=model_name,
+        object="chat.completion",
+        choices=[
+            Choice(
+                finish_reason="tool_calls",
+                index=0,
+                message=ChatCompletionMessage(
+                    role="assistant",
+                    content=None,
+                    tool_calls=[
+                        ChatCompletionMessageToolCall(
+                            id="call_1",
+                            type="function",
+                            function=Function(name="lookup", arguments='{"q":"x"}'),
+                        )
+                    ],
+                ),
+            )
+        ],
+        usage=None,
+    )
+
+    result = await _query_completions(model, response)
+
+    final_message = result.history[-1]
+    assert isinstance(final_message, RawResponse)
+    assert isinstance(final_message.response, ChatCompletionMessage)
+    if expects_reasoning_content:
+        assert getattr(final_message.response, "reasoning_content") == ""
+    else:
+        assert not hasattr(final_message.response, "reasoning_content")
 
 
 async def test_streaming_completions_empty_output_text_raises_no_output():

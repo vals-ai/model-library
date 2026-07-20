@@ -16,7 +16,7 @@ This guide is for agents/providers that already use `model-library` model object
 4. Keep calling `await model.query(...)` normally.
 5. Move provider/request overrides into `LLMConfig`; do not pass provider-specific kwargs to `query()`.
 
-When `MODEL_GATEWAY_URL` is set, `get_registry_model()` returns an unsynced `GatewayLLM` from the model string. It does not fetch or validate client-side registry state during construction. The same agent code can run direct-provider locally when the env var is unset, and through the gateway when it is set.
+When `MODEL_GATEWAY_URL` is set, `get_registry_model()` loads the Gateway-backed client registry and returns a fully configured `GatewayLLM`. Metadata and capability fields are available immediately. The same agent code can run direct-provider locally when the env var is unset, and through the Gateway when it is set.
 
 ## Minimal model code
 
@@ -115,31 +115,23 @@ Do not pass provider parameters such as `temperature`, `top_p`, `max_tokens`, `s
 
 ## Metadata and registry access
 
-In gateway mode, request execution is server-authoritative. `get_registry_model()` does not load capabilities, costs, or registry metadata during construction.
+In Gateway mode, model construction uses the Gateway-backed client registry while request execution remains server-authoritative.
 
-| Need | Use | Do not use |
-| --- | --- | --- |
-| One model's capabilities, costs, registry metadata, or context window | `await model.ensure_metadata_loaded()`, then `model.metadata` or `model.input_context_window` | Local-registry helpers |
-| Full registry for intentional bulk discovery | `get_model_registry()` and the gateway `/registry` snapshot | Implicit full-registry loading during model construction |
-| Request execution | The unsynced `GatewayLLM`; the server resolves authoritative config | Client-side registry state |
+| Need | Use |
+| --- | --- |
+| One model's capabilities, registry metadata, or context window | Construct it with `get_registry_model()`, then read the model fields directly. |
+| Full registry or explicit refresh | Use `get_model_registry()` or `refresh_model_registry()` followed by `get_model_registry()`. |
+| Request execution | Query the configured `GatewayLLM`; the server merges explicit overrides with its current registry. |
 
-Preferred single-model metadata flow:
+Single-model metadata is available immediately:
 
 ```python
 model = get_registry_model(model_key)
-await model.ensure_metadata_loaded()
 metadata = model.metadata
 context_window = model.input_context_window
 ```
 
-Avoid these local-registry helper calls in gateway mode:
-
-- `get_registry_config()`
-- `get_model_cost()`
-- `get_model_input_context_window()`
-- `get_model_names()`
-
-They are local-registry helpers and raise when `MODEL_GATEWAY_URL` is set. Use `await model.ensure_metadata_loaded()` for one model, or `get_model_registry()` only when you intentionally need the full gateway `/registry` snapshot for bulk discovery.
+A registry refresh affects models constructed afterward. Existing model objects retain the metadata snapshot used during construction.
 
 ## Attribution and IDs
 
@@ -218,7 +210,7 @@ model = get_registry_model(args.model, override_config=config)
 - [ ] Runtime model-config overrides are represented as `LLMConfig`, including `provider_config` when needed.
 - [ ] BYOK/custom-endpoint migrations explicitly account for `custom_api_key` and `custom_endpoint` as caller-supplied provider credentials.
 - [ ] `query()` calls do not pass provider-specific kwargs.
-- [ ] Code that reads metadata uses `await model.ensure_metadata_loaded()` or intentional `get_model_registry()` bulk discovery.
+- [ ] Code that reads metadata constructs the model with `get_registry_model()` first.
 - [ ] Code does not rely on gateway-unsupported `get_rate_limit()`, batch, or custom retrier paths.
 
 ## Unsupported or special paths

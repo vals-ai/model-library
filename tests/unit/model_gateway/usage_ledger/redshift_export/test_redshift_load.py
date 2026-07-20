@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 
 from model_gateway.usage_ledger import redshift_schema
@@ -10,6 +11,9 @@ from model_gateway.usage_ledger.redshift_load import (
     staging_row_from_redshift_rows,
 )
 from model_gateway.usage_ledger.redshift_transform import RedshiftUsageRows
+
+
+_PERFORMANCE = {"encoding": "gzip+base64", "data": "x" * 90_048}
 
 
 def _load(
@@ -33,34 +37,42 @@ def _rows() -> RedshiftUsageRows:
             "completed_at": datetime(2026, 5, 29, 12, tzinfo=UTC),
             "loaded_at": datetime(2026, 5, 29, 12, 1, tzinfo=UTC),
         },
-        debug={
+        performance={
             "usage_event_id": "usage-1",
-            "identity_json": {"email": "user@example.com"},
-            "provider_request_id": "request-1",
-            "provider_response_id": "response-1",
-            "performance_json": {"timeline": [{"channel": "content"}]},
-            "performance_json_truncated": False,
+            "performance": _PERFORMANCE,
+            "performance_truncated": False,
             "loaded_at": datetime(2026, 5, 29, 12, 1, tzinfo=UTC),
         },
     )
 
 
-def test_staging_table_carries_exact_fact_and_debug_columns() -> None:
+def test_staging_table_carries_only_fact_and_performance_columns() -> None:
     ddl = redshift_schema.usage_events_staging_table_ddl()
 
     assert "batch_id varchar(128) not null" in ddl
     assert "usage_event_id varchar(128) not null" in ddl
-    assert "identity_json varchar(65535)" in ddl
-    assert "performance_json varchar(65535)" in ddl
+    assert "performance varbyte(1048576)" in ddl
+    assert "performance_truncated boolean" in ddl
+    for forbidden in ("identity_json", "metadata_json", "payload", "details"):
+        assert forbidden not in ddl
 
 
-def test_staging_row_combines_fact_and_serialized_debug_payloads() -> None:
+def test_staging_row_combines_fact_and_serialized_performance() -> None:
     row = staging_row_from_redshift_rows(_rows())
+    performance = row["performance"]
 
-    assert row["usage_event_id"] == "usage-1"
-    assert row["identity_json"] == '{"email":"user@example.com"}'
-    assert row["performance_json"] == '{"timeline":[{"channel":"content"}]}'
-    assert row["performance_json_truncated"] is False
+    assert isinstance(performance, bytes)
+    assert len(performance) > 65_535
+    assert row == {
+        "batch_id": "batch-1",
+        "usage_event_id": "usage-1",
+        "completed_at": datetime(2026, 5, 29, 12, tzinfo=UTC),
+        "loaded_at": datetime(2026, 5, 29, 12, 1, tzinfo=UTC),
+        "performance": json.dumps(
+            _PERFORMANCE, sort_keys=True, separators=(",", ":")
+        ).encode(),
+        "performance_truncated": False,
+    }
 
 
 def test_direct_prepare_copy_and_finalize_use_batch_ids() -> None:
@@ -75,17 +87,38 @@ def test_direct_prepare_copy_and_finalize_use_batch_ids() -> None:
     sql = "\n".join([*prepare, *copy, *finalize])
 
     assert prepare == [
-        "delete from gateway_usage_dev.usage_events_staging\n"
+        "delete from gateway_usage_dev.usage_events_staging_v2\n"
         "where batch_id in ('window-s00', 'window-s01');"
     ]
     assert "from 's3://bucket/window/manifest.json'" in copy[0]
     assert "iam_role 'arn:aws:iam::123456789012:role/copy'" in copy[0]
     assert "on usage_events.usage_event_id = source.usage_event_id" in sql
-    assert "on usage_event_debug.usage_event_id = source.usage_event_id" in sql
-    assert "delete from gateway_usage_dev.usage_events_staging" in finalize[-1]
+    assert "on usage_event_performance_v2.usage_event_id = source.usage_event_id" in sql
+    assert "merge into gateway_usage_dev.usage_event_performance_v2" in sql
+    assert "json_parse(performance)" not in sql
+    assert "source.performance" in sql
+    assert "usage_event_debug" not in sql
+    assert "payload" not in sql
+    assert "delete from gateway_usage_dev.usage_events_staging_v2" in finalize[-1]
     assert "load_batches" not in sql
     assert "export_control" not in sql
     assert "accept_export_fence" not in sql
+
+
+def test_finalize_can_defer_analytics_refresh_for_backfill() -> None:
+    sql = "\n".join(
+        finalize_window_statements(
+            _load(),
+            schema=redshift_schema.WAREHOUSE_SCHEMA,
+            refresh_analytics=False,
+        )
+    )
+
+    assert "merge into gateway_usage.usage_events" in sql
+    assert "merge into gateway_usage.usage_event_performance_v2" in sql
+    assert "delete from gateway_usage.usage_events_staging_v2" in sql
+    assert "usage_agg_" not in sql
+    assert "usage_dimension_values" not in sql
 
 
 def test_finalize_refreshes_aggregates_and_dimension_values() -> None:

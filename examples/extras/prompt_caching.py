@@ -16,7 +16,7 @@ from model_library.base import LLM, SystemInput, TextInput
 from model_library.base.output import QueryResult
 from model_library.registry_utils import get_registry_model
 
-from examples.setup import setup, sync_model_metadata
+from examples.setup import setup
 
 
 def _run_report(label: str, result: QueryResult) -> dict[str, object]:
@@ -69,7 +69,6 @@ async def _query(model: LLM, cached_prefix: str, task_spec: str) -> QueryResult:
 
 
 async def run(model: LLM) -> dict[str, object]:
-    await sync_model_metadata(model)
 
     cached_prefix = (
         "You are a careful legal-analysis assistant. "

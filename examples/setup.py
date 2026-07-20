@@ -1,3 +1,5 @@
+# pyright: reportMissingImports=false
+
 import logging
 import os
 from pathlib import Path
@@ -8,7 +10,6 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from model_library import set_logging
-from model_library.base import LLM
 
 _ENV_FILE = Path(".env")
 
@@ -29,11 +30,6 @@ def console_log(output: Any, level: int = logging.INFO, color: str = "red"):
         console_logger.log(level, f"[{color}]{output}[/{color}]")
     else:
         console_logger.log(level, output)
-
-
-async def sync_model_metadata(model: LLM) -> None:
-    if model.gateway_mode:
-        await model.ensure_metadata_loaded()
 
 
 def setup(disable_logging: bool = False, load_gcp: bool = True):

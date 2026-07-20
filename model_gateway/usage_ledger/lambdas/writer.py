@@ -10,17 +10,11 @@ from collections.abc import Mapping
 from typing import Any, TypeAlias, cast
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
-
 from model_gateway.usage_ledger.dynamodb_writer import (
     SyncDynamoDbClient,
-    UsageLedgerEventValidationError,
     put_usage_event_sync,
 )
-from model_gateway.usage_ledger.message import (
-    UsageLedgerMessageError,
-    deserialize_usage_event_message,
-)
+from model_gateway.usage_ledger.message import deserialize_usage_event_message
 
 logger = logging.getLogger(__name__)
 
@@ -58,14 +52,7 @@ def handler(
             )
             if inserted:
                 _emit_raw_row_written_metric()
-        except (
-            BotoCoreError,
-            ClientError,
-            UsageLedgerMessageError,
-            UsageLedgerEventValidationError,
-            ValueError,
-            TypeError,
-        ):
+        except Exception:
             logger.exception(
                 "Gateway usage ledger Lambda failed message %s", message_id
             )

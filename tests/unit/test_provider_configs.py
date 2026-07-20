@@ -8,7 +8,6 @@ import asyncio
 from types import SimpleNamespace
 from typing import Literal, cast
 from unittest.mock import MagicMock
-
 from pydantic import SecretStr, ValidationError
 
 import pytest
@@ -27,7 +26,7 @@ from model_library.providers.openai import OpenAIConfig, OpenAIModel
 from model_library.providers.delegates.kimi import KimiConfig, KimiModel
 from model_library.providers.delegates.meta import MetaConfig, MetaModel
 from model_library.providers.delegates.zai import ZAIConfig, ZAIModel
-from model_library.registry_utils import get_registry_model
+from model_library.registry_utils import get_registry_config, get_registry_model
 
 _INPUT = [TextInput(text="")]
 
@@ -272,10 +271,36 @@ class TestRegistryProviderConfigs:
         assert isinstance(model, GoogleModel)
         assert isinstance(model.provider_config, GoogleConfig)
 
-    async def test_zai_registry_model_has_typed_config(self):
-        model = get_registry_model("zai/glm-4.7")
+    async def test_zai_model_has_typed_config(self):
+        model = ZAIModel(
+            "glm-4.7",
+            config=LLMConfig(custom_api_key=SecretStr("sk-test")),
+        )
         assert isinstance(model, ZAIModel)
         assert isinstance(model.provider_config, ZAIConfig)
+
+    def test_grok_45_public_registry_contract(self):
+        config = get_registry_config("grok/grok-4.5")
+
+        assert config is not None
+        assert config.provider_endpoint == "grok-4.5"
+        assert config.properties.context_window == 500_000
+        assert config.costs_per_million_token is not None
+        assert config.costs_per_million_token.input == 2.0
+        assert config.costs_per_million_token.output == 6.0
+        assert config.costs_per_million_token.cache is not None
+        assert config.costs_per_million_token.cache.read == 0.30
+        assert config.costs_per_million_token.context is not None
+        assert config.costs_per_million_token.context.threshold == 200_000
+        assert config.costs_per_million_token.context.input == 4.0
+        assert config.costs_per_million_token.context.output == 12.0
+        assert config.costs_per_million_token.context.cache is not None
+        assert config.costs_per_million_token.context.cache.read == 0.60
+
+        for alias in ("grok/grok-4.5-latest", "grok/grok-build-latest"):
+            alias_config = get_registry_config(alias)
+            assert alias_config is not None
+            assert alias_config.provider_endpoint == "grok-4.5"
 
 
 class TestMetaConfig:

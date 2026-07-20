@@ -4,10 +4,13 @@ import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
 from typing import Literal
+from unittest.mock import MagicMock
 
 import pytest
 
-from model_library.base import LLM
+import model_library
+import model_library.registry_utils as registry_utils
+from model_library.base import GatewayLLM, LLM
 from model_library.providers.delegates.fireworks import FireworksModel
 from model_library.providers.google import GoogleModel
 from model_library.register_models import (
@@ -99,6 +102,33 @@ async def test_registry_contains_expected_providers():
     expected = ["openai", "zai", "fireworks", "azure"]
     for name in expected:
         assert name in registry
+
+
+def test_gateway_registry_model_skips_provider_resolution(monkeypatch):
+    registry_config = next(
+        config
+        for config in get_model_registry().values()
+        if config.provider_name == "openai"
+    )
+    provider_registry = MagicMock(
+        side_effect=AssertionError("Gateway clients must not load local providers")
+    )
+    gateway_settings = MagicMock()
+    gateway_settings.MODEL_GATEWAY_API_KEY = "test-key"
+    gateway_settings.get.return_value = "https://gateway.test"
+
+    monkeypatch.setattr(model_library, "model_library_settings", gateway_settings)
+    monkeypatch.setattr(registry_utils, "get_provider_registry", provider_registry)
+    monkeypatch.setattr(
+        registry_utils,
+        "get_registry_config",
+        lambda _model: registry_config,
+    )
+
+    model = registry_utils.get_registry_model(registry_config.full_key)
+
+    assert isinstance(model, GatewayLLM)
+    provider_registry.assert_not_called()
 
 
 async def test_manual_and_registry_instantiation():

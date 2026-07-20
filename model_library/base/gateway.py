@@ -23,7 +23,6 @@ from model_library.base.base import (
     LLM,
     LLMConfig,
     TokenRetryParams,
-    dump_gateway_config,
 )
 from model_library.base.query_ids import resolve_query_ids
 from model_library.base.query_logging import (
@@ -37,18 +36,10 @@ from model_library.base.input import (
     InputItem,
     RawInput,
     RawResponse,
-    ToolCall,
     ToolDefinition,
     normalize_query_input,
 )
-from model_library.base.output import (
-    FinishReasonInfo,
-    ProviderToolEvent,
-    QueryResult,
-    QueryResultExtras,
-    QueryResultMetadata,
-    RateLimit,
-)
+from model_library.base.output import QueryResult, RateLimit
 from model_library.exceptions import GatewayMethodNotSupported, GatewayProviderError
 from model_library.utils import gateway_httpx_client
 
@@ -85,24 +76,11 @@ def _request_tools(tools: list[ToolDefinition]) -> list[ToolDefinition]:
     return cast(list[ToolDefinition], [t.model_dump() for t in tools])
 
 
-def _gateway_config(config: LLMConfig | None) -> LLMConfig:
-    return config if config is not None else LLMConfig()
-
-
 def _clean_optional(value: object) -> str | None:
     if value is None:
         return None
     text = str(value).strip()
     return text or None
-
-
-def _request_id(value: object | None, name: str) -> str | None:
-    if value is None:
-        return None
-    text = str(value).strip()
-    if not text:
-        raise ValueError(f"{name} must not be blank")
-    return text
 
 
 def _dump_request(request: BaseModel) -> dict[str, Any]:
@@ -227,47 +205,39 @@ def _decode_gateway_success(resp: httpx.Response) -> dict[str, Any]:
 def _parse_query_result(
     data: dict[str, Any], schema_model: type[BaseModel] | None
 ) -> QueryResult:
-    # Parse history items from server response. Raw fields stay as
-    # base64+HMAC blobs — the client never unpickles, just echoes them back.
-    history_json = data.get("signed_history")
+    result_data = dict(data)
+
+    # Raw fields stay as base64+HMAC blobs. The client decodes the signed JSON
+    # structure but never restores provider-native objects.
+    history_json = result_data.pop("signed_history", None)
     history_items: list[InputItem] = []
     if history_json:
         from pydantic import TypeAdapter
 
         adapter = TypeAdapter(list[InputItem])
         history_items = list(adapter.validate_json(history_json))
+    result_data["history"] = history_items
 
-    output_parsed: dict[str, Any] | BaseModel | None = data.get("output_parsed")
+    output_parsed: dict[str, Any] | BaseModel | None = result_data.get("output_parsed")
     if schema_model is not None:
         if output_parsed is not None:
-            output_parsed = schema_model.model_validate(output_parsed)
-        elif data.get("output_text"):
-            output_parsed = schema_model.model_validate_json(data["output_text"])
+            result_data["output_parsed"] = schema_model.model_validate(output_parsed)
+        elif result_data.get("output_text"):
+            result_data["output_parsed"] = schema_model.model_validate_json(
+                result_data["output_text"]
+            )
 
-    finish_reason = data.get("finish_reason")
-    result_kwargs: dict[str, Any] = {
-        "output_text": data.get("output_text"),
-        "output_parsed": output_parsed,
-        "reasoning": data.get("reasoning"),
-        "tool_calls": [ToolCall(**tc) for tc in data.get("tool_calls", [])],
-        "provider_tool_events": [
-            ProviderToolEvent.model_validate(e)
-            for e in data.get("provider_tool_events", [])
-        ],
-        "history": history_items,
-        "metadata": QueryResultMetadata(**data.get("metadata", {})),
-        "extras": QueryResultExtras(**data.get("extras", {})),
-    }
-    if finish_reason is not None:
+    finish_reason = result_data.get("finish_reason")
+    if finish_reason is None:
+        result_data.pop("finish_reason", None)
+    else:
         if not isinstance(finish_reason, dict):
             raise TypeError("Gateway finish_reason must be an object")
         finish_reason_data = dict(cast(dict[str, object], finish_reason))
         finish_reason_data.setdefault("raw", None)
-        result_kwargs["finish_reason"] = FinishReasonInfo.model_validate(
-            finish_reason_data
-        )
+        result_data["finish_reason"] = finish_reason_data
 
-    return QueryResult(**result_kwargs)
+    return QueryResult.model_validate(result_data)
 
 
 def _gateway_retry_delay_seconds(attempt: int) -> float:
@@ -313,6 +283,10 @@ class GatewayLLM(LLM):
         return model_library.model_library_settings.MODEL_GATEWAY_API_KEY
 
     @override
+    def _client_initialization(self, config: LLMConfig) -> tuple[str, str | None]:
+        return self._get_default_api_key(), None
+
+    @override
     def get_client(
         self, api_key: str | None = None, base_url: str | None = None
     ) -> httpx.AsyncClient:
@@ -328,29 +302,33 @@ class GatewayLLM(LLM):
             )
         return super().get_client()
 
-    def __init__(self, model_name: str, provider: str, **kwargs: Any):
-        self._gateway_metadata_loaded = True
-        self._override_config = kwargs.get("config")
-        init_kwargs = dict(kwargs)
-        init_kwargs.pop("config", None)
-        super().__init__(model_name, provider, **init_kwargs)
-        self._gateway_metadata_loaded = False
-        self.token_retry_params: TokenRetryParams | None = None
+    def __init__(
+        self,
+        model_name: str,
+        provider: str,
+        *,
+        config: LLMConfig | None = None,
+        identity: object | None = None,
+    ) -> None:
+        self.gateway_config = config if config is not None else LLMConfig()
+        self.identity = (
+            telemetry.normalize_identity(identity) if identity is not None else None
+        )
+        super().__init__(model_name, provider, config=config)
+        self.provider_config = self.gateway_config.provider_config
         if self.supports_batch:
             self.batch = cast(Any, GatewayUnsupportedBatch())
 
     @property
-    def gateway_input_context_window(self) -> int | None:
-        return self.input_context_window
+    def gateway_model_key(self) -> str:
+        return self._registry_key or f"{self.provider}/{self.model_name}"
 
-    @override
-    async def ensure_metadata_loaded(self) -> None:
-        if self._gateway_metadata_loaded:
-            return
-        await self.sync_model_metadata()
-
-    async def _post_gateway(
-        self, path: str, request_body: BaseModel | dict[str, Any]
+    async def post_gateway(
+        self,
+        path: str,
+        request_body: BaseModel | dict[str, Any],
+        *,
+        timeout: float | httpx.Timeout | None = None,
     ) -> dict[str, Any]:
         body = (
             _dump_request(request_body)
@@ -358,6 +336,7 @@ class GatewayLLM(LLM):
             else request_body
         )
         client: httpx.AsyncClient = self.get_client()
+        request_timeout = client.timeout if timeout is None else timeout
         url = f"{model_library.model_library_settings.MODEL_GATEWAY_URL.rstrip('/')}{path}"
 
         headers = _gateway_correlation_headers(body) if path == "/query" else None
@@ -369,6 +348,7 @@ class GatewayLLM(LLM):
                     url,
                     content=json.dumps(body, default=str),
                     headers=headers,
+                    timeout=request_timeout,
                 )
             except httpx.TransportError as exc:
                 if is_last_attempt:
@@ -418,65 +398,14 @@ class GatewayLLM(LLM):
 
         raise AssertionError("unreachable")
 
-    async def aresolve_model(self) -> dict[str, Any]:
-        """Resolve gateway-side effective config and registry config for this model."""
-        from model_gateway.types import ModelResolveRequest
-
-        return await self._post_gateway(
-            "/models/resolve",
-            ModelResolveRequest(
-                model=f"{self.provider}/{self.model_name}",
-                config=_gateway_config(self._override_config),
-            ),
-        )
-
-    async def sync_model_metadata(self) -> None:
-        """Load gateway-authoritative model metadata onto this instance."""
-        data = await self.aresolve_model()
-        if not data.get("exists", False):
-            raise Exception(f"Model {self.provider}/{self.model_name} not found")
-
-        effective_config = cast(dict[str, Any] | None, data.get("effective_config"))
-        if effective_config is None:
-            raise Exception("Gateway resolve response did not include effective_config")
-
-        registry_config = cast(dict[str, Any] | None, data.get("registry_config"))
-        if registry_config is None:
-            raise Exception("Gateway resolve response did not include registry_config")
-
-        from model_library.register_models import ModelConfig
-
-        # The gateway returns JSON-shaped registry data. Keep JSON-mode validation
-        # so fields such as release_date are coerced from strings.
-        metadata = ModelConfig.model_validate_json(json.dumps(registry_config))
-        self._metadata = metadata
-        self._registry_key = metadata.full_key
-
-        config = LLMConfig.model_validate(effective_config)
-        for field, value in dump_gateway_config(
-            config, mode="python", exclude_none=False, exclude_unset=False
-        ).items():
-            setattr(self, field, value)
-        self.batch = (
-            cast(Any, GatewayUnsupportedBatch()) if self.supports_batch else None
-        )
-        self._gateway_metadata_loaded = True
-
     def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
         attrs = vars(self).copy()
-        if not self._gateway_metadata_loaded:
-            for field in dump_gateway_config(
-                _gateway_config(None),
-                mode="python",
-                exclude_none=False,
-                exclude_unset=False,
-            ):
-                if field in attrs:
-                    attrs[field] = "<unloaded: call ensure_metadata_loaded()>"
         attrs.pop("_metadata", None)
         attrs.pop("custom_retrier", None)
         attrs.pop("instance_logger", None)
-        yield from attrs.items()
+        attrs.pop("gateway_config", None)
+        for name, value in attrs.items():
+            yield name, value
 
     @override
     async def query(
@@ -496,6 +425,8 @@ class GatewayLLM(LLM):
             )
 
         identity = kwargs.pop("identity", None)
+        if identity is None:
+            identity = self.identity
         raw_identity = _clean_optional(
             model_library.model_library_settings.get("IDENTITY", None)
         )
@@ -547,7 +478,7 @@ class GatewayLLM(LLM):
             tools=tools,
             kwargs=kwargs,
         )
-        data = await self._post_gateway("/query", request_body)
+        data = await self.post_gateway("/query", request_body)
         result = _parse_query_result(data, schema_model)
         log_query_completed(query_logger, result)
         return result
@@ -555,6 +486,7 @@ class GatewayLLM(LLM):
     @override
     async def init_token_retry(self, token_retry_params: TokenRetryParams) -> None:
         self.token_retry_params = token_retry_params
+        self._resolved_token_retry_params = None
 
     @override
     async def count_tokens(
@@ -568,13 +500,13 @@ class GatewayLLM(LLM):
         from model_gateway.types import TokenCountRequest
 
         all_input = normalize_query_input(input, history=history, kwargs=kwargs)
-        data = await self._post_gateway(
+        data = await self.post_gateway(
             "/tokens/count",
             TokenCountRequest(
-                model=f"{self.provider}/{self.model_name}",
+                model=self.gateway_model_key,
                 inputs=_request_items(all_input),
                 tools=_request_tools(tools),
-                config=_gateway_config(self._override_config),
+                config=self.gateway_config,
             ),
         )
         return int(data["tokens"])
@@ -583,11 +515,11 @@ class GatewayLLM(LLM):
     async def get_rate_limit(self) -> RateLimit | None:
         from model_gateway.types import RateLimitRequest
 
-        data = await self._post_gateway(
+        data = await self.post_gateway(
             "/rate-limit",
             RateLimitRequest(
-                model=f"{self.provider}/{self.model_name}",
-                config=_gateway_config(self._override_config),
+                model=self.gateway_model_key,
+                config=self.gateway_config,
             ),
         )
         raw_rate_limit = data.get("rate_limit")
@@ -606,7 +538,17 @@ class GatewayLLM(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
-        supported_kwargs = {"run_id", "question_id", "query_id", "identity", "in_agent"}
+        from model_gateway.types import QueryRequest
+
+        gateway_owned_fields = {
+            "model",
+            "inputs",
+            "tools",
+            "config",
+            "output_schema",
+            "token_retry_params",
+        }
+        supported_kwargs = set(QueryRequest.model_fields) - gateway_owned_fields
         unsupported_kwargs = sorted(set(kwargs) - supported_kwargs)
         if unsupported_kwargs:
             fields = ", ".join(unsupported_kwargs)
@@ -621,23 +563,16 @@ class GatewayLLM(LLM):
         else:
             schema = to_strict_json_schema(output_schema)
 
-        from model_gateway.types import QueryRequest
-
-        identity = kwargs.get("identity")
-        run_id = kwargs.get("run_id")
-        question_id = kwargs.get("question_id")
-        request = QueryRequest(
-            model=f"{self.provider}/{self.model_name}",
-            inputs=_request_items(input),
-            tools=_request_tools(tools),
-            config=_gateway_config(self._override_config),
-            output_schema=schema,
-            run_id=_request_id(run_id, "run_id"),
-            question_id=_request_id(question_id, "question_id"),
-            query_id=_clean_optional(kwargs.get("query_id")),
-            identity=identity,
-            in_agent=bool(kwargs.get("in_agent", False)),
-            token_retry_params=self.token_retry_params,
+        request = QueryRequest.model_validate(
+            {
+                "model": self.gateway_model_key,
+                "inputs": _request_items(input),
+                "tools": _request_tools(tools),
+                "config": self.gateway_config,
+                "output_schema": schema,
+                "token_retry_params": self.token_retry_params,
+                **kwargs,
+            }
         )
         return _dump_request(request)
 
@@ -667,15 +602,15 @@ class GatewayLLM(LLM):
     ) -> FileWithId:
         from model_gateway.types import UploadFileRequest
 
-        data = await self._post_gateway(
+        data = await self.post_gateway(
             "/files/upload",
             UploadFileRequest(
-                model=f"{self.provider}/{self.model_name}",
+                model=self.gateway_model_key,
                 name=name,
                 mime=mime,
                 content_base64=base64.b64encode(bytes.getvalue()).decode(),
                 type=type,
-                config=_gateway_config(self._override_config),
+                config=self.gateway_config,
             ),
         )
         return FileWithId(**data["file"])
@@ -685,13 +620,13 @@ class GatewayLLM(LLM):
     ) -> list[float]:
         from model_gateway.types import EmbeddingRequest
 
-        data = await self._post_gateway(
+        data = await self.post_gateway(
             "/embeddings",
             EmbeddingRequest(
-                model=f"{self.provider}/{self.model_name}",
+                model=self.gateway_model_key,
                 text=text,
                 embedding_model=model,
-                config=_gateway_config(self._override_config),
+                config=self.gateway_config,
             ),
         )
         return cast(list[float], data["embedding"])
@@ -699,12 +634,12 @@ class GatewayLLM(LLM):
     async def moderate_content(self, text: str) -> ModerationCreateResponse:
         from model_gateway.types import ModerationRequest
 
-        data = await self._post_gateway(
+        data = await self.post_gateway(
             "/moderation",
             ModerationRequest(
-                model=f"{self.provider}/{self.model_name}",
+                model=self.gateway_model_key,
                 text=text,
-                config=_gateway_config(self._override_config),
+                config=self.gateway_config,
             ),
         )
         return ModerationCreateResponse.model_validate(data["response"])

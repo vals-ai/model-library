@@ -70,6 +70,7 @@ from model_library.base import (
 from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.query_ids import PromptCacheKeyMode, resolve_prompt_cache_key
 from model_library.exceptions import (
+    BadInputError,
     ImmediateRetryException,
     ModelNoOutputError,
     NoMatchingToolCallError,
@@ -469,7 +470,16 @@ class OpenAIModel(LLM):
         def flush_content_user():
             if content_user:
                 # NOTE: must make new object as we clear()
-                new_input.append({"role": "user", "content": content_user.copy()})
+                if self.provider == "kimi" and all(
+                    item.get("type") == "text" and isinstance(item.get("text"), str)
+                    for item in content_user
+                ):
+                    content: str | list[dict[str, Any]] = "".join(
+                        cast(str, item["text"]) for item in content_user
+                    )
+                else:
+                    content = content_user.copy()
+                new_input.append({"role": "user", "content": content})
                 content_user.clear()
 
         tool_call_ids = await self.get_tool_call_ids(input)
@@ -551,13 +561,18 @@ class OpenAIModel(LLM):
             }
             match image:
                 case FileWithBase64():
-                    base_dict["image_url"]["url"] = (
-                        f"data:image/{image.mime};base64,{image.base64}"
+                    mime = (
+                        image.mime
+                        if image.mime.startswith("image/")
+                        else f"image/{image.mime}"
                     )
+                    base_dict["image_url"]["url"] = f"data:{mime};base64,{image.base64}"
                 case FileWithUrl():
                     base_dict["image_url"]["url"] = image.url
                 case FileWithId():
                     raise Exception("Completions endpoint does not support file_id")
+                case _:
+                    raise BadInputError("OpenAI does not support byte-backed files")
         else:
             base_dict = {
                 "type": "input_image",
@@ -565,13 +580,18 @@ class OpenAIModel(LLM):
             }
             match image:
                 case FileWithBase64():
-                    base_dict["image_url"] = (
-                        f"data:image/{image.mime};base64,{image.base64}"
+                    mime = (
+                        image.mime
+                        if image.mime.startswith("image/")
+                        else f"image/{image.mime}"
                     )
+                    base_dict["image_url"] = f"data:{mime};base64,{image.base64}"
                 case FileWithUrl():
                     base_dict["image_url"] = image.url
                 case FileWithId():
                     base_dict["file_id"] = image.file_id
+                case _:
+                    raise BadInputError("OpenAI does not support byte-backed files")
         return base_dict
 
     @override
@@ -594,6 +614,8 @@ class OpenAIModel(LLM):
                     raise Exception("Completions endpoint does not support url")
                 case FileWithId():
                     base_dict["file"]["file_id"] = file.file_id
+                case _:
+                    raise BadInputError("OpenAI does not support byte-backed files")
         else:
             base_dict = {
                 "type": "input_file",
@@ -606,6 +628,8 @@ class OpenAIModel(LLM):
                     base_dict["file_url"] = file.url
                 case FileWithId():
                     base_dict["file_id"] = file.file_id
+                case _:
+                    raise BadInputError("OpenAI does not support byte-backed files")
         return base_dict
 
     @property
@@ -714,8 +738,14 @@ class OpenAIModel(LLM):
         if self.parallel_tool_calls is not None:
             body["parallel_tool_calls"] = self.parallel_tool_calls
 
-        # DeepSeek documents max_tokens for thinking mode, not max_completion_tokens
-        if self.reasoning and self.max_tokens and self.provider not in {"deepseek"}:
+        # DeepSeek and older Kimi thinking modes use max_tokens. Kimi K3 follows
+        # the current API contract and uses max_completion_tokens.
+        if (
+            self.reasoning
+            and self.max_tokens
+            and self.provider != "deepseek"
+            and (self.provider != "kimi" or self.model_name == "kimi-k3")
+        ):
             del body["max_tokens"]
             body["max_completion_tokens"] = self.max_tokens
 
@@ -1019,8 +1049,11 @@ class OpenAIModel(LLM):
             if raw_tool_calls
             else None,
         )
-        if reasoning_text:
-            setattr(final_message, "reasoning_content", reasoning_text)
+        preserve_empty_reasoning = (
+            self.provider == "kimi" and self.model_name == "kimi-k3"
+        )
+        if reasoning_text or preserve_empty_reasoning:
+            setattr(final_message, "reasoning_content", reasoning_text or "")
 
         result = result_builder.build(
             finish_reason=mapped_finish_reason,

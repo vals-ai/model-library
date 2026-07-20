@@ -36,6 +36,7 @@ and never sends server-held provider keys to arbitrary endpoints.
 | `openrouter/*` | OpenRouter | `OPENROUTER_API_KEY` |
 | `perplexity/*` | Perplexity | `PERPLEXITY_API_KEY` |
 | `poolside/*` | Poolside | `POOLSIDE_API_KEY` |
+| `thinkingmachines/*` | Thinking Machines (Tinker) | `TINKER_API_KEY` |
 | `together/*` | Together AI | `TOGETHER_API_KEY` |
 | `vercel/*` | Vercel AI Gateway | `VERCEL_API_KEY` |
 | `xiaomi/*` | Xiaomi | `XIAOMI_API_KEY` |

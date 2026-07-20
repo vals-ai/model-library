@@ -61,17 +61,19 @@ def test_aggregate_tables_are_defined_per_grain_without_non_additive_metrics():
         assert "question_count" not in ddl.lower()
 
 
-def test_fact_staging_debug_and_dimension_table_ddls_are_specific():
+def test_fact_staging_performance_and_dimension_table_ddls_are_specific():
     staging_ddl = redshift_schema.usage_events_staging_table_ddl()
     facts_ddl = redshift_schema.usage_events_table_ddl()
-    debug_ddl = redshift_schema.usage_event_debug_table_ddl()
+    performance_ddl = redshift_schema.usage_event_performance_v2_table_ddl()
     dimension_values_ddl = redshift_schema.usage_dimension_values_table_ddl()
     analytics_dimensions_ddl = redshift_schema.analytics_dimensions_table_ddl()
 
     assert (
-        "create table if not exists gateway_usage.usage_events_staging" in staging_ddl
+        "create table if not exists gateway_usage.usage_events_staging_v2"
+        in staging_ddl
     )
     assert "batch_id varchar(128) not null" in staging_ddl
+    assert "performance varbyte(1048576)" in staging_ddl
     assert "sortkey (batch_id, completed_at)" in staging_ddl
     staging_column_block = staging_ddl.split("(\n", 1)[1].split("\n)\n", 1)[0]
     staging_column_names = tuple(
@@ -122,23 +124,35 @@ def test_fact_staging_debug_and_dimension_table_ddls_are_specific():
     ):
         assert column in facts_ddl
 
-    assert "create table if not exists gateway_usage.usage_event_debug" in debug_ddl
+    assert (
+        "create table if not exists gateway_usage.usage_event_performance_v2"
+        in performance_ddl
+    )
     for column in (
         "usage_event_id varchar(128) not null",
-        "identity_json super",
-        "provider_request_id varchar(65535)",
-        "provider_response_id varchar(65535)",
-        "config_redacted_json super",
-        "metadata_json super",
-        "finish_reason_json super",
-        "performance_json super",
-        "config_redacted_json_truncated boolean",
-        "metadata_json_truncated boolean",
-        "finish_reason_json_truncated boolean",
-        "performance_json_truncated boolean",
+        "performance varbyte(1048576)",
+        "performance_truncated boolean not null default false",
         "loaded_at timestamptz not null default getdate()",
     ):
-        assert column in debug_ddl
+        assert column in performance_ddl
+
+    for forbidden in (
+        "identity_json",
+        "provider_request_id",
+        "provider_response_id",
+        "config_redacted_json",
+        "metadata_json",
+        "finish_reason_json",
+        "performance_json",
+        "payload",
+        "details",
+    ):
+        assert forbidden not in staging_ddl
+        assert forbidden not in performance_ddl
+
+    assert redshift_schema.USAGE_EVENT_PERFORMANCE_TABLE_NAME == (
+        "usage_event_performance_v2"
+    )
 
     assert (
         "create table if not exists gateway_usage.usage_dimension_values"
@@ -183,7 +197,7 @@ def test_schema_statement_batches_include_required_tables_without_control_state(
     for table in (
         "usage_events_staging",
         "usage_events",
-        "usage_event_debug",
+        "usage_event_performance_v2",
         "usage_agg_5m",
         "usage_agg_1h",
         "usage_agg_1d",
@@ -191,6 +205,8 @@ def test_schema_statement_batches_include_required_tables_without_control_state(
         "analytics_dimensions",
     ):
         assert f"gateway_usage.{table}" in sql
+    assert "performance super" not in sql
+    assert "usage_event_debug" not in sql
     assert "load_batches" not in sql
     assert "export_control" not in sql
     assert "accept_export_fence" not in sql

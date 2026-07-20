@@ -1,12 +1,20 @@
 import json
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, cast
 
+from boto3.dynamodb.types import TypeDeserializer
 from botocore.exceptions import ClientError
 
 from model_gateway.types import QueryRequest
-from model_gateway.usage_ledger.message import serialize_usage_event_message
+from model_gateway.usage_ledger.details import snapshot_usage_request
+from model_gateway.usage_ledger.dynamodb_writer import put_usage_event_sync
+from model_gateway.usage_ledger.message import (
+    MAX_USAGE_LEDGER_MESSAGE_BYTES,
+    prepare_usage_event_message,
+    serialize_usage_event_message,
+)
 from model_gateway.usage_ledger.store import build_success_usage_event
+from model_library.base.input import TextInput
 from model_library.base.output import QueryResult
 
 
@@ -34,17 +42,22 @@ class FakeDynamoClient:
 def _usage_event() -> dict[str, object]:
     request = QueryRequest(
         model="openai/gpt-4o",
-        inputs=[{"kind": "text", "text": "hello"}],
+        inputs=[TextInput(text="forbidden writer prompt")],
         run_id="run-1",
         question_id="question-1",
         query_id="query-1",
+    )
+    result = QueryResult(
+        output_text="forbidden writer output",
+        history=[TextInput(text="preserved writer history")],
     )
     return build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
         dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
-        result=QueryResult(output_text="ok", history=[]),
+        result=result,
+        request=snapshot_usage_request(request),
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
     )
 
@@ -72,7 +85,61 @@ def test_usage_ledger_lambda_writes_valid_sqs_message(monkeypatch: Any):
     assert len(client.put_calls) == 1
     assert client.put_calls[0]["TableName"] == "usage-table"
     assert client.put_calls[0]["ConditionExpression"] == "attribute_not_exists(PK)"
+    item = cast(dict[str, dict[str, object]], client.put_calls[0]["Item"])
+    deserializer = TypeDeserializer()
+    stored = {key: deserializer.deserialize(value) for key, value in item.items()}
+    assert stored["details"] == event["details"]
+    serialized_details = json.dumps(stored["details"], sort_keys=True, default=str)
+    assert "forbidden writer prompt" not in serialized_details
+    assert "forbidden writer output" not in serialized_details
+    expected_request_inputs = [
+        {
+            "kind": "text",
+            "text_length": len("forbidden writer prompt"),
+        }
+    ]
+    assert stored["details"]["request"]["inputs"] == expected_request_inputs
+    assert stored["details"]["result"]["output_text_length"] == len(
+        "forbidden writer output"
+    )
+    assert "history" not in stored["details"]["result"]
     assert emitted == [{"UsageLedgerRawRowsWritten": (1, "Count")}]
+
+
+def test_exact_limit_event_has_direct_and_sqs_dynamodb_parity(monkeypatch: Any) -> None:
+    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
+
+    event = _usage_event()
+    event["duration_seconds"] = 1e-6
+    details = cast(dict[str, Any], event["details"])
+    request_data = cast(dict[str, object], details["request"])
+    request_data["padding"] = ""
+    empty_size = len(
+        serialize_usage_event_message(
+            event, max_bytes=MAX_USAGE_LEDGER_MESSAGE_BYTES * 2
+        ).encode("utf-8")
+    )
+    request_data["padding"] = "x" * (MAX_USAGE_LEDGER_MESSAGE_BYTES - empty_size)
+    prepared = prepare_usage_event_message(event)
+
+    direct_client = FakeDynamoClient()
+    assert put_usage_event_sync(
+        client=direct_client,
+        table_name="usage-table",
+        event=prepared.event,
+    )
+
+    sqs_client = FakeDynamoClient()
+    monkeypatch.setenv("GATEWAY_USAGE_LEDGER_TABLE_NAME", "usage-table")
+    monkeypatch.setattr(lambda_handler, "_dynamodb_client", lambda: sqs_client)
+    response = lambda_handler.handler(
+        {"Records": [_sqs_record("message-1", prepared.message)]},
+        None,
+    )
+
+    assert len(prepared.message.encode("utf-8")) == MAX_USAGE_LEDGER_MESSAGE_BYTES
+    assert response == {"batchItemFailures": []}
+    assert direct_client.put_calls[0]["Item"] == sqs_client.put_calls[0]["Item"]
 
 
 def test_usage_ledger_lambda_returns_partial_batch_failure_for_bad_message(
@@ -96,33 +163,6 @@ def test_usage_ledger_lambda_returns_partial_batch_failure_for_bad_message(
     )
 
     assert response == {"batchItemFailures": [{"itemIdentifier": "bad-message"}]}
-    assert len(client.put_calls) == 1
-
-
-def test_usage_ledger_lambda_fails_only_invalid_numeric_record_in_mixed_batch(
-    monkeypatch: Any,
-):
-    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
-
-    client = FakeDynamoClient()
-    bad_event = _usage_event()
-    good_event = _usage_event()
-    bad_envelope = json.loads(serialize_usage_event_message(bad_event))
-    bad_envelope["event"]["request_count"] = "oops"
-    monkeypatch.setenv("GATEWAY_USAGE_LEDGER_TABLE_NAME", "usage-table")
-    monkeypatch.setattr(lambda_handler, "_dynamodb_client", lambda: client)
-
-    response = lambda_handler.handler(
-        {
-            "Records": [
-                _sqs_record("bad-numeric", json.dumps(bad_envelope)),
-                _sqs_record("good-message", serialize_usage_event_message(good_event)),
-            ]
-        },
-        None,
-    )
-
-    assert response == {"batchItemFailures": [{"itemIdentifier": "bad-numeric"}]}
     assert len(client.put_calls) == 1
 
 
@@ -153,44 +193,30 @@ def test_usage_ledger_lambda_fails_only_unsupported_schema_version_in_mixed_batc
     assert len(client.put_calls) == 1
 
 
-def test_usage_ledger_lambda_rejects_json_valid_event_with_disallowed_fields(
-    monkeypatch: Any,
-):
+def test_usage_ledger_lambda_preserves_additive_root_fields(monkeypatch: Any) -> None:
     from model_gateway.usage_ledger.lambdas import writer as lambda_handler
 
     client = FakeDynamoClient()
     event = _usage_event()
-    event["output_text"] = "must not persist"
+    event["future_additive_field"] = "value"
     monkeypatch.setenv("GATEWAY_USAGE_LEDGER_TABLE_NAME", "usage-table")
     monkeypatch.setattr(lambda_handler, "_dynamodb_client", lambda: client)
 
     response = lambda_handler.handler(
-        {"Records": [_sqs_record("bad-event", serialize_usage_event_message(event))]},
+        {
+            "Records": [
+                _sqs_record("additive-event", serialize_usage_event_message(event))
+            ]
+        },
         None,
     )
 
-    assert response == {"batchItemFailures": [{"itemIdentifier": "bad-event"}]}
-    assert client.put_calls == []
-
-
-def test_usage_ledger_lambda_rejects_json_valid_event_missing_required_fields(
-    monkeypatch: Any,
-):
-    from model_gateway.usage_ledger.lambdas import writer as lambda_handler
-
-    client = FakeDynamoClient()
-    event = _usage_event()
-    del event["usage_event_id"]
-    monkeypatch.setenv("GATEWAY_USAGE_LEDGER_TABLE_NAME", "usage-table")
-    monkeypatch.setattr(lambda_handler, "_dynamodb_client", lambda: client)
-
-    response = lambda_handler.handler(
-        {"Records": [_sqs_record("bad-event", serialize_usage_event_message(event))]},
-        None,
-    )
-
-    assert response == {"batchItemFailures": [{"itemIdentifier": "bad-event"}]}
-    assert client.put_calls == []
+    assert response == {"batchItemFailures": []}
+    assert len(client.put_calls) == 1
+    item = cast(dict[str, dict[str, object]], client.put_calls[0]["Item"])
+    deserializer = TypeDeserializer()
+    stored = {key: deserializer.deserialize(value) for key, value in item.items()}
+    assert stored["future_additive_field"] == "value"
 
 
 def test_usage_ledger_lambda_missing_table_name_fails_before_writes(monkeypatch: Any):

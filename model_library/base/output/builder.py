@@ -400,7 +400,7 @@ class QueryResultBuilder:
         if performance is not None:
             update = {"performance": performance}
         elif (
-            result_metadata.performance is not None
+            isinstance(result_metadata.performance, QueryResultPerformance)
             and not result_metadata.performance.timeline
         ):
             update = {"performance": None}

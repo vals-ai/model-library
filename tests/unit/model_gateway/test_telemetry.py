@@ -6,6 +6,16 @@ import pytest
 import model_library.telemetry as telemetry
 
 
+def _load_json_object(value: object) -> dict[str, object]:
+    try:
+        payload = json.loads(str(value))
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"Expected valid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise AssertionError(f"Expected a JSON object, got {type(payload).__name__}")
+    return payload
+
+
 class RecordingSpan:
     def __init__(self):
         self.events: list[tuple[str, dict[str, object]]] = []
@@ -31,20 +41,21 @@ def reset_telemetry_state(monkeypatch):
 
 
 def test_telemetry_is_disabled_by_default():
-    assert telemetry.configure_telemetry() is False
-    assert telemetry.is_enabled() is False
+    assert not telemetry.configure_telemetry()
+    assert not telemetry.is_enabled()
 
     with telemetry.start_span("test.disabled") as span:
         telemetry.set_attributes({"run_id": "run-a"})
         telemetry.add_event("test.event", {"question_id": "q1"})
-        assert span is None
+        if span is not None:
+            pytest.fail("Disabled telemetry unexpectedly created a span")
 
 
 def test_configure_telemetry_missing_sentry_dsn_does_not_raise(monkeypatch):
     monkeypatch.setenv("GATEWAY_OTEL_ENABLED", "true")
 
-    assert telemetry.configure_telemetry() is False
-    assert telemetry.is_enabled() is False
+    assert not telemetry.configure_telemetry()
+    assert not telemetry.is_enabled()
 
 
 def test_start_span_sets_sentry_operation_attributes(monkeypatch):
@@ -173,14 +184,14 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
         SimpleNamespace(set_tracer_provider=fake_set_tracer_provider),
     )
 
-    assert telemetry.configure_telemetry() is True
+    assert telemetry.configure_telemetry()
 
     assert sentry_init_kwargs["dsn"] == "https://public@example.com/1"
     assert sentry_init_kwargs["server_name"] == "gateway-test"
     assert sentry_init_kwargs["environment"] == "dev"
     assert sentry_init_kwargs["instrumenter"] == "otel"
-    assert sentry_init_kwargs["enable_logs"] is True
-    assert sentry_init_kwargs["send_default_pii"] is True
+    assert sentry_init_kwargs["enable_logs"]
+    assert sentry_init_kwargs["send_default_pii"]
     assert sentry_init_kwargs["before_send"] is telemetry._before_send  # pyright: ignore[reportPrivateUsage]
     assert (
         sentry_init_kwargs["before_send_transaction"]
@@ -188,11 +199,11 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
     )  # pyright: ignore[reportPrivateUsage]
     assert sentry_init_kwargs["before_send_log"] is telemetry._before_send_log  # pyright: ignore[reportPrivateUsage]
     assert isinstance(sentry_init_kwargs["integrations"], list)
-    assert (
+    logging_integration = (
         "logging",
         {"level": None, "event_level": None, "sentry_logs_level": 30},
-    ) in sentry_init_kwargs["integrations"]
-    assert (
+    )
+    otlp_integration = (
         "otlp",
         {
             "setup_otlp_traces_exporter": True,
@@ -200,7 +211,9 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
             "setup_propagator": True,
             "capture_exceptions": False,
         },
-    ) in sentry_init_kwargs["integrations"]
+    )
+    assert logging_integration in sentry_init_kwargs["integrations"]
+    assert otlp_integration in sentry_init_kwargs["integrations"]
     assert isinstance(tracer_provider, FakeTracerProvider)
     assert tracer_provider.resource == {
         "service.name": "gateway-test",
@@ -213,14 +226,13 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
         "request_hook": telemetry._httpx_request_hook,  # pyright: ignore[reportPrivateUsage]
         "async_request_hook": telemetry._httpx_async_request_hook,  # pyright: ignore[reportPrivateUsage]
     }
-    assert telemetry.is_enabled() is True
+    assert telemetry.is_enabled()
 
 
 def test_should_trace_http_route_only_allows_gateway_routes():
-    assert telemetry.should_trace_http_route("/query") is True
-    assert telemetry.should_trace_http_route("/models/resolve") is True
-    assert telemetry.should_trace_http_route("/health/live") is False
-    assert telemetry.should_trace_http_route("/.env") is False
+    assert telemetry.should_trace_http_route("/query")
+    assert not telemetry.should_trace_http_route("/health/live")
+    assert not telemetry.should_trace_http_route("/.env")
 
 
 def test_httpx_request_hook_renames_generic_method_span():
@@ -274,7 +286,7 @@ def test_sanitize_attributes_keeps_ids_and_content_but_drops_credentials():
     assert attrs["run_id"] == "run-a"
     assert attrs["question_id"] == "q1"
     assert attrs["gen_ai.usage.input_tokens"] == 12
-    assert attrs["gateway.enabled"] is True
+    assert attrs["gateway.enabled"]
     assert attrs["gateway.error_code"] == "access_denied"
     assert attrs["gateway.error_phase"] == "access_control"
     assert attrs["gateway.error_provider"] == "openai"
@@ -499,8 +511,8 @@ def test_record_config_seen_emits_deduped_lookup_event(monkeypatch):
     name, attrs = span.events[0]
     assert name == "model.config_seen"
     assert attrs["model.config_hash"] == config_hash
-    assert attrs["model.config_redacted_json_truncated"] is False
-    assert json.loads(str(attrs["model.config_redacted_json"])) == redacted
+    assert not attrs["model.config_redacted_json_truncated"]
+    assert _load_json_object(attrs["model.config_redacted_json"]) == redacted
 
 
 def test_record_config_seen_does_not_dedupe_when_no_span_records(monkeypatch):
@@ -578,10 +590,13 @@ def test_record_config_seen_large_payload_remains_valid_json(monkeypatch):
     telemetry.record_config_seen(config_hash, redacted)
 
     _name, attrs = span.events[0]
-    payload = json.loads(str(attrs["model.config_redacted_json"]))
-    assert attrs["model.config_redacted_json_truncated"] is True
-    assert payload["truncated"] is True
-    assert "param_0" in payload["config_keys"]
+    payload = _load_json_object(attrs["model.config_redacted_json"])
+    assert attrs["model.config_redacted_json_truncated"]
+    assert payload["truncated"]
+    config_keys = payload["config_keys"]
+    if not isinstance(config_keys, list):
+        raise AssertionError("Expected config_keys to be a list")
+    assert "param_0" in config_keys
 
 
 def test_child_span_inherits_search_context_attributes(monkeypatch):
@@ -859,13 +874,12 @@ def test_record_exception_records_sentry_issue_without_exception_message_on_span
     assert [str(exc) for exc in captured] == [
         "provider response body should not be recorded"
     ]
-    assert span.events == [
-        (
-            "exception",
-            {
-                "exception.type": "RuntimeError",
-                "gateway.error.code": "provider_error",
-                "gateway.error_code": "provider_error",
-            },
-        )
-    ]
+    expected_event = (
+        "exception",
+        {
+            "exception.type": "RuntimeError",
+            "gateway.error.code": "provider_error",
+            "gateway.error_code": "provider_error",
+        },
+    )
+    assert span.events == [expected_event]

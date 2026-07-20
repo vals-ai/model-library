@@ -157,6 +157,7 @@ class TestLoadFromUrl:
 
         model = registry["openai/gpt-4o"]
         assert model.label == "GPT-4o Overridden"
+        assert model.costs_per_million_token is not None
         assert model.costs_per_million_token.input == 99.0
         assert model.properties.context_window == 999999
 

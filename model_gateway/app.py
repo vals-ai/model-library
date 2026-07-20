@@ -33,6 +33,7 @@ from model_gateway.observability import (
     log_process_lifecycle,
     runtime_snapshot,
 )
+from model_gateway.routes.benchmark_admission import register_benchmark_admission_routes
 from model_gateway.routes.health import register_health_routes
 from model_gateway.routes.models import register_model_routes
 from model_gateway.routes.provider_ops import register_provider_ops_routes
@@ -156,7 +157,7 @@ def create_app() -> FastAPI:
             loop.set_exception_handler(previous_exception_handler)
             log_process_lifecycle("gateway.process.shutdown_done")
 
-    app = FastAPI(title="Model Proxy", lifespan=lifespan)
+    app = FastAPI(title="Model Proxy", lifespan=lifespan, redirect_slashes=False)
     app.state.cache = cache
     app.state.hmac_secret = hmac_secret
     app.state.capacity_limiter = capacity_limiter
@@ -183,6 +184,7 @@ def create_app() -> FastAPI:
 
     register_health_routes(app, valid_keys=valid_keys, hmac_secret=hmac_secret)
     register_model_routes(app)
+    register_benchmark_admission_routes(app, cache=cache)
     register_token_retry_routes(app)
     register_query_routes(app, cache=cache)
     register_provider_ops_routes(app, cache=cache)

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import logging
 import os
 import time
@@ -33,21 +32,19 @@ from model_gateway.metrics import (
     record_usage_ledger_sqs_write,
 )
 from model_gateway.types import QueryRequest
+from model_gateway.usage_ledger.details import build_usage_event_details
 from model_gateway.usage_ledger.dynamodb_writer import (
     AsyncDynamoDbClient,
+    prepare_usage_event_for_write,
     put_usage_event_async,
 )
-from model_gateway.usage_ledger.message import serialize_usage_event_message
 from model_library.base.output import QueryResult, QueryResultMetadata
 
 logger = logging.getLogger("model_proxy_server.usage_ledger")
 
 UsageLedgerMode = Literal["disabled", "shadow", "enforced"]
 
-DEFAULT_SCHEMA_VERSION = 1
 DEFAULT_NORMALIZATION_VERSION = "2026-05-29"
-DEFAULT_METADATA_SCHEMA_VERSION = 1
-MAX_LEDGER_JSON_LENGTH = 64_000
 DEFAULT_SHARD_COUNT = ledger_schema.DEFAULT_SHARD_COUNT
 # Keep local SQS fanout bounded. The usage ledger now queues in-process and sends
 # in the background, so excess fanout should queue locally instead of creating a
@@ -59,6 +56,7 @@ DEFAULT_SQS_CONNECT_TIMEOUT_SECONDS = 3.0
 DEFAULT_SQS_READ_TIMEOUT_SECONDS = 5.0
 DEFAULT_SQS_CLIENT_TOTAL_MAX_ATTEMPTS = 1
 SQS_SEND_MESSAGE_BATCH_MAX_ENTRIES = 10
+SQS_SEND_MESSAGE_BATCH_MAX_BYTES = 1024 * 1024
 # Small delay lets concurrent query completions coalesce into full SQS batches.
 SQS_BATCH_FLUSH_DELAY_SECONDS = 0.025
 SQS_BATCH_SEND_CONCURRENCY = 32
@@ -68,7 +66,6 @@ SQS_MAX_PENDING_BYTES = 256 * 1024 * 1024
 # forever in memory would let a sustained SQS outage consume the gateway process.
 SQS_SEND_RETRY_DELAY_SECONDS = 10.0
 SQS_MAX_SEND_RETRY_AGE_SECONDS = 20 * 60.0
-LEDGER_REDACTED_KEYS = frozenset({"custom_api_key"})
 
 
 class UsageLedgerWriteError(RuntimeError):
@@ -422,7 +419,7 @@ class SqsUsageLedger:
     async def _write_success(self, event: Mapping[str, object]) -> tuple[str, str]:
         if self._client is None:
             raise ValueError("Gateway usage ledger SQS client is not started")
-        body = serialize_usage_event_message(event)
+        body = prepare_usage_event_for_write(event).message
         pending_message = _PendingSqsMessage(
             entry_id=str(self._next_entry_id),
             body=body,
@@ -625,8 +622,20 @@ class SqsUsageLedger:
                     for _ in range(SQS_BATCH_SEND_CONCURRENCY):
                         if not self._pending:
                             break
-                        batch = self._pending[:SQS_SEND_MESSAGE_BATCH_MAX_ENTRIES]
-                        del self._pending[:SQS_SEND_MESSAGE_BATCH_MAX_ENTRIES]
+                        batch_size = 0
+                        batch_bytes = 0
+                        for message in self._pending[
+                            :SQS_SEND_MESSAGE_BATCH_MAX_ENTRIES
+                        ]:
+                            if (
+                                batch_bytes + message.body_bytes
+                                > SQS_SEND_MESSAGE_BATCH_MAX_BYTES
+                            ):
+                                break
+                            batch_size += 1
+                            batch_bytes += message.body_bytes
+                        batch = self._pending[:batch_size]
+                        del self._pending[:batch_size]
                         self._inflight_messages += len(batch)
                         dequeued_at = time.perf_counter()
                         for message in batch:
@@ -928,10 +937,11 @@ class DynamoDbUsageLedger:
         client = self._client
         if client is None:
             raise ValueError("Gateway usage ledger DynamoDB client is not started")
+        prepared = prepare_usage_event_for_write(event)
         await put_usage_event_async(
             client=client,
             table_name=self._table_name,
-            event=event,
+            event=prepared.event,
         )
 
 
@@ -976,6 +986,7 @@ def build_success_usage_event(
     query_params: Mapping[str, object | None],
     dimensions: Mapping[str, str],
     result: QueryResult,
+    request: Mapping[str, object],
     completed_at: datetime | None = None,
     api_key_fingerprint: str | None = None,
 ) -> dict[str, object]:
@@ -993,22 +1004,11 @@ def build_success_usage_event(
         if value is not None
         and key not in telemetry.CONFIG_FINGERPRINT_EXCLUDED_PARAM_KEYS
     }
-    config_hash, config_json, config_truncated = _config_hash_and_json(
-        model=body.model,
-        config=config,
-        params=query_config_params,
-        token_retry_params=body.token_retry_params,
-    )
-    metadata_json, metadata_truncated = _bounded_ledger_json(
-        _metadata_snapshot(result.metadata)
-    )
-    finish_reason_json, finish_reason_truncated = _bounded_ledger_json(
-        result.finish_reason.model_dump(mode="json") if result.finish_reason else None
-    )
-    performance_json, performance_truncated = _bounded_ledger_json(
-        result.metadata.performance.model_dump(mode="json")
-        if result.metadata.performance is not None
-        else None
+    config_hash, _ = telemetry.config_fingerprint(
+        body.model,
+        config,
+        query_config_params,
+        body.token_retry_params,
     )
     metadata_counts = _metadata_counts(result.metadata)
 
@@ -1028,32 +1028,26 @@ def build_success_usage_event(
         "run_id": run_id,
         "question_id": question_id,
         "query_id": query_id,
-        "identity": body.identity,
         ledger_schema.IDENTITY_BENCHMARK_NAME: benchmark_name,
         ledger_schema.IDENTITY_AGENT_NAME: agent_name,
         ledger_schema.IDENTITY_EMAIL: identity_email,
         "api_key_fingerprint": api_key_fingerprint,
-        "provider_response_id": result.extras.provider_response_id,
-        "provider_request_id": result.extras.provider_request_id,
         "model": body.model,
         "provider": body.model.partition("/")[0] or "unknown",
         "provider_endpoint": "custom" if config.get("custom_endpoint") else "default",
         "param_group": dimensions.get("ParamGroup")
         or param_group(config, query_config_params, body.token_retry_params),
         "config_hash": config_hash,
-        "config_redacted_json": config_json,
-        "config_redacted_json_truncated": config_truncated,
-        "metadata_json": metadata_json,
-        "metadata_json_truncated": metadata_truncated,
-        "finish_reason_json": finish_reason_json,
-        "finish_reason_json_truncated": finish_reason_truncated,
-        "performance_json": performance_json,
-        "performance_json_truncated": performance_truncated,
+        "finish_reason": result.finish_reason.reason.value,
+        "finish_reason_raw": result.finish_reason.raw,
+        ledger_schema.DETAILS_FIELD: build_usage_event_details(
+            request=request,
+            result=result,
+        ),
         "completed_at": completed_at_iso,
         "day": day,
         "usage_shard": shard,
-        "schema_version": DEFAULT_SCHEMA_VERSION,
-        "metadata_schema_version": DEFAULT_METADATA_SCHEMA_VERSION,
+        "schema_version": ledger_schema.USAGE_EVENT_SCHEMA_VERSION,
         "normalization_version": DEFAULT_NORMALIZATION_VERSION,
         **metadata_counts,
     }
@@ -1138,125 +1132,6 @@ def _sqs_should_retry(message: _PendingSqsMessage, *, now: float) -> bool:
     return (now - message.enqueued_at) < SQS_MAX_SEND_RETRY_AGE_SECONDS
 
 
-def _bounded_ledger_json(
-    value: object, *, max_length: int = MAX_LEDGER_JSON_LENGTH
-) -> tuple[str, bool]:
-    sanitized = _sanitize_for_ledger(value)
-    try:
-        payload = json.dumps(
-            sanitized,
-            sort_keys=True,
-            separators=(",", ":"),
-            default=str,
-            allow_nan=False,
-        )
-    except (TypeError, ValueError):
-        payload = json.dumps(str(sanitized), separators=(",", ":"))
-    if len(payload) <= max_length:
-        return payload, False
-    summary = _json_summary(sanitized)
-    return json.dumps(summary, sort_keys=True, separators=(",", ":")), True
-
-
-def _json_summary(value: object) -> dict[str, object]:
-    if isinstance(value, Mapping):
-        mapping = cast(Mapping[object, object], value)
-        return {
-            "truncated": True,
-            "top_level_keys": sorted(str(key) for key in mapping),
-        }
-    if isinstance(value, list):
-        items = cast(list[object], value)
-        return {"truncated": True, "item_count": len(items)}
-    return {"truncated": True, "type": type(value).__name__}
-
-
-def _config_hash_and_json(
-    *,
-    model: str,
-    config: Mapping[str, Any],
-    params: Mapping[str, object | None],
-    token_retry_params: object | None,
-) -> tuple[str, str, bool]:
-    config_hash, _ = telemetry.config_fingerprint(
-        model,
-        config,
-        params,
-        token_retry_params,
-    )
-    config_json, config_truncated = _bounded_ledger_json(
-        {
-            "model": model,
-            "config": config,
-            "params": params,
-            "token_retry_params": token_retry_params,
-        }
-    )
-    return config_hash, config_json, config_truncated
-
-
-def _sanitize_for_ledger(value: object, *, key_name: str | None = None) -> object:
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    if isinstance(value, Decimal):
-        if key_name == ledger_schema.COST_USD_FIELD:
-            return ledger_schema.format_cost_usd_decimal(value)
-        return str(value)
-    if isinstance(value, Mapping):
-        mapping = cast(Mapping[object, object], value)
-        sanitized: dict[str, object] = {}
-        for key, item in sorted(mapping.items(), key=lambda entry: str(entry[0])):
-            text_key = str(key)
-            if _should_redact_ledger_key(text_key):
-                sanitized[text_key] = "<redacted>"
-            else:
-                sanitized[text_key] = _sanitize_for_ledger(item, key_name=text_key)
-        return sanitized
-    if isinstance(value, list | tuple):
-        items = cast(list[object] | tuple[object, ...], value)
-        return [_sanitize_for_ledger(item, key_name=key_name) for item in items]
-    model_dump = getattr(value, "model_dump", None)
-    if callable(model_dump):
-        return _sanitize_for_ledger(model_dump(mode="json"), key_name=key_name)
-    return str(value)
-
-
-def _normalized_ledger_key(key: str) -> str:
-    return key.lower().replace("-", "_")
-
-
-def _should_redact_ledger_key(key: str) -> bool:
-    return _normalized_ledger_key(key) in LEDGER_REDACTED_KEYS
-
-
-def _metadata_snapshot(metadata: QueryResultMetadata) -> dict[str, object]:
-    """Return the allowlisted metadata fields safe for the durable ledger."""
-    snapshot = _metadata_counts(metadata)
-    if metadata.cost is not None:
-        snapshot["cost"] = metadata.cost.model_dump(mode="json")
-
-    token_metadata = metadata.extra.get("token_metadata")
-    if isinstance(token_metadata, Mapping):
-        token_metadata_mapping = cast(Mapping[object, object], token_metadata)
-        safe_token_metadata = {
-            str(key): value
-            for key, value in token_metadata_mapping.items()
-            if str(key)
-            in {
-                "estimated",
-                "estimated_with_dynamic_ratio",
-                "actual",
-                "difference",
-                "ratio",
-                "dynamic_ratio_used",
-            }
-            and isinstance(value, bool | int | float)
-        }
-        if safe_token_metadata:
-            snapshot["token_metadata"] = safe_token_metadata
-    return snapshot
-
-
 def _metadata_counts(metadata: QueryResultMetadata) -> dict[str, object]:
     cost_total = metadata.cost.total if metadata.cost is not None else None
     return {
@@ -1268,11 +1143,9 @@ def _metadata_counts(metadata: QueryResultMetadata) -> dict[str, object]:
         "total_input_tokens": metadata.total_input_tokens,
         "total_output_tokens": metadata.total_output_tokens,
         "duration_seconds": metadata.duration_seconds,
-        "cost_usd": _decimal_or_zero(cost_total),
+        "cost_usd": (
+            Decimal("0")
+            if cost_total is None
+            else ledger_schema.normalize_cost_usd_decimal(Decimal(str(cost_total)))
+        ),
     }
-
-
-def _decimal_or_zero(value: float | int | None) -> Decimal:
-    if value is None:
-        return Decimal("0")
-    return ledger_schema.normalize_cost_usd_decimal(Decimal(str(value)))

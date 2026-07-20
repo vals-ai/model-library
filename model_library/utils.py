@@ -1,3 +1,4 @@
+import json
 import logging
 import socket
 from collections.abc import Generator
@@ -40,9 +41,9 @@ SecondsMetric = Annotated[float, AfterValidator(round_to_milliseconds)]
 
 
 class ValsModel(BaseModel):
-    """BaseModel with pretty repr."""
+    """BaseModel with pretty repr and overridable content sanitization."""
 
-    def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
         repr_fields = {
             name
             for name, field in self.__class__.model_fields.items()
@@ -53,10 +54,10 @@ class ValsModel(BaseModel):
         attrs = vars(self).copy()
         for name in self.__class__.model_computed_fields:
             attrs[name] = getattr(self, name)
+        return {name: value for name, value in attrs.items() if name in repr_fields}
 
-        for name, value in attrs.items():
-            if name in repr_fields:
-                yield name, value
+    def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
+        yield from self.sanitize_content(show_content=True).items()
 
     def __repr__(self) -> str:
         return pretty_repr(self)
@@ -150,8 +151,39 @@ def truncate_str(s: str | None, max_len: int = MAX_LLM_LOG_LENGTH) -> str:
         return ""
     if len(s) <= max_len:
         return s
-    half = (max_len - 1) // 2
-    return s[:half] + " […] " + s[-half:]
+    marker = " […] "
+    if max_len <= len(marker):
+        return s[:max_len]
+    remaining = max_len - len(marker)
+    prefix_length = (remaining + 1) // 2
+    suffix_length = remaining - prefix_length
+    suffix = s[-suffix_length:] if suffix_length else ""
+    return s[:prefix_length] + marker + suffix
+
+
+def content_length(value: object) -> int:
+    if value is None:
+        return 0
+    if isinstance(value, str):
+        return len(value)
+    return len(_compact_content(value))
+
+
+def content_preview(value: object) -> object:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        return truncate_str(value)
+    return truncate_str(_compact_content(value))
+
+
+def _compact_content(value: object) -> str:
+    if isinstance(value, BaseModel):
+        value = value.model_dump(mode="json")
+    try:
+        return json.dumps(value, sort_keys=True, separators=(",", ":"))
+    except TypeError:
+        return str(value)
 
 
 def get_logger(name: str | None = None):

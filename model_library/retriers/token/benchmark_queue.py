@@ -5,6 +5,7 @@ import threading
 import time
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 
 from model_library.retriers.token import utils
 from model_library.retriers.token.utils import (
@@ -179,9 +180,11 @@ class BenchmarkQueueCancelled(Exception):
 
 
 async def _lpop_long(
+    redis_client: AsyncRedisClient,
     keys: list[str],
     logger: logging.Logger | None = None,
     run_id: str = "",
+    timeout_seconds: float | None = None,
 ) -> list[str] | None:
     """Poll notification lists without holding blocked Redis connections.
 
@@ -189,7 +192,9 @@ async def _lpop_long(
     waiter, which can starve queue release operations. LPOP polling trades up to
     QUEUE_NOTIFY_POLL_INTERVAL seconds of wakeup latency for zero blocked clients.
     """
-    deadline = time.monotonic() + HOURS_24
+    deadline = time.monotonic() + (
+        HOURS_24 if timeout_seconds is None else timeout_seconds
+    )
     wait_started = time.monotonic() if BENCHMARK_QUEUE_DEBUG_ENABLED else 0.0
     last_poll_started = wait_started
     poll_count = 0
@@ -212,7 +217,7 @@ async def _lpop_long(
             poll_count += 1
 
         for key in keys:
-            value = await utils.redis_client.lpop(key)
+            value = await redis_client.lpop(key)
             if value is not None:
                 if BENCHMARK_QUEUE_DEBUG_ENABLED and logger:
                     logger.info(
@@ -276,6 +281,285 @@ async def _control_and_admit_heads(
     )
 
 
+@dataclass(frozen=True)
+class BenchmarkQueueKeys:
+    base: str
+    token: str
+    queue: str
+    active_heads: str
+    notify: str
+    alive: str
+    run_meta: str
+    dispatched: str
+
+    @classmethod
+    def for_run(
+        cls,
+        model_registry_key: tuple[str, str],
+        run_id: str,
+    ) -> "BenchmarkQueueKeys":
+        base = f"{KEY_PREFIX}:{model_registry_key[0]}:{model_registry_key[1]}:benchmark"
+        return cls.for_base(base, run_id)
+
+    @classmethod
+    def for_base(cls, base: str, run_id: str) -> "BenchmarkQueueKeys":
+        run_meta = f"{base}:run:{run_id}"
+        return cls(
+            base=base,
+            token=f"{base.removesuffix(':benchmark')}:tokens",
+            queue=f"{base}:queue",
+            active_heads=get_active_heads_key(base),
+            notify=f"{base}:notify:{run_id}",
+            alive=f"{base}:alive:{run_id}",
+            run_meta=run_meta,
+            dispatched=f"{run_meta}:dispatched",
+        )
+
+
+async def clear_benchmark_notification(
+    redis_client: AsyncRedisClient,
+    keys: BenchmarkQueueKeys,
+) -> None:
+    """Clear stale notifications before checking a new local attempt."""
+    await redis_client.delete(keys.notify)
+
+
+async def initialize_benchmark_run(
+    redis_client: AsyncRedisClient,
+    keys: BenchmarkQueueKeys,
+    run_id: str,
+    total_requests: int | None,
+    logger: logging.Logger,
+) -> None:
+    """Reset attempt state, enqueue once, and run admission control."""
+    # initialize heartbeat with short TTL
+    await redis_client.set(keys.alive, "1", ex=HEARTBEAT_TTL)
+
+    # per-run metadata for debugging
+    await redis_client.delete(keys.dispatched)
+    await redis_client.hset(
+        keys.run_meta,
+        mapping={
+            "total_requests": total_requests or 0,
+            "slot_acquired": 0,
+            "enqueued_at": time.time(),
+        },
+    )
+    await redis_client.hdel(
+        keys.run_meta,
+        "popped_at",
+        "completed_at",
+        "slot_acquired_at",
+        "outcome",
+        "early_release_deadline",
+    )
+    await redis_client.expire(keys.run_meta, HOURS_24)
+
+    # Idempotent enqueue (handles server restart where run is already in queue)
+    # NOTE: lpos returns the index (0 for first element), so we must check `is None`
+    if await redis_client.lpos(keys.queue, run_id) is None:
+        await redis_client.rpush(keys.queue, run_id)
+    await redis_client.expire(keys.queue, HOURS_24)
+
+    await _control_and_admit_heads(
+        redis_client,
+        keys.queue,
+        keys.base,
+        keys.token,
+        logger,
+    )
+
+
+async def wait_for_benchmark_slot(
+    redis_client: AsyncRedisClient,
+    keys: BenchmarkQueueKeys,
+    run_id: str,
+    logger: logging.Logger,
+    is_cancelled: Callable[[], Awaitable[bool]] | None,
+    *,
+    timeout_seconds: float | None = None,
+) -> bool:
+    """Wait for an authoritative active-head notification."""
+    # block until notified
+    while True:
+        result = await _lpop_long(
+            redis_client,
+            [keys.notify],
+            logger=logger,
+            run_id=run_id,
+            timeout_seconds=timeout_seconds,
+        )
+        if result is None:
+            return False
+
+        notification = result[1]
+        if notification == BENCHMARK_NOTIFY_CANCELLED:
+            raise BenchmarkQueueCancelled(
+                f"Run {run_id} cancelled while waiting in benchmark queue"
+            )
+
+        if notification != BENCHMARK_NOTIFY_PROCEED:
+            logger.warning(
+                f"Benchmark queue: ignoring unknown notification {notification!r} for {run_id}"
+            )
+            continue
+
+        is_active_head = await redis_client.zscore(keys.active_heads, run_id)
+        if is_active_head is None:
+            logger.warning(
+                f"Benchmark queue: ignoring stale proceed notification for {run_id}; not an active head"
+            )
+            continue
+
+        if is_cancelled and await is_cancelled():
+            raise BenchmarkQueueCancelled(
+                f"Run {run_id} cancelled before acquiring benchmark queue slot"
+            )
+
+        # Clear duplicate proceed tokens after the slot is actually acquired.
+        await redis_client.delete(keys.notify)
+        return True
+
+
+async def mark_benchmark_slot_acquired(
+    redis_client: AsyncRedisClient,
+    keys: BenchmarkQueueKeys,
+) -> None:
+    """Record that the caller consumed its authoritative admission."""
+    await redis_client.hset(
+        keys.run_meta,
+        mapping={
+            "slot_acquired": 1,
+            "slot_acquired_at": time.time(),
+        },
+    )
+
+
+async def release_benchmark_run(
+    redis_client: AsyncRedisClient,
+    keys: BenchmarkQueueKeys,
+    run_id: str,
+    logger: logging.Logger,
+    *,
+    notify_next: bool,
+) -> None:
+    """Release queue state and retain the existing 24-hour run history."""
+    # remove ourselves from queue/active heads (idempotent if heartbeat already early-released)
+    await redis_client.lrem(keys.queue, 1, run_id)
+    await redis_client.zrem(keys.active_heads, run_id)
+    await redis_client.delete(keys.alive)
+
+    # mark completed and keep metadata alive for popped run visibility
+    now = time.time()
+    fields: dict[str, float] = {"completed_at": now}
+    # set popped_at if not already set by early release in heartbeat
+    if not await redis_client.hexists(keys.run_meta, "popped_at"):
+        fields["popped_at"] = now
+    await redis_client.hset(keys.run_meta, mapping=fields)
+    await redis_client.expire(keys.run_meta, HOURS_24)
+    await redis_client.expire(keys.dispatched, HOURS_24)
+
+    if notify_next:
+        await _control_and_admit_heads(
+            redis_client,
+            keys.queue,
+            keys.base,
+            keys.token,
+            logger,
+        )
+
+
+async def refresh_benchmark_heartbeat(
+    redis_client: AsyncRedisClient,
+    keys: BenchmarkQueueKeys,
+) -> None:
+    """Refresh one run's liveness marker."""
+    # refresh our heartbeat
+    await redis_client.set(keys.alive, "1", ex=HEARTBEAT_TTL)
+
+
+async def early_release_benchmark_run(
+    redis_client: AsyncRedisClient,
+    keys: BenchmarkQueueKeys,
+    run_id: str,
+    logger: logging.Logger,
+) -> bool:
+    """Atomically release an acquired queue slot before final run cleanup."""
+    released_run = await redis_client.eval(
+        EARLY_RELEASE_LUA,
+        3,
+        keys.run_meta,
+        keys.queue,
+        keys.active_heads,
+        run_id,
+        time.time(),
+    )
+    if not released_run:
+        return False
+
+    logger.debug("Benchmark queue: early released %s", released_run)
+    await _control_and_admit_heads(
+        redis_client,
+        keys.queue,
+        keys.base,
+        keys.token,
+        logger,
+    )
+    return True
+
+
+async def control_benchmark_run(
+    redis_client: AsyncRedisClient,
+    keys: BenchmarkQueueKeys,
+    run_id: str,
+    logger: logging.Logger,
+    *,
+    self_promote: bool,
+) -> None:
+    """Run active-head control, notification recovery, and dead-head eviction."""
+    await _control_and_admit_heads(
+        redis_client,
+        keys.queue,
+        keys.base,
+        keys.token,
+        logger,
+    )
+
+    # self-promote: if we're active but missed notification, notify ourselves.
+    if self_promote:
+        is_active_head = await redis_client.zscore(keys.active_heads, run_id)
+        if is_active_head is not None:
+            await redis_client.rpush(keys.notify, BENCHMARK_NOTIFY_PROCEED)
+            await redis_client.expire(keys.notify, HOURS_24)
+
+    # check queue head heartbeat
+    head = await redis_client.lindex(keys.queue, 0)
+    if head and head != run_id:
+        head_alive_key = f"{keys.base}:alive:{head}"
+        if not await redis_client.exists(head_alive_key):
+            async with redis_client.lock(
+                f"{keys.queue}:evict",
+                timeout=HEARTBEAT_INTERVAL,
+            ):
+                # re-check after acquiring lock
+                head = await redis_client.lindex(keys.queue, 0)
+                if (
+                    head
+                    and head != run_id
+                    and not await redis_client.exists(f"{keys.base}:alive:{head}")
+                ):
+                    logger.info(f"Benchmark queue: evicting dead entry {head}")
+                    await redis_client.lrem(keys.queue, 1, head)
+                    await redis_client.zrem(keys.active_heads, head)
+                    await _control_and_admit_heads(
+                        redis_client,
+                        keys.queue,
+                        keys.base,
+                        keys.token,
+                        logger,
+                    )
+
+
 @asynccontextmanager
 async def benchmark_queue(
     model_registry_key: tuple[str, str],
@@ -315,12 +599,7 @@ async def benchmark_queue(
         yield
         return
 
-    key = f"{KEY_PREFIX}:{model_registry_key[0]}:{model_registry_key[1]}:benchmark"
-    token_key = f"{KEY_PREFIX}:{model_registry_key[0]}:{model_registry_key[1]}:tokens"
-    run_queue_key = f"{key}:queue"
-    active_heads_key = get_active_heads_key(key)
-    my_notify_key = f"{key}:notify:{run_id}"
-    alive_key = f"{key}:alive:{run_id}"
+    keys = BenchmarkQueueKeys.for_run(model_registry_key, run_id)
 
     heartbeat_task = None
     slot_acquired: asyncio.Event | None = None
@@ -329,39 +608,18 @@ async def benchmark_queue(
 
     try:
         # Clear stale notifications from a previous attempt with the same run_id.
-        await utils.redis_client.delete(my_notify_key)
+        await clear_benchmark_notification(utils.redis_client, keys)
         if is_cancelled and await is_cancelled():
             raise BenchmarkQueueCancelled(
                 f"Run {run_id} cancelled before entering benchmark queue"
             )
 
-        # initialize heartbeat with short TTL
-        await utils.redis_client.set(alive_key, "1", ex=HEARTBEAT_TTL)
-
-        # per-run metadata for debugging
-        run_meta_key = f"{key}:run:{run_id}"
-        await utils.redis_client.delete(f"{run_meta_key}:dispatched")
-        await utils.redis_client.hset(
-            run_meta_key,
-            mapping={
-                "total_requests": total_requests or 0,
-                "slot_acquired": 0,
-                "enqueued_at": time.time(),
-            },
-        )
-        await utils.redis_client.hdel(
-            run_meta_key, "popped_at", "completed_at", "slot_acquired_at"
-        )
-        await utils.redis_client.expire(run_meta_key, HOURS_24)
-
-        # Idempotent enqueue (handles server restart where run is already in queue)
-        # NOTE: lpos returns the index (0 for first element), so we must check `is None`
-        if await utils.redis_client.lpos(run_queue_key, run_id) is None:
-            await utils.redis_client.rpush(run_queue_key, run_id)
-        await utils.redis_client.expire(run_queue_key, HOURS_24)
-
-        await _control_and_admit_heads(
-            utils.redis_client, run_queue_key, key, token_key, logger
+        await initialize_benchmark_run(
+            utils.redis_client,
+            keys,
+            run_id,
+            total_requests,
+            logger,
         )
 
         # signal heartbeat that slot has been acquired
@@ -369,19 +627,14 @@ async def benchmark_queue(
 
         # per-run dispatched key for early release counting
         run_dispatched_key = (
-            f"{key}:run:{run_id}:dispatched"
-            if total_requests and early_release
-            else None
+            keys.dispatched if total_requests and early_release else None
         )
 
         # start heartbeat (refreshes my alive key + active-head control + early release)
         heartbeat_task = asyncio.create_task(
             _heartbeat(
                 utils.redis_client,
-                alive_key,
-                run_queue_key,
-                key,
-                token_key,
+                keys,
                 run_id,
                 logger,
                 dispatched_key=run_dispatched_key,
@@ -392,41 +645,17 @@ async def benchmark_queue(
             )
         )
 
-        logger.info(f"Benchmark queue: {run_id} waiting for slot ({run_queue_key})")
+        logger.info(f"Benchmark queue: {run_id} waiting for slot ({keys.queue})")
 
-        # block until notified
-        while True:
-            result = await _lpop_long([my_notify_key], logger=logger, run_id=run_id)
-            if result is None:
-                raise RuntimeError(f"Run {run_id} timed out waiting in benchmark queue")
-
-            notification = result[1]
-            if notification == BENCHMARK_NOTIFY_CANCELLED:
-                raise BenchmarkQueueCancelled(
-                    f"Run {run_id} cancelled while waiting in benchmark queue"
-                )
-
-            if notification != BENCHMARK_NOTIFY_PROCEED:
-                logger.warning(
-                    f"Benchmark queue: ignoring unknown notification {notification!r} for {run_id}"
-                )
-                continue
-
-            is_active_head = await utils.redis_client.zscore(active_heads_key, run_id)
-            if is_active_head is None:
-                logger.warning(
-                    f"Benchmark queue: ignoring stale proceed notification for {run_id}; not an active head"
-                )
-                continue
-
-            if is_cancelled and await is_cancelled():
-                raise BenchmarkQueueCancelled(
-                    f"Run {run_id} cancelled before acquiring benchmark queue slot"
-                )
-
-            # Clear duplicate proceed tokens after the slot is actually acquired.
-            await utils.redis_client.delete(my_notify_key)
-            break
+        acquired = await wait_for_benchmark_slot(
+            utils.redis_client,
+            keys,
+            run_id,
+            logger,
+            is_cancelled,
+        )
+        if not acquired:
+            raise RuntimeError(f"Run {run_id} timed out waiting in benchmark queue")
 
         logger.info(
             "Benchmark queue: %s acquired slot pid=%s thread=%s",
@@ -436,13 +665,7 @@ async def benchmark_queue(
         )
 
         slot_acquired.set()
-        await utils.redis_client.hset(
-            run_meta_key,
-            mapping={
-                "slot_acquired": 1,
-                "slot_acquired_at": time.time(),
-            },
-        )
+        await mark_benchmark_slot_acquired(utils.redis_client, keys)
 
         yield
 
@@ -451,22 +674,6 @@ async def benchmark_queue(
             heartbeat_task.cancel()
 
         async def _cleanup() -> None:
-            # remove ourselves from queue/active heads (idempotent if heartbeat already early-released)
-            await utils.redis_client.lrem(run_queue_key, 1, run_id)
-            await utils.redis_client.zrem(active_heads_key, run_id)
-
-            await utils.redis_client.delete(alive_key)
-            # mark completed and keep metadata alive for popped run visibility
-            now = time.time()
-            run_meta = f"{key}:run:{run_id}"
-            fields: dict[str, float] = {"completed_at": now}
-            # set popped_at if not already set by early release in heartbeat
-            if not await utils.redis_client.hexists(run_meta, "popped_at"):
-                fields["popped_at"] = now
-            await utils.redis_client.hset(run_meta, mapping=fields)
-            await utils.redis_client.expire(run_meta, HOURS_24)
-            await utils.redis_client.expire(f"{run_meta}:dispatched", HOURS_24)
-
             should_notify_next = slot_acquired is not None and slot_acquired.is_set()
             if should_notify_next and is_cancelled:
                 try:
@@ -476,10 +683,13 @@ async def benchmark_queue(
                         f"Benchmark queue: cancellation check failed during cleanup for {run_id}",
                         exc_info=True,
                     )
-            if should_notify_next:
-                await _control_and_admit_heads(
-                    utils.redis_client, run_queue_key, key, token_key, logger
-                )
+            await release_benchmark_run(
+                utils.redis_client,
+                keys,
+                run_id,
+                logger,
+                notify_next=should_notify_next,
+            )
 
         await asyncio.shield(_cleanup())
 
@@ -488,10 +698,7 @@ async def benchmark_queue(
 
 async def _heartbeat(
     redis_client: AsyncRedisClient,
-    alive_key: str,
-    run_queue_key: str,
-    base_key: str,
-    token_key: str,
+    keys: BenchmarkQueueKeys,
     run_id: str,
     logger: logging.Logger,
     dispatched_key: str | None = None,
@@ -527,8 +734,7 @@ async def _heartbeat(
                 )
             last_heartbeat_started = heartbeat_started
         try:
-            # refresh our heartbeat
-            await redis_client.set(alive_key, "1", ex=HEARTBEAT_TTL)
+            await refresh_benchmark_heartbeat(redis_client, keys)
 
             # early release: all requests dispatched
             # only check after slot acquired
@@ -570,65 +776,21 @@ async def _heartbeat(
                                 f"early releasing {run_id}"
                             )
 
-                    run_meta_key = f"{base_key}:run:{run_id}"
-                    released_run = await redis_client.eval(
-                        EARLY_RELEASE_LUA,
-                        3,
-                        run_meta_key,
-                        run_queue_key,
-                        get_active_heads_key(base_key),
+                    await early_release_benchmark_run(
+                        redis_client,
+                        keys,
                         run_id,
-                        time.time(),
+                        logger,
                     )
-                    if released_run:
-                        logger.debug(
-                            "Benchmark queue: early released %s",
-                            released_run,
-                        )
-                        await _control_and_admit_heads(
-                            redis_client, run_queue_key, base_key, token_key, logger
-                        )
                     dispatched_key = None  # stop checking
 
-            await _control_and_admit_heads(
-                redis_client, run_queue_key, base_key, token_key, logger
+            await control_benchmark_run(
+                redis_client,
+                keys,
+                run_id,
+                logger,
+                self_promote=bool(slot_acquired and not slot_acquired.is_set()),
             )
-
-            # self-promote: if we're active but missed notification, notify ourselves.
-            if slot_acquired and not slot_acquired.is_set():
-                is_active_head = await redis_client.zscore(
-                    get_active_heads_key(base_key), run_id
-                )
-                if is_active_head is not None:
-                    notify_key = f"{base_key}:notify:{run_id}"
-                    await redis_client.rpush(notify_key, BENCHMARK_NOTIFY_PROCEED)
-                    await redis_client.expire(notify_key, HOURS_24)
-
-            # check queue head heartbeat
-            head = await redis_client.lindex(run_queue_key, 0)
-            if head and head != run_id:
-                head_alive_key = f"{base_key}:alive:{head}"
-                if not await redis_client.exists(head_alive_key):
-                    async with redis_client.lock(
-                        f"{run_queue_key}:evict", timeout=HEARTBEAT_INTERVAL
-                    ):
-                        # re-check after acquiring lock
-                        head = await redis_client.lindex(run_queue_key, 0)
-                        if (
-                            head
-                            and head != run_id
-                            and not await redis_client.exists(
-                                f"{base_key}:alive:{head}"
-                            )
-                        ):
-                            logger.info(f"Benchmark queue: evicting dead entry {head}")
-                            await redis_client.lrem(run_queue_key, 1, head)
-                            await redis_client.zrem(
-                                get_active_heads_key(base_key), head
-                            )
-                            await _control_and_admit_heads(
-                                redis_client, run_queue_key, base_key, token_key, logger
-                            )
         except Exception:
             logger.warning(
                 f"Benchmark queue heartbeat error for {run_id}", exc_info=True

@@ -21,7 +21,7 @@ MODEL_GATEWAY_URL="http://localhost:8000"
 MODEL_GATEWAY_API_KEY="key1"
 ```
 
-When `MODEL_GATEWAY_URL` is set, `get_registry_model()` returns a `GatewayLLM` from the model string and routes supported calls through the server automatically. `get_model_registry()` can still fetch a gateway registry snapshot for explicit bulk discovery, but request execution and single-model metadata are resolved by the gateway server.
+When `MODEL_GATEWAY_URL` is set, `get_model_registry()` fetches and caches the Gateway registry snapshot. `get_registry_model()` uses that snapshot to construct a fully configured `GatewayLLM`, while request execution remains authoritative on the Gateway server.
 
 For application/agent migration steps, see [Migrating agents and providers to Model Gateway](gateway-migration.md).
 
@@ -62,7 +62,7 @@ keeps `/health/ready` at `503` until it passes.
 #### Usage ledger
 
 - `GATEWAY_USAGE_LEDGER_MODE` (**optional**): successful-query usage ledger mode: `disabled`, `shadow`, or `enforced`. Defaults to `shadow`. In current SQS mode, `/query` locally queues the usage event before returning and SQS send/retry runs in the background, every 10 seconds for up to 20 minutes. Synchronous SQS durable acceptance is intentionally not implemented; see the usage-ledger rationale below.
-- `GATEWAY_USAGE_LEDGER_QUEUE_URL` (**required when gateway ledger is enabled**): SQS queue for successful completed `/query` usage events. When set, the gateway sends successful usage events through SQS and a consumer can write the DynamoDB ledger row asynchronously.
+- `GATEWAY_USAGE_LEDGER_QUEUE_URL` (**required when gateway ledger is enabled**): SQS queue for successful completed `/query` usage events. When set, the gateway sends successful usage events through SQS and a consumer can write the ledger row asynchronously.
 - `GATEWAY_USAGE_LEDGER_TABLE_NAME` (**required when DynamoDB writer is enabled**): DynamoDB table for successful completed `/query` usage events. Set this for DynamoDB writers; local/direct gateway DynamoDB mode can also set it when no queue URL is configured.
 - `GATEWAY_USAGE_LEDGER_SHARDS` (**optional**): number of write shards for day-partitioned DynamoDB usage events and run/key/benchmark/agent GSIs. Readers and the Redshift export Lambda must use the configured shard count.
 - `GATEWAY_USAGE_LEDGER_MAX_POOL_CONNECTIONS` (**optional**): aiobotocore HTTP connection pool size for the per-process async ledger client. Increase only with matching request concurrency and AWS account limits.
@@ -91,27 +91,26 @@ usage-ledger section.
 
 ### Client
 
-| Variable          | Required | Description                                                 |
+| Variable | Required | Description |
 | ----------------- | -------- | ----------------------------------------------------------- |
-| `MODEL_GATEWAY_URL`     | Yes      | URL of the gateway server (e.g. `http://localhost:8000`)    |
-| `MODEL_GATEWAY_API_KEY` | Yes      | Client API key (must be in the server's `MODEL_GATEWAY_API_KEYS`) |
-| `IDENTITY`              | No       | JSON object attached to gateway query telemetry and usage ledger rows. |
-| `RUN_ID`                | No       | Default run ID for gateway queries when `query(run_id=...)` is absent or `None`. |
-| `QUESTION_ID`           | No       | Default question/task ID for gateway queries when `query(question_id=...)` is absent or `None`. |
-| `TASK_ID`               | No       | Alias fallback for `QUESTION_ID`; used only when `QUESTION_ID` is unset or blank. |
+| `MODEL_GATEWAY_URL` | Yes | URL of the gateway server (e.g. `http://localhost:8000`) |
+| `MODEL_GATEWAY_API_KEY` | Yes | Client API key (must be in the server's `MODEL_GATEWAY_API_KEYS`) |
+| `IDENTITY` | No | JSON object attached to gateway query telemetry and usage ledger rows. |
+| `RUN_ID` | No | Default run ID for gateway queries when `query(run_id=...)` is absent or `None`. |
+| `QUESTION_ID` | No | Default question/task ID for gateway queries when `query(question_id=...)` is absent or `None`. |
+| `TASK_ID` | No | Alias fallback for `QUESTION_ID`; used only when `QUESTION_ID` is unset or blank. |
 
 Attribution behavior:
 
 - `IDENTITY` setting/env var must be a JSON-encoded object string, for example `{"user_id":"user_123","benchmark_name":"swebench"}`.
 - Explicit `query(identity=...)` takes a Python mapping/object.
-- Identity keys are caller-defined.
-- Identity values are preserved as provided.
-- Identity is emitted/stored as raw caller metadata for debugging and ledger attribution.
-- `IDENTITY` is persisted in usage ledger and operational metadata, so do not put secrets, provider API keys, bearer tokens, or other credentials in identity. PII is allowed when needed for attribution/analytics.
+- Identity keys are caller-defined and values are preserved in the gateway request.
+- The usage ledger promotes recognized `benchmark_name`, `agent_name`, and `email` dimensions while preserving the complete normalized identity in `details.request`.
+- Identity can still enter operational telemetry, so do not put secrets, provider API keys, bearer tokens, or other credentials in it. PII is allowed when needed for attribution/analytics.
 - `benchmark_name`, `agent_name`, and `email` are recognized usage-ledger analytics keys when their values are strings that trim to non-empty values no larger than 512 UTF-8 bytes.
 - `email` must be email-shaped and is stored as canonical lowercased `identity_email` for exact Redshift filtering.
 - Benchmark and agent raw-ledger lookup keys are exact-match and forward-only. Email analytics are available through Redshift; there is no raw-ledger email lookup or substring search path.
-- Rows written before those fields, indexes, or mart columns existed are excluded unless backfilled.
+- Rows written before those fields, indexes, or mart columns existed are not included in those lookup or analytics paths.
 - Invalid `IDENTITY` settings are omitted by the client:
   - non-object
   - non-finite
@@ -152,8 +151,7 @@ For deployed environments, keep server and client Secrets Manager entries separa
 | GET    | `/health/live`        | No   | Liveness check                                                             |
 | GET    | `/health/ready`       | No   | Readiness check (verifies gateway auth/signing config and startup canary)  |
 | GET    | `/models`             | Yes  | List available models with capability flags                                |
-| GET    | `/registry`           | Yes  | Return the full model registry snapshot for discovery clients              |
-| POST   | `/models/resolve`     | Yes  | Resolve server-side effective config and full registry entry for one model |
+| GET    | `/registry`           | Yes  | Return the full model registry snapshot for client construction            |
 | POST   | `/query`              | Yes  | Execute an LLM query                                                       |
 | POST   | `/tokens/count`       | Yes  | Count input tokens by using the gateway-side model implementation          |
 | POST   | `/rate-limit`         | Yes  | Reserved endpoint; currently rejects with `Gateway token retry use only`   |
@@ -168,13 +166,12 @@ For deployed environments, keep server and client Secrets Manager entries separa
 Client (get_model_registry / get_registry_model)
   │
   ├─ get_model_registry + MODEL_GATEWAY_URL ──► GET /registry
-  │                                        └─ cache explicit bulk discovery snapshot locally
+  │                                        └─ cache registry snapshot locally
   │
-  ├─ get_registry_model + MODEL_GATEWAY_URL ──► unsynced GatewayLLM from model string
-  │                                        ├─ no implicit registry fetch
-  │                                        ├─ await model.ensure_metadata_loaded() before model.metadata reads
-  │                                        ├─ send model string + explicit overrides only
-  │                                        ├─ gateway resolves server-loaded registry config on cache miss
+  ├─ get_registry_model + MODEL_GATEWAY_URL ──► construct registry-configured GatewayLLM
+  │                                        ├─ metadata and capabilities available immediately
+  │                                        ├─ send canonical model key + explicit overrides only
+  │                                        ├─ gateway resolves current server config on cache miss
   │                                        ├─ POST supported calls with Bearer token
   │                                        └─ deserialize typed responses/history
   │
@@ -183,14 +180,15 @@ Client (get_model_registry / get_registry_model)
 
 ### Data flow
 
-1. **Client optionally loads registry from gateway** — when `MODEL_GATEWAY_URL` is set, `get_model_registry()` fetches `/registry` with `MODEL_GATEWAY_API_KEY` and caches that snapshot instead of reading bundled YAML files. This snapshot is for explicit bulk discovery. It is not request-time authority, and single-model helper APIs do not silently use it in gateway mode.
+1. **Client loads the registry from gateway** — when `MODEL_GATEWAY_URL` is set, `get_model_registry()` fetches `/registry` with `MODEL_GATEWAY_API_KEY` and caches that snapshot instead of reading bundled YAML files. Provider properties remain available as raw client metadata without importing provider implementations. `refresh_model_registry()` replaces the snapshot for models constructed afterward. The Gateway remains request-time execution authority.
 
-2. **Client constructs `GatewayLLM` from the model string**
+2. **Client constructs a registry-configured `GatewayLLM`**
 
-   - In gateway mode, `get_registry_model()`:
-     - does not fetch the registry;
-     - does not require the model to exist in a client snapshot;
-     - returns an unsynced `GatewayLLM`.
+   - In gateway mode, `get_registry_model()` follows the normal registry construction path:
+     - resolves the model from the current client snapshot;
+     - applies registry defaults and explicit overrides to local model fields;
+     - exposes `model.metadata` and capability attributes immediately;
+     - preserves only caller-supplied overrides for Gateway requests.
    - Gateway requests send:
      - top-level `model`
      - top-level `config` for model-config overrides
@@ -201,15 +199,8 @@ Client (get_model_registry / get_registry_model)
        - `query_id`
        - `in_agent`
    - Provider-specific overrides live under `config.provider_config`, not as top-level fields.
-   - Metadata fields such as `supports_tools` and `supports_temperature` start with local defaults.
-   - Call `await model.ensure_metadata_loaded()` to load gateway-authoritative metadata and `model.metadata`.
-   - Metadata loading is a no-op once loaded.
-   - After loading, `model.metadata` is the full server `ModelConfig` registry entry.
-   - `/models/resolve` returns the one-model server view:
-     - server-built `effective_config`
-     - full server `registry_config`
-     - server-computed `input_context_window`
-   - Callers migrating registry-entry reads can use `model.metadata` without fetching the full `/registry` snapshot.
+   - `model.metadata` is a copy of the registry entry used at construction.
+   - Existing model instances retain that construction snapshot; newly constructed models use the refreshed registry.
    - Gateway batch capability metadata is preserved.
    - Client-side gateway batch calls raise until gateway batch endpoints exist.
    - Client-side custom retriers are rejected in gateway mode because provider retries run on the gateway server.
@@ -273,17 +264,20 @@ make gateway  # uvicorn with --reload on port 8000
 ```
 ## Source files
 
-| File                            | Role                                                   |
+| File | Role |
 | ------------------------------- | ------------------------------------------------------ |
-| `model_gateway/app.py`                 | FastAPI `create_app` factory, gateway endpoints, model caching |
-| `model_gateway/auth.py`                | Bearer token middleware                                |
-| `model_gateway/cache.py`               | LRU cache for LLM instances by (model, config)         |
-| `model_gateway/errors.py`              | Exception → HTTP error response mapping                |
-| `model_gateway/history.py`             | HMAC sign/verify wrappers around `LLM.serialize_input` |
-| `model_gateway/types.py`               | Gateway request/response Pydantic models               |
-| `model_gateway/usage_ledger/store.py`  | DynamoDB usage-ledger event construction and writes     |
-| `model_gateway/usage_ledger/schema.py` | DynamoDB usage-ledger key, index, and projection schema |
-| `model_library/telemetry.py`    | Optional OpenTelemetry helpers and attribute filtering |
-| `model_library/base/gateway.py` | Client-side `GatewayLLM` class                         |
-| `model_library/exceptions.py`   | `GatewayMethodNotSupported` exception                  |
-| `Dockerfile`                    | Multi-stage build with uv                              |
+| `model_gateway/app.py` | FastAPI `create_app` factory, gateway endpoints, model caching |
+| `model_gateway/auth.py` | Bearer token middleware |
+| `model_gateway/cache.py` | LRU cache for LLM instances by (model, config) |
+| `model_gateway/errors.py` | Exception → HTTP error response mapping |
+| `model_gateway/history.py` | HMAC sign/verify wrappers around `LLM.serialize_input` |
+| `model_gateway/types.py` | Gateway request/response Pydantic models |
+| `model_gateway/usage_ledger/store.py` | Usage-event promoted spine and canonical details attachment |
+| `model_gateway/usage_ledger/details.py` | Projected request/result details and explicit content reductions |
+| `model_gateway/usage_ledger/message.py` | Shared direct/SQS event preparation and envelope codec |
+| `model_gateway/usage_ledger/schema.py` | DynamoDB key/index, physical-field, and event-size contract |
+| `model_gateway/usage_ledger/redshift_schema.py` | Redshift fact/performance/staging contract |
+| `model_library/telemetry.py` | Optional OpenTelemetry helpers and attribute filtering |
+| `model_library/base/gateway.py` | Client-side `GatewayLLM` class |
+| `model_library/exceptions.py` | `GatewayMethodNotSupported` exception |
+| `Dockerfile` | Multi-stage build with uv |

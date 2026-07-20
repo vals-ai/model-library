@@ -1,0 +1,9 @@
+base-config:
+  company: Thinking Machines
+  documentation_url: https://tinker-docs.thinkingmachines.ai/tinker/compatible-apis/openai/
+  open_source: true
+  supports:
+    images: true
+    files: false
+    tools: true
+    temperature: true

@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from rich.console import Console
 
 from examples.inputs import (
+    audio_bytes,
     file_base64,
     file_id,
     file_url,
@@ -28,7 +29,7 @@ from examples.inputs import (
     image_url,
 )
 from examples.quickstart import basic_agent
-from examples.setup import setup, sync_model_metadata
+from examples.setup import setup
 from model_library.agent import AgentResult
 from model_library.base import LLM, SystemInput, TextInput
 from model_library.base.delegate_only import DelegateOnlyException
@@ -722,6 +723,19 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
             capability_name="supports.files",
             skip_explicit_unsupported=True,
         ),
+        semantic_transport_case(
+            section="Audio",
+            name="bytes transport",
+            declared=model.supports_audio,
+            runner=lambda: audio_bytes(
+                model,
+                quiet=True,
+                raise_errors=True,
+                logger=QUIET_QUERY_LOGGER,
+            ),
+            expected_text="tone",
+            capability_name="supports.audio",
+        ),
         _capability_case(
             section="Agent",
             name="bounded tool use",
@@ -908,6 +922,7 @@ def _model_info(model_key: str, model: LLM) -> dict[str, object]:
         "supports": {
             "images": model.supports_images,
             "files": model.supports_files,
+            "audio": model.supports_audio,
             "videos": model.supports_videos,
             "batch": model.supports_batch,
             "temperature": model.supports_temperature,
@@ -1034,7 +1049,6 @@ async def main() -> int:
         return 2 if "not found in registry" in str(e) else 3
 
     try:
-        await sync_model_metadata(model)
         results = await _run_cases(_build_cases(model))
     except Exception as e:
         if args.json:

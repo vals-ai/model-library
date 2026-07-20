@@ -99,7 +99,6 @@ class TestAnthropicBuildBodyOutputSchema:
 
 UNSUPPORTED_PROVIDER_MODELS = [
     "perplexity/sonar-pro",
-    "together/zai-org/GLM-4.5-Air-FP8",
     "cohere/command-a-03-2025",
     "deepseek/deepseek-chat",
     "mistralai/mistral-large-2512",

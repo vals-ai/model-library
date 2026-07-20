@@ -104,9 +104,12 @@ On each retry, priority increments by 1 (toward MIN). A request waits if any low
 5. Register in priority ZSET at current level, store initial per-question metadata hash
 6. Loop until tokens deducted (jittered wait: `uniform(TOKEN_WAIT_TIME * 0.5, TOKEN_WAIT_TIME * 1.5)`):
    - Check for lower-priority waiters → if found, sleep and retry
-   - Attempt atomic deduction via `DEDUCT_TOKENS_LUA` (checks both token count and burst limit)
+   - Attempt atomic deduction via `DEDUCT_TOKENS_LUA`. The same Redis operation checks the run metadata outcome, token count, and burst limit.
+   - If the run outcome is `cancelled` or `failed`, return the terminal sentinel without deducting tokens and raise `BenchmarkRunTerminated` (`NoRetryException`).
    - On success: add to per-run inflight ZSET, register run in active_runs SET, add `question_id` to per-run dispatched SET, store per-question metadata hash
 7. Finally (shielded): remove from priority ZSET; if no deduction occurred, delete metadata hash
+
+Missing run metadata and non-terminal outcomes retain the normal deduction path. This keeps non-benchmark requests and completed runs compatible with token retry.
 
 **execute** (wraps the actual API call):
 
@@ -162,11 +165,18 @@ benchmark_queue(model_key, run_id, total_requests=N, early_release=True):
      - TokenRetrier detects queue membership via lpos on first _pre_function call
   6. Finally (shielded):
      - Cancel heartbeat task
+     - Persist the terminal outcome before releasing queue ownership
      - Remove from queue and active_heads, delete alive key
      - Set popped_at if not already set (early release sets it earlier)
      - Set completed_at
      - Run active-head control to backfill if appropriate
 ```
+
+### Terminal Outcome Boundary
+
+Admission release writes `outcome` to the model-scoped run metadata hash before queue cleanup. That write is the terminal linearization point: a later `DEDUCT_TOKENS_LUA` call sees `cancelled` or `failed` and exits without changing the token or burst counters. The retrier then raises `BenchmarkRunTerminated`, so it does not continue waiting or call the provider, and its existing shielded cleanup removes priority and per-question metadata.
+
+A deduction that completes immediately before the terminal write is already admitted and cannot be revoked by Redis; cancellation of already-running request tasks remains responsible for that boundary. Reacquiring the run initializes a new attempt and clears the previous `outcome`, so retained 24-hour history does not permanently block the run ID.
 
 ### Heartbeat (\_heartbeat)
 
@@ -244,7 +254,7 @@ Prefix: `model_library` (`KEY_PREFIX`). Identifiers: `{P}` = provider.model_name
 | `{P}:{K}:benchmark:queue:evict`          | LOCK   | 2s   | Dead head eviction lock; timeout equals `HEARTBEAT_INTERVAL`                              |
 | `{P}:{K}:benchmark:alive:{RUN}`          | STRING | 300s | Run heartbeat                                                                             |
 | `{P}:{K}:benchmark:notify:{RUN}`         | LIST   | 24h  | Notification channel polled by waiters                                                    |
-| `{P}:{K}:benchmark:run:{RUN}`            | HASH   | 24h  | Per-run metadata (enqueued_at, slot_acquired_at, popped_at, completed_at, total_requests) |
+| `{P}:{K}:benchmark:run:{RUN}`            | HASH   | 24h  | Per-run metadata (enqueued_at, slot_acquired_at, popped_at, completed_at, outcome, total_requests) |
 | `{P}:{K}:benchmark:run:{RUN}:dispatched` | SET    | 24h  | Per-run dispatched question_ids                                                           |
 
 ---
@@ -255,7 +265,7 @@ All scripts run atomically in Redis (no interleaving with other commands).
 
 | Script                        | Keys                           | Args                               | Returns                                                              | Purpose                                                    |
 | ----------------------------- | ------------------------------ | ---------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `DEDUCT_TOKENS_LUA`           | token_key, burst_key           | required_tokens, burst_limit       | 1/0                                                                  | Check-and-deduct tokens with per-second burst cap          |
+| `DEDUCT_TOKENS_LUA`           | token_key, burst_key, optional run_meta_key | required_tokens, burst_limit | -1 terminal / 0 unavailable / 1 deducted | Atomically reject cancelled/failed runs or check-and-deduct tokens with the burst cap |
 | `REFILL_TOKENS_LUA`           | token_key                      | amount, cap                        | new_count                                                            | Apply positive or negative adjustment, clamped to `[0, cap]` |
 | `CORRECT_TOKENS_LUA`          | token_key                      | adjusted                           | [corrected, current, adjusted]                                       | Correct down from headers                                  |
 | `ADJUST_RATIO_LUA`            | ratio_key                      | observed, alpha                    | [old, new]                                                           | EMA ratio update                                           |
@@ -270,13 +280,22 @@ All scripts run atomically in Redis (no interleaving with other commands).
 
 ### TokenRetryParams
 
-| Field                   | Type  | Default  | Purpose                                |
-| ----------------------- | ----- | -------- | -------------------------------------- |
-| `limit`                 | int   | required | Total tokens per refresh window        |
-| `limit_refresh_seconds` | `Literal[60]` | 60 | Fixed one-minute refresh window |
-| `input_modifier`        | float | required | Scale factor for input token estimate  |
-| `output_modifier`       | float | required | Scale factor for output token estimate |
-| `use_dynamic_estimate`  | bool  | True     | Enable EMA ratio learning              |
+`TokenRetryParams` is caller-owned configuration. Gateway or the local model
+resolves it before token retry starts.
+
+| Field                   | Type          | Default  | Purpose                                |
+| ----------------------- | ------------- | -------- | -------------------------------------- |
+| `input_modifier`        | float         | required | Scale factor for input token estimate  |
+| `output_modifier`       | float         | required | Scale factor for output token estimate |
+| `use_dynamic_estimate`  | bool          | True     | Enable EMA ratio learning              |
+| `limit`                 | `int \| None` | None     | Provider token limit override          |
+| `limit_refresh_seconds` | `60`          | 60       | Fixed provider limit refresh interval  |
+
+`limit` may be omitted only when the target Gateway has configured provider
+defaults. Direct or local initialization and Gateway deployments without those
+defaults require an explicit limit.
+`ResolvedTokenRetryParams` is internal. It contains the concrete `limit` and
+fixed `limit_refresh_seconds=60`; only the retrier consumes it.
 
 ### Constants (token.py)
 
@@ -314,49 +333,47 @@ All scripts run atomically in Redis (no interleaving with other commands).
 | `ACTIVE_HEAD_SCALE_DOWN_INTERVAL`  | 15s    | Time below threshold before `window -= 1`       |
 | `HOURS_24`                         | 86400s | TTL for queue and metadata keys                 |
 
-### Constants (utils.py)
-
-| Constant                           | Value | Purpose                                            |
-| ---------------------------------- | ----- | -------------------------------------------------- |
-| `DEFAULT_STATUS_QUEUE_ENTRY_LIMIT` | 100   | Queue entries fetched per model by platform status |
-
 `get_status(queue_entry_limit=None, include_historical=True)` returns the full
-queue and historical metadata for diagnostics. Platform polling uses
-`queue_entry_limit=100` and `include_historical=True`, so Redis reads only `LLEN`
-plus the visible queue prefix for queued runs, while also scanning benchmark run
-metadata to show popped/completed history. If a live token-retry run is no longer
-in the visible queue, status fetches only that run's exact benchmark metadata key
-to distinguish popped queue runs from direct token-retry traffic. Platform status
-exposes `active_heads`, `active_head_window`, and per-entry `is_active_head` so
-the Requests UI can show multiple admitted benchmark heads instead of the legacy
-single head.
+queue and historical metadata for diagnostics. The Gateway
+`/token-retry/status` endpoint calls it with those defaults, owns the Redis reads,
+and caches the response. Clients poll that authenticated endpoint instead of
+reading token-retry Redis state directly. The status payload exposes `active_heads`,
+`active_head_window`, and per-entry `is_active_head` for displaying multiple
+admitted benchmark heads.
 
 ---
 
 ## Integration
 
-### App-level usage (question_answer_sets.py)
+### Gateway client usage
 
 ```python
-# 1. Init token retry (once per model per run)
-model, params = await fetch_model_run_info(run.parameters, user_info)
-# ↑ calls model.init_token_retry(TokenRetryParams(...)) inside
+# 1. Resolve a GatewayLLM and attach token-retry parameters for its queries.
+await model.init_token_retry(token_retry_params)
 
-run_id = str(run.id)
-
-# 2. Enter benchmark queue (serializes runs per model)
-async with benchmark_queue(
-    model._client_registry_key_model_specific,
+# 2. Send the same caller configuration to Gateway for admission.
+async with gateway_benchmark_admission(
+    model,
     run_id,
-    logger,
-    total_requests=len(tests),
-    early_release=True,  # False for agentic runs
-):
-    # 3. Dispatch all questions concurrently
-    # Pass run_id explicitly — TokenRetrier detects queue membership via lpos
-    qa_pair_statuses = await asyncio.gather(*tasks)
-    # Each task calls model.query(run_id=run_id, question_id=...) → TokenRetrier handles scheduling
+    token_retry_params=token_retry_params,
+    enabled=use_queue,
+    total_requests=len(tasks),
+    is_cancelled=is_cancelled,
+) as effective_token_limit:
+    logger.info("Gateway token limit: %s tokens/minute", effective_token_limit)
+
+    # 3. Query through GatewayLLM while the caller owns execution.
+    results = await asyncio.gather(*tasks)
 ```
+
+`gateway_benchmark_admission` uses the Gateway
+`/benchmark-runs/acquire`, `/wait`, `/renew`, and `/release` endpoints. Gateway
+resolves caller parameters to an effective limit, initializes the provider
+model's token retrier with internal resolved parameters, persists the effective
+limit with admission state, and returns it to
+the client. Query and admission requests use the same resolver. Gateway owns all
+token, queue, and background-loop Redis state; clients do not configure Redis or
+inspect those keys.
 
 ### Agent integration
 
@@ -389,6 +406,12 @@ response = await self._llm.query(
 - Alive key expires (TTL=300s)
 - Other runs' heartbeats detect missing alive key → evict dead entry → notify next
 - If crash between lrem and notify: self-promotion in heartbeat detects we're at head
+
+### Benchmark cancellation or failure while token waiters remain
+
+- Admission release persists `outcome=cancelled|failed` before removing queue ownership.
+- Waiting retriers reject their next atomic deduction without spending tokens, stop retrying, and run shielded cleanup.
+- Requests deducted before that outcome write are already admitted; task cancellation handles those in-flight requests.
 
 ### Server restart
 

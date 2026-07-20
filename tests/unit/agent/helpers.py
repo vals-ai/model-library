@@ -1,12 +1,13 @@
 """Shared test helpers for agent tests."""
 
 import logging
-from typing import Any
+from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock
 
 import tiktoken
 
 from model_library.agent import Agent, AgentConfig, Tool, ToolOutput
+from model_library.base.base import LLM
 from model_library.base.input import TextInput, ToolCall
 from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
 
@@ -61,31 +62,33 @@ def make_tool_call(
     return ToolCall(id="tc_1", name=name, args=args or {"text": "hello"})
 
 
+class _MockLLM(MagicMock):
+    def __rich_repr__(self):
+        yield "model_name", self.model_name
+        yield "temperature", self.temperature
+        yield "max_tokens", self.max_tokens
+
+
 def mock_llm(*responses: QueryResult | Exception) -> MagicMock:
     """Create a mock LLM that returns the given responses in sequence."""
-
-    class _MockLLM(MagicMock):
-        def __rich_repr__(self):
-            yield "model_name", self.model_name
-            yield "temperature", self.temperature
-            yield "max_tokens", self.max_tokens
 
     llm = _MockLLM()
     llm.model_name = "mock-model"
     llm.max_tokens = None
     llm.query = AsyncMock(side_effect=list(responses))
-    llm.ensure_metadata_loaded = AsyncMock(return_value=None)
     # Tokenizer used by default compaction estimate. Approximate cl100k.
     llm.get_encoding = AsyncMock(return_value=tiktoken.get_encoding("cl100k_base"))
 
     return llm
 
 
-def make_agent(llm: MagicMock, tools: list[Tool] | None = None, **kwargs: Any) -> Agent:
+def make_agent(
+    llm: LLM | MagicMock, tools: list[Tool] | None = None, **kwargs: Any
+) -> Agent:
     kwargs.setdefault("name", "test")
     kwargs.setdefault("config", _cfg)
 
-    return Agent(llm=llm, tools=tools or [], **kwargs)
+    return Agent(llm=cast(LLM, llm), tools=tools or [], **kwargs)
 
 
 class DoneTool(Tool):

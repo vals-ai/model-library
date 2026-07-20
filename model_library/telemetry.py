@@ -30,10 +30,13 @@ TRACER_NAME = "model_library.gateway"
 HTTP_TRACE_EXCLUDED_ROUTES = frozenset({"/health/live", "/health/ready"})
 HTTP_TRACE_ALLOWED_ROUTES = frozenset(
     {
+        "/benchmark-runs/acquire",
+        "/benchmark-runs/release",
+        "/benchmark-runs/renew",
+        "/benchmark-runs/wait",
         "/embeddings",
         "/files/upload",
         "/models",
-        "/models/resolve",
         "/moderation",
         "/query",
         "/rate-limit",
@@ -335,7 +338,10 @@ def _otel_sampler(sampling_module: Any) -> Any:
     if sampler_name in {"traceidratio", "parentbased_traceidratio"}:
         if sampler_arg is None:
             raise ValueError(f"OTEL_TRACES_SAMPLER_ARG is required for {sampler_name}")
-        ratio = float(sampler_arg)
+        try:
+            ratio = float(sampler_arg)
+        except ValueError as exc:
+            raise ValueError("OTEL_TRACES_SAMPLER_ARG must be a number") from exc
         if not math.isfinite(ratio) or ratio < 0 or ratio > 1:
             raise ValueError("OTEL_TRACES_SAMPLER_ARG must be between 0 and 1")
         return sampler(ratio)

@@ -10,17 +10,7 @@ from model_gateway.usage_ledger import redshift_schema
 from model_gateway.usage_ledger.redshift_transform import RedshiftUsageRows
 
 _FACT_COLUMNS = redshift_schema.USAGE_EVENT_FACT_COLUMN_NAMES
-_DEBUG_COLUMNS = redshift_schema.USAGE_EVENT_DEBUG_COLUMN_NAMES
-
-_SUPER_JSON_COLUMNS = frozenset(
-    (
-        "identity_json",
-        "config_redacted_json",
-        "metadata_json",
-        "finish_reason_json",
-        "performance_json",
-    )
-)
+_PERFORMANCE_COLUMNS = redshift_schema.USAGE_EVENT_PERFORMANCE_COLUMN_NAMES
 _STAGING_COPY_COLUMNS = redshift_schema.USAGE_EVENTS_STAGING_COLUMN_NAMES
 
 
@@ -36,8 +26,8 @@ def staging_row_from_redshift_rows(rows: RedshiftUsageRows) -> dict[str, object]
     row = dict(rows.fact)
     row.update(
         {
-            key: _json_string(value) if key in _SUPER_JSON_COLUMNS else value
-            for key, value in rows.debug.items()
+            key: _json_bytes(value) if key == "performance" else value
+            for key, value in rows.performance.items()
             if key != "loaded_at"
         }
     )
@@ -50,7 +40,9 @@ def copy_usage_events_staging_sql(
     iam_role_arn: str,
     schema: str = redshift_schema.WAREHOUSE_SCHEMA,
 ) -> str:
-    table = redshift_schema.qualified_table_name("usage_events_staging", schema)
+    table = redshift_schema.qualified_table_name(
+        redshift_schema.USAGE_EVENTS_STAGING_TABLE_NAME, schema
+    )
     columns = _select_column_list(_STAGING_COPY_COLUMNS, spaces=2, expressions={})
     return f"""copy {table} (
 {columns}
@@ -66,7 +58,9 @@ def prepare_window_statements(
     *,
     schema: str,
 ) -> list[str]:
-    staging = redshift_schema.qualified_table_name("usage_events_staging", schema)
+    staging = redshift_schema.qualified_table_name(
+        redshift_schema.USAGE_EVENTS_STAGING_TABLE_NAME, schema
+    )
     return [f"delete from {staging}\nwhere batch_id in ({_batch_id_list(load)});"]
 
 
@@ -89,13 +83,37 @@ def finalize_window_statements(
     load: RedshiftWindowLoad,
     *,
     schema: str,
+    refresh_analytics: bool = True,
 ) -> list[str]:
     batch_ids = _batch_id_list(load)
-    data_through = _timestamp_literal(load.aggregate_end)
-    staging = redshift_schema.qualified_table_name("usage_events_staging", schema)
+    staging = redshift_schema.qualified_table_name(
+        redshift_schema.USAGE_EVENTS_STAGING_TABLE_NAME, schema
+    )
+    analytics = (
+        analytics_refresh_statements(
+            start=load.aggregate_start,
+            end=load.aggregate_end,
+            schema=schema,
+        )
+        if refresh_analytics
+        else []
+    )
     return [
         merge_usage_events_for_batch_ids_sql(batch_ids, schema),
-        merge_usage_event_debug_for_batch_ids_sql(batch_ids, schema),
+        merge_usage_event_performance_for_batch_ids_sql(batch_ids, schema),
+        *analytics,
+        f"delete from {staging}\nwhere batch_id in ({batch_ids});",
+    ]
+
+
+def analytics_refresh_statements(
+    *,
+    start: datetime,
+    end: datetime,
+    schema: str,
+) -> list[str]:
+    data_through = _timestamp_literal(end)
+    return [
         *(
             statement
             for grain in redshift_schema.AGGREGATE_GRAINS
@@ -103,18 +121,15 @@ def finalize_window_statements(
                 grain,
                 schema,
                 start_expression=_timestamp_literal(
-                    _aggregate_refresh_start(grain, load.aggregate_start)
+                    _aggregate_refresh_start(grain, start)
                 ),
                 end_expression=_timestamp_literal(
-                    _aggregate_refresh_end(
-                        grain, load.aggregate_start, load.aggregate_end
-                    )
+                    _aggregate_refresh_end(grain, start, end)
                 ),
                 data_through_expression=data_through,
             )
         ),
         *usage_dimension_values_refresh_statements(schema),
-        f"delete from {staging}\nwhere batch_id in ({batch_ids});",
     ]
 
 
@@ -125,11 +140,11 @@ def merge_usage_events_for_batch_ids_sql(
     return _merge_usage_events_sql(schema, batch_predicate=f"batch_id in ({batch_ids})")
 
 
-def merge_usage_event_debug_for_batch_ids_sql(
+def merge_usage_event_performance_for_batch_ids_sql(
     batch_ids: str,
     schema: str = redshift_schema.WAREHOUSE_SCHEMA,
 ) -> str:
-    return _merge_usage_event_debug_sql(
+    return _merge_usage_event_performance_sql(
         schema, batch_predicate=f"batch_id in ({batch_ids})"
     )
 
@@ -208,18 +223,17 @@ when not matched then insert (
 );"""
 
 
-def _merge_usage_event_debug_sql(schema: str, *, batch_predicate: str) -> str:
-    target_table_name = "usage_event_debug"
+def _merge_usage_event_performance_sql(schema: str, *, batch_predicate: str) -> str:
+    target_table_name = redshift_schema.USAGE_EVENT_PERFORMANCE_TABLE_NAME
     target = redshift_schema.qualified_table_name(target_table_name, schema)
     source = _batch_source_sql(
         schema,
-        _DEBUG_COLUMNS,
+        _PERFORMANCE_COLUMNS,
         batch_predicate,
-        expressions={column: f"json_parse({column})" for column in _SUPER_JSON_COLUMNS},
     )
-    update_assignments = _merge_update_assignments(_DEBUG_COLUMNS)
-    insert_columns = _column_list(_DEBUG_COLUMNS)
-    insert_values = _source_column_list(_DEBUG_COLUMNS)
+    update_assignments = _merge_update_assignments(_PERFORMANCE_COLUMNS)
+    insert_columns = _column_list(_PERFORMANCE_COLUMNS)
+    insert_values = _source_column_list(_PERFORMANCE_COLUMNS)
     return f"""merge into {target}
 using (
 {source}
@@ -241,7 +255,9 @@ def _batch_source_sql(
     *,
     expressions: dict[str, str] | None = None,
 ) -> str:
-    staging = redshift_schema.qualified_table_name("usage_events_staging", schema)
+    staging = redshift_schema.qualified_table_name(
+        redshift_schema.USAGE_EVENTS_STAGING_TABLE_NAME, schema
+    )
     selected_columns = _select_column_list(
         columns, spaces=2, expressions=expressions or {}
     )
@@ -256,10 +272,12 @@ def _merge_update_assignments(columns: tuple[str, ...]) -> str:
     return ",\n".join(f"  {column} = source.{column}" for column in mutable_columns)
 
 
-def _json_string(value: object) -> str | None:
+def _json_bytes(value: object) -> bytes | None:
     if value is None:
         return None
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), default=str
+    ).encode()
 
 
 def _select_column_list(

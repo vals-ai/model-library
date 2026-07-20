@@ -54,6 +54,8 @@ if performance is not None:
 | Segment `duration_ms` | Derived segment duration in integer milliseconds |
 | Segment `events` | Raw normalized timing events for that segment |
 
+The typed Python model and the decompressed performance payload have this shape:
+
 ```json
 {
   "time_to_first_token_ms": {
@@ -86,6 +88,49 @@ if performance is not None:
   ]
 }
 ```
+
+### JSON serialization
+
+`QueryResultMetadata.model_dump(mode="json")` and Model Gateway responses encode a
+non-null `performance` value as a lossless gzip/base64 envelope:
+
+```json
+{
+  "performance": {
+    "encoding": "gzip+base64",
+    "data": "H4sI..."
+  }
+}
+```
+
+The envelope uses gzip compression level 1. Its decompressed bytes are the
+compact JSON representation shown above, including every event, timestamp,
+offset, and ordering. This is an application-level field encoding, not HTTP
+`Content-Encoding`.
+
+Model Library validation accepts both representations without implicitly
+changing either one. Historical uncompressed objects validate as
+`QueryResultPerformance`; compressed JSON validates as
+`CompressedQueryResultPerformance`. Gateway clients, metadata aggregation,
+usage-ledger storage, and Redshift storage retain the compressed envelope.
+
+A consumer must explicitly decompress the envelope when it needs the timeline:
+
+```python
+from model_library.base.output import (
+    CompressedQueryResultPerformance,
+    decompress_query_result_performance,
+)
+
+performance = result.metadata.performance
+if isinstance(performance, CompressedQueryResultPerformance):
+    performance = decompress_query_result_performance(performance)
+```
+
+The usage ledger preserves the envelope past its generic 64,000-character field
+bound. The complete event remains subject to the ledger's 300,000-byte message
+budget, DynamoDB's 400 KiB hard item limit, and the existing oversized-details
+fallback.
 
 ### Channels and events
 

@@ -12,16 +12,25 @@ import base64
 import logging
 from io import BytesIO
 
-from model_library.base import LLM, FileWithBase64, FileWithId, FileWithUrl, TextInput
+from model_library.base import (
+    LLM,
+    FileWithBase64,
+    FileWithBytes,
+    FileWithId,
+    FileWithUrl,
+    TextInput,
+)
 from model_library.base.output import QueryResult
 from model_library.registry_utils import get_registry_model
 
+from examples.data.audio import tone_wav
 from examples.data.files import secret_pdf
 from examples.data.images import red_image
-from examples.setup import console_log, setup, sync_model_metadata
+from examples.setup import console_log, setup
 
 IMAGE_MIME = "png"
 FILE_MIME = "application/pdf"
+AUDIO_MIME = "audio/wav"
 
 
 async def image_base64(
@@ -210,8 +219,44 @@ async def file_url(
         return None
 
 
+async def audio_bytes(
+    model: LLM,
+    *,
+    quiet: bool = False,
+    raise_errors: bool = False,
+    logger: logging.Logger | None = None,
+) -> QueryResult | None:
+    if not quiet:
+        console_log("\n--- Audio ---\n")
+
+    try:
+        result = await model.query(
+            [
+                TextInput(
+                    text="Is this audio speech or a musical tone? Answer in one short sentence."
+                ),
+                FileWithBytes(
+                    type="file",
+                    name="tone.wav",
+                    mime=AUDIO_MIME,
+                    data=tone_wav(),
+                ),
+            ],
+            logger=logger,
+        )
+        if not quiet:
+            console_log(result.output_text_str)
+        return result
+    except Exception as e:
+        if raise_errors:
+            raise
+        if not quiet:
+            console_log(f"Error: {e}")
+        return None
+
+
 async def main() -> None:
-    parser = argparse.ArgumentParser(description="Run image and file input demos")
+    parser = argparse.ArgumentParser(description="Run image, file, and audio demos")
     parser.add_argument(
         "model",
         nargs="?",
@@ -228,7 +273,6 @@ async def main() -> None:
 
     model = get_registry_model(args.model)
     model.instance_logger.info(model)
-    await sync_model_metadata(model)
 
     if model.supports_images:
         await image_base64(model)
@@ -247,6 +291,11 @@ async def main() -> None:
             await file_url(model)
     else:
         console_log("Skipping file demo: model does not support files", color="yellow")
+
+    if model.supports_audio:
+        await audio_bytes(model)
+    else:
+        console_log("Skipping audio demo: model does not support audio", color="yellow")
 
 
 if __name__ == "__main__":

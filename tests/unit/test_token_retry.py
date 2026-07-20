@@ -1292,7 +1292,7 @@ async def test_dispatched_removed_on_reentry(redis):
 
     async def capture_mid_pre(script, numkeys, *args):
         nonlocal removed_before_deduct
-        if numkeys == 2 and removed_before_deduct is None:
+        if numkeys == 3 and removed_before_deduct is None:
             removed_before_deduct = not await redis.sismember(
                 dispatched_key, "run-cycle:q-agent"
             )
@@ -1321,7 +1321,7 @@ async def test_dispatched_cycling_across_turns(redis):
 
         async def capture_mid_pre(script, numkeys, *args, _orig=original_eval):
             nonlocal removed_during_turn
-            if numkeys == 2 and removed_during_turn is None:
+            if numkeys == 3 and removed_during_turn is None:
                 removed_during_turn = not await redis.sismember(
                     dispatched_key, "q-agentic"
                 )

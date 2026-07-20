@@ -17,6 +17,7 @@ from model_gateway.usage_ledger.redshift_export import (
 
 
 def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
+    performance = b'{"encoding":"gzip+base64","data":"' + b"x" * 90_048 + b'"}'
     payload = parquet_bytes_from_rows(
         [
             {
@@ -25,27 +26,39 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
                 "completed_at": datetime(2026, 5, 29, 12, 1, tzinfo=UTC),
                 "completed_date": datetime(2026, 5, 29, tzinfo=UTC).date(),
                 "completed_hour": datetime(2026, 5, 29, 12),
+                "run_id": None,
+                "question_id": None,
+                "query_id": None,
+                "query_id_normalized": None,
                 "requested_model_key": "openai/gpt-4.1-mini",
                 "provider": "openai",
                 "provider_endpoint": "default",
-                "input_tokens": 100,
-                "output_tokens": 20,
-                "reasoning_tokens": 0,
-                "cache_read_tokens": 0,
-                "cache_write_tokens": 0,
-                "total_input_tokens": 100,
-                "total_output_tokens": 20,
+                "param_group": None,
+                "config_hash": None,
+                "benchmark_name": None,
+                "agent_name": None,
+                "identity_email": None,
+                "api_key_fingerprint": None,
+                "input_tokens": Decimal("100"),
+                "output_tokens": Decimal("20"),
+                "reasoning_tokens": Decimal("0"),
+                "cache_read_tokens": Decimal("0"),
+                "cache_write_tokens": Decimal("0"),
+                "total_input_tokens": Decimal("100"),
+                "total_output_tokens": Decimal("20"),
                 "duration_seconds": Decimal("1.000000"),
                 "cost_usd": Decimal("0.123456789012"),
-                "schema_version": 1,
-                "metadata_schema_version": 1,
+                "finish_reason": "stop",
+                "finish_reason_raw": None,
+                "schema_version": Decimal("2"),
+                "metadata_schema_version": Decimal("2"),
                 "normalization_version": "v1",
+                "usage_shard": None,
                 "source_pk": "pk",
                 "source_sk": "sk",
                 "loaded_at": datetime(2026, 5, 29, 12, 2, tzinfo=UTC),
-                "identity_json": '{"email":"user@example.com"}',
-                "performance_json": '{"timeline":[{"channel":"content"}]}',
-                "performance_json_truncated": False,
+                "performance": performance,
+                "performance_truncated": False,
             }
         ]
     )
@@ -56,14 +69,22 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
     )
     assert table.schema.field("run_id").type == pa.string()
     assert table.schema.field("schema_version").type == pa.int32()
+    assert table.schema.field("metadata_schema_version").type == pa.int32()
     assert table.schema.field("cost_usd").type == pa.decimal128(38, 12)
     assert table.schema.field("duration_seconds").type == pa.decimal128(18, 6)
-    assert table.schema.field("performance_json").type == pa.string()
+    assert table.schema.field("performance").type == pa.binary()
+    assert "payload" not in table.schema.names
+    assert "details" not in table.schema.names
     row = table.to_pylist()[0]
     assert row["usage_event_id"] == "usage-1"
     assert row["run_id"] is None
+    assert row["input_tokens"] == 100
+    assert row["schema_version"] == 2
+    assert row["metadata_schema_version"] == 2
     assert row["cost_usd"] == Decimal("0.123456789012")
-    assert row["performance_json_truncated"] is False
+    assert not row["performance_truncated"]
+    assert len(row["performance"]) > 65_535
+    assert row["performance"] == performance
 
 
 def test_window_and_artifact_identity_are_deterministic() -> None:

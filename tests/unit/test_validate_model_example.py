@@ -40,11 +40,15 @@ def _query_result(text: str) -> QueryResult:
 
 
 def _fake_model(
-    *, supports_files: bool = True, supports_images: bool = True
+    *,
+    supports_audio: bool = True,
+    supports_files: bool = True,
+    supports_images: bool = True,
 ) -> _FakeModel:
     return _FakeModel(
         supports_images=supports_images,
         supports_files=supports_files,
+        supports_audio=supports_audio,
         supports_tools=False,
         supports_reasoning=False,
         reasoning=False,
@@ -60,10 +64,19 @@ def _fake_model(
     )
 
 
-def _fake_llm(*, supports_files: bool = True, supports_images: bool = True) -> LLM:
+def _fake_llm(
+    *,
+    supports_audio: bool = True,
+    supports_files: bool = True,
+    supports_images: bool = True,
+) -> LLM:
     return cast(
         LLM,
-        _fake_model(supports_files=supports_files, supports_images=supports_images),
+        _fake_model(
+            supports_audio=supports_audio,
+            supports_files=supports_files,
+            supports_images=supports_images,
+        ),
     )
 
 
@@ -77,6 +90,7 @@ def test_validate_model_media_and_file_cases_require_semantic_answers() -> None:
         ("Files", "base64 transport"): "pineapple",
         ("Files", "upload-id transport"): "pineapple",
         ("Files", "URL transport"): "sample",
+        ("Audio", "bytes transport"): "tone",
     }
 
     for case_key, expected in semantic_expectations.items():
@@ -108,11 +122,17 @@ async def _erroring_file_probe() -> QueryResult:
 
 
 def test_validate_model_runs_all_capability_cases_when_not_declared() -> None:
-    cases = _build_cases(_fake_llm(supports_files=False, supports_images=False))
+    cases = _build_cases(
+        _fake_llm(
+            supports_audio=False,
+            supports_files=False,
+            supports_images=False,
+        )
+    )
 
     undeclared = [case for case in cases if case.expected == "not_declared"]
     sections = {case.section for case in undeclared}
-    assert {"Images", "Files", "Agent"} <= sections
+    assert {"Images", "Files", "Audio", "Agent"} <= sections
     for case in undeclared:
         assert case.declared is False
 

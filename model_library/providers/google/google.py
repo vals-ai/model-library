@@ -41,6 +41,7 @@ from model_library.base import (
     FileBase,
     FileInput,
     FileWithBase64,
+    FileWithBytes,
     FileWithId,
     FileWithUrl,
     FinishReasonInfo,
@@ -330,11 +331,14 @@ class GoogleModel(LLM):
                     mime_type=mime,
                     data=base64.b64decode(file.base64),
                 )
+            case FileWithBytes():
+                mime = f"image/{file.mime}" if file.type == "image" else file.mime
+                return Part.from_bytes(mime_type=mime, data=file.data)
             case FileWithId():
                 return Part.from_uri(file_uri=file.file_id, mime_type=file.mime)
             case FileWithUrl():
                 raise BadInputError(
-                    "Gemini does not support URL. Please fetch the image, convert it to bytes, and pass it as a FileWithBase64 object."
+                    "Gemini does not support URL. Please fetch the file, convert it to bytes, and pass it as a FileWithBase64 object."
                 )
 
     @override

@@ -1,9 +1,14 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import cast
+
+import pytest
+from pydantic import ValidationError
+
 from model_gateway.usage_ledger.dynamodb_writer import serialize_item
 from model_gateway.usage_ledger.redshift_export_job import (
     RedshiftExportJobConfig,
+    run_export_event,
     run_export_job,
 )
 
@@ -11,8 +16,10 @@ from model_gateway.usage_ledger.redshift_export_job import (
 class FakeDynamoDbClient:
     def __init__(self, items: list[dict[str, object]]) -> None:
         self.items = items
+        self.calls: list[dict[str, object]] = []
 
-    def query(self, **_kwargs: object) -> dict[str, object]:
+    def query(self, **kwargs: object) -> dict[str, object]:
+        self.calls.append(kwargs)
         return {"Items": [serialize_item(item) for item in self.items]}
 
 
@@ -59,10 +66,15 @@ def _raw_event() -> dict[str, object]:
         "model": "openai/gpt-4.1-mini",
         "provider": "openai",
         "provider_endpoint": "default",
+        "finish_reason": "stop",
+        "finish_reason_raw": "stop",
+        "details": {
+            "request": {},
+            "result": {"metadata": {"performance": None}},
+        },
         "completed_at": "2026-05-29T12:01:00Z",
         "usage_shard": "00",
-        "schema_version": 1,
-        "metadata_schema_version": 1,
+        "schema_version": 2,
         "normalization_version": "v1",
         "input_tokens": 100,
         "output_tokens": 20,
@@ -110,6 +122,79 @@ def test_export_job_runs_direct_window_load() -> None:
     )
     assert submission_sql[1].startswith("copy gateway_usage_dev.usage_events_staging")
     assert submission_sql[2].startswith("merge into gateway_usage_dev.usage_events")
+
+
+def test_explicit_backfill_event_replays_current_schema_separately() -> None:
+    dynamodb = FakeDynamoDbClient([_raw_event()])
+    s3 = FakeS3Client()
+    redshift = FakeRedshiftClient()
+
+    loaded = run_export_event(
+        {
+            "operation": "backfill",
+            "start": "2026-05-29T12:00:00Z",
+            "end": "2026-05-29T12:05:00Z",
+        },
+        config=_config(),
+        dynamodb_client=dynamodb,
+        s3_client=s3,
+        redshift_data_client=redshift,
+    )
+
+    assert loaded == {"loaded": True, "rows": 1}
+    expression_values = cast(
+        dict[str, dict[str, str]],
+        dynamodb.calls[0]["ExpressionAttributeValues"],
+    )
+    assert expression_values[":schema_version"] == {"N": "2"}
+    assert [put["Key"] for put in s3.puts] == [
+        "gateway-usage/dev/raw/backfill/"
+        "window=20260529T120000Z-20260529T120500Z/shard=00/part-000.parquet",
+        "gateway-usage/dev/raw/backfill/"
+        "window=20260529T120000Z-20260529T120500Z/manifest.json",
+    ]
+    prepare_sql = cast(list[str], redshift.submissions[0]["Sqls"])[0]
+    assert (
+        "batch_id in ('backfill-20260529T120000Z-20260529T120500Z-s00')" in prepare_sql
+    )
+
+
+def test_explicit_analytics_refresh_runs_once_for_complete_backfill_range() -> None:
+    redshift = FakeRedshiftClient()
+
+    result = run_export_event(
+        {
+            "operation": "refresh_analytics",
+            "start": "2026-05-29T12:00:00Z",
+            "end": "2026-05-30T12:00:00Z",
+        },
+        config=_config(),
+        dynamodb_client=FakeDynamoDbClient([]),
+        s3_client=FakeS3Client(),
+        redshift_data_client=redshift,
+    )
+
+    assert result == {"refreshed": True}
+    assert len(redshift.submissions) == 1
+    sql = "\n".join(cast(list[str], redshift.submissions[0]["Sqls"]))
+    assert sql.count("delete from gateway_usage_dev.usage_agg_") == 3
+    assert sql.count("insert into gateway_usage_dev.usage_agg_") == 3
+    assert "delete from gateway_usage_dev.usage_dimension_values;" in sql
+
+
+def test_backfill_event_rejects_fractional_second_boundaries() -> None:
+    with pytest.raises(ValidationError, match="whole-second"):
+        run_export_event(
+            {
+                "operation": "backfill",
+                "start": "2026-05-29T12:00:00.100000Z",
+                "end": "2026-05-29T12:05:00Z",
+            },
+            config=_config(),
+            dynamodb_client=FakeDynamoDbClient([]),
+            s3_client=FakeS3Client(),
+            redshift_data_client=FakeRedshiftClient(),
+        )
 
 
 def test_export_job_returns_immediately_for_empty_window() -> None:

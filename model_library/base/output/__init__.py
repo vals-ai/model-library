@@ -7,6 +7,8 @@ from model_library.base.output.performance import (
     QueryPerformanceTimelineEntry,
     QueryResultPerformance,
     QueryTimeToFirstToken,
+    CompressedQueryResultPerformance,
+    decompress_query_result_performance,
 )
 from model_library.base.output.result import (
     Citation,
@@ -27,6 +29,8 @@ __all__ = [
     "QueryTimeToFirstToken",
     "QueryPerformanceTimelineEntry",
     "QueryResultPerformance",
+    "CompressedQueryResultPerformance",
+    "decompress_query_result_performance",
     "FinishReason",
     "FinishReasonInfo",
     "Citation",

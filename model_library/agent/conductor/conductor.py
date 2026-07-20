@@ -278,7 +278,7 @@ class ConductorAgent:
 
         # Write result.json
         try:
-            (output_dir / "result.json").write_text(result.model_dump_json(indent=2))
+            (output_dir / "result.json").write_text(result.model_dump_json())
         except Exception:
             logger.exception("Failed to write result.json")
 

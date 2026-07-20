@@ -117,7 +117,7 @@ def _build_active_payload(
             _section_fields(
                 [
                     f"*Traffic*\n{candidate.total_current_request_count:,} reqs",
-                    f"*Cost / req*\n{_format_cost_per_request(candidate.total_current_cost_usd, candidate.total_current_request_count)}",
+                    f"*Cost / req*\n{_format_cost_per_request(candidate.total_current_cost_usd, candidate.total_current_eligible_request_count)}",
                 ]
             ),
             _section(f"*Window:* {_format_window(candidate)}"),
@@ -354,6 +354,7 @@ def _compact_contributors_text(contributors: tuple[AlertContributor, ...]) -> st
         return "No data"
     return "; ".join(
         f"{contributor.display_value} {_format_usd(contributor.current_cost_usd)}"
+        f"{' [Ignored]' if contributor.ignored_for_cost else ''}"
         for contributor in contributors
     )
 
@@ -363,10 +364,17 @@ def _contributors_text(
 ) -> str:
     lines: list[str] = []
     for index, contributor in enumerate(contributors, start=1):
-        lines.append(
+        prefix = (
             f"{index}. *{_escape_mrkdwn(contributor.display_value)}* — "
-            f"*{_format_usd(contributor.current_cost_usd)}* "
-            f"({_format_share(contributor.current_cost_usd, total_cost)}) · "
+            f"*{_format_usd(contributor.current_cost_usd)}*"
+        )
+        if contributor.ignored_for_cost:
+            lines.append(
+                f"{prefix} · {contributor.current_request_count:,} reqs [Ignored]"
+            )
+            continue
+        lines.append(
+            f"{prefix} ({_format_share(contributor.current_cost_usd, total_cost)}) · "
             f"{contributor.current_request_count:,} reqs"
         )
     return "\n".join(lines)

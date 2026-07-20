@@ -14,6 +14,11 @@ from model_gateway.usage_ledger.redshift_export_job import (
     write_export_window,
 )
 
+_COMPRESSED_PERFORMANCE = {
+    "encoding": "gzip+base64",
+    "data": "opaque",
+}
+
 
 class FakeDynamoDbClient:
     def __init__(self, pages: list[dict[str, object]]) -> None:
@@ -67,10 +72,15 @@ def _raw_event(
         "model": "openai/gpt-4.1-mini",
         "provider": "openai",
         "provider_endpoint": "default",
+        "finish_reason": "stop",
+        "finish_reason_raw": "stop",
+        "details": {
+            "request": {},
+            "result": {"metadata": {"performance": _COMPRESSED_PERFORMANCE}},
+        },
         "completed_at": completed_at,
         "usage_shard": shard,
-        "schema_version": 1,
-        "metadata_schema_version": 1,
+        "schema_version": 2,
         "normalization_version": "v1",
         "input_tokens": 100,
         "output_tokens": 20,
@@ -109,20 +119,19 @@ def test_config_from_env_uses_only_success_path_inputs(monkeypatch: Any) -> None
     )
 
 
-def test_extract_export_window_paginates_and_filters_items() -> None:
-    in_window = _raw_event()
-    non_usage = {**_raw_event(usage_event_id="metadata"), "entity_type": "metadata"}
-    after_window = _raw_event(
-        usage_event_id="late",
-        completed_at="2026-05-29T12:06:00Z",
+def test_extract_export_window_paginates_with_exclusive_upper_bound() -> None:
+    first = _raw_event()
+    second = _raw_event(
+        usage_event_id="usage-2",
+        completed_at="2026-05-29T12:02:00Z",
     )
     dynamodb = FakeDynamoDbClient(
         [
             {
-                "Items": [serialize_item(in_window), serialize_item(non_usage)],
+                "Items": [serialize_item(first)],
                 "LastEvaluatedKey": {"PK": {"S": "next"}},
             },
-            {"Items": [serialize_item(after_window)]},
+            {"Items": [serialize_item(second)]},
         ]
     )
     window = plan_logical_export_window(now=datetime(2026, 5, 29, 12, 5, tzinfo=UTC))
@@ -134,27 +143,68 @@ def test_extract_export_window_paginates_and_filters_items() -> None:
         loaded_at=datetime(2026, 5, 29, 12, 5, tzinfo=UTC),
     )
 
-    assert len(extracted.shards[0].rows) == 1
-    assert extracted.shards[0].rows[0]["usage_event_id"] == "usage-1"
+    assert [row["usage_event_id"] for row in extracted.shards[0].rows] == [
+        "usage-1",
+        "usage-2",
+    ]
     assert len(dynamodb.calls) == 2
     assert {call["TableName"] for call in dynamodb.calls} == {"usage-ledger"}
     assert {call["KeyConditionExpression"] for call in dynamodb.calls} == {
         "PK = :pk AND SK BETWEEN :start AND :end"
+    }
+    assert {call["FilterExpression"] for call in dynamodb.calls} == {
+        "schema_version = :schema_version"
     }
     assert {call["ConsistentRead"] for call in dynamodb.calls} == {True}
     assert [_expression_values(call) for call in dynamodb.calls] == [
         {
             ":pk": schema.usage_day_pk("20260529", 0),
             ":start": "TS#2026-05-29T11:30:00",
-            ":end": "TS#2026-05-29T12:05:00Z\uffff",
+            ":end": "TS#2026-05-29T12:05:00",
+            ":schema_version": schema.USAGE_EVENT_SCHEMA_VERSION,
         },
         {
             ":pk": schema.usage_day_pk("20260529", 0),
             ":start": "TS#2026-05-29T11:30:00",
-            ":end": "TS#2026-05-29T12:05:00Z\uffff",
+            ":end": "TS#2026-05-29T12:05:00",
+            ":schema_version": schema.USAGE_EVENT_SCHEMA_VERSION,
         },
     ]
     assert "ExclusiveStartKey" not in dynamodb.calls[0]
+    assert dynamodb.calls[1]["ExclusiveStartKey"] == {"PK": {"S": "next"}}
+    end_key = _expression_values(dynamodb.calls[0])[":end"]
+    boundary_event_key = _raw_event(completed_at="2026-05-29T12:05:00Z")["SK"]
+    fractional_boundary_event_key = _raw_event(
+        completed_at="2026-05-29T12:05:00.123456Z"
+    )["SK"]
+    assert isinstance(end_key, str)
+    assert isinstance(boundary_event_key, str)
+    assert isinstance(fractional_boundary_event_key, str)
+    assert boundary_event_key > end_key
+    assert fractional_boundary_event_key > end_key
+
+
+def test_extract_export_window_continues_after_empty_filtered_page() -> None:
+    dynamodb = FakeDynamoDbClient(
+        [
+            {
+                "Items": [],
+                "LastEvaluatedKey": {"PK": {"S": "next"}},
+            },
+            {"Items": [serialize_item(_raw_event())]},
+        ]
+    )
+    window = plan_logical_export_window(now=datetime(2026, 5, 29, 12, 5, tzinfo=UTC))
+
+    extracted = extract_export_window(
+        window,
+        config=_config(),
+        dynamodb_client=dynamodb,
+        loaded_at=datetime(2026, 5, 29, 12, 5, tzinfo=UTC),
+    )
+
+    assert [row["usage_event_id"] for row in extracted.shards[0].rows] == ["usage-1"]
+    assert len(dynamodb.calls) == 2
     assert dynamodb.calls[1]["ExclusiveStartKey"] == {"PK": {"S": "next"}}
 
 
@@ -215,8 +265,8 @@ def test_window_extraction_preserves_source_order_and_transform_output() -> None
     )
 
     assert [row["usage_event_id"] for row in extracted.shards[0].rows] == [
-        "earlier",
         "later",
+        "earlier",
     ]
     assert extracted.shards[0].rows[0]["batch_id"] == (
         "20260529T113000Z-20260529T120500Z-s00"
@@ -239,26 +289,33 @@ def test_cross_midnight_window_queries_each_day_for_each_shard() -> None:
     assert {call["KeyConditionExpression"] for call in dynamodb.calls} == {
         "PK = :pk AND SK BETWEEN :start AND :end"
     }
+    assert {call["FilterExpression"] for call in dynamodb.calls} == {
+        "schema_version = :schema_version"
+    }
     assert {call["ConsistentRead"] for call in dynamodb.calls} == {True}
     assert [_expression_values(call) for call in dynamodb.calls] == [
         {
             ":pk": schema.usage_day_pk("20260529", 0),
             ":start": "TS#2026-05-29T23:30:00",
-            ":end": "TS#2026-05-30T00:00:00Z\uffff",
+            ":end": "TS#2026-05-30T00:00:00",
+            ":schema_version": schema.USAGE_EVENT_SCHEMA_VERSION,
         },
         {
             ":pk": schema.usage_day_pk("20260530", 0),
             ":start": "TS#2026-05-30T00:00:00",
-            ":end": "TS#2026-05-30T00:05:00Z\uffff",
+            ":end": "TS#2026-05-30T00:05:00",
+            ":schema_version": schema.USAGE_EVENT_SCHEMA_VERSION,
         },
         {
             ":pk": schema.usage_day_pk("20260529", 1),
             ":start": "TS#2026-05-29T23:30:00",
-            ":end": "TS#2026-05-30T00:00:00Z\uffff",
+            ":end": "TS#2026-05-30T00:00:00",
+            ":schema_version": schema.USAGE_EVENT_SCHEMA_VERSION,
         },
         {
             ":pk": schema.usage_day_pk("20260530", 1),
             ":start": "TS#2026-05-30T00:00:00",
-            ":end": "TS#2026-05-30T00:05:00Z\uffff",
+            ":end": "TS#2026-05-30T00:05:00",
+            ":schema_version": schema.USAGE_EVENT_SCHEMA_VERSION,
         },
     ]

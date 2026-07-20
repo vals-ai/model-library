@@ -7,8 +7,8 @@ import importlib
 import logging
 from unittest.mock import AsyncMock, patch
 
-import fakeredis.aioredis
 import pytest
+from fakeredis import aioredis
 from model_library.retriers.token.benchmark_queue import (
     BENCHMARK_NOTIFY_CANCELLED,
     BENCHMARK_NOTIFY_PROCEED,
@@ -26,7 +26,7 @@ logger = logging.getLogger("test_benchmark_queue")
 
 @pytest.fixture
 def redis():
-    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    client = aioredis.FakeRedis(decode_responses=True)
     set_redis_client(client)
     return client
 
@@ -407,6 +407,7 @@ async def test_cancel_check_exits_after_clearing_stale_notification(redis):
 
     assert not executed
     assert await redis.llen(_queue_key()) == 0
+    assert await redis.llen(_notify_key("run-1")) == 0
 
 
 async def test_stale_cancelled_notification_is_cleared_when_not_cancelled(redis):
@@ -823,14 +824,14 @@ async def test_get_queue_status_during_run(redis):
     assert queue.length == 2
     assert queue.entries[0].run_id == "run-1"
     assert queue.entries[1].run_id == "run-2"
-    assert queue.entries[0].alive is True
-    assert queue.entries[1].alive is True
+    assert queue.entries[0].alive
+    assert queue.entries[1].alive
     assert queue.entries[0].heartbeat_ttl > 0
     assert queue.active_head_window == 1
     assert queue.active_heads == ["run-1"]
-    assert queue.entries[0].is_active_head is True
+    assert queue.entries[0].is_active_head
     assert queue.entries[0].display_state == "ACTIVE_HEAD"
-    assert queue.entries[1].is_active_head is False
+    assert not queue.entries[1].is_active_head
 
     holder_task.cancel()
     with pytest.raises(asyncio.CancelledError):
@@ -890,8 +891,8 @@ async def test_fast_status_classifies_popped_token_active_run(redis):
     assert queue is not None
     assert queue.entries[0].run_id == run_id
     assert queue.entries[0].display_state == "POPPED"
-    assert queue.entries[0].is_queued is True
-    assert queue.entries[0].popped is True
+    assert queue.entries[0].is_queued
+    assert queue.entries[0].popped
 
 
 async def test_get_queue_status_can_skip_historical_scan(redis):
@@ -948,7 +949,7 @@ async def test_get_queue_status_dead_entry(redis):
     assert queue is not None
     assert queue.length == 1
     assert queue.entries[0].run_id == "dead-run"
-    assert queue.entries[0].alive is False
+    assert not queue.entries[0].alive
     assert queue.entries[0].heartbeat_ttl == -1
 
 
@@ -1194,7 +1195,12 @@ async def test_reused_run_id_clears_stale_dispatched_and_lifecycle_fields(redis)
         assert "popped_at" not in meta
         assert "completed_at" not in meta
         assert meta["slot_acquired"] == "1"
-        assert float(meta["slot_acquired_at"]) > 3.0
+        try:
+            slot_acquired_at = float(meta["slot_acquired_at"])
+        except (TypeError, ValueError):
+            pytest.fail("slot_acquired_at must be a numeric Redis value")
+        else:
+            assert slot_acquired_at > 3.0
 
 
 @patch.object(bq_module, "EARLY_RELEASE_GRACE_PERIOD", 0)

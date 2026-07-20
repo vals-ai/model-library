@@ -22,6 +22,7 @@ gemini-3-models:
     supports:
       images: true
       files: true
+      audio: true
       videos: true
       tools: true
       batch: true
@@ -129,6 +130,7 @@ gemini-2.5-models:
     supports:
       images: true
       files: true
+      audio: true
       videos: true
       tools: true
       batch: true

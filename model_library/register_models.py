@@ -3,9 +3,10 @@ import json
 import pkgutil
 import threading
 from copy import deepcopy
-from datetime import date
+from datetime import date, timedelta
 from functools import cache
 from pathlib import Path
+from time import monotonic
 from urllib.parse import urljoin
 from typing import Any, Callable, Type, TypeVar, cast, get_type_hints
 
@@ -37,6 +38,7 @@ class Supports(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     images: bool | None = None
+    audio: bool | None = None
     videos: bool | None = None
     files: bool | None = None
     batch: bool | None = None
@@ -172,6 +174,12 @@ class BaseProviderProperties(BaseModel):
     """Static base class for dynamic ProviderProperties."""
 
 
+class GatewayProviderProperties(BaseProviderProperties):
+    """Raw provider metadata preserved by Gateway registry clients."""
+
+    model_config = ConfigDict(extra="allow")
+
+
 def all_subclasses(cls: type) -> list[type]:
     """Recursively find all subclasses of a class."""
     result: list[type] = []
@@ -258,11 +266,12 @@ ModelRegistry = dict[str, ModelConfig]
 
 def model_config_from_json(data: dict[str, Any]) -> ModelConfig:
     """Build a ModelConfig from a gateway registry JSON object."""
-    ProviderProperties = get_dynamic_provider_properties_model()
-    provider_properties = data.get("provider_properties", {})
+    provider_properties = data["provider_properties"]
     model = ModelConfig.model_validate_json(json.dumps(data))
     model.supports = model.supports.resolve()
-    model.provider_properties = ProviderProperties.model_validate(provider_properties)
+    model.provider_properties = GatewayProviderProperties.model_validate(
+        provider_properties
+    )
     return model
 
 
@@ -295,8 +304,8 @@ def _model_registry_from_gateway_payload(payload: object) -> ModelRegistry:
     }
 
 
-def _load_gateway_model_registry(gateway_url: str) -> ModelRegistry:
-    """Load the model registry from a gateway server."""
+def fetch_gateway_model_registry(gateway_url: str) -> ModelRegistry:
+    """Fetch and parse a model registry snapshot from Gateway."""
     registry_url, headers = _gateway_registry_request(gateway_url)
     logger.info("Loading model registry from gateway: %s", registry_url)
     with httpx.Client(timeout=GATEWAY_REGISTRY_TIMEOUT_SECONDS) as client:
@@ -438,19 +447,22 @@ def _register_models() -> ModelRegistry:
 
     sections = sorted(yaml_files, key=lambda x: "openai" in x.name.lower())
     for section in sections:
-        with open(section, "r") as file:
-            try:
+        try:
+            with section.open() as file:
                 model_blocks = cast(
                     dict[str, dict[str, dict[str, Any]]] | None, yaml.safe_load(file)
                 )
-            except yaml.YAMLError as e:
-                logger.error(f"Error loading {section}: {e}")
-                raise e
+        except OSError as error:
+            logger.error(f"Error reading {section}: {error}")
+            raise
+        except yaml.YAMLError as error:
+            logger.error(f"Error loading {section}: {error}")
+            raise
 
-            if not model_blocks:
-                continue
+        if not model_blocks:
+            continue
 
-            parse_yaml_blocks(model_blocks, registry)
+        parse_yaml_blocks(model_blocks, registry)
 
     return registry
 
@@ -500,7 +512,28 @@ def get_provider_registry() -> dict[str, type[LLM]]:
 
 
 _model_registry: ModelRegistry | None = None
+_model_registry_refreshed_at: float | None = None
 _model_registry_lock = threading.Lock()
+
+
+def _load_model_registry() -> ModelRegistry:
+    from model_library import model_library_settings as current_settings
+
+    gateway_url = current_settings.get("MODEL_GATEWAY_URL")
+    if gateway_url:
+        return fetch_gateway_model_registry(gateway_url)
+
+    get_provider_registry()
+    registry = _register_models()
+    custom_config = current_settings.get("MODEL_LIBRARY_CUSTOM_CONFIG")
+    if custom_config:
+        # Local import avoids a circular dependency:
+        # custom_register_models imports register_models helpers.
+        from model_library.custom_register_models import load_custom_model_configs
+
+        logger.info(f"Loading custom config from {custom_config}")
+        load_custom_model_configs(custom_config, registry=registry)
+    return registry
 
 
 def get_model_registry() -> ModelRegistry:
@@ -509,27 +542,51 @@ def get_model_registry() -> ModelRegistry:
     if _model_registry is None:
         with _model_registry_lock:
             if _model_registry is None:
-                # initialize provider registry
-                global get_provider_registry
-                get_provider_registry()
-
-                from model_library import model_library_settings as current_settings
-
-                gateway_url = current_settings.get("MODEL_GATEWAY_URL")
-                if gateway_url:
-                    registry = _load_gateway_model_registry(gateway_url)
-                else:
-                    registry = _register_models()
-
-                    custom_config = current_settings.get("MODEL_LIBRARY_CUSTOM_CONFIG")
-                    if custom_config:
-                        # Local import avoids a circular dependency:
-                        # custom_register_models imports register_models helpers.
-                        from model_library.custom_register_models import (
-                            load_custom_model_configs,
-                        )
-
-                        logger.info(f"Loading custom config from {custom_config}")
-                        load_custom_model_configs(custom_config, registry=registry)
-                _model_registry = registry
+                _model_registry = _load_model_registry()
     return _model_registry
+
+
+def refresh_model_registry(
+    *,
+    refresh_ttl: timedelta,
+    allow_stale_on_error: bool = False,
+) -> None:
+    """Refresh the shared model registry when its refresh TTL has expired."""
+    global _model_registry, _model_registry_refreshed_at
+
+    with _model_registry_lock:
+        now = monotonic()
+        current_registry = _model_registry
+        if (
+            current_registry is not None
+            and _model_registry_refreshed_at is not None
+            and now - _model_registry_refreshed_at < refresh_ttl.total_seconds()
+        ):
+            return
+
+        try:
+            registry = _load_model_registry()
+        except httpx.HTTPError as error:
+            refresh_error: Exception = error
+        except OSError as error:
+            refresh_error = error
+        except ValueError as error:
+            refresh_error = error
+        except yaml.YAMLError as error:
+            refresh_error = error
+        else:
+            _model_registry = registry
+            _model_registry_refreshed_at = monotonic()
+            return
+
+        if (
+            not allow_stale_on_error
+            or current_registry is None
+            or _model_registry_refreshed_at is None
+        ):
+            raise refresh_error
+        logger.warning(
+            "Failed to refresh model registry; using last known good snapshot",
+            exc_info=refresh_error,
+        )
+        _model_registry_refreshed_at = monotonic()

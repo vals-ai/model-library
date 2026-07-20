@@ -1,16 +1,28 @@
+import base64
 import json
-from collections.abc import Generator, Sequence
+from collections.abc import Sequence
 from typing import Annotated, Any, Literal, cast
 
-from typing_extensions import TypeAlias
+from typing_extensions import TypeAlias, override
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field, field_serializer, field_validator
 
-from model_library.utils import ValsModel
+from model_library.utils import ValsModel, content_length, content_preview
 
 """
 --- FILES ---
 """
+
+
+def _sanitize_content_field(
+    field: str,
+    value: object,
+    *,
+    show_content: bool,
+) -> dict[str, object]:
+    if show_content:
+        return {field: content_preview(value)}
+    return {f"{field}_length": content_length(value)}
 
 
 class FileBase(ValsModel):
@@ -19,33 +31,81 @@ class FileBase(ValsModel):
     name: str
     mime: str
 
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            "kind": self.kind,
+            "type": self.type,
+            "name": self.name,
+            "mime": self.mime,
+        }
+
 
 class FileWithBase64(FileBase):
     append_type: Literal["base64"] = "base64"
     base64: str
 
-    def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
-        # Elide the raw base64 payload — it can be megabytes and pollutes
-        # any rendered transcript (e.g. compaction prompts, debug logs).
-        yield "type", self.type
-        yield "name", self.name
-        yield "mime", self.mime
-        yield "append_type", self.append_type
-        yield "base64", f"<{len(self.base64)} chars>"
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            **super().sanitize_content(show_content=show_content),
+            "append_type": self.append_type,
+            "base64_length": content_length(self.base64),
+        }
+
+
+class FileWithBytes(FileBase):
+    append_type: Literal["bytes"] = "bytes"
+    data: bytes
+
+    @field_validator("data", mode="before")
+    @classmethod
+    def deserialize_data(cls, value: object) -> object:
+        if isinstance(value, str):
+            return base64.b64decode(value)
+        return value
+
+    @field_serializer("data")
+    def serialize_data(self, value: bytes) -> str:
+        return base64.b64encode(value).decode("ascii")
+
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            **super().sanitize_content(show_content=show_content),
+            "append_type": self.append_type,
+            "data_length": len(self.data),
+        }
 
 
 class FileWithUrl(FileBase):
     append_type: Literal["url"] = "url"
     url: str
 
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            **super().sanitize_content(show_content=show_content),
+            "append_type": self.append_type,
+            **_sanitize_content_field("url", self.url, show_content=show_content),
+        }
+
 
 class FileWithId(FileBase):
     append_type: Literal["file_id"] = "file_id"
     file_id: str
 
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            **super().sanitize_content(show_content=show_content),
+            "append_type": self.append_type,
+            "file_id": self.file_id,
+        }
+
 
 FileInput = Annotated[
-    FileWithBase64 | FileWithUrl | FileWithId,
+    FileWithBase64 | FileWithBytes | FileWithUrl | FileWithId,
     Field(discriminator="append_type"),
 ]
 
@@ -71,6 +131,15 @@ class ToolDefinition(ValsModel):
     name: str  # acts as a key
     body: ToolBody | Any
 
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        summary: dict[str, object] = {"name": self.name}
+        if show_content:
+            summary["body"] = content_preview(self.body)
+        else:
+            summary["body_length"] = content_length(self.body)
+        return summary
+
 
 class ToolCall(ValsModel):
     id: str
@@ -79,6 +148,17 @@ class ToolCall(ValsModel):
     args: dict[str, Any] | str
     code_mode_id: str | None = None
     sequence: int | None = None
+
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        data = cast(
+            dict[str, object],
+            self.model_dump(mode="json", exclude={"args", "parsed_args"}),
+        )
+        data.update(
+            _sanitize_content_field("args", self.args, show_content=show_content)
+        )
+        return data
 
     @computed_field
     @property
@@ -103,11 +183,27 @@ class ToolCall(ValsModel):
 class ToolInput(ValsModel):
     tools: list[ToolDefinition] = []
 
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            "tools": [
+                tool.sanitize_content(show_content=show_content) for tool in self.tools
+            ]
+        }
+
 
 class ToolResult(ValsModel):
     kind: Literal["tool_result"] = "tool_result"
     tool_call: ToolCall
     result: Any
+
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            "kind": self.kind,
+            "tool_call": self.tool_call.sanitize_content(show_content=show_content),
+            **_sanitize_content_field("result", self.result, show_content=show_content),
+        }
 
 
 class SystemInput(ValsModel):
@@ -116,10 +212,24 @@ class SystemInput(ValsModel):
     kind: Literal["system"] = "system"
     text: str
 
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            "kind": self.kind,
+            **_sanitize_content_field("text", self.text, show_content=show_content),
+        }
+
 
 class TextInput(ValsModel):
     kind: Literal["text"] = "text"
     text: str
+
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            "kind": self.kind,
+            **_sanitize_content_field("text", self.text, show_content=show_content),
+        }
 
 
 class RawResponse(ValsModel):
@@ -127,11 +237,25 @@ class RawResponse(ValsModel):
     # used to store a received response
     response: Any
 
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            "kind": self.kind,
+            **_sanitize_content_field("response", self.response, show_content=False),
+        }
+
 
 class RawInput(ValsModel):
     kind: Literal["raw_input"] = "raw_input"
     # used to pass in anything provider specific (e.g. a mock conversation)
     input: Any
+
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            "kind": self.kind,
+            **_sanitize_content_field("input", self.input, show_content=False),
+        }
 
 
 InputItem = Annotated[

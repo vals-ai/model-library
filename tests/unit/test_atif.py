@@ -1,6 +1,7 @@
 # tests/unit/test_atif.py
 import json
 from collections.abc import Sequence
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
@@ -40,6 +41,13 @@ from model_library.base.output import (
     QueryResultCost,
     QueryResultMetadata,
 )
+
+
+def _load_json(value: str) -> Any:
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(f"Expected valid JSON: {exc}") from exc
 
 
 @pytest.mark.unit
@@ -180,11 +188,13 @@ class TestAgentResultToATIF:
         assert trajectory.agent.model_name == "openai/gpt-4"
 
         # step 1: user, step 2: agent
+        expected_question = "What is 2+2?"
+        expected_answer = "The answer is 4."
         assert len(trajectory.steps) == 2
         assert trajectory.steps[0].source == "user"
-        assert trajectory.steps[0].message == "What is 2+2?"
+        assert trajectory.steps[0].message == expected_question
         assert trajectory.steps[1].source == "agent"
-        assert trajectory.steps[1].message == "The answer is 4."
+        assert trajectory.steps[1].message == expected_answer
         assert trajectory.steps[1].metrics is not None
         assert trajectory.steps[1].metrics.prompt_tokens == 10
         assert trajectory.steps[1].metrics.completion_tokens == 5
@@ -252,7 +262,8 @@ class TestAgentResultToATIF:
         assert trajectory.steps[1].observation is not None
         assert trajectory.steps[1].observation.results[0].content == "Found results"
         assert trajectory.steps[2].source == "agent"
-        assert trajectory.steps[2].message == "The answer is X."
+        expected_answer = "The answer is X."
+        assert trajectory.steps[2].message == expected_answer
 
     def test_error_turn(self):
         """ErrorTurn becomes a system step with error in extra."""
@@ -373,7 +384,8 @@ class TestAgentResultToATIF:
         assert trajectory.steps[0].source == "system"
         assert trajectory.steps[0].message == "Be concise."
         assert trajectory.steps[1].source == "user"
-        assert trajectory.steps[1].message == "What is AI?"
+        expected_question = "What is AI?"
+        assert trajectory.steps[1].message == expected_question
 
     def test_to_json_dict_roundtrip(self):
         """to_json_dict produces valid JSON-serializable dict."""
@@ -392,7 +404,7 @@ class TestAgentResultToATIF:
 
         d = trajectory.to_json_dict()
         json_str = json.dumps(d)
-        parsed = json.loads(json_str)
+        parsed = _load_json(json_str)
         assert parsed["schema_version"] == "ATIF-v1.6"
         assert len(parsed["steps"]) == 2
 
@@ -443,13 +455,12 @@ class TestAgentATIFExport:
         atif_path = result.output_dir / "trajectory_atif.json"
         assert atif_path.exists()
 
-        data = json.loads(atif_path.read_text())
+        data = _load_json(atif_path.read_text())
         assert data["schema_version"] == "ATIF-v1.6"
         assert data["agent"]["model_name"] == "openai/gpt-4"
         assert len(data["steps"]) >= 2  # user + agent
 
-    async def test_atif_file_written_after_gateway_metadata_sync(self, tmp_path):
-        """Agent.run() syncs GatewayLLM metadata before ATIF export reads it."""
+    async def test_atif_file_written_with_gateway_model(self, tmp_path):
         llm = GatewayLLM("gpt-4o-mini", "openai")
         llm.query = AsyncMock(
             return_value=QueryResult(
@@ -463,10 +474,6 @@ class TestAgentATIFExport:
             )
         )
 
-        async def sync_metadata() -> None:
-            object.__setattr__(llm, "_gateway_metadata_loaded", True)
-
-        llm.sync_model_metadata = AsyncMock(side_effect=sync_metadata)
         agent = Agent(
             llm=llm,
             tools=[DoneTool()],
@@ -481,10 +488,9 @@ class TestAgentATIFExport:
             atif_export=True,
         )
 
-        llm.sync_model_metadata.assert_awaited_once()
         atif_path = result.output_dir / "trajectory_atif.json"
         assert atif_path.exists()
-        data = json.loads(atif_path.read_text())
+        data = _load_json(atif_path.read_text())
         assert data["agent"]["model_name"] == "gpt-4o-mini"
 
     async def test_atif_not_written_by_default(self, tmp_path):

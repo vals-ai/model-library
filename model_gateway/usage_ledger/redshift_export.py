@@ -5,7 +5,6 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 import json
 from typing import Any, cast
 
@@ -58,17 +57,8 @@ def _redshift_staging_arrow_schema() -> Any:
             ("source_pk", pyarrow.string()),
             ("source_sk", pyarrow.string()),
             ("loaded_at", pyarrow.timestamp("us", tz="UTC")),
-            ("identity_json", pyarrow.string()),
-            ("provider_request_id", pyarrow.string()),
-            ("provider_response_id", pyarrow.string()),
-            ("config_redacted_json", pyarrow.string()),
-            ("metadata_json", pyarrow.string()),
-            ("finish_reason_json", pyarrow.string()),
-            ("performance_json", pyarrow.string()),
-            ("config_redacted_json_truncated", pyarrow.bool_()),
-            ("metadata_json_truncated", pyarrow.bool_()),
-            ("finish_reason_json_truncated", pyarrow.bool_()),
-            ("performance_json_truncated", pyarrow.bool_()),
+            ("performance", pyarrow.binary()),
+            ("performance_truncated", pyarrow.bool_()),
         ]
     )
     return pyarrow.schema(
@@ -82,7 +72,7 @@ def _redshift_staging_arrow_schema() -> Any:
 _REDSHIFT_STAGING_ARROW_SCHEMA: Any = _redshift_staging_arrow_schema()
 
 
-_EXPORT_WINDOW_MINUTES = 35
+EXPORT_WINDOW_MINUTES = 35
 
 
 @dataclass(frozen=True)
@@ -101,18 +91,32 @@ def floor_export_boundary(value: datetime, *, minutes: int = 5) -> datetime:
     )
 
 
-def plan_logical_export_window(*, now: datetime) -> LogicalExportWindow:
-    end = floor_export_boundary(now)
-    start = end - timedelta(minutes=_EXPORT_WINDOW_MINUTES)
+def logical_export_window(*, start: datetime, end: datetime) -> LogicalExportWindow:
+    start_utc = _normalize_datetime(start)
+    end_utc = _normalize_datetime(end)
     return LogicalExportWindow(
-        start=start,
-        end=end,
-        logical_window_id=f"{_timestamp_id(start)}-{_timestamp_id(end)}",
+        start=start_utc,
+        end=end_utc,
+        logical_window_id=f"{_timestamp_id(start_utc)}-{_timestamp_id(end_utc)}",
     )
 
 
-def export_batch_id(window: LogicalExportWindow, *, shard: int) -> str:
-    return f"{window.logical_window_id}-s{ledger_schema.format_shard(shard)}"
+def plan_logical_export_window(*, now: datetime) -> LogicalExportWindow:
+    end = floor_export_boundary(now)
+    return logical_export_window(
+        start=end - timedelta(minutes=EXPORT_WINDOW_MINUTES),
+        end=end,
+    )
+
+
+def export_batch_id(
+    window: LogicalExportWindow,
+    *,
+    shard: int,
+    namespace: str | None = None,
+) -> str:
+    prefix = f"{namespace}-" if namespace is not None else ""
+    return f"{prefix}{window.logical_window_id}-s{ledger_schema.format_shard(shard)}"
 
 
 def export_data_key(
@@ -143,12 +147,7 @@ def parquet_bytes_from_rows(rows: Sequence[Mapping[str, object]]) -> bytes:
 
 
 def _arrow_staging_row(row: Mapping[str, object]) -> dict[str, object]:
-    normalized = {column: row.get(column) for column in _REDSHIFT_STAGING_COLUMN_NAMES}
-    for decimal_column in ("duration_seconds", "cost_usd"):
-        value = normalized[decimal_column]
-        if value is not None and not isinstance(value, Decimal):
-            normalized[decimal_column] = Decimal(str(value))
-    return normalized
+    return {column: row[column] for column in _REDSHIFT_STAGING_COLUMN_NAMES}
 
 
 def build_manifest_json(entries: Sequence[tuple[str, int]]) -> str:
@@ -172,6 +171,4 @@ def _timestamp_id(value: datetime) -> str:
 
 
 def _normalize_datetime(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)

@@ -1,12 +1,18 @@
+import base64
+import gzip
+from unittest.mock import patch
+
 import pytest
 from pydantic import ValidationError
 
 from model_library.base import (
     QueryPerformanceEvent,
     QueryResultCost,
+    decompress_query_result_performance,
     QueryResultMetadata,
     QueryResultPerformance,
     QueryPerformanceTimelineEntry,
+    CompressedQueryResultPerformance,
 )
 from model_library.base.output.result import (
     QueryResultExtras,
@@ -15,7 +21,7 @@ from model_library.base.output.result import (
 
 def _require_performance(metadata: QueryResultMetadata) -> QueryResultPerformance:
     performance = metadata.performance
-    assert performance is not None
+    assert isinstance(performance, QueryResultPerformance)
     return performance
 
 
@@ -532,6 +538,89 @@ class TestQueryResultPerformance:
         assert _require_performance(reparsed).timeline[0].duration_ms == 100
         assert _require_performance(reparsed).time_to_first_token_ms.content == 120
 
+    async def test_performance_metadata_json_uses_lossless_gzip_envelope(self):
+        performance = _content_performance()
+        metadata = QueryResultMetadata(performance=performance)
+
+        python_dump = metadata.model_dump()
+        with patch(
+            "model_library.base.output.performance.gzip.compress",
+            wraps=gzip.compress,
+        ) as compress:
+            json_dump = metadata.model_dump(mode="json")
+
+        compress.assert_called_once_with(
+            performance.model_dump_json().encode(), compresslevel=1, mtime=0
+        )
+        assert python_dump["performance"] == performance.model_dump()
+        envelope = json_dump["performance"]
+        assert envelope["encoding"] == "gzip+base64"
+        compressed = base64.b64decode(envelope["data"], validate=True)
+        assert gzip.decompress(compressed) == performance.model_dump_json().encode()
+
+        reparsed = QueryResultMetadata.model_validate(json_dump)
+        assert isinstance(reparsed.performance, CompressedQueryResultPerformance)
+        assert reparsed.performance.model_dump(mode="json") == envelope
+
+        with patch(
+            "model_library.base.output.performance.gzip.compress",
+            wraps=gzip.compress,
+        ) as recompress:
+            retransmitted = reparsed.model_dump(mode="json")
+
+        recompress.assert_not_called()
+        assert retransmitted["performance"] == envelope
+
+        assert decompress_query_result_performance(reparsed.performance) == performance
+
+    async def test_performance_metadata_accepts_legacy_uncompressed_json(self):
+        performance = _content_performance()
+
+        metadata = QueryResultMetadata.model_validate(
+            {"performance": performance.model_dump(mode="json")}
+        )
+
+        assert metadata.performance == performance
+
+    async def test_performance_metadata_json_schemas_match_each_wire_direction(self):
+        validation_schema = QueryResultMetadata.model_json_schema(mode="validation")
+        serialization_schema = QueryResultMetadata.model_json_schema(
+            mode="serialization"
+        )
+
+        validation_refs = {
+            option.get("$ref")
+            for option in validation_schema["properties"]["performance"]["anyOf"]
+        }
+        serialization_refs = {
+            option.get("$ref")
+            for option in serialization_schema["properties"]["performance"]["anyOf"]
+        }
+        assert "#/$defs/QueryResultPerformance" in validation_refs
+        assert "#/$defs/CompressedQueryResultPerformance" in validation_refs
+        assert "#/$defs/CompressedQueryResultPerformance" in serialization_refs
+
+    @pytest.mark.parametrize(
+        "data",
+        [
+            "not-base64!",
+            base64.b64encode(b"not gzip").decode("ascii"),
+        ],
+    )
+    async def test_performance_metadata_does_not_inspect_compressed_data(
+        self, data: str
+    ):
+        metadata = QueryResultMetadata.model_validate(
+            {
+                "performance": {
+                    "encoding": "gzip+base64",
+                    "data": data,
+                }
+            }
+        )
+        assert isinstance(metadata.performance, CompressedQueryResultPerformance)
+        assert metadata.performance.data == data
+
     async def test_timeline_timing_fields_are_derived_from_events(self):
         entry = QueryPerformanceTimelineEntry(
             channel="content",
@@ -742,6 +831,23 @@ class TestQueryResultMetadataAddition:
         assert result.in_tokens == 300
         assert result.out_tokens == 150
         assert result.extra == {}
+
+    async def test_add_metadata_drops_compressed_per_query_performance(self):
+        metadata = QueryResultMetadata.model_validate(
+            {
+                "in_tokens": 100,
+                "performance": {
+                    "encoding": "gzip+base64",
+                    "data": "not-decompressed-during-aggregation",
+                },
+            }
+        )
+
+        result = metadata + QueryResultMetadata(in_tokens=200)
+
+        assert isinstance(metadata.performance, CompressedQueryResultPerformance)
+        assert result.in_tokens == 300
+        assert result.performance is None
 
     async def test_add_metadata_default_duration(self):
         meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50, duration_seconds=None)

@@ -113,8 +113,21 @@ ellipsis.
 - The handler polls submitted Data API statements until they finish and surfaces
   Redshift `FAILED` or `ABORTED` outcomes. It does not defer work or cancel
   statements.
-- Each rule uses `max(data_through_utc)` from its aggregate table as the
-  evaluation watermark.
+- Each rule uses `max(data_through_utc)` across all rows in its aggregate table
+  as the evaluation watermark.
+- Comparison and breakdown queries include every model's request activity, but
+  treat cost as zero for model keys whose current generated registry metadata
+  sets `ignored_for_cost: true`. Registry changes therefore reclassify alert
+  cost in existing evaluated windows without changing stored usage events,
+  aggregate rows, request counts, or source costs. Historical model keys absent
+  from the current active registry are not masked.
+- Slack Traffic includes every request in the evaluated alert scope. Cost per
+  request divides policy-eligible cost by policy-eligible requests, excluding
+  ignored-model requests from that denominator.
+- Top-model breakdowns rank every model by actual cost. Ignored models stay in
+  their normal rank with actual cost and requests shown, append `[Ignored]`,
+  and omit the percentage share because their cost is excluded from the alert
+  total. Other breakdown dimensions continue to rank policy-eligible cost.
 - Alert scheduling is independent of usage-export scheduling.
 - `1h` detects sustained spend.
 - `1d` follows the current Pacific-time calendar day, including 23- or 25-hour

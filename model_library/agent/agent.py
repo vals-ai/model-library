@@ -9,7 +9,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, computed_field
+from pydantic import Field, computed_field  # pyright: ignore[reportMissingImports]
 from rich.pretty import pretty_repr
 
 from model_library.agent.config import AgentConfig, TimeLimit, TurnLimit
@@ -296,7 +296,6 @@ class Agent:
             .getChild(f"<question={question_id}>")
         )
         question_logger.setLevel(logging.DEBUG)
-        await self._llm.ensure_metadata_loaded()
         if (
             self._config.history_compaction is not None
             and self._hooks.compaction is None
@@ -761,7 +760,7 @@ class Agent:
 
         try:
             result_path = output_dir / "result.json"
-            result_path.write_text(result.model_dump_json(indent=2))
+            result_path.write_text(result.model_dump_json())
         except Exception:
             logger.exception("Failed to serialize result")
 

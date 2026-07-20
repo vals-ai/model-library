@@ -1,0 +1,402 @@
+base-config:
+  company: zAI
+  open_source: true
+  documentation_url: https://docs.z.ai/
+  supports:
+    images: false
+    files: false
+    temperature: true
+    tools: true
+  properties:
+    reasoning_model: true
+  default_parameters:
+    temperature: 0.6
+    top_p: 1
+  costs_per_million_token:
+    cache:
+      read_discount: 1
+      write_markup: 1
+
+
+deprecated:
+  base-config:
+    metadata:
+      deprecated: true
+
+  zai/glm-4.6:
+    company: zAI
+    label: GLM 4.6
+    release_date: 2025-09-30
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    properties:
+      context_window: 200000
+      max_tokens: 122880
+      reasoning_model: true
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.6
+      output: 2.2
+      cache:
+        read: 0.11
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys:
+    - fireworks/glm-4p6:
+        metadata:
+          deprecated: true
+        costs_per_million_token:
+          input: 0.55
+          output: 2.19
+    default_parameters:
+      temperature: 0.6
+      top_p: 1.0
+    provider_endpoint: glm-4.6
+
+  zai/glm-4.5-air:
+    company: zAI
+    label: GLM 4.5 Air
+    release_date: 2025-07-28
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    properties:
+      context_window: 128000
+      max_tokens: 81920
+      reasoning_model: true
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.2
+      output: 1.1
+      cache:
+        read: 0.03
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys:
+    - together/zai-org/GLM-4.5-Air-FP8:
+        metadata:
+          deprecated: true
+        costs_per_million_token:
+          input: 0.22
+          output: 0.88
+    default_parameters:
+      temperature: 0.6
+      top_p: 1.0
+    provider_endpoint: glm-4.5-air
+
+  zai/glm-4.5:
+    company: zAI
+    label: GLM 4.5
+    release_date: 2025-07-28
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    properties:
+      context_window: 128000
+      max_tokens: 81920
+      reasoning_model: true
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.6
+      output: 2.2
+      cache:
+        read: 0.11
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys:
+    - fireworks/glm-4p5:
+        metadata:
+          deprecated: true
+        costs_per_million_token:
+          input: 0.55
+          output: 2.19
+    default_parameters:
+      temperature: 0.6
+      top_p: 1.0
+    provider_endpoint: glm-4.5
+
+  zai/glm-4.7:
+    company: zAI
+    label: GLM 4.7
+    release_date: 2025-12-22
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    properties:
+      context_window: 200000
+      max_tokens: 128000
+      reasoning_model: true
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.6
+      output: 2.2
+      cache:
+        read: 0.11
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys:
+    - vercel/zai/glm-4.7
+    default_parameters:
+      temperature: 1.0
+      top_p: 1.0
+    provider_endpoint: glm-4.7
+
+  zai/glm-4.7-flashx:
+    company: zAI
+    label: GLM 4.7 Flash
+    release_date: 2026-01-19
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    properties:
+      context_window: 200000
+      max_tokens: 128000
+      reasoning_model: true
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    provider_properties:
+      clear_thinking: false
+    costs_per_million_token:
+      input: 0.07
+      output: 0.4
+      cache:
+        read: 0.01
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    provider_endpoint: glm-4.7-flashx
+
+  zai/glm-5-turbo:
+    company: zAI
+    label: GLM 5 Turbo
+    release_date: 2026-03-15
+    open_source: false
+    documentation_url: https://docs.z.ai/
+    properties:
+      context_window: 200000
+      max_tokens: 128000
+      reasoning_model: true
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 1.2
+      output: 4.0
+      cache:
+        read: 0.24
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys:
+    - zai/glm-5-turbo-thinking:
+        properties:
+          reasoning_model: true
+        provider_properties:
+          clear_thinking: false
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    provider_endpoint: glm-5-turbo
+
+  zai/glm-5:
+    company: zAI
+    label: GLM 5
+    release_date: 2026-02-11
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    properties:
+      context_window: 200000
+      max_tokens: 131072
+      reasoning_model: false
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 1.0
+      output: 3.2
+      cache:
+        read: 0.2
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys:
+    - zai/glm-5-thinking:
+        properties:
+          reasoning_model: true
+        provider_properties:
+          clear_thinking: false
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    provider_endpoint: glm-5
+
+  zai/glm-5.1:
+    company: zAI
+    label: GLM 5.1
+    release_date: 2026-04-01
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    properties:
+      context_window: 200000
+      max_tokens: 131072
+      reasoning_model: false
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 1.0
+      output: 3.2
+      cache:
+        read: 0.2
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys:
+    - zai/glm-5.1-thinking:
+        properties:
+          reasoning_model: true
+        provider_properties:
+          clear_thinking: false
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    provider_endpoint: glm-5.1
+
+  zai/glm-5.2:
+    company: zAI
+    label: GLM 5.2
+    release_date: 2026-06-13
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    properties:
+      context_window: 1000000
+      max_tokens: 131072
+      reasoning_model: true
+    supports:
+      images: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    provider_properties:
+      clear_thinking: false
+    costs_per_million_token:
+      input: 1.4
+      output: 4.4
+      cache:
+        read: 0.26
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys:
+    - zai/glm-5.2-high:
+        default_parameters:
+          reasoning_effort: high
+    - zai/glm-5.2-max-tokens-48k-top-p-1:
+        default_parameters:
+          temperature: 1
+          top_p: 1.0
+          max_tokens: 48000
+          reasoning_effort: max
+    - zai/glm-5.2-max-tokens-64k-top-p-1:
+        default_parameters:
+          temperature: 1
+          top_p: 1.0
+          max_tokens: 64000
+          reasoning_effort: max
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+      reasoning_effort: max
+    provider_endpoint: glm-5.2

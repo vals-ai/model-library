@@ -14,14 +14,14 @@ from pathlib import Path
 from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
-import fakeredis.aioredis
+import fakeredis.aioredis  # pyright: ignore[reportMissingImports]
 import pytest
 
 from model_library.agent import Agent, AgentConfig, Tool, ToolOutput
 from model_library.base.input import TextInput, ToolCall
 from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
 from model_library.base import LLM
-from model_library.base.base import TokenRetryParams
+from model_library.base.base import ResolvedTokenRetryParams, TokenRetryParams
 from model_library.retriers.token import TokenRetrier, set_redis_client
 from model_library.retriers.token.utils import KEY_PREFIX
 from model_library.utils import run_logging
@@ -72,7 +72,6 @@ def _make_qr(text: str = "ok") -> QueryResult:
 def _mock_llm(*responses: QueryResult | Exception) -> MagicMock:
     llm = MagicMock()
     llm.query = AsyncMock(side_effect=list(responses))
-    llm.ensure_metadata_loaded = AsyncMock(return_value=None)
     llm.model_name = "test-model"
     llm.run_id = "default-run-id"
     return llm
@@ -157,7 +156,9 @@ async def test_token_retry_telemetry_uses_original_question_id(redis):
     assert tokens_deducted["retry_queue.question_ref"] == "run-a:question-a"
 
 
-async def _query_identity_attrs(settings: _Settings, **kwargs: object) -> dict[str, object | None]:
+async def _query_identity_attrs(
+    settings: _Settings, **kwargs: object
+) -> dict[str, object | None]:
     MockLLM = _make_mock_llm_class()
     llm = MockLLM("gpt-4o", "openai")
     llm._query_impl = AsyncMock(return_value=QueryResult(output_text="ok"))  # pyright: ignore[reportPrivateUsage]
@@ -170,7 +171,7 @@ async def _query_identity_attrs(settings: _Settings, **kwargs: object) -> dict[s
         patch("model_library.model_library_settings", settings),
         patch("model_library.base.base.telemetry.set_attributes", fake_set_attributes),
     ):
-        await llm.query("hello", **kwargs)
+        await llm.query("hello", **cast(dict[str, Any], kwargs))
 
     return next(attrs for attrs in attrs_seen if "model.provider" in attrs)
 
@@ -308,24 +309,23 @@ async def test_llm_query_records_provider_query_span():
     provider_spans = [
         span for span in spans if span[0] == "model_library.provider_query"
     ]
-    assert provider_spans == [
-        (
-            "model_library.provider_query",
-            {
-                "run_id": "run-a",
-                "question_id": "q1",
-                "query_id": "query-a",
-                "model.provider": "openai",
-                "model.name": "gpt-4o",
-                "model.registry_key": None,
-                "llm.in_agent": False,
-                "llm.in_agent.mode": "disabled",
-                "llm.output_schema.mode": "disabled",
-                "retry_queue.mode": "disabled",
-            },
-            "client",
-        )
-    ]
+    expected_span = (
+        "model_library.provider_query",
+        {
+            "run_id": "run-a",
+            "question_id": "q1",
+            "query_id": "query-a",
+            "model.provider": "openai",
+            "model.name": "gpt-4o",
+            "model.registry_key": None,
+            "llm.in_agent": False,
+            "llm.in_agent.mode": "disabled",
+            "llm.output_schema.mode": "disabled",
+            "retry_queue.mode": "disabled",
+        },
+        "client",
+    )
+    assert provider_spans == [expected_span]
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -334,8 +334,9 @@ async def test_llm_query_records_provider_query_span():
 @pytest.fixture
 def redis():
     client = fakeredis.aioredis.FakeRedis(decode_responses=True)
-    client.lock = lambda *args, **kwargs: _FakeLock()
-    set_redis_client(client)
+    client_any = cast(Any, client)
+    client_any.lock = lambda *args, **kwargs: _FakeLock()
+    set_redis_client(client_any)
     return client
 
 
@@ -410,9 +411,15 @@ async def test_agent_logger_name_format():
     llm = _mock_llm(_make_qr())
     llm.model_name = "gpt-4o"
     captured: list[logging.Logger] = []
-    llm.query = AsyncMock(
-        side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr()
-    )
+
+    def capture_query_logger(*args: object, **kwargs: object) -> QueryResult:
+        logger = kwargs.get("logger")
+        if not isinstance(logger, logging.Logger):
+            raise AssertionError("Expected a scoped query logger")
+        captured.append(logger)
+        return _make_qr()
+
+    llm.query = AsyncMock(side_effect=capture_query_logger)
     agent = Agent(name="submit", llm=llm, tools=[], config=_cfg)
     await agent.run([TextInput(text="go")], question_id="q1")
     assert captured and "agent.submit<gpt-4o>" in captured[0].name
@@ -423,9 +430,15 @@ async def test_agent_passes_scoped_logger_to_llm():
     llm.model_name = "gpt-4o"
     llm.run_id = "run-xyz"
     captured: list[logging.Logger] = []
-    llm.query = AsyncMock(
-        side_effect=lambda *a, **kw: captured.append(kw.get("logger")) or _make_qr()
-    )
+
+    def capture_query_logger(*args: object, **kwargs: object) -> QueryResult:
+        logger = kwargs.get("logger")
+        if not isinstance(logger, logging.Logger):
+            raise AssertionError("Expected a scoped query logger")
+        captured.append(logger)
+        return _make_qr()
+
+    llm.query = AsyncMock(side_effect=capture_query_logger)
     agent = Agent(name="eval", llm=llm, tools=[], config=_cfg)
     await agent.run([TextInput(text="go")], question_id="q1")
     assert captured and captured[0].name.startswith("agent.eval<gpt-4o>")
@@ -590,7 +603,8 @@ async def test_execute_cleanup_removes_only_own_question(redis):
     mock_qr.metadata.cache_read_tokens = 0
     mock_qr.metadata.extra = {}
 
-    await retrier.execute(AsyncMock(return_value=(mock_qr, 0.5)))
+    run_retry = retrier.execute
+    await run_retry(AsyncMock(return_value=(mock_qr, 0.5)))
 
     members = await redis.zrangebyscore(inflight_key, "-inf", "+inf")
     assert "run-shared:my-q" not in members
@@ -607,7 +621,7 @@ async def test_metadata_cleaned_on_pre_function_failure(redis):
     original_eval = redis.eval
 
     async def cancel_eval(script, numkeys, *args):  # noqa: S307
-        if numkeys == 2 and args and args[0] == TOKEN_KEY:
+        if numkeys == 3 and args and args[0] == TOKEN_KEY:
             raise asyncio.CancelledError()
         return await original_eval(script, numkeys, *args)  # noqa: S307
 
@@ -679,7 +693,15 @@ async def test_run_id_and_question_id_forwarded_to_token_retrier():
     MockLLM = _make_mock_llm_class()
     llm = MockLLM("gpt-4o", "openai")
     llm.token_retry_params = TokenRetryParams(  # pyright: ignore[reportAttributeAccessIssue]
-        limit=10000, limit_refresh_seconds=60, input_modifier=1.0, output_modifier=1.0
+        input_modifier=1.0,
+        output_modifier=1.0,
+        limit=10_000,
+    )
+    llm._resolved_token_retry_params = ResolvedTokenRetryParams(  # pyright: ignore[reportAttributeAccessIssue]
+        input_modifier=1.0,
+        output_modifier=1.0,
+        use_dynamic_estimate=True,
+        limit=10_000,
     )
     llm.estimate_query_tokens = AsyncMock(return_value=(100, 50))  # pyright: ignore[reportAttributeAccessIssue]
 
@@ -697,7 +719,7 @@ async def test_run_id_and_question_id_forwarded_to_token_retrier():
         async def validate(self) -> None:
             pass
 
-    with patch("model_library.base.base.TokenRetrier", CapturingRetrier):
+    with patch("model_library.retriers.token.token.TokenRetrier", CapturingRetrier):
         await llm.query("test input", run_id="my-run-id", question_id="my-question-id")
 
     assert captured["run_id"] == "my-run-id"

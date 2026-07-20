@@ -68,6 +68,8 @@ Configured provider default rate limits are not bundled in the public package; u
 
 Use `supports.files` only for provider-supported non-image document/file inputs. Providers with image/video-only multimodal APIs should keep `supports.files: false` and set `supports.images`/`supports.videos` instead, so callers can choose image or video fallbacks rather than provider file-upload paths. The validator still runs file examples when `supports.files` is false and fails if a file example works, because that means the registry config is stale.
 
+Set `supports.audio: true` only for providers that accept audio inputs (e.g. Gemini via `FileWithBytes`). Leave it `false` otherwise.
+
 To restore a deprecated model to the active registry, move its entry from
 `config/deprecated/<provider>_models.yaml` back to the matching active provider
 YAML file and run `make config`.
@@ -111,23 +113,43 @@ MODEL_LIBRARY_INCLUDE_DEPRECATED=True
 
 ### Discovery and helper behavior
 
-When `MODEL_GATEWAY_URL` is set:
+When `MODEL_GATEWAY_URL` is set before the registry is initialized:
 
-- `get_model_registry()` fetches the full `/registry` snapshot with
-  `MODEL_GATEWAY_API_KEY` for explicit bulk discovery.
-- Registry-fetch failures are strict; the client does not fall back to local
-  files.
-- Local helpers such as `get_registry_config()`, `get_model_cost()`,
-  `get_model_input_context_window()`, and `get_model_names()` raise instead of
-  implicitly fetching or serving a cached gateway snapshot.
+- The first `get_model_registry()` call fetches the full `/registry` snapshot
+  with `MODEL_GATEWAY_API_KEY`. `get_registry_config()` and
+  `get_registry_model()` construction use that snapshot. No-argument calls
+  retain it for the process lifetime.
+- `refresh_model_registry()` provides opt-in lazy refresh without changing the
+  `get_model_registry()` singleton contract. It reloads whichever source the
+  current settings select: Gateway, local YAML, or custom config. A successful
+  refresh atomically replaces the shared snapshot; `timedelta(0)` attempts a
+  refresh on every call.
+- Refresh failures are strict by default and never switch registry sources.
+  `allow_stale_on_error=True` returns a snapshot previously loaded by a
+  successful refresh and restarts a positive-TTL refresh cooldown.
+- Cached metadata helpers such as `get_model_cost()`,
+  `get_model_input_context_window()`, and `get_model_names()` remain
+  direct-provider-only and raise in Gateway mode.
+
+```python
+from datetime import timedelta
+
+from model_library.register_models import get_model_registry, refresh_model_registry
+
+refresh_model_registry(
+    refresh_ttl=timedelta(seconds=30),
+    allow_stale_on_error=True,
+)
+registry = get_model_registry()
+```
 
 ### Request execution
 
 Gateway execution is server-authoritative:
 
-1. `get_registry_model()` constructs an unsynced `GatewayLLM` from the model
-   string without a client-side registry fetch.
-2. Requests send only explicit override config.
+1. `get_registry_model()` constructs a `GatewayLLM` through the normal client
+   registry path, with metadata and capabilities available immediately.
+2. Requests send only explicit override config, not registry-derived defaults.
 3. On a provider-model cache miss, the server merges overrides with its loaded
    registry config.
 4. The server caches the provider model by model and override config, plus token
@@ -138,13 +160,11 @@ restart or explicit cache invalidation is required.
 
 ### Single-model metadata
 
-- Capability attributes such as `supports_tools` and `supports_temperature` begin with local defaults.
-- `await model.ensure_metadata_loaded()` resolves current gateway metadata once;
-  later calls are no-ops after the first success.
-- `model.metadata` then contains the full server `ModelConfig` registry entry.
-- Local registry-backed models expose the same property immediately.
-- `/models/resolve` returns `effective_config`, full `registry_config`, and the
-  server-computed context window for one model.
+- `get_registry_model()` results expose `model.metadata`, capability attributes,
+  and the input context window immediately.
+- The values come from the client registry snapshot used at construction.
+- `refresh_model_registry()` affects models constructed afterward; existing
+  model instances retain their construction snapshot.
 - Gateway batch capability metadata is preserved, but client-side gateway batch
   calls raise until gateway batch endpoints exist.
 
@@ -178,7 +198,7 @@ provider files are included automatically.
 
 | Variable                           | Default | Description                                                                                   |
 | ---------------------------------- | ------- | --------------------------------------------------------------------------------------------- |
-| `MODEL_GATEWAY_URL`                      | —       | Gateway server URL. When set, execution and single-model metadata resolve through the gateway |
+| `MODEL_GATEWAY_URL`                      | —       | Gateway server URL. When set, registry snapshots load from it and requests route through it    |
 | `MODEL_GATEWAY_API_KEY`                  | —       | Bearer token used for gateway registry and request calls                                      |
 | `MODEL_LIBRARY_INCLUDE_DEPRECATED` | `False` | Load deprecated model configs from `config/deprecated/`                                       |
 | `MODEL_LIBRARY_CUSTOM_CONFIG`      | —       | Path or URL to additional YAML config to merge into non-gateway registry                      |

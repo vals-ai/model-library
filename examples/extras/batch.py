@@ -17,7 +17,7 @@ from model_library.base import LLM, FileWithBase64, TextInput
 from model_library.registry_utils import get_registry_model
 
 from examples.data.images import red_image
-from examples.setup import console_log, setup, sync_model_metadata
+from examples.setup import console_log, setup
 
 SPINNER = cycle(["|", "/", "-", "\\"])
 
@@ -106,7 +106,7 @@ async def main():
     args = parser.parse_args()
 
     model = get_registry_model(args.model)
-    await sync_model_metadata(model)
+
     model.instance_logger.info(model)
 
     if not model.supports_batch:

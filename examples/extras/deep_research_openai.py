@@ -12,7 +12,7 @@ import asyncio
 from model_library.base import LLM, ToolDefinition
 from model_library.registry_utils import get_registry_model
 
-from examples.setup import console_log, setup, sync_model_metadata
+from examples.setup import console_log, setup
 
 
 async def deep_research(model: LLM):
@@ -62,7 +62,6 @@ async def main():
     model = get_registry_model(args.model)
     model.instance_logger.info(model)
 
-    await sync_model_metadata(model)
     if not model.supports_tools:
         raise Exception("Model does not support tools")
 

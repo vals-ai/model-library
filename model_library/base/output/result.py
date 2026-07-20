@@ -11,13 +11,18 @@ from pydantic import (
     Field,
     JsonValue,
     computed_field,
+    field_serializer,
     field_validator,
     model_validator,
 )
 from typing_extensions import override
 
 from model_library.base.input import InputItem, ToolCall
-from model_library.base.output.performance import QueryResultPerformance
+from model_library.base.output.performance import (
+    QueryResultPerformance,
+    CompressedQueryResultPerformance,
+    compress_query_result_performance,
+)
 from model_library.base.utils import add_optional
 from model_library.utils import SecondsMetric, ValsModel
 
@@ -248,7 +253,7 @@ class QueryResultMetadata(ValsModel):
 
     cost: QueryResultCost | None = None  # set post query
     duration_seconds: SecondsMetric | None = None  # set post query; rounded to ms
-    performance: QueryResultPerformance | None = None
+    performance: QueryResultPerformance | CompressedQueryResultPerformance | None = None
     in_tokens: int = 0
 
     out_tokens: int = 0
@@ -256,6 +261,21 @@ class QueryResultMetadata(ValsModel):
     cache_read_tokens: int | None = None
     cache_write_tokens: int | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
+
+    @field_serializer(
+        "performance",
+        when_used="json",
+        return_type=CompressedQueryResultPerformance | None,
+    )
+    def serialize_performance(
+        self,
+        performance: QueryResultPerformance | CompressedQueryResultPerformance | None,
+    ) -> CompressedQueryResultPerformance | None:
+        if performance is None or isinstance(
+            performance, CompressedQueryResultPerformance
+        ):
+            return performance
+        return compress_query_result_performance(performance)
 
     @property
     def default_duration_seconds(self) -> float:

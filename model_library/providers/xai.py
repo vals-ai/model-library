@@ -42,6 +42,7 @@ from model_library.base import (
 from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.output.result import ProviderToolEvent
 from model_library.exceptions import (
+    BadInputError,
     ImmediateRetryException,
     ModelNoOutputError,
     NoMatchingToolCallError,
@@ -222,6 +223,8 @@ class XAIModel(LLM):
                 return xai_image(image_url=image.url, detail="high")
             case FileWithId():
                 return xai_file(file_id=image.file_id)
+            case _:
+                raise BadInputError("xAI does not support byte-backed files")
 
     @override
     async def parse_file(
@@ -239,6 +242,8 @@ class XAIModel(LLM):
                     filename=file.name,
                     mime_type=file.mime,
                 )
+            case _:
+                raise BadInputError("xAI does not support byte-backed files")
 
     @property
     @override

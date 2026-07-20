@@ -136,9 +136,7 @@ async def test_query_completion_logging_uses_start_level_when_logger_changes(cap
 
 
 def _agent_mock_llm() -> MagicMock:
-    llm = MagicMock()
-    llm.ensure_metadata_loaded = AsyncMock(return_value=None)
-    return llm
+    return MagicMock()
 
 
 def _capture_logger(captured: list[logging.Logger]):

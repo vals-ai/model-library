@@ -12,7 +12,9 @@ import re
 from typing import Final, cast
 
 DEFAULT_SHARD_COUNT: Final = 16
+USAGE_EVENT_SCHEMA_VERSION: Final = 2
 MAX_DIMENSION_VALUE_BYTES: Final = 512
+DETAILS_FIELD: Final = "details"
 
 BASE_PK: Final = "PK"
 BASE_SK: Final = "SK"
@@ -116,13 +118,6 @@ BENCHMARK_PROJECTION_FIELDS: Final = (
 AGENT_PROJECTION_FIELDS: Final = (
     *DIMENSION_PROJECTION_FIELDS,
     IDENTITY_BENCHMARK_NAME,
-)
-
-BULKY_LEDGER_FIELDS: Final = (
-    "config_redacted_json",
-    "metadata_json",
-    "finish_reason_json",
-    "performance_json",
 )
 
 

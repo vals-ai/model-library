@@ -11,18 +11,7 @@ from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 EXEMPT_PATHS = {"/health/live", "/health/ready"}
-TRACE_AUTH_FAILURE_PATHS = {
-    "/embeddings",
-    "/files/upload",
-    "/models",
-    "/models/resolve",
-    "/moderation",
-    "/query",
-    "/rate-limit",
-    "/registry",
-    "/token-retry/status",
-    "/tokens/count",
-}
+TRACE_AUTH_FAILURE_PATHS = telemetry.HTTP_TRACE_ALLOWED_ROUTES
 
 
 def create_auth_middleware(valid_keys: set[str]):

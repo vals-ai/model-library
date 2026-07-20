@@ -1,5 +1,7 @@
 """Structured performance telemetry for query results."""
 
+import base64
+import gzip
 from typing import Literal, cast
 
 from pydantic import (
@@ -18,6 +20,9 @@ __all__ = [
     "QueryTimeToFirstToken",
     "QueryPerformanceTimelineEntry",
     "QueryResultPerformance",
+    "CompressedQueryResultPerformance",
+    "compress_query_result_performance",
+    "decompress_query_result_performance",
 ]
 
 QueryPerformanceChannel = Literal["reasoning", "content", "tool_call"]
@@ -201,6 +206,7 @@ class QueryPerformanceTimelineEntry(ValsModel):
     )
     events: list[QueryPerformanceEvent] = Field(
         default_factory=list,
+        repr=False,
         description="Canonical raw timing events used as the source of truth for this segment.",
     )
 
@@ -427,3 +433,30 @@ class QueryResultPerformance(ValsModel):
         if self.timeline:
             self.time_to_first_token_ms = self._compute_time_to_first_token_ms()
         return self
+
+
+class CompressedQueryResultPerformance(ValsModel):
+    """Lossless JSON representation of compressed query performance telemetry."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    encoding: Literal["gzip+base64"] = "gzip+base64"
+    data: str
+
+
+def compress_query_result_performance(
+    performance: QueryResultPerformance,
+) -> CompressedQueryResultPerformance:
+    payload = performance.model_dump_json().encode()
+    compressed = gzip.compress(payload, compresslevel=1, mtime=0)
+    return CompressedQueryResultPerformance(
+        data=base64.b64encode(compressed).decode("ascii")
+    )
+
+
+def decompress_query_result_performance(
+    performance: CompressedQueryResultPerformance,
+) -> QueryResultPerformance:
+    compressed = base64.b64decode(performance.data, validate=True)
+    payload = gzip.decompress(compressed)
+    return QueryResultPerformance.model_validate_json(payload)

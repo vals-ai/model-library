@@ -19,6 +19,11 @@ from model_gateway import metrics
 from model_gateway import model_helpers
 from model_gateway.usage_ledger import store as ledger_store
 from model_gateway.usage_ledger import schema as ledger_schema
+from model_gateway.usage_ledger.details import snapshot_usage_request
+from model_gateway.usage_ledger.message import (
+    MAX_USAGE_LEDGER_MESSAGE_BYTES,
+    serialize_usage_event_message,
+)
 from model_gateway.usage_ledger.store import (
     DynamoDbUsageLedger,
     NoopUsageLedger,
@@ -28,15 +33,18 @@ from model_gateway.usage_ledger.store import (
     create_usage_ledger_from_env,
 )
 from model_gateway.types import QueryRequest
-from model_library.base.input import TextInput
+from model_library.base.input import TextInput, ToolBody, ToolDefinition
 from model_library.base.output import (
+    ProviderToolEvent,
     QueryPerformanceEvent,
     QueryPerformanceTimelineEntry,
+    decompress_query_result_performance,
     QueryResult,
     QueryResultCost,
     QueryResultExtras,
     QueryResultMetadata,
     QueryResultPerformance,
+    CompressedQueryResultPerformance,
 )
 
 
@@ -76,7 +84,16 @@ def _metric_number(payload: dict[str, object], metric_name: str) -> int | float:
 
 
 def _usage_event_body_bytes(event: dict[str, object]) -> int:
-    return len(ledger_store.serialize_usage_event_message(event).encode("utf-8"))
+    return len(serialize_usage_event_message(event).encode("utf-8"))
+
+
+def _content_mapping_summary(value: dict[str, object]) -> dict[str, object]:
+    serialized = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return {
+        "type": "object",
+        "fields": len(value),
+        "bytes": len(serialized.encode("utf-8")),
+    }
 
 
 async def _drain_sqs_flush(ledger: SqsUsageLedger) -> None:
@@ -300,6 +317,14 @@ def _identity_with_compact_json_size(size: int) -> dict[str, str]:
     return identity
 
 
+def _build_success_usage_event(**kwargs: Any) -> dict[str, object]:
+    request = cast(QueryRequest, kwargs["body"])
+    return build_success_usage_event(
+        **kwargs,
+        request=snapshot_usage_request(request),
+    )
+
+
 def _basic_usage_event() -> dict[str, object]:
     request = QueryRequest(
         model="openai/gpt-4o",
@@ -308,7 +333,7 @@ def _basic_usage_event() -> dict[str, object]:
         question_id="question-1",
         query_id="query-1",
     )
-    return build_success_usage_event(
+    return _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -418,7 +443,7 @@ def test_query_request_rejects_over_depth_identity():
         )
 
 
-def test_build_success_usage_event_keeps_sanitized_config_and_metadata_without_result_payload():
+def test_build_success_usage_event_owns_each_value_once_in_root_or_details():
     request = QueryRequest.model_validate(
         {
             "model": "openai/gpt-4o",
@@ -437,6 +462,17 @@ def test_build_success_usage_event_keeps_sanitized_config_and_metadata_without_r
                 "benchmark_name": "swebench",
                 "agent_name": "swe-agent",
             },
+            "tools": [
+                ToolDefinition(
+                    name="search",
+                    body=ToolBody(
+                        name="search",
+                        description="secret tool definition",
+                        properties={"query": {"type": "string"}},
+                        required=["query"],
+                    ),
+                )
+            ],
         }
     )
     result = QueryResult(
@@ -475,23 +511,30 @@ def test_build_success_usage_event_keeps_sanitized_config_and_metadata_without_r
                 ]
             ),
             extra={
-                "provider_billable_units": 7,
-                "response_text": "secret response",
-                "api_key": "secret",
                 "token_metadata": {
                     "estimated": 150,
                     "actual": 125,
-                    "raw_response": "do not persist",
                 },
             },
         ),
+        provider_tool_events=[
+            ProviderToolEvent(
+                id="provider-tool-1",
+                provider="openai",
+                type="web_search_call",
+                name="web_search",
+                input="secret provider tool input",
+                output={"content": "secret provider tool output"},
+            )
+        ],
         extras=QueryResultExtras(
+            search_results={"content": "secret search result"},
             provider_response_id="provider-response-1",
             provider_request_id="provider-request-1",
         ),
     )
 
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -501,29 +544,19 @@ def test_build_success_usage_event_keeps_sanitized_config_and_metadata_without_r
         api_key_fingerprint="keyfingerprint",
     )
 
-    config = json.loads(str(event["config_redacted_json"]))
-    metadata = json.loads(str(event["metadata_json"]))
-    performance = json.loads(str(event["performance_json"]))
-
     assert event["run_id"] == "run-1"
     assert event["question_id"] == "question-1"
     assert event["query_id"] == "query-1"
-    assert event["identity"] == {
-        "email": "user@example.com",
-        "benchmark_name": "swebench",
-        "agent_name": "swe-agent",
-    }
     assert event[ledger_schema.IDENTITY_EMAIL] == "user@example.com"
     assert event["api_key_fingerprint"] == "keyfingerprint"
-    assert event["provider_response_id"] == "provider-response-1"
-    assert event["provider_request_id"] == "provider-request-1"
-    assert event["performance_json_truncated"] is False
-    assert performance["timeline"][0]["channel"] == "content"
-    assert performance["timeline"][0]["first_token_ms"] == 25
+    assert event["finish_reason"] == "unknown"
+    assert not event["finish_reason_raw"]
+    assert event["schema_version"] == 2
     assert event["input_tokens"] == 100
     assert event["cache_read_tokens"] == 10
     assert event["total_input_tokens"] == 113
     assert event["total_output_tokens"] == 25
+
     shard = event["usage_shard"]
     assert event["GSI1PK"] == f"RUN#run-1#S#{shard}"
     assert event["GSI2PK"] == "QUERY#query-1"
@@ -536,25 +569,72 @@ def test_build_success_usage_event_keeps_sanitized_config_and_metadata_without_r
     )
     assert event["GSI5SK"] == event["GSI4SK"]
 
-    assert config["config"]["custom_api_key"] == "<redacted>"
-    assert config["config"]["custom_endpoint"] == "https://custom.example/v1"
-    assert config["config"]["provider_config"]["prompt_cache_retention"] == "24h"
-    assert metadata["cost"]["output"] == 0.002
-    assert metadata["token_metadata"] == {"actual": 125, "estimated": 150}
-    assert "extra" not in metadata
-    assert "provider_billable_units" not in metadata
-    assert "response_text" not in metadata
-    assert "api_key" not in metadata
-    assert "output_text" not in event
-    assert "reasoning" not in event
-    assert "history" not in event
+    details = cast(dict[str, Any], event[ledger_schema.DETAILS_FIELD])
+    assert set(details) == {"request", "result"}
+    assert details["request"]["config"]["custom_api_key"] == "**********"
+    assert (
+        details["request"]["config"]["provider_config"]["prompt_cache_retention"]
+        == "24h"
+    )
+    assert details["request"]["identity"] == request.identity
+    tool = details["request"]["tools"][0]
+    assert tool["name"] == "search"
+    assert tool["body_length"] == len(
+        json.dumps(
+            request.tools[0].body.model_dump(mode="json"),
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+    )
+    result_data = details["result"]
+    assert result_data["output_text_length"] == len("do not persist me")
+    assert result_data["reasoning_length"] == len("do not persist reasoning")
+    assert "output_text" not in result_data
+    assert "reasoning" not in result_data
+    stored_performance = CompressedQueryResultPerformance.model_validate(
+        result_data["metadata"]["performance"]
+    )
+    performance = decompress_query_result_performance(stored_performance)
+    assert performance.timeline[0].channel == "content"
+    assert performance.timeline[0].first_token_ms == 25
+    assert len(performance.timeline[0].events) == 3
+    assert result_data["metadata"]["extra"]["token_metadata"] == {
+        "estimated": 150,
+        "actual": 125,
+    }
+    provider_event = result_data["provider_tool_events"][0]
+    assert provider_event["input_length"] == len("secret provider tool input")
+    assert provider_event["output_length"] == len(
+        '{"content":"secret provider tool output"}'
+    )
+    assert result_data["extras"]["search_results_length"] == len(
+        '{"content":"secret search result"}'
+    )
+    assert result_data["extras"]["provider_request_id"] == "provider-request-1"
+    assert result_data["extras"]["provider_response_id"] == "provider-response-1"
+
+    serialized = json.dumps(event, default=str, sort_keys=True)
+    message = serialize_usage_event_message(event)
+    for secret in [
+        "do not persist me",
+        "do not persist reasoning",
+        "provider-secret",
+        "secret tool definition",
+        "secret provider tool input",
+        "secret provider tool output",
+        "secret search result",
+        "secret response",
+        "do not persist",
+    ]:
+        assert secret not in serialized
+        assert secret not in message
 
 
-def test_build_success_usage_event_serializes_absent_performance_as_json_null():
+def test_build_success_usage_event_preserves_absent_performance_as_null():
     event = _basic_usage_event()
 
-    assert event["performance_json"] == "null"
-    assert event["performance_json_truncated"] is False
+    details = cast(dict[str, Any], event[ledger_schema.DETAILS_FIELD])
+    assert details["result"]["metadata"]["performance"] is None
 
 
 def test_build_success_usage_event_normalizes_float_artifact_cost_total():
@@ -573,7 +653,7 @@ def test_build_success_usage_event_normalizes_float_artifact_cost_total():
         ),
     )
 
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -582,12 +662,10 @@ def test_build_success_usage_event_normalizes_float_artifact_cost_total():
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
     )
 
-    metadata = json.loads(str(event["metadata_json"]))
     assert event["cost_usd"] == Decimal("1.3")
-    assert metadata["cost_usd"] == "1.3"
 
 
-def test_build_success_usage_event_preserves_subcent_cost_precision_in_metadata_json():
+def test_build_success_usage_event_preserves_subcent_cost_precision_at_root():
     request = QueryRequest(
         model="openai/gpt-4o",
         inputs=[TextInput(text="hello")],
@@ -603,7 +681,7 @@ def test_build_success_usage_event_preserves_subcent_cost_precision_in_metadata_
         ),
     )
 
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -612,9 +690,7 @@ def test_build_success_usage_event_preserves_subcent_cost_precision_in_metadata_
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
     )
 
-    metadata = json.loads(str(event["metadata_json"]))
     assert event["cost_usd"] == Decimal("0.000000000001")
-    assert metadata["cost_usd"] == "0.000000000001"
 
 
 def test_build_success_usage_event_serializes_integral_cost_without_exponent():
@@ -633,7 +709,7 @@ def test_build_success_usage_event_serializes_integral_cost_without_exponent():
         ),
     )
 
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -642,9 +718,7 @@ def test_build_success_usage_event_serializes_integral_cost_without_exponent():
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
     )
 
-    metadata = json.loads(str(event["metadata_json"]))
     assert event["cost_usd"] == Decimal("1000")
-    assert metadata["cost_usd"] == "1000"
 
 
 @pytest.mark.parametrize(
@@ -665,7 +739,7 @@ def test_usage_event_extracts_canonical_identity_email(
         identity=identity,
     )
 
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -675,7 +749,9 @@ def test_usage_event_extracts_canonical_identity_email(
     )
 
     assert event[ledger_schema.IDENTITY_EMAIL] == expected_email
-    assert event["identity"] == identity
+    assert "identity" not in event
+    details = cast(dict[str, Any], event[ledger_schema.DETAILS_FIELD])
+    assert details["request"]["identity"] == request.identity
 
 
 @pytest.mark.parametrize(
@@ -701,7 +777,7 @@ def test_usage_event_omits_invalid_or_absent_identity_email(
         identity=identity,
     )
 
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -714,7 +790,9 @@ def test_usage_event_omits_invalid_or_absent_identity_email(
         assert event[ledger_schema.IDENTITY_EMAIL] == "user@example.com"
     else:
         assert ledger_schema.IDENTITY_EMAIL not in event
-    assert event["identity"] == identity
+    assert "identity" not in event
+    details = cast(dict[str, Any], event[ledger_schema.DETAILS_FIELD])
+    assert details["request"]["identity"] == request.identity
 
 
 def test_usage_event_skips_dimension_indexes_for_non_string_or_blank_identity_values():
@@ -726,7 +804,7 @@ def test_usage_event_skips_dimension_indexes_for_non_string_or_blank_identity_va
         query_id="query-1",
         identity={"benchmark_name": "   ", "agent_name": 123},
     )
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -760,7 +838,7 @@ async def test_dynamodb_usage_ledger_writes_only_event_row():
             cost=QueryResultCost(input=0.001, output=0.002),
         ),
     )
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -794,13 +872,35 @@ async def test_dynamodb_usage_ledger_writes_only_event_row():
 
 
 @pytest.mark.asyncio
+async def test_dynamodb_usage_ledger_writes_canonical_details_without_rewriting():
+    event = _basic_usage_event()
+    event["details"] = {
+        "request": {"custom": {"value": "keep"}},
+        "result": {"metadata": {"performance": None}},
+    }
+    client = FakeDynamoClient()
+    ledger = cast(Any, object.__new__(DynamoDbUsageLedger))
+    ledger._table_name = "usage-table"
+    ledger._client = client
+
+    await ledger._write_success(event)
+
+    item = cast(dict[str, Any], client.calls[0]["Item"])
+    details = cast(dict[str, Any], item["details"]["M"])
+    assert details == {
+        "request": {"M": {"custom": {"M": {"value": {"S": "keep"}}}}},
+        "result": {"M": {"metadata": {"M": {"performance": {"NULL": True}}}}},
+    }
+
+
+@pytest.mark.asyncio
 async def test_dynamodb_usage_ledger_treats_duplicate_same_usage_event_as_success():
     request = QueryRequest(
         model="openai/gpt-4o",
         inputs=[TextInput(text="hello")],
         query_id="query-1",
     )
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -842,7 +942,7 @@ async def test_dynamodb_usage_ledger_reraises_conditional_failure_for_different_
         inputs=[TextInput(text="hello")],
         query_id="query-1",
     )
-    event = build_success_usage_event(
+    event = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -875,7 +975,7 @@ def test_reused_query_id_records_distinct_completed_usage_events():
     )
     result = QueryResult(output_text="ok", history=[])
 
-    first = build_success_usage_event(
+    first = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -884,7 +984,7 @@ def test_reused_query_id_records_distinct_completed_usage_events():
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
         api_key_fingerprint="keyfingerprint",
     )
-    second = build_success_usage_event(
+    second = _build_success_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -1052,6 +1152,29 @@ async def test_sqs_usage_ledger_sends_serialized_usage_event_message_in_batch(
 
 
 @pytest.mark.asyncio
+async def test_sqs_usage_ledger_compacts_oversized_details_before_enqueue():
+    client = FakeSqsClient()
+    ledger = SqsUsageLedger(
+        queue_url="https://sqs.us-east-1.amazonaws.com/123/ledger",
+        mode="shadow",
+    )
+    ledger._client = client
+    event = _basic_usage_event()
+    event["details"] = {"large": "x" * MAX_USAGE_LEDGER_MESSAGE_BYTES}
+
+    await ledger.write_success(event)
+    await _drain_sqs_flush(ledger)
+
+    entries = cast(list[dict[str, object]], client.batch_calls[0]["Entries"])
+    message = json.loads(cast(str, entries[0]["MessageBody"]))
+    assert message["event"]["details"] == {
+        "truncated": True,
+        "request": {},
+        "result": {"metadata": {"performance": None}},
+    }
+
+
+@pytest.mark.asyncio
 async def test_sqs_usage_ledger_shadow_returns_before_sqs_send_completes():
     client = FakeSqsClient()
     client.batch_started = asyncio.Event()
@@ -1094,7 +1217,7 @@ async def test_sqs_usage_ledger_enforced_currently_uses_background_handoff():
 
 
 @pytest.mark.asyncio
-async def test_sqs_usage_ledger_batches_ten_concurrent_usage_events():
+async def test_sqs_usage_ledger_splits_eleven_concurrent_events_by_count():
     client = FakeSqsClient()
     ledger = SqsUsageLedger(
         queue_url="https://sqs.us-east-1.amazonaws.com/123/ledger",
@@ -1102,7 +1225,7 @@ async def test_sqs_usage_ledger_batches_ten_concurrent_usage_events():
     )
     ledger._client = client
     events = []
-    for index in range(10):
+    for index in range(11):
         event = _basic_usage_event()
         event["usage_event_id"] = f"usg_{index}"
         events.append(event)
@@ -1110,15 +1233,82 @@ async def test_sqs_usage_ledger_batches_ten_concurrent_usage_events():
     await asyncio.gather(*(ledger.write_success(event) for event in events))
     await _drain_sqs_flush(ledger)
 
-    assert len(client.batch_calls) == 1
-    entries = cast(list[dict[str, object]], client.batch_calls[0]["Entries"])
-    assert len(entries) == 10
-    assert len({entry["Id"] for entry in entries}) == 10
+    assert sorted(
+        len(cast(list[dict[str, object]], call["Entries"]))
+        for call in client.batch_calls
+    ) == [1, 10]
+    entries = [
+        entry
+        for call in client.batch_calls
+        for entry in cast(list[dict[str, object]], call["Entries"])
+    ]
+    assert len({entry["Id"] for entry in entries}) == 11
     event_ids = {
         json.loads(cast(str, entry["MessageBody"]))["event"]["usage_event_id"]
         for entry in entries
     }
-    assert event_ids == {f"usg_{index}" for index in range(10)}
+    assert event_ids == {f"usg_{index}" for index in range(11)}
+
+
+async def test_sqs_usage_ledger_batches_by_aggregate_message_bytes():
+    client = FakeSqsClient()
+    ledger = SqsUsageLedger(
+        queue_url="https://sqs.us-east-1.amazonaws.com/123/ledger",
+        mode="shadow",
+    )
+    ledger._client = client
+    events = []
+    for index in range(4):
+        event = _basic_usage_event()
+        event["usage_event_id"] = f"large-{index}"
+        event["details"] = {
+            "request": {"large": ""},
+            "result": {"metadata": {"performance": None}},
+        }
+        empty_size = len(
+            serialize_usage_event_message(
+                event,
+                max_bytes=MAX_USAGE_LEDGER_MESSAGE_BYTES * 2,
+            ).encode("utf-8")
+        )
+        event["details"] = {
+            "request": {"large": "x" * (MAX_USAGE_LEDGER_MESSAGE_BYTES - empty_size)},
+            "result": {"metadata": {"performance": None}},
+        }
+        assert (
+            len(
+                serialize_usage_event_message(
+                    event,
+                    max_bytes=MAX_USAGE_LEDGER_MESSAGE_BYTES,
+                ).encode("utf-8")
+            )
+            == MAX_USAGE_LEDGER_MESSAGE_BYTES
+        )
+        events.append(event)
+
+    await asyncio.gather(*(ledger.write_success(event) for event in events))
+    await _drain_sqs_flush(ledger)
+
+    assert sorted(
+        len(cast(list[dict[str, object]], call["Entries"]))
+        for call in client.batch_calls
+    ) == [1, 3]
+    all_entries: list[dict[str, object]] = []
+    for call in client.batch_calls:
+        entries = cast(list[dict[str, object]], call["Entries"])
+        assert len(entries) <= 10
+        assert (
+            sum(
+                len(cast(str, entry["MessageBody"]).encode("utf-8"))
+                for entry in entries
+            )
+            <= 1_048_576
+        )
+        all_entries.extend(entries)
+    assert {
+        json.loads(cast(str, entry["MessageBody"]))["event"]["usage_event_id"]
+        for entry in all_entries
+    } == {f"large-{index}" for index in range(4)}
 
 
 @pytest.mark.asyncio
@@ -1764,6 +1954,8 @@ async def test_dynamodb_usage_ledger_enforced_mode_raises_on_write_failure():
 
 def test_query_writes_success_usage_event_when_ledger_is_configured():
     from model_gateway import main
+    from model_library.base.base import LLM
+    from model_library.base.input import RawInput
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = "sk-test"
@@ -1787,6 +1979,11 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
                 ),
             )
 
+    signed_inputs = LLM.serialize_input(
+        [RawInput(input={"messages": [{"role": "user", "content": "hi"}]})],
+        secret=b"test-secret",
+    )
+    raw_request_inputs = json.loads(signed_inputs)
     fake_ledger = FakeUsageLedger()
     with (
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
@@ -1800,7 +1997,7 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
             "/query",
             json={
                 "model": "openai/gpt-4o",
-                "inputs": [{"kind": "text", "text": "hi"}],
+                "inputs": raw_request_inputs,
                 "run_id": "run-a",
                 "question_id": "question-a",
                 "query_id": "query-a",
@@ -1822,22 +2019,38 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
     event = fake_ledger.events[0]
     assert event["run_id"] == "run-a"
     assert event["question_id"] == "question-a"
-    assert event["identity"] == {
+    assert event["query_id"] == "query-a"
+    assert event[ledger_schema.IDENTITY_EMAIL] == "user@example.com"
+    assert "identity" not in event
+    assert event["api_key_fingerprint"] == "f3abf2a6cc4f0098"
+    assert event["provider_endpoint"] == "custom"
+    assert event["input_tokens"] == 12
+    assert event["output_tokens"] == 3
+
+    details = cast(dict[str, Any], event[ledger_schema.DETAILS_FIELD])
+    request_data = details["request"]
+    result_data = details["result"]
+    config = request_data["config"]
+    assert config["custom_endpoint"] == "https://private-provider.example.internal/v1"
+    assert config["custom_api_key"] == "**********"
+    raw_input = cast(dict[str, object], raw_request_inputs[0])["input"]
+    raw_input_length = len(json.dumps(raw_input, sort_keys=True, separators=(",", ":")))
+    expected_request_inputs = [
+        {
+            "kind": "raw_input",
+            "input_length": raw_input_length,
+        }
+    ]
+    assert request_data["inputs"] == expected_request_inputs
+    assert request_data["identity"] == {
         "email": "user@example.com",
         "benchmark_name": "swebench",
         "agent_name": "swe-agent",
     }
-    assert event["query_id"] == "query-a"
-    assert event["api_key_fingerprint"] == "f3abf2a6cc4f0098"
-    assert event["provider_endpoint"] == "custom"
-    config = json.loads(str(event["config_redacted_json"]))
-    assert (
-        config["config"]["custom_endpoint"]
-        == "https://private-provider.example.internal/v1"
-    )
-    assert config["config"]["custom_api_key"] == "<redacted>"
-    assert event["input_tokens"] == 12
-    assert event["output_tokens"] == 3
+    assert result_data["output_text_length"] == 2
+    assert result_data["reasoning_length"] == 0
+    assert result_data["metadata"]["in_tokens"] == 12
+    assert result_data["metadata"]["out_tokens"] == 3
 
 
 def test_local_startup_canary_query_skips_usage_ledger():

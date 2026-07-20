@@ -8,7 +8,6 @@ base-config:
     files: false
 
 kimi-models:
-
   kimi/kimi-k2.7-code:
     label: Kimi K2.7 Code
     release_date: 2026-06-12

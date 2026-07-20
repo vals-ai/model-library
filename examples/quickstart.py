@@ -15,7 +15,7 @@ from model_library.base import LLM, LLMConfig, SystemInput, TextInput
 from model_library.base.output import QueryResult
 from model_library.registry_utils import get_registry_model
 
-from examples.setup import console_log, setup, sync_model_metadata
+from examples.setup import console_log, setup
 from examples.utils import GetWeather, SaveNote
 
 
@@ -127,7 +127,6 @@ async def main() -> None:
 
     model = get_registry_model(args.model, LLMConfig(temperature=0.7, top_p=0.95))
     model.instance_logger.info(model)
-    await sync_model_metadata(model)
 
     await basic_query(model)
     await system_prompt(model)

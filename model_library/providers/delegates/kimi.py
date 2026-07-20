@@ -16,12 +16,18 @@ from model_library.base import (
     QueryResult,
     ToolDefinition,
 )
+from model_library.base.query_ids import PromptCacheKeyMode
 from model_library.providers.openai import OpenAIConfig
 from model_library.register_models import register_provider
+
+_KIMI_K3_PUBLIC_MODEL = "kimi-k3"
 
 
 class KimiConfig(ProviderConfig):
     parallel_tool_calls: bool | None = None
+    prompt_cache_key: PromptCacheKeyMode | None = None
+    thinking_keep: Literal["all"] | None = None
+    thinking_effort: Literal["max"] | None = None
 
 
 @register_provider("kimi")
@@ -44,9 +50,10 @@ class KimiModel(DelegateOnly):
                 "custom_endpoint": config.custom_endpoint
                 or "https://api.moonshot.ai/v1/",
                 "custom_api_key": config.custom_api_key
-                or SecretStr(model_library_settings.KIMI_API_KEY),
+                or SecretStr(self._default_api_key()),
                 "provider_config": OpenAIConfig(
-                    parallel_tool_calls=self.provider_config.parallel_tool_calls
+                    parallel_tool_calls=self.provider_config.parallel_tool_calls,
+                    prompt_cache_key=self.provider_config.prompt_cache_key,
                 ),
             }
         )
@@ -57,13 +64,25 @@ class KimiModel(DelegateOnly):
             use_completions=True,
         )
 
+    def _default_api_key(self) -> str:
+        api_key = model_library_settings.KIMI_API_KEY
+        return api_key
+
     @override
     def _get_extra_body(self) -> dict[str, Any]:
         """
         Build extra body parameters for Kimi-specific features.
         see https://platform.moonshot.ai/docs/guide/kimi-k2-5-quickstart#parameters-differences-in-request-body
         """
-        return {"thinking": {"type": "enabled" if self.reasoning else "disabled"}}
+        if self.model_name == _KIMI_K3_PUBLIC_MODEL:
+            return {}
+
+        thinking: dict[str, str] = {"type": "enabled" if self.reasoning else "disabled"}
+        if self.reasoning and self.provider_config.thinking_keep is not None:
+            thinking["keep"] = self.provider_config.thinking_keep
+        if self.reasoning and self.provider_config.thinking_effort is not None:
+            thinking["effort"] = self.provider_config.thinking_effort
+        return {"thinking": thinking}
 
     async def _preprocess_files(self, input: Sequence[InputItem]) -> list[InputItem]:
         """Replace file items with TextInput containing extracted text.

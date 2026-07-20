@@ -13,7 +13,7 @@ from model_library.base.output import QueryResult
 from model_library.registry_utils import get_registry_model
 
 from examples.quickstart import basic_agent
-from examples.setup import console_log, setup, sync_model_metadata
+from examples.setup import console_log, setup
 from examples.utils import GetWeather
 
 
@@ -74,7 +74,6 @@ async def main() -> None:
     model = get_registry_model(args.model)
     model.instance_logger.info(model)
 
-    await sync_model_metadata(model)
     if not model.supports_tools:
         raise Exception("Model does not support tools")
 

@@ -65,7 +65,6 @@ def query_telemetry_attributes(
             {
                 "retry_queue.mode": "enabled",
                 "retry_queue.limit": body.token_retry_params.limit,
-                "retry_queue.limit_refresh_seconds": body.token_retry_params.limit_refresh_seconds,
                 "retry_queue.input_modifier": body.token_retry_params.input_modifier,
                 "retry_queue.output_modifier": body.token_retry_params.output_modifier,
                 "retry_queue.dynamic_estimate.mode": telemetry.mode_attribute(

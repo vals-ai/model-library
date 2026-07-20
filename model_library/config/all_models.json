@@ -1,4 +1,187 @@
 {
+    "grok/grok-build-latest": {
+        "company": "xAI",
+        "label": "Grok 4.5",
+        "release_date": "2026-07-16",
+        "open_source": false,
+        "documentation_url": "https://docs.x.ai/developers/models/grok-4.5",
+        "properties": {
+            "context_window": 500000,
+            "max_tokens": 500000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.3,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 0.6,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "grok-4.5",
+        "provider_name": "grok",
+        "full_key": "grok/grok-build-latest",
+        "slug": "grok_grok-build-latest"
+    },
+    "grok/grok-4.5-latest": {
+        "company": "xAI",
+        "label": "Grok 4.5",
+        "release_date": "2026-07-16",
+        "open_source": false,
+        "documentation_url": "https://docs.x.ai/developers/models/grok-4.5",
+        "properties": {
+            "context_window": 500000,
+            "max_tokens": 500000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.3,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 0.6,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "grok-4.5",
+        "provider_name": "grok",
+        "full_key": "grok/grok-4.5-latest",
+        "slug": "grok_grok-4.5-latest"
+    },
+    "grok/grok-4.5": {
+        "company": "xAI",
+        "label": "Grok 4.5",
+        "release_date": "2026-07-16",
+        "open_source": false,
+        "documentation_url": "https://docs.x.ai/developers/models/grok-4.5",
+        "properties": {
+            "context_window": 500000,
+            "max_tokens": 500000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.3,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 0.6,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "alternative_keys": [
+            "grok/grok-4.5-latest",
+            "grok/grok-build-latest"
+        ],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "grok-4.5",
+        "provider_name": "grok",
+        "full_key": "grok/grok-4.5",
+        "slug": "grok_grok-4.5"
+    },
     "anthropic/claude-sonnet-5-xhigh": {
         "company": "Anthropic",
         "label": "Claude Sonnet 5 (Extra High Effort)",
@@ -13,6 +196,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -70,6 +254,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -127,6 +312,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -184,6 +370,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -241,6 +428,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -317,240 +505,6 @@
         "full_key": "anthropic/claude-sonnet-5",
         "slug": "anthropic_claude-sonnet-5"
     },
-    "zai/glm-5.2-max-tokens-64k-top-p-1": {
-        "company": "zAI",
-        "label": "GLM 5.2",
-        "release_date": "2026-06-13",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "clear_thinking": false
-        },
-        "costs_per_million_token": {
-            "input": 1.4,
-            "output": 4.4,
-            "cache": {
-                "read": 0.26,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "max_tokens": 64000,
-            "temperature": 1.0,
-            "top_p": 1.0,
-            "reasoning_effort": "max"
-        },
-        "provider_endpoint": "glm-5.2",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5.2-max-tokens-64k-top-p-1",
-        "slug": "zai_glm-5.2-max-tokens-64k-top-p-1"
-    },
-    "zai/glm-5.2-max-tokens-48k-top-p-1": {
-        "company": "zAI",
-        "label": "GLM 5.2",
-        "release_date": "2026-06-13",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "clear_thinking": false
-        },
-        "costs_per_million_token": {
-            "input": 1.4,
-            "output": 4.4,
-            "cache": {
-                "read": 0.26,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "max_tokens": 48000,
-            "temperature": 1.0,
-            "top_p": 1.0,
-            "reasoning_effort": "max"
-        },
-        "provider_endpoint": "glm-5.2",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5.2-max-tokens-48k-top-p-1",
-        "slug": "zai_glm-5.2-max-tokens-48k-top-p-1"
-    },
-    "zai/glm-5.2-high": {
-        "company": "zAI",
-        "label": "GLM 5.2",
-        "release_date": "2026-06-13",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "clear_thinking": false
-        },
-        "costs_per_million_token": {
-            "input": 1.4,
-            "output": 4.4,
-            "cache": {
-                "read": 0.26,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95,
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "glm-5.2",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5.2-high",
-        "slug": "zai_glm-5.2-high"
-    },
-    "zai/glm-5.2": {
-        "company": "zAI",
-        "label": "GLM 5.2",
-        "release_date": "2026-06-13",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "clear_thinking": false
-        },
-        "costs_per_million_token": {
-            "input": 1.4,
-            "output": 4.4,
-            "cache": {
-                "read": 0.26,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [
-            {
-                "zai/glm-5.2-high": {
-                    "default_parameters": {
-                        "reasoning_effort": "high"
-                    }
-                }
-            },
-            {
-                "zai/glm-5.2-max-tokens-48k-top-p-1": {
-                    "default_parameters": {
-                        "temperature": 1,
-                        "top_p": 1.0,
-                        "max_tokens": 48000,
-                        "reasoning_effort": "max"
-                    }
-                }
-            },
-            {
-                "zai/glm-5.2-max-tokens-64k-top-p-1": {
-                    "default_parameters": {
-                        "temperature": 1,
-                        "top_p": 1.0,
-                        "max_tokens": 64000,
-                        "reasoning_effort": "max"
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95,
-            "reasoning_effort": "max"
-        },
-        "provider_endpoint": "glm-5.2",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5.2",
-        "slug": "zai_glm-5.2"
-    },
     "fireworks/glm-5p2": {
         "company": "zAI",
         "label": "GLM 5.2 (Fireworks)",
@@ -565,6 +519,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -617,6 +572,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": false,
             "batch": false,
@@ -666,6 +622,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -705,6 +662,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": false,
             "batch": false,
@@ -766,6 +724,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": true,
             "batch": false,
@@ -824,6 +783,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -860,6 +820,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -918,6 +879,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -957,6 +919,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1007,6 +970,7 @@
         },
         "supports": {
             "images": true,
+            "audio": true,
             "videos": true,
             "files": true,
             "batch": true,
@@ -1059,6 +1023,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1104,6 +1069,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1149,6 +1115,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -1208,6 +1175,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1252,6 +1220,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1299,6 +1268,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1337,6 +1307,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1384,6 +1355,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1422,6 +1394,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -1480,6 +1453,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -1544,6 +1518,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -1616,6 +1591,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1665,6 +1641,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1729,6 +1706,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1778,6 +1756,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1842,6 +1821,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1890,6 +1870,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -1938,6 +1919,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": false,
             "batch": false,
@@ -1984,6 +1966,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -2033,6 +2016,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -2093,6 +2077,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -2152,6 +2137,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -2208,6 +2194,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -2273,6 +2260,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": true,
             "batch": false,
@@ -2326,6 +2314,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": false,
             "batch": false,
@@ -2365,115 +2354,6 @@
         "full_key": "alibaba/qwen3.6-plus",
         "slug": "alibaba_qwen3.6-plus"
     },
-    "zai/glm-5.1-thinking": {
-        "company": "zAI",
-        "label": "GLM 5.1",
-        "release_date": "2026-04-01",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "clear_thinking": false
-        },
-        "costs_per_million_token": {
-            "input": 1.0,
-            "output": 3.2,
-            "cache": {
-                "read": 0.2,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "glm-5.1",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5.1-thinking",
-        "slug": "zai_glm-5.1-thinking"
-    },
-    "zai/glm-5.1": {
-        "company": "zAI",
-        "label": "GLM 5.1",
-        "release_date": "2026-04-01",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.0,
-            "output": 3.2,
-            "cache": {
-                "read": 0.2,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [
-            {
-                "zai/glm-5.1-thinking": {
-                    "properties": {
-                        "reasoning_model": true
-                    },
-                    "provider_properties": {
-                        "clear_thinking": false
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "glm-5.1",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5.1",
-        "slug": "zai_glm-5.1"
-    },
     "openrouter/arcee-ai/trinity-large-thinking": {
         "company": "Arcee AI",
         "label": "Trinity Large Thinking",
@@ -2488,6 +2368,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -2536,6 +2417,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -2586,6 +2468,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -2637,6 +2520,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -2690,6 +2574,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -2741,6 +2626,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -2790,6 +2676,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -2819,115 +2706,6 @@
         "full_key": "mistralai/mistral-small-2603",
         "slug": "mistralai_mistral-small-2603"
     },
-    "zai/glm-5-turbo-thinking": {
-        "company": "zAI",
-        "label": "GLM 5 Turbo",
-        "release_date": "2026-03-15",
-        "open_source": false,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 128000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "clear_thinking": false
-        },
-        "costs_per_million_token": {
-            "input": 1.2,
-            "output": 4.0,
-            "cache": {
-                "read": 0.24,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "glm-5-turbo",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5-turbo-thinking",
-        "slug": "zai_glm-5-turbo-thinking"
-    },
-    "zai/glm-5-turbo": {
-        "company": "zAI",
-        "label": "GLM 5 Turbo",
-        "release_date": "2026-03-15",
-        "open_source": false,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 128000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.2,
-            "output": 4.0,
-            "cache": {
-                "read": 0.24,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [
-            {
-                "zai/glm-5-turbo-thinking": {
-                    "properties": {
-                        "reasoning_model": true
-                    },
-                    "provider_properties": {
-                        "clear_thinking": false
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "glm-5-turbo",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5-turbo",
-        "slug": "zai_glm-5-turbo"
-    },
     "grok/grok-4.20-multi-agent-0309": {
         "company": "xAI",
         "label": "Grok 4.20 (Multi-Agent)",
@@ -2942,6 +2720,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -3000,6 +2779,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -3058,6 +2838,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -3109,6 +2890,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -3170,6 +2952,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -3231,6 +3014,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -3307,6 +3091,7 @@
         },
         "supports": {
             "images": true,
+            "audio": true,
             "videos": true,
             "files": true,
             "batch": true,
@@ -3358,6 +3143,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -3409,6 +3195,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": false,
             "batch": false,
@@ -3456,6 +3243,7 @@
         },
         "supports": {
             "images": true,
+            "audio": true,
             "videos": true,
             "files": true,
             "batch": true,
@@ -3518,6 +3306,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -3574,6 +3363,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": false,
             "batch": false,
@@ -3633,6 +3423,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": false,
             "batch": false,
@@ -3703,6 +3494,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -3752,6 +3544,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -3795,115 +3588,6 @@
         "full_key": "minimax/MiniMax-M2.5",
         "slug": "minimax_MiniMax-M2.5"
     },
-    "zai/glm-5-thinking": {
-        "company": "zAI",
-        "label": "GLM 5",
-        "release_date": "2026-02-11",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "clear_thinking": false
-        },
-        "costs_per_million_token": {
-            "input": 1.0,
-            "output": 3.2,
-            "cache": {
-                "read": 0.2,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "glm-5",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5-thinking",
-        "slug": "zai_glm-5-thinking"
-    },
-    "zai/glm-5": {
-        "company": "zAI",
-        "label": "GLM 5",
-        "release_date": "2026-02-11",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.0,
-            "output": 3.2,
-            "cache": {
-                "read": 0.2,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [
-            {
-                "zai/glm-5-thinking": {
-                    "properties": {
-                        "reasoning_model": true
-                    },
-                    "provider_properties": {
-                        "clear_thinking": false
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "glm-5",
-        "provider_name": "zai",
-        "full_key": "zai/glm-5",
-        "slug": "zai_glm-5"
-    },
     "anthropic/claude-opus-4-6-thinking": {
         "company": "Anthropic",
         "label": "Claude Opus 4.6 (Thinking)",
@@ -3918,6 +3602,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -3974,6 +3659,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -4038,6 +3724,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -4086,6 +3773,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -4144,6 +3832,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -4172,56 +3861,6 @@
         "full_key": "alibaba/qwen3-max-2026-01-23",
         "slug": "alibaba_qwen3-max-2026-01-23"
     },
-    "zai/glm-4.7-flashx": {
-        "company": "zAI",
-        "label": "GLM 4.7 Flash",
-        "release_date": "2026-01-19",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 128000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "clear_thinking": false
-        },
-        "costs_per_million_token": {
-            "input": 0.07,
-            "output": 0.4,
-            "cache": {
-                "read": 0.01,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "glm-4.7-flashx",
-        "provider_name": "zai",
-        "full_key": "zai/glm-4.7-flashx",
-        "slug": "zai_glm-4.7-flashx"
-    },
     "minimax/MiniMax-M2.1": {
         "company": "MiniMax",
         "label": "MiniMax-M2.1",
@@ -4236,6 +3875,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -4271,104 +3911,6 @@
         "full_key": "minimax/MiniMax-M2.1",
         "slug": "minimax_MiniMax-M2.1"
     },
-    "zai/glm-4.7": {
-        "company": "zAI",
-        "label": "GLM 4.7",
-        "release_date": "2025-12-22",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 128000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.6,
-            "output": 2.2,
-            "cache": {
-                "read": 0.11,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [
-            "vercel/zai/glm-4.7"
-        ],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 1.0
-        },
-        "provider_endpoint": "glm-4.7",
-        "provider_name": "zai",
-        "full_key": "zai/glm-4.7",
-        "slug": "zai_glm-4.7"
-    },
-    "vercel/zai/glm-4.7": {
-        "company": "zAI",
-        "label": "GLM 4.7",
-        "release_date": "2025-12-22",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 128000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.6,
-            "output": 2.2,
-            "cache": {
-                "read": 0.11,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 1.0
-        },
-        "provider_endpoint": "zai/glm-4.7",
-        "provider_name": "vercel",
-        "full_key": "vercel/zai/glm-4.7",
-        "slug": "vercel_zai_glm-4.7"
-    },
     "xiaomi/mimo-v2-flash": {
         "company": "Xiaomi",
         "label": "MiMo V2 Flash",
@@ -4383,6 +3925,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -4431,6 +3974,7 @@
         },
         "supports": {
             "images": true,
+            "audio": true,
             "videos": true,
             "files": true,
             "batch": true,
@@ -4482,6 +4026,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -4530,6 +4075,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -4576,6 +4122,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -4627,6 +4174,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -4680,6 +4228,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -4731,6 +4280,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -4773,6 +4323,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -4815,6 +4366,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -4866,6 +4418,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -4908,6 +4461,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -4963,6 +4517,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -5026,6 +4581,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -5079,6 +4635,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -5132,6 +4689,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -5183,6 +4741,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -5234,6 +4793,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -5285,6 +4845,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -5325,6 +4886,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -5374,6 +4936,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -5426,6 +4989,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -5472,114 +5036,6 @@
         "full_key": "anthropic/claude-haiku-4-5-20251001",
         "slug": "anthropic_claude-haiku-4-5-20251001"
     },
-    "zai/glm-4.6": {
-        "company": "zAI",
-        "label": "GLM 4.6",
-        "release_date": "2025-09-30",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 122880,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.6,
-            "output": 2.2,
-            "cache": {
-                "read": 0.11,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [
-            {
-                "fireworks/glm-4p6": {
-                    "metadata": {
-                        "deprecated": true
-                    },
-                    "costs_per_million_token": {
-                        "input": 0.55,
-                        "output": 2.19
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 0.6,
-            "top_p": 1.0
-        },
-        "provider_endpoint": "glm-4.6",
-        "provider_name": "zai",
-        "full_key": "zai/glm-4.6",
-        "slug": "zai_glm-4.6"
-    },
-    "fireworks/glm-4p6": {
-        "company": "zAI",
-        "label": "GLM 4.6",
-        "release_date": "2025-09-30",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 122880,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": true,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.55,
-            "output": 2.19,
-            "cache": {
-                "read": 0.11,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.6,
-            "top_p": 1.0
-        },
-        "provider_endpoint": "glm-4p6",
-        "provider_name": "fireworks",
-        "full_key": "fireworks/glm-4p6",
-        "slug": "fireworks_glm-4p6"
-    },
     "deepseek/deepseek-reasoner": {
         "company": "DeepSeek",
         "label": "DeepSeek Reasoner",
@@ -5594,6 +5050,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -5641,6 +5098,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -5688,6 +5146,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -5751,6 +5210,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -5822,6 +5282,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -5872,6 +5333,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -5913,6 +5375,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -5955,6 +5418,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -6008,6 +5472,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -6064,6 +5529,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -6117,6 +5583,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -6172,6 +5639,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -6225,6 +5693,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -6267,6 +5736,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -6308,6 +5778,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -6350,6 +5821,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -6398,6 +5870,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -6449,6 +5922,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -6497,6 +5971,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -6550,6 +6025,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -6603,6 +6079,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -6656,6 +6133,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -6707,6 +6185,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -6758,6 +6237,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -6809,6 +6289,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -6857,6 +6338,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -6905,6 +6387,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -6947,6 +6430,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -6997,6 +6481,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -7049,6 +6534,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -7095,222 +6581,6 @@
         "full_key": "anthropic/claude-opus-4-1-20250805",
         "slug": "anthropic_claude-opus-4-1-20250805"
     },
-    "zai/glm-4.5-air": {
-        "company": "zAI",
-        "label": "GLM 4.5 Air",
-        "release_date": "2025-07-28",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 128000,
-            "max_tokens": 81920,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.2,
-            "output": 1.1,
-            "cache": {
-                "read": 0.03,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [
-            {
-                "together/zai-org/GLM-4.5-Air-FP8": {
-                    "metadata": {
-                        "deprecated": true
-                    },
-                    "costs_per_million_token": {
-                        "input": 0.22,
-                        "output": 0.88
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 0.6,
-            "top_p": 1.0
-        },
-        "provider_endpoint": "glm-4.5-air",
-        "provider_name": "zai",
-        "full_key": "zai/glm-4.5-air",
-        "slug": "zai_glm-4.5-air"
-    },
-    "zai/glm-4.5": {
-        "company": "zAI",
-        "label": "GLM 4.5",
-        "release_date": "2025-07-28",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 128000,
-            "max_tokens": 81920,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.6,
-            "output": 2.2,
-            "cache": {
-                "read": 0.11,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [
-            {
-                "fireworks/glm-4p5": {
-                    "metadata": {
-                        "deprecated": true
-                    },
-                    "costs_per_million_token": {
-                        "input": 0.55,
-                        "output": 2.19
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 0.6,
-            "top_p": 1.0
-        },
-        "provider_endpoint": "glm-4.5",
-        "provider_name": "zai",
-        "full_key": "zai/glm-4.5",
-        "slug": "zai_glm-4.5"
-    },
-    "together/zai-org/GLM-4.5-Air-FP8": {
-        "company": "zAI",
-        "label": "GLM 4.5 Air",
-        "release_date": "2025-07-28",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 128000,
-            "max_tokens": 81920,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": true,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.22,
-            "output": 0.88,
-            "cache": {
-                "read": 0.03,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.6,
-            "top_p": 1.0
-        },
-        "provider_endpoint": "zai-org/GLM-4.5-Air-FP8",
-        "provider_name": "together",
-        "full_key": "together/zai-org/GLM-4.5-Air-FP8",
-        "slug": "together_zai-org_GLM-4.5-Air-FP8"
-    },
-    "fireworks/glm-4p5": {
-        "company": "zAI",
-        "label": "GLM 4.5",
-        "release_date": "2025-07-28",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "properties": {
-            "context_window": 128000,
-            "max_tokens": 81920,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": true,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.55,
-            "output": 2.19,
-            "cache": {
-                "read": 0.11,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.6,
-            "top_p": 1.0
-        },
-        "provider_endpoint": "glm-4p5",
-        "provider_name": "fireworks",
-        "full_key": "fireworks/glm-4p5",
-        "slug": "fireworks_glm-4p5"
-    },
     "google/gemini-2.5-flash-lite-thinking": {
         "company": "Google",
         "label": "Gemini 2.5 Flash Lite (Thinking)",
@@ -7325,6 +6595,7 @@
         },
         "supports": {
             "images": true,
+            "audio": true,
             "videos": true,
             "files": true,
             "batch": true,
@@ -7376,6 +6647,7 @@
         },
         "supports": {
             "images": true,
+            "audio": true,
             "videos": true,
             "files": true,
             "batch": true,
@@ -7435,6 +6707,7 @@
         },
         "supports": {
             "images": true,
+            "audio": true,
             "videos": true,
             "files": true,
             "batch": true,
@@ -7496,6 +6769,7 @@
         },
         "supports": {
             "images": true,
+            "audio": true,
             "videos": true,
             "files": true,
             "batch": true,
@@ -7547,6 +6821,7 @@
         },
         "supports": {
             "images": true,
+            "audio": true,
             "videos": true,
             "files": true,
             "batch": true,
@@ -7606,6 +6881,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -7659,6 +6935,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -7715,6 +6992,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -7768,6 +7046,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -7810,6 +7089,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -7863,6 +7143,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -7916,6 +7197,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -7969,6 +7251,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8022,6 +7305,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8072,6 +7356,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -8131,6 +7416,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -8198,6 +7484,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -8246,6 +7533,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -8302,6 +7590,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -8344,6 +7633,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8397,6 +7687,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8450,6 +7741,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8501,6 +7793,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8552,6 +7845,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8606,6 +7900,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8660,6 +7955,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8714,6 +8010,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8766,6 +8063,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8818,6 +8116,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -8870,6 +8169,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -8918,6 +8218,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -8966,6 +8267,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -9014,6 +8316,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -9062,6 +8365,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -9110,6 +8414,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": false,
@@ -9164,6 +8469,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -9206,6 +8512,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -9248,6 +8555,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9301,6 +8609,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9352,6 +8661,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9403,6 +8713,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -9443,6 +8754,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9497,6 +8809,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9548,6 +8861,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9599,6 +8913,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -9641,6 +8956,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": false,
             "batch": false,
@@ -9686,6 +9002,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -9731,6 +9048,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": true,
             "files": false,
             "batch": false,
@@ -9776,6 +9094,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9830,6 +9149,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9882,6 +9202,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9934,6 +9255,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -9986,6 +9308,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -10040,6 +9363,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -10092,6 +9416,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -10144,6 +9469,7 @@
         },
         "supports": {
             "images": true,
+            "audio": false,
             "videos": false,
             "files": true,
             "batch": true,
@@ -10194,6 +9520,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": true,
@@ -10238,6 +9565,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": true,
@@ -10282,6 +9610,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -10321,6 +9650,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -10360,6 +9690,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,
@@ -10399,6 +9730,7 @@
         },
         "supports": {
             "images": false,
+            "audio": false,
             "videos": false,
             "files": false,
             "batch": false,

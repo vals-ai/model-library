@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 import os
 import time
-from typing import Any, Protocol, cast
+from typing import Any, Literal, Protocol, Self, cast
 
 import boto3
 from boto3.dynamodb.types import TypeDeserializer
+from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
 from model_gateway.usage_ledger import schema
 from model_gateway.usage_ledger.dynamodb_writer import serialize_item
@@ -18,11 +19,13 @@ from model_gateway.usage_ledger.redshift_export import (
     export_batch_id,
     export_data_key,
     export_manifest_key,
+    logical_export_window,
     parquet_bytes_from_rows,
     plan_logical_export_window,
 )
 from model_gateway.usage_ledger.redshift_load import (
     RedshiftWindowLoad,
+    analytics_refresh_statements,
     copy_window_statements,
     finalize_window_statements,
     prepare_window_statements,
@@ -47,6 +50,29 @@ class RedshiftDataClient(Protocol):
 
 class RedshiftStatementError(RuntimeError):
     pass
+
+
+class _WindowRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    start: AwareDatetime
+    end: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_window(self) -> Self:
+        if self.start.microsecond or self.end.microsecond:
+            raise ValueError("window boundaries must use whole-second timestamps")
+        if self.start >= self.end:
+            raise ValueError("window end must be after start")
+        return self
+
+
+class BackfillRequest(_WindowRequest):
+    operation: Literal["backfill"]
+
+
+class AnalyticsRefreshRequest(_WindowRequest):
+    operation: Literal["refresh_analytics"]
 
 
 @dataclass(frozen=True)
@@ -95,6 +121,7 @@ def extract_export_window(
     config: RedshiftExportJobConfig,
     dynamodb_client: DynamoDbQueryClient,
     loaded_at: datetime,
+    batch_namespace: str | None = None,
 ) -> ExportWindowExtraction:
     shards: list[ExportShardExtraction] = []
     for shard in range(config.shards):
@@ -105,7 +132,11 @@ def extract_export_window(
             end=window.end,
             shard=shard,
         )
-        batch_id = export_batch_id(window, shard=shard)
+        batch_id = export_batch_id(
+            window,
+            shard=shard,
+            namespace=batch_namespace,
+        )
         rows = tuple(
             staging_row_from_redshift_rows(
                 redshift_rows_from_usage_event(
@@ -164,24 +195,28 @@ def write_export_window(
     return manifest_uri
 
 
-def run_export_job(
+def run_export_window(
     *,
+    window: LogicalExportWindow,
     config: RedshiftExportJobConfig,
     dynamodb_client: DynamoDbQueryClient,
     s3_client: S3PutObjectClient,
     redshift_data_client: RedshiftDataClient,
-    now: datetime | None = None,
-) -> None:
-    current_time = (now or datetime.now(UTC)).astimezone(UTC)
-    window = plan_logical_export_window(now=current_time)
+    loaded_at: datetime | None = None,
+    batch_namespace: str | None = None,
+    refresh_analytics: bool = True,
+) -> int:
+    current_time = (loaded_at or datetime.now(UTC)).astimezone(UTC)
     extracted = extract_export_window(
         window,
         config=config,
         dynamodb_client=dynamodb_client,
         loaded_at=current_time,
+        batch_namespace=batch_namespace,
     )
-    if not any(shard.rows for shard in extracted.shards):
-        return
+    row_count = sum(len(shard.rows) for shard in extracted.shards)
+    if row_count == 0:
+        return 0
 
     manifest_s3_uri = write_export_window(
         extracted,
@@ -209,7 +244,11 @@ def run_export_job(
         ),
         (
             "usage-redshift-window-finalize",
-            finalize_window_statements(load, schema=config.redshift_schema_name),
+            finalize_window_statements(
+                load,
+                schema=config.redshift_schema_name,
+                refresh_analytics=refresh_analytics,
+            ),
         ),
     )
     for statement_name, statements in submissions:
@@ -219,6 +258,73 @@ def run_export_job(
             config=config,
             redshift_data_client=redshift_data_client,
         )
+    return row_count
+
+
+def run_export_job(
+    *,
+    config: RedshiftExportJobConfig,
+    dynamodb_client: DynamoDbQueryClient,
+    s3_client: S3PutObjectClient,
+    redshift_data_client: RedshiftDataClient,
+    now: datetime | None = None,
+) -> None:
+    current_time = (now or datetime.now(UTC)).astimezone(UTC)
+    run_export_window(
+        window=plan_logical_export_window(now=current_time),
+        config=config,
+        dynamodb_client=dynamodb_client,
+        s3_client=s3_client,
+        redshift_data_client=redshift_data_client,
+        loaded_at=current_time,
+    )
+
+
+def run_export_event(
+    event: Mapping[str, object],
+    *,
+    config: RedshiftExportJobConfig,
+    dynamodb_client: DynamoDbQueryClient,
+    s3_client: S3PutObjectClient,
+    redshift_data_client: RedshiftDataClient,
+    now: datetime | None = None,
+) -> dict[str, bool | int] | None:
+    if event.get("operation") == "refresh_analytics":
+        request = AnalyticsRefreshRequest.model_validate(event)
+        _execute_submission(
+            analytics_refresh_statements(
+                start=request.start,
+                end=request.end,
+                schema=config.redshift_schema_name,
+            ),
+            statement_name="usage-redshift-backfill-refresh",
+            config=config,
+            redshift_data_client=redshift_data_client,
+        )
+        return {"refreshed": True}
+
+    if "operation" not in event:
+        run_export_job(
+            config=config,
+            dynamodb_client=dynamodb_client,
+            s3_client=s3_client,
+            redshift_data_client=redshift_data_client,
+            now=now,
+        )
+        return None
+
+    request = BackfillRequest.model_validate(event)
+    rows = run_export_window(
+        window=logical_export_window(start=request.start, end=request.end),
+        config=replace(config, export_prefix=f"{config.export_prefix}/backfill"),
+        dynamodb_client=dynamodb_client,
+        s3_client=s3_client,
+        redshift_data_client=redshift_data_client,
+        loaded_at=now,
+        batch_namespace="backfill",
+        refresh_analytics=False,
+    )
+    return {"loaded": rows > 0, "rows": rows}
 
 
 def _execute_submission(
@@ -237,29 +343,8 @@ def _execute_submission(
     _wait_for_statement(redshift_data_client, str(response["Id"]))
 
 
-def _require_utc(value: datetime) -> datetime:
-    if value.tzinfo is None:
-        raise ValueError("datetime must be timezone-aware")
-    return value.astimezone(UTC)
-
-
-def _parse_utc_iso(value: str) -> datetime:
-    normalized = value.strip()
-    if normalized.endswith("Z"):
-        normalized = normalized[:-1] + "+00:00"
-    return _require_utc(datetime.fromisoformat(normalized))
-
-
-def _datetime_from_object(value: object) -> datetime:
-    if isinstance(value, datetime):
-        return _require_utc(value)
-    if isinstance(value, str):
-        return _parse_utc_iso(value)
-    raise TypeError("expected UTC datetime or ISO string")
-
-
 def _isoformat_utc(value: datetime) -> str:
-    return _require_utc(value).isoformat().replace("+00:00", "Z")
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _query_full_raw_events_for_export(
@@ -270,26 +355,23 @@ def _query_full_raw_events_for_export(
     end: datetime,
     shard: int,
 ) -> tuple[dict[str, object], ...]:
-    start_dt = _require_utc(start)
-    end_dt = _require_utc(end)
-    if start_dt >= end_dt:
-        raise ValueError("start must be earlier than end")
-
     events: list[dict[str, object]] = []
     deserializer = cast(Any, TypeDeserializer())
-    for day, day_start, day_end in _day_windows(start_dt, end_dt):
+    for day, day_start, day_end in _day_windows(start, end):
         sk_start = f"TS#{_raw_usage_event_sk_start(day_start)}"
-        sk_end = f"TS#{_raw_usage_event_sk_end(day_end)}\uffff"
+        sk_end = f"TS#{_raw_usage_event_sk_end(day_end)}"
         exclusive_start_key: object | None = None
         while True:
             kwargs: dict[str, object] = {
                 "TableName": table_name,
                 "KeyConditionExpression": "PK = :pk AND SK BETWEEN :start AND :end",
+                "FilterExpression": "schema_version = :schema_version",
                 "ExpressionAttributeValues": serialize_item(
                     {
                         ":pk": schema.usage_day_pk(day, shard),
                         ":start": sk_start,
                         ":end": sk_end,
+                        ":schema_version": schema.USAGE_EVENT_SCHEMA_VERSION,
                     }
                 ),
                 "ConsistentRead": True,
@@ -297,34 +379,21 @@ def _query_full_raw_events_for_export(
             if exclusive_start_key is not None:
                 kwargs["ExclusiveStartKey"] = exclusive_start_key
             response = client.query(**kwargs)
-            for item in _deserialize_items(response.get("Items", []), deserializer):
-                if item.get("entity_type") != "usage_event":
-                    continue
-                completed_at = _datetime_from_object(item.get("completed_at"))
-                if start_dt <= completed_at < end_dt:
-                    events.append(item)
+            events.extend(_deserialize_items(response.get("Items", []), deserializer))
             exclusive_start_key = response.get("LastEvaluatedKey")
             if exclusive_start_key is None:
                 break
-    return tuple(sorted(events, key=lambda event: str(event.get("completed_at", ""))))
+    return tuple(events)
 
 
 def _deserialize_items(
     items_value: object, deserializer: Any
 ) -> list[dict[str, object]]:
-    if not isinstance(items_value, list):
-        return []
-    items: list[dict[str, object]] = []
-    for raw_item in cast(list[object], items_value):
-        if not isinstance(raw_item, dict):
-            continue
-        item = {
-            str(key): deserializer.deserialize(value)
-            for key, value in cast(dict[object, object], raw_item).items()
-            if isinstance(value, dict)
-        }
-        items.append(item)
-    return items
+    raw_items = cast(list[dict[str, dict[str, Any]]], items_value)
+    return [
+        {key: deserializer.deserialize(value) for key, value in raw_item.items()}
+        for raw_item in raw_items
+    ]
 
 
 def _raw_usage_event_sk_start(start: datetime) -> str:
@@ -332,7 +401,9 @@ def _raw_usage_event_sk_start(start: datetime) -> str:
 
 
 def _raw_usage_event_sk_end(end: datetime) -> str:
-    return _isoformat_utc(end.replace(microsecond=0))
+    # Event keys append a `Z` or fractional seconds before `#USG#...`, so the
+    # bare whole-second prefix makes inclusive BETWEEN end-exclusive.
+    return _isoformat_utc(end.replace(microsecond=0)).removesuffix("Z")
 
 
 def _day_windows(
@@ -344,15 +415,18 @@ def _day_windows(
         next_day = current + timedelta(days=1)
         window_start = max(start, current)
         window_end = min(end, next_day)
-        if window_start < window_end:
-            windows.append((window_start.strftime("%Y%m%d"), window_start, window_end))
+        windows.append((window_start.strftime("%Y%m%d"), window_start, window_end))
         current = next_day
     return windows
 
 
-def handler(_event: Mapping[str, object], _context: object) -> None:
+def handler(
+    event: Mapping[str, object],
+    _context: object,
+) -> dict[str, bool | int] | None:
     boto3_client = cast(Any, boto3).client
-    run_export_job(
+    return run_export_event(
+        event,
         config=RedshiftExportJobConfig.from_env(),
         dynamodb_client=cast(DynamoDbQueryClient, boto3_client("dynamodb")),
         s3_client=cast(S3PutObjectClient, boto3_client("s3")),

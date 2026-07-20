@@ -46,6 +46,7 @@ from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.input import normalize_query_input
 from model_library.base.output.result import ProviderToolEvent
 from model_library.exceptions import (
+    BadInputError,
     ImmediateRetryException,
     NoMatchingToolCallError,
     UnexpectedSystemInputError,
@@ -544,6 +545,8 @@ class AnthropicModel(LLM):
                         "file_id": image.file_id,
                     },
                 }
+            case _:
+                raise BadInputError("Anthropic does not support byte-backed files")
 
     @override
     async def parse_file(
@@ -576,6 +579,8 @@ class AnthropicModel(LLM):
                         "file_id": file.file_id,
                     },
                 }
+            case _:
+                raise BadInputError("Anthropic does not support byte-backed files")
 
     @property
     @override

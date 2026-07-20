@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from decimal import Decimal
 import json
+from pathlib import Path
 from typing import Any, cast
 
 import pytest
@@ -46,7 +48,12 @@ def _rule(name: str = "dev-email-1d") -> cost_alerts.CostAlertRule:
     )
 
 
-def _row(dimension: str, cost: str, requests: int = 1) -> cost_alerts.ComparisonRow:
+def _row(
+    dimension: str,
+    cost: str,
+    requests: int = 1,
+    eligible_requests: int | None = None,
+) -> cost_alerts.ComparisonRow:
     current = Decimal(cost)
     return cost_alerts.ComparisonRow(
         bucket_start_utc=datetime(2026, 7, 10, 7, tzinfo=UTC),
@@ -55,6 +62,9 @@ def _row(dimension: str, cost: str, requests: int = 1) -> cost_alerts.Comparison
         watermark_utc=datetime(2026, 7, 10, 20, tzinfo=UTC),
         dimension_value=dimension,
         current_request_count=requests,
+        current_eligible_request_count=(
+            requests if eligible_requests is None else eligible_requests
+        ),
         current_cost_usd=current,
         previous_cost_usd=Decimal("0"),
         absolute_increase_usd=current,
@@ -68,7 +78,7 @@ def _install_handler(
     table: FakeStateTable,
     sender: FakeSlackSender,
     rows: tuple[cost_alerts.ComparisonRow, ...],
-) -> list[cost_alerts.CostAlertRule]:
+) -> tuple[list[cost_alerts.CostAlertRule], list[tuple[str, ...]]]:
     config = json.dumps(
         {
             "rules": [
@@ -93,13 +103,23 @@ def _install_handler(
     monkeypatch.setattr(cost_alert_handler, "_state_table", lambda _name: table)
     monkeypatch.setattr(cost_alert_handler, "_slack_sender", lambda _url: sender)
     monkeypatch.setattr(cost_alert_handler, "_redshift_client", object)
+    ignored_model_keys = ("provider/ignored",)
+    monkeypatch.setattr(
+        cost_alert_handler,
+        "_ignored_for_cost_model_keys",
+        lambda: ignored_model_keys,
+    )
     queried_rules: list[cost_alerts.CostAlertRule] = []
+    ignored_model_key_calls: list[tuple[str, ...]] = []
 
     def query_rules(
         **kwargs: object,
     ) -> tuple[tuple[cost_alerts.CostAlertRule, dict[str, object]], ...]:
         rules = cast(tuple[cost_alerts.CostAlertRule, ...], kwargs["rules"])
         queried_rules.extend(rules)
+        ignored_model_key_calls.append(
+            tuple(cast(Sequence[str], kwargs["ignored_model_keys"]))
+        )
         return tuple((rule, {}) for rule in rules)
 
     monkeypatch.setattr(cost_alert_handler, "_query_rules", query_rules)
@@ -108,12 +128,35 @@ def _install_handler(
         "parse_comparison_rows",
         lambda _result: rows,
     )
-    monkeypatch.setattr(
-        cost_alert_handler,
-        "_query_breakdowns",
-        lambda **_kwargs: {"ColumnMetadata": [], "Records": []},
+
+    def query_breakdowns(**kwargs: object) -> dict[str, object]:
+        ignored_model_key_calls.append(
+            tuple(cast(Sequence[str], kwargs["ignored_model_keys"]))
+        )
+        return {"ColumnMetadata": [], "Records": []}
+
+    monkeypatch.setattr(cost_alert_handler, "_query_breakdowns", query_breakdowns)
+    return queried_rules, ignored_model_key_calls
+
+
+def test_ignored_for_cost_model_keys_come_from_generated_registry(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    registry_path = tmp_path / "all_models.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "provider/included": {"metadata": {"ignored_for_cost": False}},
+                "provider/ignored": {"metadata": {"ignored_for_cost": True}},
+            }
+        )
     )
-    return queried_rules
+    monkeypatch.setattr(cost_alert_handler, "_MODEL_REGISTRY_PATH", registry_path)
+
+    ignored_model_keys = cost_alert_handler._ignored_for_cost_model_keys()
+
+    assert list(ignored_model_keys) == ["provider/ignored"]
 
 
 def test_handler_posts_and_persists_each_breached_scope(
@@ -121,7 +164,7 @@ def test_handler_posts_and_persists_each_breached_scope(
 ) -> None:
     table = FakeStateTable()
     sender = FakeSlackSender()
-    queried = _install_handler(
+    queried, ignored_model_key_calls = _install_handler(
         monkeypatch,
         table=table,
         sender=sender,
@@ -135,6 +178,10 @@ def test_handler_posts_and_persists_each_breached_scope(
     cost_alert_handler.handler({}, object())
 
     assert queried == [_rule()]
+    assert [list(keys) for keys in ignored_model_key_calls] == [
+        ["provider/ignored"],
+        ["provider/ignored"],
+    ]
     assert len(sender.payloads) == 2
     assert len(table.items) == 2
     assert all(
@@ -222,6 +269,7 @@ def test_breakdown_enrichment_preserves_candidate_order(
         redshift_client=object(),
         workgroup_name="workgroup",
         database_name="database",
+        ignored_model_keys=(),
         schema="gateway_usage",
         rule=_rule(),
         candidates=(first, second),
@@ -260,6 +308,7 @@ def test_rule_queries_run_eight_at_a_time_and_yield_in_config_order() -> None:
             redshift_client=client,
             workgroup_name="workgroup",
             database_name="database",
+            ignored_model_keys=(),
             schema="gateway_usage",
             rules=rules,
         )

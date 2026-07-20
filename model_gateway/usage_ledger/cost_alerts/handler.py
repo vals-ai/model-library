@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import os
+from pathlib import Path
 import time
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, Literal, cast
+from typing import Any, Final, Literal, cast
 
 import boto3  # pyright: ignore[reportMissingImports]
 
@@ -20,6 +22,9 @@ _QUERY_POLL_INTERVAL_SECONDS = 1.0
 _MAX_CONCURRENT_RULE_QUERIES = 8
 _STATE_TTL_DAYS = 30
 _ESCALATION_STEP = Decimal("0.25")
+_MODEL_REGISTRY_PATH: Final = (
+    Path(__file__).resolve().parents[3] / "model_library" / "config" / "all_models.json"
+)
 
 
 @dataclass(frozen=True)
@@ -27,6 +32,23 @@ class AlertState:
     pk: str
     last_alerted_bucket: datetime
     last_notified_level: int
+
+
+def _ignored_for_cost_model_keys() -> tuple[str, ...]:
+    try:
+        registry = cast(
+            dict[str, dict[str, Any]],
+            json.loads(_MODEL_REGISTRY_PATH.read_text(encoding="utf-8")),
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(
+            f"Unable to load generated model registry: {_MODEL_REGISTRY_PATH}"
+        ) from exc
+    return tuple(
+        model_key
+        for model_key, config in registry.items()
+        if cast(dict[str, object], config["metadata"])["ignored_for_cost"]
+    )
 
 
 def handler(_event: Mapping[str, object], _context: object) -> None:
@@ -41,11 +63,13 @@ def handler(_event: Mapping[str, object], _context: object) -> None:
     database_name = _env("GATEWAY_USAGE_REDSHIFT_DATABASE_NAME")
     schema = _env("GATEWAY_USAGE_REDSHIFT_SCHEMA_NAME")
     stage = _env("GATEWAY_STAGE")
+    ignored_model_keys = _ignored_for_cost_model_keys()
     redshift_client = _redshift_client()
     query_results = _query_rules(
         redshift_client=redshift_client,
         workgroup_name=workgroup_name,
         database_name=database_name,
+        ignored_model_keys=ignored_model_keys,
         schema=schema,
         rules=rules,
     )
@@ -56,6 +80,7 @@ def handler(_event: Mapping[str, object], _context: object) -> None:
             redshift_client=redshift_client,
             workgroup_name=workgroup_name,
             database_name=database_name,
+            ignored_model_keys=ignored_model_keys,
             schema=schema,
             stage=stage,
             rule=rule,
@@ -70,6 +95,7 @@ def _process_rule(
     redshift_client: Any,
     workgroup_name: str,
     database_name: str,
+    ignored_model_keys: Sequence[str],
     stage: str,
     rule: cost_alerts.CostAlertRule,
     comparison_result: Mapping[str, object],
@@ -93,6 +119,7 @@ def _process_rule(
         redshift_client=redshift_client,
         workgroup_name=workgroup_name,
         database_name=database_name,
+        ignored_model_keys=ignored_model_keys,
         schema=schema,
         rule=rule,
         candidates=notification_candidates,
@@ -114,6 +141,7 @@ def _add_required_breakdowns(
     redshift_client: Any,
     workgroup_name: str,
     database_name: str,
+    ignored_model_keys: Sequence[str],
     rule: cost_alerts.CostAlertRule,
     candidates: Sequence[cost_alerts.AlertCandidate],
     schema: str,
@@ -125,6 +153,7 @@ def _add_required_breakdowns(
             redshift_client=redshift_client,
             workgroup_name=workgroup_name,
             database_name=database_name,
+            ignored_model_keys=ignored_model_keys,
             schema=schema,
             rule=rule,
             candidates=candidates,
@@ -198,6 +227,7 @@ def _query_rules(
     redshift_client: Any,
     workgroup_name: str,
     database_name: str,
+    ignored_model_keys: Sequence[str],
     rules: Sequence[cost_alerts.CostAlertRule],
     schema: str,
 ) -> Iterator[tuple[cost_alerts.CostAlertRule, dict[str, object]]]:
@@ -208,7 +238,11 @@ def _query_rules(
                 redshift_client=redshift_client,
                 workgroup_name=workgroup_name,
                 database_name=database_name,
-                sql=cost_alerts.build_rule_query(rule, schema=schema),
+                sql=cost_alerts.build_rule_query(
+                    rule,
+                    ignored_model_keys=ignored_model_keys,
+                    schema=schema,
+                ),
                 statement_name=f"gateway-cost-alert-{rule.name}",
             )
             for index, rule in enumerate(batch)
@@ -242,6 +276,7 @@ def _query_breakdowns(
     redshift_client: Any,
     workgroup_name: str,
     database_name: str,
+    ignored_model_keys: Sequence[str],
     rule: cost_alerts.CostAlertRule,
     candidates: Sequence[cost_alerts.AlertCandidate],
     schema: str,
@@ -252,6 +287,7 @@ def _query_breakdowns(
         database_name=database_name,
         sql=cost_alerts.build_breakdown_query(
             rule,
+            ignored_model_keys=ignored_model_keys,
             scope_values=tuple(
                 candidate.scope_value
                 for candidate in candidates

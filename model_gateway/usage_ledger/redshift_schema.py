@@ -10,6 +10,9 @@ import re
 from typing import Final, Literal, NamedTuple
 
 WAREHOUSE_SCHEMA: Final = "gateway_usage"
+USAGE_EVENTS_STAGING_TABLE_NAME: Final = "usage_events_staging_v2"
+USAGE_EVENT_PERFORMANCE_TABLE_NAME: Final = "usage_event_performance_v2"
+PERFORMANCE_VARBYTE_MAX_BYTES: Final = 1_048_576
 MISSING_DIMENSION_VALUE: Final = "__missing__"
 RESERVED_DIMENSION_VALUES: Final[tuple[str, ...]] = (MISSING_DIMENSION_VALUE,)
 
@@ -19,6 +22,7 @@ _SQL_LITERAL_PATTERN: Final = re.compile(r"^'(?:''|[^'])*'$")
 _ALLOWED_SQL_EXPRESSIONS: Final[frozenset[str]] = frozenset({"getdate()"})
 
 AggregateGrain = Literal["5m", "1h", "1d"]
+
 AGGREGATE_GRAINS: Final[tuple[AggregateGrain, ...]] = ("5m", "1h", "1d")
 USAGE_EVENT_FACT_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "usage_event_id",
@@ -57,19 +61,10 @@ USAGE_EVENT_FACT_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "source_sk",
     "loaded_at",
 )
-USAGE_EVENT_DEBUG_COLUMN_NAMES: Final[tuple[str, ...]] = (
+USAGE_EVENT_PERFORMANCE_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "usage_event_id",
-    "identity_json",
-    "provider_request_id",
-    "provider_response_id",
-    "config_redacted_json",
-    "metadata_json",
-    "finish_reason_json",
-    "performance_json",
-    "config_redacted_json_truncated",
-    "metadata_json_truncated",
-    "finish_reason_json_truncated",
-    "performance_json_truncated",
+    "performance",
+    "performance_truncated",
     "loaded_at",
 )
 USAGE_EVENTS_STAGING_COLUMN_NAMES: Final[tuple[str, ...]] = (
@@ -77,7 +72,7 @@ USAGE_EVENTS_STAGING_COLUMN_NAMES: Final[tuple[str, ...]] = (
     *USAGE_EVENT_FACT_COLUMN_NAMES,
     *(
         column
-        for column in USAGE_EVENT_DEBUG_COLUMN_NAMES
+        for column in USAGE_EVENT_PERFORMANCE_COLUMN_NAMES
         if column not in {"usage_event_id", "loaded_at"}
     ),
 )
@@ -273,25 +268,16 @@ def usage_events_column_sql(*, include_batch_id: bool = False) -> str:
   loaded_at timestamptz not null default getdate()"""
 
 
-def usage_events_staging_debug_column_sql() -> str:
-    return """  identity_json varchar(65535),
-  provider_request_id varchar(65535),
-  provider_response_id varchar(65535),
-  config_redacted_json varchar(65535),
-  metadata_json varchar(65535),
-  finish_reason_json varchar(65535),
-  performance_json varchar(65535),
-  config_redacted_json_truncated boolean,
-  metadata_json_truncated boolean,
-  finish_reason_json_truncated boolean,
-  performance_json_truncated boolean"""
+def usage_events_staging_performance_column_sql() -> str:
+    return f"""  performance varbyte({PERFORMANCE_VARBYTE_MAX_BYTES}),
+  performance_truncated boolean not null default false"""
 
 
 def usage_events_staging_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:
-    table = qualified_table_name("usage_events_staging", schema)
+    table = qualified_table_name(USAGE_EVENTS_STAGING_TABLE_NAME, schema)
     return f"""create table if not exists {table} (
 {usage_events_column_sql(include_batch_id=True)},
-{usage_events_staging_debug_column_sql()}
+{usage_events_staging_performance_column_sql()}
 )
 diststyle auto
 sortkey (batch_id, completed_at);"""
@@ -306,21 +292,12 @@ diststyle auto
 sortkey (completed_at);"""
 
 
-def usage_event_debug_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:
-    table = qualified_table_name("usage_event_debug", schema)
+def usage_event_performance_v2_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:
+    table = qualified_table_name(USAGE_EVENT_PERFORMANCE_TABLE_NAME, schema)
     return f"""create table if not exists {table} (
   usage_event_id varchar(128) not null,
-  identity_json super,
-  provider_request_id varchar(65535),
-  provider_response_id varchar(65535),
-  config_redacted_json super,
-  metadata_json super,
-  finish_reason_json super,
-  performance_json super,
-  config_redacted_json_truncated boolean,
-  metadata_json_truncated boolean,
-  finish_reason_json_truncated boolean,
-  performance_json_truncated boolean,
+  performance varbyte({PERFORMANCE_VARBYTE_MAX_BYTES}),
+  performance_truncated boolean not null default false,
   loaded_at timestamptz not null default getdate()
 )
 diststyle auto
@@ -647,7 +624,7 @@ def schema_statement_batches(
         create_schema_ddl(schema),
         usage_events_staging_table_ddl(schema),
         usage_events_table_ddl(schema),
-        usage_event_debug_table_ddl(schema),
+        usage_event_performance_v2_table_ddl(schema),
         *aggregate_ddls,
         usage_dimension_values_table_ddl(schema),
         analytics_dimensions_table_ddl(schema),

@@ -28,7 +28,6 @@ async def query_with_truncation_retry(
     - Then retries on ``MaxContextWindowExceededError``, shortening by 10% each time
     - Also retries on ``MAX_TOKENS`` finish reason (output truncated), shortening by 5%
     """
-    await llm.ensure_metadata_loaded()
     if llm.metadata is None and not llm._registry_key:  # pyright: ignore[reportPrivateUsage]
         raise ValueError("LLM has no registry key — use get_registry_model()")
 

@@ -41,7 +41,7 @@ claude-4-models:                    # model block
 | Field | Description |
 |-------|-------------|
 | `properties` | `context_window`, `max_tokens`, `training_cutoff`, `reasoning_model` |
-| `supports` | Boolean flags: `images`, `videos`, `files`, `batch`, `temperature`, `tools`, `output_schema` |
+| `supports` | Boolean flags: `images`, `audio`, `videos`, `files`, `batch`, `temperature`, `tools`, `output_schema` |
 | `costs_per_million_token` | `input`, `output`, optional `cache`, `batch`, `context` pricing. Set to `null` for models without known pricing |
 | `metadata` | `deprecated`, `available_for_everyone`, `available_as_evaluator`, `ignored_for_cost`, `internal_only` |
 | `default_parameters` | `temperature`, `top_p`, `top_k`, `reasoning_effort` |

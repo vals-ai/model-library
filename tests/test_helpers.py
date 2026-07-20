@@ -9,7 +9,8 @@ from typing import Any, Dict, cast
 from PIL import Image
 
 from model_library.base import InputItem, TextInput, ToolBody, ToolDefinition
-from model_library.base.input import FileWithBase64
+from model_library.base.input import FileWithBase64, FileWithBytes
+from examples.data.audio import tone_wav
 
 
 def create_test_pdf() -> bytes:
@@ -82,6 +83,18 @@ def get_example_file_base64_input() -> list[InputItem]:
             name="test.pdf",
             mime="application/pdf",
             base64=encoded,
+        ),
+    ]
+
+
+def get_example_audio_bytes_input() -> list[InputItem]:
+    return [
+        TextInput(text="Is this audio speech or a musical tone? Answer with one word."),
+        FileWithBytes(
+            type="file",
+            name="tone.wav",
+            mime="audio/wav",
+            data=tone_wav(),
         ),
     ]
 

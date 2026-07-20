@@ -3,6 +3,7 @@
 import io
 import json
 import logging
+import math
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
 from unittest.mock import AsyncMock, patch
@@ -15,8 +16,10 @@ from model_library.base.base import (
     LLM,
     LLMConfig,
     ProviderConfig,
+    ResolvedTokenRetryParams,
     TokenRetryParams,
     dump_gateway_config,
+    resolve_token_retry_params,
 )
 from model_library.base.gateway import GatewayLLM
 from model_library.registry_utils import (
@@ -27,6 +30,7 @@ from model_library.registry_utils import (
     get_registry_model,
 )
 from model_library.base.input import (
+    FileWithBytes,
     FileWithId,
     InputItem,
     RawInput,
@@ -56,6 +60,13 @@ PROXY_ENV = {
 }
 
 
+def _load_json(value: Any) -> Any:
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise AssertionError(f"Expected valid JSON: {exc}") from exc
+
+
 class _GatewaySettings:
     def __init__(self, **values: str):
         self._values = values
@@ -70,7 +81,10 @@ def _identity_with_compact_json_size(size: int) -> dict[str, str]:
     value_length = size - len('{"large":""}')
     assert value_length >= 0
     identity = {"large": "x" * value_length}
-    assert len(json.dumps(identity, sort_keys=True, separators=(",", ":"))) == size
+    compact_separators = (",", ":")
+    assert (
+        len(json.dumps(identity, sort_keys=True, separators=compact_separators)) == size
+    )
     return identity
 
 
@@ -120,47 +134,96 @@ def test_gateway_is_llm_instance():
     assert isinstance(llm, LLM)
 
 
-async def test_gateway_ensure_metadata_loaded_syncs_once():
-    llm = _make_gateway()
-    resolve = AsyncMock(
-        return_value={
-            "exists": True,
-            "effective_config": {"supports_tools": True},
-            "registry_config": _registry_config_dict(),
-            "input_context_window": 1234,
-        }
-    )
+def test_gateway_registry_model_is_immediately_configured():
+    from model_library.register_models import get_model_registry
 
-    with patch.object(llm, "aresolve_model", resolve):
-        await llm.ensure_metadata_loaded()
-        await llm.ensure_metadata_loaded()
-
-    resolve.assert_awaited_once()
-    assert llm.supports_tools is True
-    assert llm.metadata is not None
-    assert llm.metadata.full_key == "openai/gpt-4o"
-    assert llm.input_context_window is not None
-
-
-def test_gateway_registry_model_does_not_require_client_registry_config():
-    class GatewaySettings:
-        MODEL_GATEWAY_URL = PROXY_ENV["MODEL_GATEWAY_URL"]
-        MODEL_GATEWAY_API_KEY = PROXY_ENV["MODEL_GATEWAY_API_KEY"]
-
-        def get(self, name: str, default: str | None = None) -> str | None:
-            return getattr(self, name, default)
+    registry_config = get_model_registry()["openai/gpt-4o"]
+    overrides = LLMConfig(temperature=0.25)
+    identity = {"agent_name": "platform_generation"}
 
     with (
-        patch("model_library.model_library_settings", GatewaySettings()),
-        patch("model_library.registry_utils.get_registry_config", return_value=None),
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
+        patch(
+            "model_library.registry_utils.get_registry_config",
+            return_value=registry_config,
+        ) as get_config,
     ):
-        llm = get_registry_model("newprovider/new-model")
+        llm = get_registry_model(
+            "openai/gpt-4o",
+            override_config=overrides,
+            identity=identity,
+        )
+
+    get_config.assert_called_once_with("openai/gpt-4o")
+    assert isinstance(llm, GatewayLLM)
+    assert llm.metadata == registry_config
+    assert llm.metadata is not registry_config
+    assert llm._registry_key == "openai/gpt-4o"
+    assert llm.max_tokens == registry_config.properties.max_tokens
+    assert llm.supports_images is registry_config.supports.images
+    assert llm.supports_output_schema is registry_config.supports.output_schema
+    assert llm.temperature == 0.25
+    assert llm.gateway_config.model_dump(exclude_unset=True) == {"temperature": 0.25}
+    assert llm.identity == identity
+
+
+def test_gateway_registry_model_keeps_provider_overrides_out_of_transport():
+    from model_library.register_models import get_model_registry
+
+    registry_config = get_model_registry()["openai/gpt-4o"]
+    overrides = LLMConfig(
+        custom_api_key=SecretStr("provider-key"),
+        custom_endpoint="https://provider.test/v1",
+        native=False,
+        provider_config=OpenAIConfig(verbosity="low"),
+    )
+
+    with (
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
+        patch(
+            "model_library.registry_utils.get_registry_config",
+            return_value=registry_config,
+        ),
+    ):
+        llm = get_registry_model("openai/gpt-4o", override_config=overrides)
 
     assert isinstance(llm, GatewayLLM)
-    assert llm.provider == "newprovider"
-    assert llm.model_name == "new-model"
-    assert llm.supports_images is False
-    assert llm.metadata is None
+    assert llm.get_client().headers.get("Authorization") == "Bearer test-key"
+    assert llm.custom_endpoint == "https://provider.test/v1"
+    assert not llm.native
+    assert llm.gateway_config is overrides
+
+
+async def test_gateway_registry_model_sends_canonical_key_for_provider_alias():
+    from model_library.register_models import get_model_registry
+
+    registry_key = "bedrock/claude-sonnet-4-20250514-v1"
+    registry_config = get_model_registry()[registry_key]
+    assert registry_config.provider_endpoint != registry_key.partition("/")[2]
+
+    with (
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
+        patch(
+            "model_library.registry_utils.get_registry_config",
+            return_value=registry_config,
+        ),
+    ):
+        llm = get_registry_model(registry_key)
+        body = await llm.build_body([TextInput(text="hi")], tools=[])
+
+    assert llm.model_name == registry_config.provider_endpoint
+    assert body["model"] == registry_key
+
+
+def test_gateway_registry_model_requires_registry_config():
+    with (
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
+        patch("model_library.registry_utils.get_registry_config", return_value=None),
+        pytest.raises(
+            Exception, match="Model newprovider/new-model not found in registry"
+        ),
+    ):
+        get_registry_model("newprovider/new-model")
 
 
 def test_old_gateway_env_names_do_not_activate_proxy_mode():
@@ -177,13 +240,16 @@ def test_old_gateway_env_names_do_not_activate_proxy_mode():
     assert not isinstance(llm, GatewayLLM)
 
 
-def test_gateway_repr_redacts_unsynced_metadata():
-    llm = _make_gateway()
+def test_gateway_repr_uses_normal_config_state():
+    llm = GatewayLLM(
+        "gpt-4o",
+        "openai",
+        config=LLMConfig(supports_tools=True),
+    )
+
     rendered = repr(llm)
 
-    assert "supports_temperature=True" not in rendered
-    assert "supports_tools=False" not in rendered
-    assert "<unloaded: call ensure_metadata_loaded()>" in rendered
+    assert "supports_tools=True" in rendered
 
 
 async def test_gateway_query_rejects_custom_retrier_before_network():
@@ -199,6 +265,21 @@ async def test_gateway_query_rejects_unsupported_extra_parameters_before_network
 
     with pytest.raises(GatewayMethodNotSupported, match="extra parameter"):
         await llm.query("hi", stop=["done"])
+
+
+async def test_gateway_build_body_accepts_declared_query_request_field():
+    from model_gateway.types import QueryRequest
+
+    class ExtendedQueryRequest(QueryRequest):
+        transport_hint: str | None = None
+
+    llm = _make_gateway()
+    with patch("model_gateway.types.QueryRequest", ExtendedQueryRequest):
+        body = await llm.build_body(
+            [TextInput(text="hi")], transport_hint="preserve-me"
+        )
+
+    assert body["transport_hint"] == "preserve-me"
 
 
 async def test_gateway_query_explicit_identity_overrides_settings_identity():
@@ -223,8 +304,45 @@ async def test_gateway_query_explicit_identity_overrides_settings_identity():
     ):
         await llm.query("hi", identity=explicit_identity)
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["identity"] == explicit_identity
+
+
+async def test_gateway_query_serializes_file_bytes_as_json_safe_input():
+    """
+    Verify byte-backed files are JSON-safe when sent through GatewayLLM.
+
+    Test cases:
+    - FileWithBytes data is serialized as base64 in the request body.
+    - The binary append type is preserved for server-side parsing.
+    """
+    llm = _make_gateway()
+    response = httpx.Response(
+        200,
+        json={"output_text": "ok", "tool_calls": [], "metadata": {}},
+    )
+
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        return_value=response,
+    ) as mock_post:
+        await llm.query(
+            [
+                TextInput(text="listen"),
+                FileWithBytes(
+                    type="file",
+                    name="clip.wav",
+                    mime="audio/wav",
+                    data=b"audio bytes",
+                ),
+            ],
+        )
+
+    body = _load_json(mock_post.call_args[1]["content"])
+    file_input = body["inputs"][1]
+    assert file_input["append_type"] == "bytes"
+    assert file_input["data"] == "YXVkaW8gYnl0ZXM="
 
 
 async def test_gateway_query_empty_explicit_identity_does_not_fall_back_to_settings_identity():
@@ -247,7 +365,7 @@ async def test_gateway_query_empty_explicit_identity_does_not_fall_back_to_setti
     ):
         await llm.query("hi", identity={})
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["identity"] == {}
 
 
@@ -272,7 +390,7 @@ async def test_gateway_query_explicit_none_identity_uses_settings_identity():
     ):
         await llm.query("hi", identity=None)
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["identity"] == settings_identity
 
 
@@ -302,7 +420,7 @@ async def test_gateway_query_accepts_client_side_logger_kwarg():
     ) as mock_post:
         await llm.query("hi", logger=logging.getLogger("test.gateway.local"))
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert "logger" not in body
 
 
@@ -331,7 +449,7 @@ async def test_gateway_query_logs_started_and_completed_locally(caplog):
             "hi", logger=logger, run_id="run", question_id="q", query_id="qry"
         )
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     messages = [record.getMessage() for record in caplog.records]
     assert "logger" not in body
     assert any(
@@ -560,7 +678,7 @@ async def test_gateway_query_prepends_system_prompt_without_leaking_kwarg():
     ) as mock_post:
         await llm.query("hi", system_prompt="follow policy")
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert "system_prompt" not in body
     assert body["inputs"] == [
         {"kind": "system", "text": "follow policy"},
@@ -594,81 +712,6 @@ async def test_gateway_query_rejects_non_leading_system_input_before_network():
     mock_post.assert_not_called()
 
 
-def test_gateway_registry_model_does_not_fetch_registry_for_known_model():
-    class GatewaySettings:
-        MODEL_GATEWAY_URL = PROXY_ENV["MODEL_GATEWAY_URL"]
-        MODEL_GATEWAY_API_KEY = PROXY_ENV["MODEL_GATEWAY_API_KEY"]
-
-        def get(self, name: str, default: str | None = None) -> str | None:
-            return getattr(self, name, default)
-
-    with (
-        patch("model_library.model_library_settings", GatewaySettings()),
-        patch("model_library.registry_utils.get_registry_config") as mock_get_config,
-    ):
-        llm = get_registry_model("openai/gpt-4o")
-
-    assert isinstance(llm, GatewayLLM)
-    assert llm.provider == "openai"
-    assert llm.model_name == "gpt-4o"
-    assert llm.supports_temperature is True
-    assert llm.metadata is None
-    mock_get_config.assert_not_called()
-
-
-async def test_gateway_registry_model_syncs_metadata_when_called_explicitly():
-    class GatewaySettings:
-        MODEL_GATEWAY_URL = PROXY_ENV["MODEL_GATEWAY_URL"]
-        MODEL_GATEWAY_API_KEY = PROXY_ENV["MODEL_GATEWAY_API_KEY"]
-
-        def get(self, name: str, default: str | None = None) -> str | None:
-            return getattr(self, name, default)
-
-    response = httpx.Response(
-        200,
-        json={
-            "exists": True,
-            "model": "openai/gpt-4o",
-            "effective_config": {
-                "supports_tools": True,
-                "supports_images": False,
-                "supports_files": False,
-                "supports_videos": False,
-                "supports_batch": True,
-                "supports_temperature": True,
-                "supports_output_schema": False,
-                "max_tokens": 456,
-            },
-            "registry_config": _registry_config_dict(),
-            "input_context_window": 123_456,
-        },
-    )
-
-    with patch("model_library.model_library_settings", GatewaySettings()):
-        llm = get_registry_model("openai/gpt-4o")
-
-    assert isinstance(llm, GatewayLLM)
-
-    with patch(
-        "httpx.AsyncClient.post",
-        new_callable=AsyncMock,
-        return_value=response,
-    ) as mock_post:
-        await llm.sync_model_metadata()
-
-    assert mock_post.call_args[0][0].endswith("/models/resolve")
-    assert llm.supports_tools is True
-    assert llm.supports_batch is True
-    assert llm.batch is not None
-    with pytest.raises(GatewayMethodNotSupported, match="batch is not supported"):
-        await llm.batch.batch_query("batch", [])
-    assert llm.supports_temperature is True
-    assert llm.max_tokens == 456
-    assert llm.metadata is not None
-    assert llm.metadata.full_key == "openai/gpt-4o"
-    assert llm.gateway_input_context_window is not None
-
-
 def _model_keys_with_provider_config() -> list[str]:
     from model_library.register_models import get_model_registry, get_provider_registry
 
@@ -687,7 +730,7 @@ def test_gateway_config_roundtrips_all_provider_configs(model_key: str):
     from model_library.base.base import dump_llm_config, normalize_llm_config_for_model
     from model_library.registry_utils import create_config
     from model_library.register_models import get_provider_registry
-    from model_gateway.types import ModelResolveRequest
+    from model_gateway.types import QueryRequest
 
     registry_config = get_registry_config(model_key)
     assert registry_config is not None
@@ -700,7 +743,9 @@ def test_gateway_config_roundtrips_all_provider_configs(model_key: str):
     config.custom_endpoint = "https://provider.test/v1"
 
     dumped = dump_llm_config(config)
-    request = ModelResolveRequest.model_validate({"model": model_key, "config": dumped})
+    request = QueryRequest.model_validate(
+        {"model": model_key, "config": dumped, "inputs": []}
+    )
     rebuilt = normalize_llm_config_for_model(model_key, request.config)
 
     assert rebuilt is not None
@@ -750,7 +795,7 @@ async def test_proxy_query_sends_full_input():
         assert isinstance(result.history[0], SystemInput)
 
         # Verify inputs were sent as flat list
-        body = json.loads(mock_post.call_args[1]["content"])
+        body = _load_json(mock_post.call_args[1]["content"])
         assert "signed_history" not in body
         assert len(body["inputs"]) == 1
         assert body["inputs"][0]["kind"] == "text"
@@ -788,14 +833,73 @@ def _moderation_response_payload(flagged: bool) -> dict[str, object]:
     }
 
 
+def test_token_retry_params_requires_input_modifier() -> None:
+    with pytest.raises(ValidationError):
+        TokenRetryParams.model_validate({"output_modifier": 2})
+async def test_llm_init_token_retry_uses_public_limit() -> None:
+    captured: list[ResolvedTokenRetryParams] = []
+
+    class FakeLLM:
+        provider = "openai"
+        model_name = "gpt-4o"
+
+        async def _init_resolved_token_retry(
+            self,
+            token_retry_params: TokenRetryParams,
+            resolved_token_retry_params: ResolvedTokenRetryParams,
+        ) -> None:
+            captured.append(resolved_token_retry_params)
+
+    params = TokenRetryParams(
+        input_modifier=1,
+        output_modifier=2,
+        limit=1_000,
+    )
+
+    await LLM.init_token_retry(cast(LLM, FakeLLM()), params)
+
+    assert len(captured) == 1
+    assert captured[0].limit == 1_000
+    assert captured[0].limit_refresh_seconds == 60
+
+
+def test_resolve_token_retry_params_uses_effective_limit() -> None:
+    params = TokenRetryParams(
+        input_modifier=1,
+        output_modifier=2,
+        use_dynamic_estimate=False,
+        limit=1_000,
+    )
+
+    resolved = resolve_token_retry_params(params, 1_000)
+
+    assert resolved.limit == 1_000
+    assert resolved.output_modifier == 2
+    assert resolved.use_dynamic_estimate is False
+    assert resolved.limit_refresh_seconds == 60
+
+
+def test_resolve_token_retry_params_requires_effective_limit() -> None:
+    params = TokenRetryParams(
+        input_modifier=1,
+        output_modifier=2,
+    )
+
+    with pytest.raises(ValueError) as exc_info:
+        resolve_token_retry_params(params, None)
+
+    assert str(exc_info.value) == (
+        "Token retry requires an explicit limit when no configured provider "
+        "default is available"
+    )
+
+
 async def test_gateway_init_token_retry_only_stores_params_and_query_sends_them():
     llm = _make_gateway()
     token_retry_params = TokenRetryParams(
         input_modifier=1,
         output_modifier=2,
         use_dynamic_estimate=False,
-        limit=1000,
-        limit_refresh_seconds=60,
     )
     response = httpx.Response(
         200,
@@ -806,34 +910,27 @@ async def test_gateway_init_token_retry_only_stores_params_and_query_sends_them(
         },
     )
 
-    with (
-        patch(
-            "model_library.base.base.TokenRetrier.init_remaining_tokens",
-            new_callable=AsyncMock,
-        ) as init_remaining_tokens,
-        patch(
-            "httpx.AsyncClient.post",
-            new_callable=AsyncMock,
-            return_value=response,
-        ) as mock_post,
-    ):
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        return_value=response,
+    ) as mock_post:
         await llm.init_token_retry(token_retry_params)
         await llm.query([TextInput(text="hi")])
 
-    init_remaining_tokens.assert_not_awaited()
-    body = json.loads(mock_post.call_args[1]["content"])
+    assert llm._resolved_token_retry_params is None
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["token_retry_params"] == {
         "input_modifier": 1.0,
         "output_modifier": 2.0,
         "use_dynamic_estimate": False,
-        "limit": 1000,
         "limit_refresh_seconds": 60,
     }
 
 
 async def test_gateway_token_count_forwards_request_and_returns_count():
     llm = _make_gateway()
-    response = httpx.Response(200, json={"tokens": 42})
+    response = httpx.Response(200, json={"tokens": "42"})
 
     with patch(
         "httpx.AsyncClient.post",
@@ -844,7 +941,7 @@ async def test_gateway_token_count_forwards_request_and_returns_count():
 
     assert tokens == 42
     assert mock_post.call_args[0][0].endswith("/tokens/count")
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["model"] == "openai/gpt-4o"
     assert body["inputs"] == [
         {"kind": "system", "text": "policy"},
@@ -868,7 +965,7 @@ async def test_gateway_rate_limit_calls_reserved_endpoint():
             await llm.get_rate_limit()
 
     assert mock_post.call_args[0][0].endswith("/rate-limit")
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body == {"model": "openai/gpt-4o", "config": {}}
 
 
@@ -901,54 +998,25 @@ async def test_gateway_registry_model_forwards_only_explicit_override_config():
     ) as mock_post:
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["config"] == {"temperature": 0.25}
 
 
-async def test_gateway_syncs_model_metadata_from_gateway():
-    llm = _make_gateway()
-    response = httpx.Response(
-        200,
-        json={
-            "exists": True,
-            "model": "openai/gpt-4o",
-            "effective_config": {
-                "supports_tools": True,
-                "supports_images": True,
-                "supports_files": False,
-                "supports_videos": False,
-                "supports_batch": True,
-                "supports_temperature": True,
-                "supports_output_schema": False,
-                "max_tokens": 123,
-            },
-            "registry_config": _registry_config_dict(),
-        },
-    )
+def test_gateway_mode_registry_config_uses_loaded_snapshot():
+    from model_library.register_models import get_model_registry
 
-    with patch(
-        "httpx.AsyncClient.post",
-        new_callable=AsyncMock,
-        return_value=response,
-    ) as mock_post:
-        await llm.sync_model_metadata()
+    registry_config = get_model_registry()["openai/gpt-4o"]
+    with (
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
+        patch(
+            "model_library.registry_utils.get_model_registry",
+            return_value={"openai/gpt-4o": registry_config},
+        ) as get_registry,
+    ):
+        result = get_registry_config("openai/gpt-4o")
 
-    body = json.loads(mock_post.call_args[1]["content"])
-    assert mock_post.call_args[0][0].endswith("/models/resolve")
-    assert body == {
-        "model": "openai/gpt-4o",
-        "config": {},
-    }
-    assert llm.supports_tools is True
-    assert llm.supports_images is True
-    assert llm.supports_batch is True
-    assert llm.batch is not None
-    with pytest.raises(GatewayMethodNotSupported, match="batch is not supported"):
-        await llm.batch.batch_query("batch", [])
-    assert llm.supports_temperature is True
-    assert llm.max_tokens == 123
-    assert llm.metadata is not None
-    assert llm.metadata.full_key == "openai/gpt-4o"
+    get_registry.assert_called_once_with()
+    assert result is registry_config
 
 
 def test_gateway_mode_legacy_metadata_helpers_raise_without_registry_fetch():
@@ -960,7 +1028,6 @@ def test_gateway_mode_legacy_metadata_helpers_raise_without_registry_fetch():
             return getattr(self, name, default)
 
     helpers = [
-        lambda: get_registry_config("openai/gpt-4o"),
         lambda: get_model_cost("openai/gpt-4o"),
         lambda: get_model_input_context_window("openai/gpt-4o"),
         get_model_names,
@@ -970,7 +1037,7 @@ def test_gateway_mode_legacy_metadata_helpers_raise_without_registry_fetch():
         patch("model_library.registry_utils.get_model_registry") as mock_registry,
     ):
         for helper in helpers:
-            with pytest.raises(RuntimeError, match="ensure_metadata_loaded"):
+            with pytest.raises(RuntimeError, match="local-registry only"):
                 helper()
 
     mock_registry.assert_not_called()
@@ -1006,12 +1073,47 @@ async def test_proxy_query_uses_settings_identity_and_ids_when_ids_are_not_expli
     ):
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["identity"] == identity
     assert body["run_id"] == "run-from-settings"
     assert body["question_id"] == "question-from-settings"
     assert isinstance(body["query_id"], str)
     assert body["query_id"]
+
+
+async def test_proxy_query_uses_instance_identity_unless_query_overrides_it():
+    instance_identity = {
+        "email": "runner@example.com",
+        "benchmark_name": "LegalBench",
+        "agent_name": "platform_generation",
+    }
+    explicit_identity = {"agent_name": "explicit"}
+    llm = GatewayLLM("gpt-4o", "openai", identity=instance_identity)
+    response = httpx.Response(
+        200,
+        json={"output_text": "ok", "tool_calls": [], "metadata": {}},
+    )
+
+    with (
+        patch(
+            "model_library.model_library_settings",
+            _GatewaySettings(
+                **PROXY_ENV,
+                IDENTITY=json.dumps({"agent_name": "environment"}),
+            ),
+        ),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=response,
+        ) as mock_post,
+    ):
+        await llm.query([TextInput(text="instance")])
+        await llm.query([TextInput(text="explicit")], identity=explicit_identity)
+
+    bodies = [_load_json(call.kwargs["content"]) for call in mock_post.await_args_list]
+    assert bodies[0]["identity"] == instance_identity
+    assert bodies[1]["identity"] == explicit_identity
 
 
 async def test_proxy_query_generates_run_question_and_query_ids_without_env_ids():
@@ -1031,7 +1133,7 @@ async def test_proxy_query_generates_run_question_and_query_ids_without_env_ids(
     ):
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert isinstance(body["run_id"], str)
     assert len(body["run_id"]) == 8
     assert isinstance(body["question_id"], str)
@@ -1060,7 +1162,7 @@ async def test_proxy_query_treats_blank_settings_ids_as_absent():
     ):
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert isinstance(body["run_id"], str)
     assert len(body["run_id"]) == 8
     assert isinstance(body["question_id"], str)
@@ -1072,7 +1174,7 @@ async def test_proxy_query_treats_blank_settings_ids_as_absent():
     [
         "not-json",
         "[]",
-        json.dumps({"value": float("nan")}),
+        json.dumps({"value": math.nan}),
         json.dumps({"large": "x" * 4097}),
         json.dumps(
             {
@@ -1105,7 +1207,7 @@ async def test_proxy_query_omits_invalid_identity_setting(identity_env: str):
     ):
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert "identity" not in body
 
 
@@ -1134,7 +1236,7 @@ async def test_proxy_query_keeps_exact_identity_boundaries():
         ):
             await llm.query([TextInput(text="hi")])
 
-        body = json.loads(mock_post.call_args[1]["content"])
+        body = _load_json(mock_post.call_args[1]["content"])
         assert body["identity"] == identity
 
 
@@ -1167,7 +1269,7 @@ async def test_proxy_query_preserves_identity_keys_and_ignores_query_id_env():
     ):
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["identity"] == identity
     assert body["query_id"] != "query-from-settings"
 
@@ -1196,7 +1298,7 @@ async def test_proxy_query_uses_task_id_setting_when_question_id_absent():
     ):
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["run_id"] == "run-from-settings"
     assert body["question_id"] == "task-from-settings"
 
@@ -1225,7 +1327,7 @@ async def test_proxy_query_uses_task_id_setting_when_question_id_blank():
     ):
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["question_id"] == "task-from-settings"
 
 
@@ -1254,7 +1356,7 @@ async def test_proxy_query_question_id_setting_precedes_task_id_setting():
     ):
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["question_id"] == "question-from-settings"
 
 
@@ -1286,7 +1388,7 @@ async def test_proxy_query_explicit_none_ids_use_settings_ids():
             question_id=None,
         )
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["run_id"] == "run-from-settings"
     assert body["question_id"] == "question-from-settings"
 
@@ -1370,7 +1472,7 @@ async def test_proxy_query_explicit_ids_override_settings_ids():
             query_id="query-explicit",
         )
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["identity"] == identity
     assert body["run_id"] == "run-explicit"
     assert body["question_id"] == "question-explicit"
@@ -1423,7 +1525,7 @@ async def test_proxy_query_treats_blank_explicit_query_id_as_absent(query_id: st
     ) as mock_post:
         await llm.query([TextInput(text="hi")], query_id=query_id)
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["query_id"] != query_id
     assert len(body["query_id"]) == 14
 
@@ -1456,7 +1558,7 @@ async def test_proxy_query_forwards_override_config():
     ) as mock_post:
         await llm.query([TextInput(text="hi")])
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["config"]["max_tokens"] == 123
     assert body["config"]["custom_api_key"] == "provider-key"
     assert body["config"]["custom_endpoint"] == "https://provider.test/v1"
@@ -1492,7 +1594,7 @@ async def test_gateway_upload_file_forwards_request_and_returns_file_id():
             "doc.pdf", "application/pdf", io.BytesIO(b"pdf bytes")
         )
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert mock_post.call_args[0][0].endswith("/files/upload")
     assert body["model"] == "openai/gpt-4o"
     assert body["name"] == "doc.pdf"
@@ -1525,7 +1627,7 @@ async def test_gateway_get_embedding_forwards_request_and_returns_embedding():
             "embed this", model="text-embedding-3-large"
         )
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert mock_post.call_args[0][0].endswith("/embeddings")
     assert body["model"] == "openai/gpt-4o"
     assert body["text"] == "embed this"
@@ -1551,12 +1653,12 @@ async def test_gateway_moderate_content_forwards_request_and_parses_response():
     ) as mock_post:
         moderation = await llm.moderate_content("check this")
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert mock_post.call_args[0][0].endswith("/moderation")
     assert body["model"] == "openai/moderation"
     assert body["text"] == "check this"
     assert body["config"]["custom_api_key"] == "provider-key"
-    assert moderation.results[0].flagged is True
+    assert moderation.results[0].flagged
 
 
 @pytest.mark.parametrize(
@@ -1701,9 +1803,9 @@ async def test_proxy_query_forwards_pydantic_schema_and_validates_response():
     ) as mock_post:
         result = await llm.query([TextInput(text="hi")], output_schema=Answer)
 
-    body = json.loads(mock_post.call_args[1]["content"])
+    body = _load_json(mock_post.call_args[1]["content"])
     assert body["output_schema"]["title"] == "Answer"
-    assert body["output_schema"]["additionalProperties"] is False
+    assert not body["output_schema"]["additionalProperties"]
     assert isinstance(result.output_parsed, Answer)
     assert result.output_parsed.value == 7
 
@@ -1732,6 +1834,35 @@ async def test_proxy_query_preserves_response_metadata_fields():
         reason=FinishReason.STOP, raw="stop"
     )
     assert result.extras.citations[0].title == "doc"
+
+
+async def test_gateway_query_preserves_declared_query_result_field():
+    class ExtendedQueryResult(QueryResult):
+        transport_marker: str
+
+    llm = _make_gateway()
+    response = httpx.Response(
+        200,
+        json={
+            "output_text": "ok",
+            "tool_calls": [],
+            "metadata": {},
+            "transport_marker": "preserve-me",
+        },
+    )
+
+    with (
+        patch("model_library.base.gateway.QueryResult", ExtendedQueryResult),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=response,
+        ),
+    ):
+        result = await llm.query([TextInput(text="hi")])
+
+    assert isinstance(result, ExtendedQueryResult)
+    assert result.transport_marker == "preserve-me"
 
 
 async def test_gateway_client_to_server_contract_with_mock_model():
@@ -1880,7 +2011,7 @@ async def test_proxy_query_history_joined_into_inputs():
         )
 
         # Second call should have history items + new input in inputs
-        second_body = json.loads(mock_post.call_args_list[1][1]["content"])
+        second_body = _load_json(mock_post.call_args_list[1][1]["content"])
         assert len(second_body["inputs"]) == 3  # sys + hi + follow up
         assert second_body["inputs"][0]["kind"] == "system"
         assert result2.output_text == "world"
@@ -1913,7 +2044,8 @@ async def test_raw_response_echoed_as_blob():
     raw = [i for i in result.history if isinstance(i, RawResponse)]
     assert len(raw) == 1
     # The response field should be a string or dict (blob), not the original object
-    assert isinstance(raw[0].response, (str, dict))
+    serialized_response_types = (str, dict)
+    assert isinstance(raw[0].response, serialized_response_types)
 
 
 @pytest.mark.parametrize(
@@ -2137,7 +2269,7 @@ def test_serialize_input_returns_json_string():
     items = [TextInput(text="hello"), SystemInput(text="sys")]
     result = LLM.serialize_input(items)
     assert isinstance(result, str)
-    parsed = json.loads(result)
+    parsed = _load_json(result)
     assert len(parsed) == 2
     assert parsed[0]["kind"] == "text"
     assert parsed[1]["kind"] == "system"
@@ -2147,7 +2279,7 @@ def test_serialize_pickles_raw_response():
     """RawResponse.response is pickled+base64 inline."""
     provider_obj = {"role": "assistant", "content": "hi", "nested": [1, 2, 3]}
     item = RawResponse(response=provider_obj)
-    result = json.loads(LLM.serialize_input([item]))
+    result = _load_json(LLM.serialize_input([item]))
 
     assert result[0]["kind"] == "raw_response"
     # Without secret: plain base64 string
@@ -2158,7 +2290,7 @@ def test_serialize_pickles_raw_input():
     """RawInput.input is pickled+base64 inline."""
     provider_obj = {"messages": [{"role": "user", "content": "hello"}]}
     item = RawInput(input=provider_obj)
-    result = json.loads(LLM.serialize_input([item]))
+    result = _load_json(LLM.serialize_input([item]))
 
     assert result[0]["kind"] == "raw_input"
     assert isinstance(result[0]["input"], str)
@@ -2166,14 +2298,14 @@ def test_serialize_pickles_raw_input():
 
 def test_serialize_leaves_text_input_unchanged():
     item = TextInput(text="hello")
-    result = json.loads(LLM.serialize_input([item]))
+    result = _load_json(LLM.serialize_input([item]))
     assert result[0] == {"kind": "text", "text": "hello"}
 
 
 def test_serialize_with_secret_adds_hmac():
     """With a secret, pickled fields get {pickle, hmac} dicts."""
     item = RawResponse(response={"key": "value"})
-    result = json.loads(LLM.serialize_input([item], secret=b"test-secret"))
+    result = _load_json(LLM.serialize_input([item], secret=b"test-secret"))
 
     field = result[0]["response"]
     assert isinstance(field, dict)
@@ -2214,7 +2346,7 @@ def test_deserialize_rejects_tampered_hmac():
     serialized = LLM.serialize_input([item], secret=secret)
 
     # Tamper with the HMAC
-    data = json.loads(serialized)
+    data = _load_json(serialized)
     data[0]["response"]["hmac"] = "deadbeef" * 8
     tampered = json.dumps(data)
 
@@ -2300,7 +2432,7 @@ def test_restore_raw_fields_rejects_tampered():
     from pydantic import TypeAdapter
 
     # Tamper with HMAC
-    data = json.loads(serialized)
+    data = _load_json(serialized)
     data[0]["response"]["hmac"] = "deadbeef" * 8
 
     adapter = TypeAdapter(list[InputItem])

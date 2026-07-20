@@ -31,6 +31,7 @@ def _row(
     current_cost: str,
     previous_cost: str = "0",
     current_requests: int = 1,
+    current_eligible_requests: int | None = None,
 ) -> cost_alerts.ComparisonRow:
     current = Decimal(current_cost)
     previous = Decimal(previous_cost)
@@ -41,6 +42,11 @@ def _row(
         watermark_utc=datetime(2026, 3, 8, 20, tzinfo=UTC),
         dimension_value=dimension_value,
         current_request_count=current_requests,
+        current_eligible_request_count=(
+            current_requests
+            if current_eligible_requests is None
+            else current_eligible_requests
+        ),
         current_cost_usd=current,
         previous_cost_usd=previous,
         absolute_increase_usd=current - previous,
@@ -117,10 +123,11 @@ def test_config_ignores_unknown_fields() -> None:
 
     rule = parsed[0]
     assert rule.name == "tolerant"
-    assert rule.include_missing is False
+    assert not rule.include_missing
     assert rule.image is not None
     assert rule.image.alt_text == "cost alert image"
-    assert rule.image.attach_to == ("worsening",)
+    assert len(rule.image.attach_to) == 1
+    assert rule.image.attach_to[0] == "worsening"
 
 
 def test_image_config_accepts_exact_slack_limits() -> None:
@@ -178,6 +185,70 @@ def test_queries_normalize_blank_dimensions_to_missing() -> None:
     assert f"{normalized_email} as identity_email" in breakdown_sql
 
 
+def test_queries_zero_ignored_model_cost_without_excluding_activity() -> None:
+    ignored_model_keys = ("provider/ignored", "provider/model'quoted")
+    rule = _rule()
+
+    comparison_sql = cost_alerts.build_rule_query(
+        rule,
+        ignored_model_keys=ignored_model_keys,
+        schema=_SCHEMA,
+    )
+    breakdown_sql = cost_alerts.build_breakdown_query(
+        rule,
+        ignored_model_keys=ignored_model_keys,
+        scope_values=("user@example.com",),
+        schema=_SCHEMA,
+    )
+
+    ignored_condition = (
+        "when agg.provider_model in ('provider/ignored', "
+        "'provider/model''quoted') then 0"
+    )
+    assert comparison_sql.count(ignored_condition) == 2
+    assert breakdown_sql.count(ignored_condition) == 1
+    assert "agg.request_count as source_request_count" in comparison_sql
+    assert "end as source_eligible_request_count" in comparison_sql
+    assert "agg.request_count," in breakdown_sql
+    assert "end as source_cost_usd" in comparison_sql
+    assert "end as cost_usd_sum" in breakdown_sql
+    assert "where current_cost_usd > 0" in breakdown_sql
+
+    for sql in (comparison_sql, breakdown_sql):
+        watermark_sql = sql.split("), evaluation_window as (", 1)[0]
+        assert "provider_model" not in watermark_sql
+        assert "not in" not in sql
+
+    unmasked_comparison_sql = cost_alerts.build_rule_query(rule, schema=_SCHEMA)
+    unmasked_breakdown_sql = cost_alerts.build_breakdown_query(
+        rule,
+        scope_values=("user@example.com",),
+        schema=_SCHEMA,
+    )
+    assert "agg.request_count as source_eligible_request_count" in (
+        unmasked_comparison_sql
+    )
+    assert "agg.cost_usd_sum as source_cost_usd" in unmasked_comparison_sql
+    assert "agg.cost_usd_sum as cost_usd_sum" in unmasked_breakdown_sql
+    assert "when agg.provider_model in" not in unmasked_comparison_sql
+    assert "when agg.provider_model in" not in unmasked_breakdown_sql
+
+
+def test_breakdown_query_ranks_ignored_models_by_actual_cost() -> None:
+    sql = cost_alerts.build_breakdown_query(
+        _rule(),
+        ignored_model_keys=("provider/ignored",),
+        scope_values=("user@example.com",),
+        schema=_SCHEMA,
+    )
+
+    assert "agg.cost_usd_sum as actual_cost_usd_sum" in sql
+    assert "end as ignored_for_cost" in sql
+    assert "sum(actual_cost_usd_sum) as current_cost_usd" in sql
+    assert "max(ignored_for_cost) as ignored_for_cost" in sql
+    assert "order by current_cost_usd desc, dimension_value asc" in sql
+
+
 def test_queries_use_the_configured_redshift_schema() -> None:
     rule = _rule()
 
@@ -193,7 +264,7 @@ def test_queries_use_the_configured_redshift_schema() -> None:
 
     for sql in (comparison_sql, breakdown_sql):
         assert "from gateway_usage_prod.usage_agg_1h" in sql
-        assert "max(data_through_utc) as watermark_utc" in sql
+        assert "max(agg.data_through_utc) as watermark_utc" in sql
         assert "load_batches" not in sql
         assert "from gateway_usage_prod.usage_agg_1h as agg" in sql
         assert "gateway_usage.load_batches" not in sql
@@ -273,14 +344,21 @@ def test_scoped_evaluation_returns_one_truthful_candidate_per_breach(
 
 
 def test_global_evaluation_returns_one_global_candidate() -> None:
+    row = _row(
+        "all",
+        current_cost="1400",
+        current_requests=140,
+        current_eligible_requests=40,
+    )
     candidates = cost_alerts.evaluate_rule_rows(
         _rule(group_by="global"),
-        (_row("all", current_cost="1400", current_requests=140),),
+        (row,),
     )
 
     assert len(candidates) == 1
     assert candidates[0].scope_value is None
     assert candidates[0].total_current_cost_usd == Decimal("1400")
+    assert candidates[0].total_current_eligible_request_count == 40
 
 
 @pytest.mark.parametrize(
@@ -324,13 +402,14 @@ def test_percent_rule_requires_minimum_baseline_and_percent_increase() -> None:
 def test_missing_scope_follows_include_missing() -> None:
     row = _row("__missing__", current_cost="1400")
 
-    assert cost_alerts.evaluate_rule_rows(_rule(), (row,)) == ()
-    assert (
-        cost_alerts.evaluate_rule_rows(_rule(include_missing=True), (row,))[
-            0
-        ].scope_value
-        == "__missing__"
+    excluded_candidates = cost_alerts.evaluate_rule_rows(_rule(), (row,))
+    included_candidates = cost_alerts.evaluate_rule_rows(
+        _rule(include_missing=True),
+        (row,),
     )
+
+    assert not excluded_candidates
+    assert included_candidates[0].scope_value == "__missing__"
 
 
 def test_config_rejects_resolved_image_attachment() -> None:
@@ -382,15 +461,23 @@ def test_breakdown_parser_keeps_scopes_independent() -> None:
         {"name": "dimension_value"},
         {"name": "current_request_count"},
         {"name": "current_cost_usd"},
+        {"name": "ignored_for_cost"},
     ]
 
-    def record(scope: str, model: str, cost: str) -> list[dict[str, object]]:
+    def record(
+        scope: str,
+        model: str,
+        cost: str,
+        *,
+        ignored_for_cost: bool,
+    ) -> list[dict[str, object]]:
         values: list[object] = [
             scope,
             "provider_model",
             model,
             10,
             cost,
+            1 if ignored_for_cost else 0,
         ]
         return [
             {"longValue": value}
@@ -405,15 +492,33 @@ def test_breakdown_parser_keeps_scopes_independent() -> None:
         {
             "ColumnMetadata": metadata,
             "Records": [
-                record("connor@example.com", "model-a", "10"),
-                record("hung@example.com", "model-b", "20"),
+                record(
+                    "connor@example.com",
+                    "model-a",
+                    "10",
+                    ignored_for_cost=True,
+                ),
+                record(
+                    "hung@example.com",
+                    "model-b",
+                    "20",
+                    ignored_for_cost=False,
+                ),
             ],
         }
     )
 
-    assert [(item.scope_value, item.group_by) for item in breakdowns] == [
-        ("connor@example.com", "provider_model"),
-        ("hung@example.com", "provider_model"),
+    assert [item.scope_value for item in breakdowns] == [
+        "connor@example.com",
+        "hung@example.com",
+    ]
+    assert [item.group_by for item in breakdowns] == [
+        "provider_model",
+        "provider_model",
+    ]
+    assert [item.top_contributors[0].ignored_for_cost for item in breakdowns] == [
+        True,
+        False,
     ]
 
 
@@ -425,6 +530,7 @@ def test_comparison_parser_decodes_data_api_values() -> None:
         "watermark_utc",
         "dimension_value",
         "current_request_count",
+        "current_eligible_request_count",
         "current_cost_usd",
         "previous_cost_usd",
         "absolute_increase_usd",
@@ -437,6 +543,7 @@ def test_comparison_parser_decodes_data_api_values() -> None:
         "2026-07-10 20:05:00+00:00",
         "anthropic/model",
         42,
+        30,
         "12.50",
         "0",
         "12.50",
@@ -458,7 +565,7 @@ def test_comparison_parser_decodes_data_api_values() -> None:
         }
     )
 
-    assert rows == (
+    expected_rows = (
         cost_alerts.ComparisonRow(
             bucket_start_utc=datetime.fromisoformat("2026-07-10T00:00:00-07:00"),
             bucket_end_utc=datetime(2026, 7, 11, 7, tzinfo=UTC),
@@ -466,9 +573,11 @@ def test_comparison_parser_decodes_data_api_values() -> None:
             watermark_utc=datetime(2026, 7, 10, 20, 5, tzinfo=UTC),
             dimension_value="anthropic/model",
             current_request_count=42,
+            current_eligible_request_count=30,
             current_cost_usd=Decimal("12.50"),
             previous_cost_usd=Decimal("0"),
             absolute_increase_usd=Decimal("12.50"),
             percent_increase=None,
         ),
     )
+    assert rows == expected_rows

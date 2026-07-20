@@ -18,7 +18,20 @@ import model_gateway.app as gateway_app
 import model_gateway.model_helpers as model_helpers
 from model_gateway import startup_canary
 from model_gateway import telemetry_helpers
-from model_library.base import LLMConfig, TextInput, dump_gateway_config
+from model_library.base import (
+    LLMConfig,
+    TextInput,
+    TokenRetryParams,
+    dump_gateway_config,
+)
+from model_library.register_models import get_model_registry
+
+
+def _load_json(value: Any) -> Any:
+    try:
+        return json.loads(value)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise AssertionError(f"Expected valid JSON: {exc}") from exc
 
 
 def _make_client(*, client: tuple[str, int] = ("testclient", 50000)):
@@ -150,6 +163,34 @@ def test_query_telemetry_buckets_custom_endpoint_without_raw_url():
     assert attrs["llm.config.custom_endpoint"] == f'"{raw_endpoint}"'
     assert attrs["llm.config.custom_api_key"] == '"**********"'
     assert "sk-provider" not in attrs.values()
+
+
+def test_query_telemetry_emits_public_retry_limit() -> None:
+    from model_gateway.types import QueryRequest
+
+    config = dump_gateway_config(LLMConfig())
+    token_retry_params = TokenRetryParams(
+        input_modifier=1,
+        output_modifier=2,
+        use_dynamic_estimate=False,
+        limit=1_000,
+    )
+    attrs = telemetry_helpers.query_telemetry_attributes(
+        QueryRequest(
+            model="openai/gpt-4o",
+            inputs=[TextInput(text="hi")],
+            token_retry_params=token_retry_params,
+        ),
+        config,
+        config_query_params=telemetry_helpers.query_config_params(config),
+        token_retry_params=token_retry_params.model_dump(mode="json"),
+    )
+
+    assert attrs["retry_queue.mode"] == "enabled"
+    assert attrs["retry_queue.limit"] == 1_000
+    assert attrs["retry_queue.input_modifier"] == 1
+    assert attrs["retry_queue.output_modifier"] == 2
+    assert attrs["retry_queue.dynamic_estimate.mode"] == "disabled"
 
 
 def test_health_live_no_auth():
@@ -292,7 +333,7 @@ async def test_startup_canary_executes_authenticated_local_query():
     query_request = requests[-1]
     assert query_request.url.path == "/query"
     assert query_request.headers["Authorization"] == "Bearer sk-test"
-    body = json.loads(query_request.content)
+    body = _load_json(query_request.content)
     assert body["model"] == "openai/gpt-5.4-nano-2026-03-17"
     assert body["config"] == {
         "max_tokens": 16,
@@ -411,45 +452,19 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     client = _make_client()
     assert client.get("/registry").status_code == 401
 
-    config = MagicMock()
-    config.model_dump.return_value = {"full_key": "openai/gpt-4o"}
+    config = get_model_registry()["openai/gpt-4o"]
     with patch(
         "model_gateway.routes.models.get_model_registry",
-        return_value={"openai/gpt-4o": config},
+        return_value={config.full_key: config},
     ):
         resp = client.get("/registry", headers=HEADERS)
 
     assert resp.status_code == 200
-    assert resp.json() == {"models": {"openai/gpt-4o": {"full_key": "openai/gpt-4o"}}}
-    config.model_dump.assert_called_once_with(mode="json")
-
-
-def test_model_resolve_requires_auth_and_returns_effective_and_registry_config():
-    client = _make_client()
-    assert (
-        client.post("/models/resolve", json={"model": "openai/gpt-4o"}).status_code
-        == 401
-    )
-
-    resp = client.post(
-        "/models/resolve",
-        headers=HEADERS,
-        json={
-            "model": "openai/gpt-4o",
-            "config": {"max_tokens": 123, "custom_api_key": "provider-key"},
-        },
-    )
-
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["exists"] is True
-    assert data["model"] == "openai/gpt-4o"
-    assert "capabilities" not in data
-    assert "default_parameters" not in data
-    assert data["effective_config"]["max_tokens"] == 123
-    assert data["effective_config"]["supports_batch"] is True
-    assert data["effective_config"]["custom_api_key"] == "**********"
-    assert data["registry_config"]["full_key"] == "openai/gpt-4o"
+    response_config = resp.json()["models"][config.full_key]
+    assert response_config["full_key"] == config.full_key
+    assert response_config[
+        "provider_properties"
+    ] == config.provider_properties.model_dump(mode="json")
 
 
 def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
@@ -480,7 +495,7 @@ def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
     client = _make_client()
     token_body = {
         "model": "openai/gpt-4o",
-        "inputs": json.loads(signed_inputs),
+        "inputs": _load_json(signed_inputs),
         "tools": [
             {
                 "name": "lookup",
@@ -655,57 +670,6 @@ def test_token_retry_status_returns_503_when_redis_is_not_configured():
     }
 
 
-def test_model_resolve_returns_exists_false_for_unknown_model():
-    client = _make_client()
-    resp = client.post(
-        "/models/resolve",
-        headers=HEADERS,
-        json={"model": "unknown-provider/new-model"},
-    )
-
-    assert resp.status_code == 200
-    assert resp.json() == {
-        "exists": False,
-        "model": "unknown-provider/new-model",
-        "effective_config": None,
-        "registry_config": None,
-        "input_context_window": None,
-    }
-
-
-def test_model_resolve_maps_invalid_config_to_error_envelope():
-    client = _make_client()
-
-    resp = client.post(
-        "/models/resolve",
-        headers=HEADERS,
-        json={
-            "model": "openai/gpt-4o",
-            "config": {"custom_endpoint": "https://provider.example/v1"},
-        },
-    )
-
-    assert resp.status_code == 400
-    assert resp.json()["code"] == "custom_key_rejected"
-
-
-def test_model_resolve_rejects_unknown_provider_config_keys():
-    client = _make_client()
-
-    resp = client.post(
-        "/models/resolve",
-        headers=HEADERS,
-        json={
-            "model": "openai/gpt-4o",
-            "config": {"provider_config": {"verbostiy": "low"}},
-        },
-    )
-
-    assert resp.status_code == 400
-    assert resp.json()["code"] == "invalid_request"
-    assert "verbostiy" in resp.json()["message"]
-
-
 def test_lifespan_starts_and_closes_usage_ledger():
     from model_gateway import main
 
@@ -807,7 +771,7 @@ def test_lifespan_close_continues_after_usage_ledger_close_failure():
         with TestClient(app):
             pass
 
-    assert fake_redis.closed is True
+    assert fake_redis.closed
     mock_shutdown_telemetry.assert_called_once_with()
 
 
@@ -853,7 +817,7 @@ def test_lifespan_closes_owned_redis_client():
         retry_on_error=[RedisTimeoutError],
         max_connections=200,
     )
-    assert fake_redis.closed is True
+    assert fake_redis.closed
     mock_set_redis_client.assert_called_once_with(fake_redis)
 
 
@@ -1418,7 +1382,7 @@ def test_query_returns_429_when_gateway_capacity_is_full(capsys):
     )
 
     metrics.flush_metrics()
-    payloads = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    payloads = [_load_json(line) for line in capsys.readouterr().out.splitlines()]
     assert any(
         payload.get("Route") == "/query"
         and payload.get("StatusCode") == "429"
@@ -1451,7 +1415,7 @@ def test_query_metrics_param_group_uses_bounded_config_and_request_context(capsy
             assert resp.status_code == 200
 
     metrics.flush_metrics()
-    payloads = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+    payloads = [_load_json(line) for line in capsys.readouterr().out.splitlines()]
     model_payloads = [
         payload
         for payload in payloads
@@ -1615,7 +1579,10 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
 
     class OtlpHandler(BaseHTTPRequestHandler):
         def do_POST(self) -> None:
-            length = int(self.headers.get("Content-Length", "0"))
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+            except ValueError as exc:
+                raise AssertionError("Invalid Content-Length header") from exc
             bodies.append(self.rfile.read(length))
             self.send_response(200)
             self.end_headers()
@@ -1725,21 +1692,27 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
         '{"agent_name":"swe-agent","benchmark_name":"swebench","email":"user@example.com"}'
         in identities
     )
-    assert ("gateway.retry_queue.mode", "disabled") in mode_attrs
-    assert ("gateway.output_schema.mode", "disabled") in mode_attrs
-    assert ("retry_queue.mode", "disabled") in mode_attrs
-    assert ("llm.config.max_tokens", "7") in llm_config_attrs
-    assert ("llm.config.temperature", "0.0") in llm_config_attrs
+    expected_mode_attrs = {
+        ("gateway.retry_queue.mode", "disabled"),
+        ("gateway.output_schema.mode", "disabled"),
+        ("retry_queue.mode", "disabled"),
+    }
+    expected_config_attrs = {
+        ("llm.config.max_tokens", "7"),
+        ("llm.config.temperature", "0.0"),
+    }
+    assert expected_mode_attrs.issubset(mode_attrs)
+    assert expected_config_attrs.issubset(llm_config_attrs)
     assert param_groups and all(group != "none" for group in param_groups)
     assert config_seen_payloads
-    payload = json.loads(str(config_seen_payloads[-1]["model.config_redacted_json"]))
+    payload = _load_json(str(config_seen_payloads[-1]["model.config_redacted_json"]))
     assert payload["config"]["provider_config"]["prompt_cache_retention"] == "24h"
     assert payload["params"] == {
         "max_tokens": 7,
         "temperature": 0,
         "provider_config": {"prompt_cache_retention": "24h"},
     }
-    assert config_seen_payloads[-1]["model.config_redacted_json_truncated"] is False
+    assert not config_seen_payloads[-1]["model.config_redacted_json_truncated"]
 
 
 def test_query_forwards_custom_endpoint_with_custom_api_key():
@@ -1788,6 +1761,7 @@ def test_models_returns_list():
     assert isinstance(data, list)
     assert len(data) > 0
     assert "id" in data[0]
+    assert "supports_audio" in data[0]
 
 
 def test_upload_file_success_uses_config_and_returns_file_id():
@@ -2131,12 +2105,19 @@ def test_query_initializes_token_retry_on_server_side_and_reuses_token_model():
     class FakeLLM:
         def __init__(self):
             self.token_retry_params = None
+            self._resolved_token_retry_params = None
             self.init_count = 0
             self.query_count = 0
 
-        async def init_token_retry(self, token_retry_params):
-            self.token_retry_params = token_retry_params
-            self.init_count += 1
+        async def ensure_resolved_token_retry(
+            self,
+            token_retry_params,
+            resolved_token_retry_params,
+        ):
+            if self._resolved_token_retry_params != resolved_token_retry_params:
+                self.token_retry_params = token_retry_params
+                self._resolved_token_retry_params = resolved_token_retry_params
+                self.init_count += 1
 
         async def query(self, inputs, **kwargs):
             self.query_count += 1
@@ -2172,9 +2153,9 @@ def test_query_initializes_token_retry_on_server_side_and_reuses_token_model():
     assert len(created_models) == 1
     assert created_models[0].init_count == 1
     assert created_models[0].query_count == 2
-    assert created_models[0].token_retry_params.limit == 1000
+    assert created_models[0]._resolved_token_retry_params.limit == 1000
     assert created_models[0].token_retry_params.output_modifier == 2
-    assert created_models[0].token_retry_params.use_dynamic_estimate is False
+    assert not created_models[0].token_retry_params.use_dynamic_estimate
 
 
 def test_query_rejects_malformed_raw_history_with_400():
@@ -2335,7 +2316,7 @@ def test_query_success_uses_config_restores_raw_history_and_returns_metadata():
             "/query",
             json={
                 "model": "openai/gpt-4o",
-                "inputs": json.loads(signed_inputs),
+                "inputs": _load_json(signed_inputs),
                 "config": {"max_tokens": 7},
             },
             headers=HEADERS,

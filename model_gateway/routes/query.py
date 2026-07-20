@@ -27,6 +27,7 @@ from model_gateway.types import (
     QueryRequest,
     query_result_response_body,
 )
+from model_gateway.usage_ledger.details import snapshot_usage_request
 from model_gateway.usage_ledger.store import build_success_usage_event
 from model_library.base import LLM, dump_gateway_config, dump_llm_config
 
@@ -46,6 +47,7 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
     @app.post("/query")
     async def query(request: Request, body: QueryRequest):
         start = time.perf_counter()
+        usage_request = snapshot_usage_request(body)
         config = dump_llm_config(body.config)
         display_config = dump_gateway_config(body.config)
         query_params = {
@@ -190,6 +192,9 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
 
             signed_history = await run_phase("sign_history", sign_result_history)
             operation.add_event("sign_history_done")
+            result_payload = query_result_response_body(
+                result, signed_history=signed_history
+            )
 
             if request.app.state.usage_ledger.enabled and not _is_local_startup_canary(
                 request, body
@@ -202,6 +207,7 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                         query_params=query_params,
                         dimensions=dimensions,
                         result=result,
+                        request=usage_request,
                         api_key_fingerprint=getattr(
                             request.state, "gateway_api_key_fingerprint", None
                         ),
@@ -252,7 +258,7 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 telemetry.add_event("deploy_test_response_delay_done")
 
             return operation.success(
-                query_result_response_body(result, signed_history=signed_history),
+                result_payload,
                 extra_metrics=extra_metrics,
                 attrs=response_attrs,
             )

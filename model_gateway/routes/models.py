@@ -3,14 +3,9 @@
 from typing import Any
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 
 from model_library.registry_utils import get_model_names, get_registry_config
 from model_library.register_models import get_model_registry
-
-from model_gateway.errors import map_exception_to_error
-from model_gateway.model_helpers import resolve_model as resolve_gateway_model
-from model_gateway.types import ModelResolveRequest
 
 
 def register_model_routes(app: FastAPI) -> None:
@@ -22,18 +17,6 @@ def register_model_routes(app: FastAPI) -> None:
                 key: config.model_dump(mode="json") for key, config in registry.items()
             }
         }
-
-    @app.post("/models/resolve")
-    async def resolve_model(body: ModelResolveRequest):
-        try:
-            return resolve_gateway_model(body)
-        except Exception as exc:
-            err = map_exception_to_error(
-                exc, provider=body.model.partition("/")[0] or None
-            )
-            return JSONResponse(
-                status_code=err.status_code, content=err.body.model_dump()
-            )
 
     @app.get("/models")
     async def list_models():
@@ -48,6 +31,7 @@ def register_model_routes(app: FastAPI) -> None:
                     "supports_tools": config.supports.tools or False,
                     "supports_images": config.supports.images or False,
                     "supports_files": config.supports.files or False,
+                    "supports_audio": config.supports.audio or False,
                     "supports_structured_output": config.supports.output_schema
                     or False,
                 }

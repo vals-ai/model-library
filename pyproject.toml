@@ -79,6 +79,7 @@ include = ["model_library*", "model_gateway*"]
   "py.typed",
   "config/*.yaml",
   "config/defaults/*.yaml",
+  "config/deprecated/*.yaml",
   "config/defaults/*.json",
   "config/all_models.json",
 ]

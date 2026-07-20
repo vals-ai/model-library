@@ -8,7 +8,7 @@ from typing import Any, Callable, Coroutine
 
 import model_library.telemetry as telemetry
 from model_library.base.base import QueryResult, RateLimit
-from model_library.exceptions import exception_message
+from model_library.exceptions import NoRetryException, exception_message
 from model_library.retriers.base import BaseRetrier
 from model_library.retriers.token import utils
 from model_library.retriers.token.utils import KEY_PREFIX
@@ -40,10 +40,24 @@ _BACKGROUND_LOOP_TASKS: dict[str, asyncio.Task[None]] = {}
 _BACKGROUND_LOOP_LOCKS: dict[str, asyncio.Lock] = {}
 
 
-# Lua: atomic check-and-deduct with per-second burst cap.
-# KEYS[1] = token key, KEYS[2] = burst key
+class BenchmarkRunTerminated(NoRetryException):
+    def __init__(self, run_id: str, outcome: str):
+        self.run_id = run_id
+        self.outcome = outcome
+        super().__init__(f"Benchmark run {run_id} terminated with outcome {outcome}")
+
+
+# Lua: atomic terminal-outcome check and token deduction with a burst cap.
+# KEYS[1] = token key, KEYS[2] = burst key, KEYS[3] = optional benchmark run metadata
 # ARGV[1] = required tokens, ARGV[2] = burst limit
+# Returns -1 for cancelled/failed benchmark runs, 0 when capacity is insufficient, 1 on deduction.
 DEDUCT_TOKENS_LUA = """
+local run_meta_key = KEYS[3]
+if run_meta_key then
+    local outcome = redis.call('HGET', run_meta_key, 'outcome')
+    if outcome == 'cancelled' or outcome == 'failed' then return -1 end
+end
+
 local required = tonumber(ARGV[1])
 local remaining = tonumber(redis.call('GET', KEYS[1]))
 if remaining < required then return 0 end
@@ -465,12 +479,24 @@ class TokenRetrier(BaseRetrier):
                     # atomic check-and-deduct via Lua (no lock needed)
                     deducted = await utils.redis_client.eval(
                         DEDUCT_TOKENS_LUA,
-                        2,
+                        3,
                         self.token_key,
                         f"{self.token_key}:burst",
+                        self._run_meta_key,
                         self.actual_estimate_total_tokens,
                         self._burst_limit,
                     )
+                    if deducted == -1:
+                        meta = await utils.redis_client.hgetall(self._run_meta_key)
+                        outcome = meta.get("outcome", "failed")
+                        telemetry.add_event(
+                            "retry_queue.benchmark_run_terminated",
+                            {
+                                **self._telemetry_ids(),
+                                "retry_queue.benchmark_outcome": outcome,
+                            },
+                        )
+                        raise BenchmarkRunTerminated(self._run_id, outcome)
                     if deducted:
                         _deducted = True
                         # per-run inflight tracking (pipelined — single round-trip)

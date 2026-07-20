@@ -103,18 +103,6 @@ class RateLimitResponse(BaseModel):
     rate_limit: dict[str, Any] | None = None
 
 
-class ModelResolveRequest(GatewayRequestBase):
-    pass
-
-
-class ModelResolveResponse(BaseModel):
-    exists: bool
-    model: str
-    effective_config: dict[str, Any] | None = None
-    registry_config: dict[str, Any] | None = None
-    input_context_window: int | None = None
-
-
 class ProviderError(BaseModel):
     type: Literal["ProviderError"] = "ProviderError"
     message: str

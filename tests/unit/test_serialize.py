@@ -6,6 +6,7 @@ import tempfile
 from pathlib import Path
 
 from model_library.base.base import LLM
+from model_library.base.input import FileWithBytes, InputItem, TextInput
 from tests.test_helpers import get_example_tool_input
 
 
@@ -48,5 +49,29 @@ async def test_deserialize_from_file():
     temp_path = Path(temp_path)
 
     dinput = LLM.deserialize_input(temp_path)
+
+    assert dinput == input
+
+
+async def test_file_with_bytes_serializes_for_history_roundtrip():
+    """
+    Verify byte-backed file inputs survive history serialization.
+
+    Test cases:
+    - Raw bytes serialize to JSON-safe history.
+    - Deserialization restores the original bytes.
+    """
+    input: list[InputItem] = [
+        TextInput(text="What is in this audio?"),
+        FileWithBytes(
+            type="file",
+            name="clip.wav",
+            mime="audio/wav",
+            data=b"audio bytes",
+        ),
+    ]
+
+    serialized = LLM.serialize_input(input)
+    dinput = LLM.deserialize_input(serialized)
 
     assert dinput == input
