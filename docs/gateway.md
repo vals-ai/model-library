@@ -6,7 +6,7 @@ Remote proxy server that routes model calls through a centralized FastAPI servic
 
 ```env
 # Server .env
-MODEL_GATEWAY_API_KEYS="key1,key2"            # comma-separated client keys
+MODEL_GATEWAY_API_KEYS='{"default":"key1","security-testing":"key2"}'  # name-to-key JSON map
 OPENAI_API_KEY="sk-..."                  # provider keys as usual; configure any providers you serve
 MODEL_GATEWAY_HMAC_SECRET="some-secret"        # required for startup and signed history blobs
 ```
@@ -33,17 +33,16 @@ The gateway server uses server-side auth/signing config. Do not set `MODEL_GATEW
 
 #### Auth and provider credentials
 
-- `MODEL_GATEWAY_API_KEYS` (**required**): comma-separated list of valid client API keys. Gateway startup fails if unset or empty.
+- `MODEL_GATEWAY_API_KEYS` (**required**): JSON object mapping stable names to valid client API keys. Gateway startup fails if unset or empty.
 - `MODEL_GATEWAY_HMAC_SECRET` (**required**): secret for HMAC-signing pickled fields in history blobs. Gateway startup fails without this so every task can safely return and accept raw history blobs.
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc. (**usually required**): provider API keys for providers served by this gateway. See [Provider API keys](api-keys.md). Per-request `custom_api_key` can supply caller credentials at call time. Per-request `custom_endpoint` is accepted only with `custom_api_key`; the gateway uses that caller-supplied key for the custom URL and never sends server-held provider keys to arbitrary endpoints.
-
 #### Capacity and timeouts
 
 | Contract | Behavior |
 | --- | --- |
 | Admission | Application code bounds active calls, queue size, and queue wait before request-body parsing. |
-| Timeout ordering | The application timeout stays below target drain; caller and ALB timeouts stay above the gateway timeout; Uvicorn keepalive stays above the ALB idle timeout. |
-| Provider timeout | Provider read timeouts may fire before the outer gateway cap. |
+| Timeout ordering | `/query` reserves 200 seconds of its capacity-owned request budget, so the provider operation gets at most 3,340 seconds and less when pre-provider work consumes time. This stays below the 3,400-second per-attempt provider read timeout and 3,540-second gateway cap. |
+| Provider timeout | Provider-operation expiry cancels the in-flight query and returns the normal HTTP `200` `ProviderError` envelope. |
 | Ownership | Deployment infrastructure supplies worker/process settings; keep those values consistent with the application limits above. |
 
 #### Deployments
@@ -129,11 +128,25 @@ Attribution behavior:
 - Explicit blank or whitespace-only `run_id` and `question_id` values are rejected.
 - Direct blank `query_id` values are treated as absent.
 
+Provider retry policy:
+
+- Direct provider execution and gateway-server provider execution use the normal model retrier unless a custom retrier replaces it.
+- Eight failed outer provider calls with an integer `status_code` of exactly `500` exhaust a query's HTTP-500 retry budget; seven such failures may still be followed by success on call eight. Other retryable errors retain the selected retrier's normal budget.
+- Provider SDKs may retry internally within each outer provider call. Exceptions classified only by message text do not consume the structured HTTP-500 budget.
+
+Local query deadlines:
+
+- Direct and gateway-mode `LLM.query()` accept an optional absolute `deadline` from `asyncio.get_running_loop().time()`; omitted deadlines preserve the existing unlimited local behavior.
+- The deadline bounds the complete local query lifecycle, including retry waits. Expiry raises non-retriable `QueryDeadlineExceededError`, which is also a `TimeoutError`.
+- A `GatewayLLM` deadline cancels the active local HTTP request and stops local gateway retries, but it is not serialized to the server. The server continues to enforce its independent capacity-owned deadline.
+- Custom `LLM.query()` overrides must accept and enforce `deadline` or delegate to the base implementation; provider `_query_impl()` methods do not receive it.
+- Cancellation is best-effort downstream: asynchronous transports normally receive cancellation, while already-dispatched remote or threaded provider work may continue.
+
 Gateway client HTTP retry policy:
 
 - Gateway-mode `LLM.query()` does not use the normal model/provider retry wrapper; provider retries happen inside the gateway server.
 - Provider-call failures from `/query`, `/tokens/count`, `/files/upload`, `/embeddings`, and `/moderation` return HTTP `200` with a top-level `error` envelope such as `{"error":{"type":"ProviderError","message":"...","exception_type":"RateLimitError"}}`.
-- The client raises HTTP `200` error envelopes as `GatewayProviderError` without retrying.
+- The client raises HTTP `200` error envelopes as `GatewayProviderError` without retrying, including provider-operation deadline errors.
 - Provider-error envelopes include the provider-operation exception type and sanitized message. They include `code` and `status_code` only when the provider/library exception already exposes those fields; the gateway does not synthesize mapped provider codes or mapped provider status codes for the response body.
 - Provider-error responses do not include `signed_history`, pickled exception objects, tracebacks, or raw provider exception transport.
 - The client retries gateway HTTP transport failures, actual HTTP `429`, and actual HTTP `5xx` responses.
@@ -141,7 +154,7 @@ Gateway client HTTP retry policy:
 
 For deployed environments, keep server and client Secrets Manager entries separate:
 
-- server config secret: `api_keys`, `hmac_secret`
+- server config secret: `api_keys` (a JSON-encoded name-to-key object), `hmac_secret`
 - client config secret: `MODEL_GATEWAY_URL`, `MODEL_GATEWAY_API_KEY`
 
 ## Endpoints
@@ -156,6 +169,10 @@ For deployed environments, keep server and client Secrets Manager entries separa
 | POST   | `/tokens/count`       | Yes  | Count input tokens by using the gateway-side model implementation          |
 | POST   | `/rate-limit`         | Yes  | Reserved endpoint; currently rejects with `Gateway token retry use only`   |
 | GET    | `/token-retry/status` | Yes  | Return 1s-cached Redis token retry and benchmark queue status              |
+| POST   | `/benchmark-runs/acquire` | Yes | Request admission and resolve the effective token-retry limit           |
+| POST   | `/benchmark-runs/wait`    | Yes | Long-poll until the benchmark run is admitted                           |
+| POST   | `/benchmark-runs/renew`   | Yes | Renew the admitted run's heartbeat                                      |
+| POST   | `/benchmark-runs/release` | Yes | Release admission with the terminal outcome                             |
 | POST   | `/files/upload`       | Yes  | Upload a provider file and return a `FileWithId`                           |
 | POST   | `/embeddings`         | Yes  | Create an embedding vector                                                 |
 | POST   | `/moderation`         | Yes  | Run content moderation                                                     |

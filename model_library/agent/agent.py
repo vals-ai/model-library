@@ -689,6 +689,15 @@ class Agent:
         # determine final answer (hooks get raw turns)
         elapsed = time.monotonic() - start_time
         answer = self._hooks.determine_answer(state, raw_turns, final_error)
+        result = AgentResult(
+            final_answer=answer,
+            final_error=final_error,
+            final_history=history,
+            turns=turns,
+            compactions=compactions,
+            final_duration_seconds=elapsed,
+            output_dir=output_dir,
+        )
 
         if atif_export:
             try:
@@ -731,6 +740,18 @@ class Agent:
                     if v is not None
                 } or None
 
+                _termination: dict[str, Any] = {
+                    "status": "error"
+                    if result.final_error is not None
+                    else "completed",
+                    "stop_reason": result.stop_reason.value,
+                    "duration_seconds": result.final_duration_seconds,
+                }
+                if result.final_error is not None:
+                    _termination["error"] = result.final_error.model_dump(
+                        mode="json", exclude={"traceback"}
+                    )
+
                 trajectory = ATIFTrajectory.from_agent_result(
                     turns=raw_turns,
                     compactions=compactions,
@@ -739,6 +760,16 @@ class Agent:
                     tool_definitions=_tool_defs,
                     reasoning_effort=_reasoning_effort,
                     agent_extra=_agent_extra,
+                    session_id=f"{run_id}:{question_id}" if run_id else question_id,
+                    trajectory_extra={
+                        "vals": {
+                            "task_id": question_id,
+                            **({"run_id": run_id} if run_id else {}),
+                            "fidelity": "partial",
+                            "omitted": ["tool_result_timestamps"],
+                            "termination": _termination,
+                        }
+                    },
                 )
                 trajectory_path = output_dir / "trajectory_atif.json"
                 trajectory_path.write_text(
@@ -747,15 +778,6 @@ class Agent:
             except Exception:
                 logger.warning("ATIF export failed", exc_info=True)
 
-        result = AgentResult(
-            final_answer=answer,
-            final_error=final_error,
-            final_history=history,
-            turns=turns,
-            compactions=compactions,
-            final_duration_seconds=elapsed,
-            output_dir=output_dir,
-        )
         logger.debug(f"Run complete: {result!r}")
 
         try:

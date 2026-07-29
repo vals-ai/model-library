@@ -5,6 +5,8 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import cast
 
+import httpx
+
 from model_gateway.benchmark_admission_types import (
     BenchmarkAdmissionOutcome,
     BenchmarkAdmissionResponse,
@@ -15,6 +17,7 @@ from model_library.base.gateway import GatewayLLM
 from model_library.retriers.token.benchmark_admission_client import (
     GatewayBenchmarkAdmissionClient,
 )
+from model_library.utils import gateway_httpx_client
 
 CancellationCheck = Callable[[], Awaitable[bool]]
 HEARTBEAT_INTERVAL_SECONDS = 2
@@ -64,9 +67,10 @@ async def _release_admission(
 
 
 @asynccontextmanager
-async def gateway_benchmark_admission(
+async def _gateway_benchmark_admission(
     model: GatewayLLM,
     run_id: str,
+    http_client: httpx.AsyncClient,
     *,
     token_retry_params: TokenRetryParams | None = None,
     enabled: bool = True,
@@ -87,7 +91,7 @@ async def gateway_benchmark_admission(
     if is_cancelled is not None and await is_cancelled():
         raise BenchmarkAdmissionCancelled(f"Run {run_id} cancelled before admission")
 
-    client = GatewayBenchmarkAdmissionClient(model)
+    client = GatewayBenchmarkAdmissionClient(model, http_client=http_client)
     admission = await client.acquire(
         run_id=run_id,
         token_retry_params=token_retry_params,
@@ -188,3 +192,34 @@ async def gateway_benchmark_admission(
 
     if primary_error is not None:
         raise primary_error
+
+
+@asynccontextmanager
+async def gateway_benchmark_admission(
+    model: GatewayLLM,
+    run_id: str,
+    *,
+    token_retry_params: TokenRetryParams | None = None,
+    enabled: bool = True,
+    total_requests: int | None = None,
+    early_release: bool = True,
+    immediate_queue_release: bool = False,
+    is_cancelled: CancellationCheck | None = None,
+) -> AsyncGenerator[int | None, None]:
+    if not enabled:
+        yield None
+        return
+
+    control_http_client = gateway_httpx_client(headers=dict(model.get_client().headers))
+    async with control_http_client:
+        async with _gateway_benchmark_admission(
+            model,
+            run_id,
+            control_http_client,
+            token_retry_params=token_retry_params,
+            total_requests=total_requests,
+            early_release=early_release,
+            immediate_queue_release=immediate_queue_release,
+            is_cancelled=is_cancelled,
+        ) as effective_token_limit:
+            yield effective_token_limit

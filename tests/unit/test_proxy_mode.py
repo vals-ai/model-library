@@ -1,5 +1,6 @@
 """Tests for proxy mode — GatewayLLM and serialization."""
 
+import asyncio
 import io
 import json
 import logging
@@ -47,6 +48,7 @@ from model_library.base.output import (
 from model_library.exceptions import (
     GatewayMethodNotSupported,
     GatewayProviderError,
+    QueryDeadlineExceededError,
     is_retriable_error,
 )
 from model_library.providers.openai import OpenAIConfig
@@ -258,6 +260,42 @@ async def test_gateway_query_rejects_custom_retrier_before_network():
 
     with pytest.raises(GatewayMethodNotSupported, match="custom_retrier"):
         await llm.query("hi")
+
+
+async def test_gateway_query_deadline_cancels_active_http_request():
+    llm = _make_gateway()
+    request_cancelled = False
+    request_count = 0
+    request_content: bytes | None = None
+
+    async def blocked_request(request: httpx.Request) -> httpx.Response:
+        nonlocal request_cancelled, request_content, request_count
+        request_count += 1
+        request_content = request.content
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            request_cancelled = True
+            raise
+        raise AssertionError("blocked request unexpectedly resumed")
+
+    transport = httpx.MockTransport(blocked_request)
+    async with httpx.AsyncClient(transport=transport) as client:
+        with (
+            patch(
+                "model_library.model_library_settings",
+                _GatewaySettings(**PROXY_ENV),
+            ),
+            patch.object(llm, "get_client", return_value=client),
+        ):
+            deadline = asyncio.get_running_loop().time() + 0.1
+            with pytest.raises(QueryDeadlineExceededError):
+                await asyncio.wait_for(llm.query("hi", deadline=deadline), timeout=1)
+
+    assert request_cancelled
+    assert request_count == 1
+    assert request_content is not None
+    assert "deadline" not in _load_json(request_content)
 
 
 async def test_gateway_query_rejects_unsupported_extra_parameters_before_network():
@@ -1879,7 +1917,7 @@ async def test_gateway_client_to_server_contract_with_mock_model():
             return getattr(self, name, default)
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "integration-key"
+        MODEL_GATEWAY_API_KEYS = '{"integration":"integration-key"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:

@@ -179,6 +179,29 @@ def test_details_preserve_request_and_result_except_explicit_reductions() -> Non
     assert result_data["extras"]["provider_response_id"] == "provider-response-1"
 
 
+def test_details_preserve_anthropic_fallback_metadata() -> None:
+    fallback_metadata = {
+        "fallback": True,
+        "anthropic_response_model": "claude-fallback-test",
+        "anthropic_usage_iterations": [
+            {"type": "fallback_message", "model": "claude-fallback-test"}
+        ],
+        "anthropic_fallback_blocks": [
+            {
+                "type": "fallback",
+                "from": {"model": "claude-primary-test"},
+                "to": {"model": "claude-fallback-test"},
+                "trigger": {"type": "refusal", "category": "general_harms"},
+            }
+        ],
+    }
+    result = _result(metadata=QueryResultMetadata(extra=fallback_metadata))
+
+    details = _details(result=result)
+
+    assert details["result"]["metadata"]["extra"] == fallback_metadata
+
+
 def test_request_details_delegate_content_sanitization() -> None:
     tool_body = {"private": "definition"}
     output_schema = {"type": "object"}

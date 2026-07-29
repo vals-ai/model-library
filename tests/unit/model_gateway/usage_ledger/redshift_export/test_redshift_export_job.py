@@ -72,6 +72,7 @@ def _raw_event(
         "model": "openai/gpt-4.1-mini",
         "provider": "openai",
         "provider_endpoint": "default",
+        "api_key_name": "default",
         "finish_reason": "stop",
         "finish_reason_raw": "stop",
         "details": {
@@ -80,7 +81,7 @@ def _raw_event(
         },
         "completed_at": completed_at,
         "usage_shard": shard,
-        "schema_version": 2,
+        "schema_version": 3,
         "normalization_version": "v1",
         "input_tokens": 100,
         "output_tokens": 20,

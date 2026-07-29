@@ -208,6 +208,8 @@ provider files are included automatically.
 | `ARCEE_API_KEY`                    | —       | Arcee AI API key                                                                              |
 | `NVIDIA_API_KEY`                   | —       | NVIDIA API key                                                                                |
 | `POOLSIDE_API_KEY`                 | —       | Poolside API key                                                                              |
+| `BASETEN_API_KEY`                  | —       | Baseten API key                                                                               |
+| `BASETEN_API_BASE_URL`             | —       | Full OpenAI-compatible Baseten `/v1` base URL                                                 |
 
 Settings can be set via environment variables or programmatically:
 

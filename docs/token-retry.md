@@ -288,12 +288,10 @@ resolves it before token retry starts.
 | `input_modifier`        | float         | required | Scale factor for input token estimate  |
 | `output_modifier`       | float         | required | Scale factor for output token estimate |
 | `use_dynamic_estimate`  | bool          | True     | Enable EMA ratio learning              |
-| `limit`                 | `int \| None` | None     | Provider token limit override          |
+| `limit`                 | `int \| None` | public: required | Provider token limit override          |
 | `limit_refresh_seconds` | `60`          | 60       | Fixed provider limit refresh interval  |
 
-`limit` may be omitted only when the target Gateway has configured provider
-defaults. Direct or local initialization and Gateway deployments without those
-defaults require an explicit limit.
+Public callers must provide `limit`.
 `ResolvedTokenRetryParams` is internal. It contains the concrete `limit` and
 fixed `limit_refresh_seconds=60`; only the retrier consumes it.
 

@@ -66,6 +66,7 @@ def _raw_event() -> dict[str, object]:
         "model": "openai/gpt-4.1-mini",
         "provider": "openai",
         "provider_endpoint": "default",
+        "api_key_name": "default",
         "finish_reason": "stop",
         "finish_reason_raw": "stop",
         "details": {
@@ -74,7 +75,7 @@ def _raw_event() -> dict[str, object]:
         },
         "completed_at": "2026-05-29T12:01:00Z",
         "usage_shard": "00",
-        "schema_version": 2,
+        "schema_version": 3,
         "normalization_version": "v1",
         "input_tokens": 100,
         "output_tokens": 20,
@@ -146,7 +147,7 @@ def test_explicit_backfill_event_replays_current_schema_separately() -> None:
         dict[str, dict[str, str]],
         dynamodb.calls[0]["ExpressionAttributeValues"],
     )
-    assert expression_values[":schema_version"] == {"N": "2"}
+    assert expression_values[":schema_version"] == {"N": "3"}
     assert [put["Key"] for put in s3.puts] == [
         "gateway-usage/dev/raw/backfill/"
         "window=20260529T120000Z-20260529T120500Z/shard=00/part-000.parquet",

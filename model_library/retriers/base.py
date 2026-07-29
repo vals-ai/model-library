@@ -10,6 +10,7 @@ from model_library.exceptions import (
     ImmediateRetryException,
     ImmediateRetryExhaustedError,
     MaxContextWindowExceededError,
+    exception_http_status_code,
     exception_message,
     is_context_window_error,
     is_retriable_error,
@@ -18,6 +19,8 @@ from model_library.exceptions import (
 RetrierType = Callable[[Callable[..., Awaitable[Any]]], Callable[..., Awaitable[Any]]]
 
 R = TypeVar("R")  # wrapper return type
+
+_HTTP_500_MAX_FAILURES = 8
 
 
 class BaseRetrier(ABC):
@@ -200,6 +203,7 @@ class BaseRetrier(ABC):
 
         self.attempts = 0
         self.start_time = time.time()
+        http_500_failures = 0
 
         await self.validate()
         telemetry.set_attributes(
@@ -251,6 +255,15 @@ class BaseRetrier(ABC):
 
                 if not self._should_retry(e):
                     self._handle_giveup(e, "not retriable")
+
+                if exception_http_status_code(e) == 500:
+                    http_500_failures += 1
+                    if http_500_failures >= _HTTP_500_MAX_FAILURES:
+                        self._handle_giveup(
+                            e,
+                            "HTTP 500 retry limit reached "
+                            f"({http_500_failures} >= {_HTTP_500_MAX_FAILURES})",
+                        )
 
                 # calculate wait time
                 wait_time = await self._calculate_wait_time(self.attempts, e)

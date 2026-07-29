@@ -1,4 +1,775 @@
 {
+    "anthropic/claude-opus-5-xhigh": {
+        "company": "Anthropic",
+        "label": "Claude Opus 5 (Extra High Effort)",
+        "release_date": "2026-07-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-4-8"
+            ]
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "xhigh"
+        },
+        "provider_endpoint": "claude-opus-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-xhigh",
+        "slug": "anthropic_claude-opus-5-xhigh"
+    },
+    "anthropic/claude-opus-5-no-fallback": {
+        "company": "Anthropic",
+        "label": "Claude Opus 5 (No Fallback)",
+        "release_date": "2026-07-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": []
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-no-fallback",
+        "slug": "anthropic_claude-opus-5-no-fallback"
+    },
+    "anthropic/claude-opus-5-medium": {
+        "company": "Anthropic",
+        "label": "Claude Opus 5 (Medium Effort)",
+        "release_date": "2026-07-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-4-8"
+            ]
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "medium"
+        },
+        "provider_endpoint": "claude-opus-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-medium",
+        "slug": "anthropic_claude-opus-5-medium"
+    },
+    "anthropic/claude-opus-5-max": {
+        "company": "Anthropic",
+        "label": "Claude Opus 5 (Max Effort)",
+        "release_date": "2026-07-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-4-8"
+            ]
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-max",
+        "slug": "anthropic_claude-opus-5-max"
+    },
+    "anthropic/claude-opus-5-low": {
+        "company": "Anthropic",
+        "label": "Claude Opus 5 (Low Effort)",
+        "release_date": "2026-07-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-4-8"
+            ]
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "low"
+        },
+        "provider_endpoint": "claude-opus-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-low",
+        "slug": "anthropic_claude-opus-5-low"
+    },
+    "anthropic/claude-opus-5-high": {
+        "company": "Anthropic",
+        "label": "Claude Opus 5 (High Effort)",
+        "release_date": "2026-07-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-4-8"
+            ]
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "high"
+        },
+        "provider_endpoint": "claude-opus-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-high",
+        "slug": "anthropic_claude-opus-5-high"
+    },
+    "anthropic/claude-opus-5": {
+        "company": "Anthropic",
+        "label": "Claude Opus 5",
+        "release_date": "2026-07-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-4-8"
+            ]
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [
+            {
+                "anthropic/claude-opus-5-low": {
+                    "label": "Claude Opus 5 (Low Effort)",
+                    "default_parameters": {
+                        "compute_effort": "low"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-medium": {
+                    "label": "Claude Opus 5 (Medium Effort)",
+                    "default_parameters": {
+                        "compute_effort": "medium"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-high": {
+                    "label": "Claude Opus 5 (High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "high"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-xhigh": {
+                    "label": "Claude Opus 5 (Extra High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "xhigh"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-max": {
+                    "label": "Claude Opus 5 (Max Effort)",
+                    "default_parameters": {
+                        "compute_effort": "max"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-no-fallback": {
+                    "label": "Claude Opus 5 (No Fallback)",
+                    "provider_properties": {
+                        "fallback_models": []
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5",
+        "slug": "anthropic_claude-opus-5"
+    },
+    "google/gemini-3.6-flash": {
+        "company": "Google",
+        "label": "Gemini 3.6 Flash",
+        "release_date": "2026-07-21",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": true,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 1.5,
+            "output": 7.5,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-3.6-flash",
+        "provider_name": "google",
+        "full_key": "google/gemini-3.6-flash",
+        "slug": "google_gemini-3.6-flash"
+    },
+    "google/gemini-3.5-flash-lite": {
+        "company": "Google",
+        "label": "Gemini 3.5 Flash Lite",
+        "release_date": "2026-07-21",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": true,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 2.5,
+            "cache": {
+                "read": 0.03,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-3.5-flash-lite",
+        "provider_name": "google",
+        "full_key": "google/gemini-3.5-flash-lite",
+        "slug": "google_gemini-3.5-flash-lite"
+    },
+    "vercel/poolside/laguna-s-2.1": {
+        "company": "Poolside",
+        "label": "Laguna S 2.1",
+        "release_date": "2026-07-20",
+        "open_source": true,
+        "documentation_url": "https://vercel.com/ai-gateway/models/laguna-s-2.1",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "audio": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.2,
+            "cache": {
+                "read": 0.01,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0
+        },
+        "provider_endpoint": "poolside/laguna-s-2.1",
+        "provider_name": "vercel",
+        "full_key": "vercel/poolside/laguna-s-2.1",
+        "slug": "vercel_poolside_laguna-s-2.1"
+    },
+    "baseten/laguna-s-2.1-int4": {
+        "company": "Poolside",
+        "label": "Laguna S 2.1 INT4",
+        "release_date": "2026-07-20",
+        "open_source": true,
+        "documentation_url": "https://huggingface.co/poolside/Laguna-S-2.1-INT4",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": false,
+            "audio": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": true
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0
+        },
+        "provider_endpoint": "poolside/laguna-s-2.1",
+        "provider_name": "baseten",
+        "full_key": "baseten/laguna-s-2.1-int4",
+        "slug": "baseten_laguna-s-2.1-int4"
+    },
+    "kimi/kimi-k3-public": {
+        "company": "Moonshot AI",
+        "label": "Kimi K3",
+        "release_date": "2026-07-16",
+        "open_source": true,
+        "documentation_url": "https://platform.kimi.ai/docs/api/chat",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "prompt_cache_key": "hash"
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 262144,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "kimi-k3",
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k3-public",
+        "slug": "kimi_kimi-k3-public"
+    },
+    "kimi/kimi-k3": {
+        "company": "Moonshot AI",
+        "label": "Kimi K3",
+        "release_date": "2026-07-16",
+        "open_source": true,
+        "documentation_url": "https://platform.kimi.ai/docs/api/chat",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": false,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "prompt_cache_key": "hash"
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "alternative_keys": [
+            "kimi/kimi-k3-public"
+        ],
+        "default_parameters": {
+            "max_tokens": 262144,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "kimi-k3",
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k3",
+        "slug": "kimi_kimi-k3"
+    },
     "grok/grok-build-latest": {
         "company": "xAI",
         "label": "Grok 4.5",
@@ -181,6 +952,357 @@
         "provider_name": "grok",
         "full_key": "grok/grok-4.5",
         "slug": "grok_grok-4.5"
+    },
+    "openai/gpt-5.6-terra-high": {
+        "company": "OpenAI",
+        "label": "GPT-5.6 Terra (High)",
+        "release_date": "2026-07-09",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "costs_per_million_token": {
+            "input": 2.5,
+            "output": 15.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-5.6-terra",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.6-terra-high",
+        "slug": "openai_gpt-5.6-terra-high"
+    },
+    "openai/gpt-5.6-terra": {
+        "company": "OpenAI",
+        "label": "GPT-5.6 Terra",
+        "release_date": "2026-07-09",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "costs_per_million_token": {
+            "input": 2.5,
+            "output": 15.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-5.6-terra-high": {
+                    "label": "GPT-5.6 Terra (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-5.6-terra",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.6-terra",
+        "slug": "openai_gpt-5.6-terra"
+    },
+    "openai/gpt-5.6-sol-high": {
+        "company": "OpenAI",
+        "label": "GPT-5.6 Sol (High)",
+        "release_date": "2026-07-09",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 30.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-5.6-sol",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.6-sol-high",
+        "slug": "openai_gpt-5.6-sol-high"
+    },
+    "openai/gpt-5.6-sol": {
+        "company": "OpenAI",
+        "label": "GPT-5.6 Sol",
+        "release_date": "2026-07-09",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 30.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-5.6-sol-high": {
+                    "label": "GPT-5.6 Sol (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-5.6-sol",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.6-sol",
+        "slug": "openai_gpt-5.6-sol"
+    },
+    "openai/gpt-5.6-luna-high": {
+        "company": "OpenAI",
+        "label": "GPT-5.6 Luna (High)",
+        "release_date": "2026-07-09",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 6.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-5.6-luna",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.6-luna-high",
+        "slug": "openai_gpt-5.6-luna-high"
+    },
+    "openai/gpt-5.6-luna": {
+        "company": "OpenAI",
+        "label": "GPT-5.6 Luna",
+        "release_date": "2026-07-09",
+        "open_source": false,
+        "documentation_url": "",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 6.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-5.6-luna-high": {
+                    "label": "GPT-5.6 Luna (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-5.6-luna",
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.6-luna",
+        "slug": "openai_gpt-5.6-luna"
     },
     "anthropic/claude-sonnet-5-xhigh": {
         "company": "Anthropic",
@@ -648,6 +1770,204 @@
         "full_key": "cohere/north-mini-code-1-0",
         "slug": "cohere_north-mini-code-1-0"
     },
+    "anthropic/claude-fable-5-no-fallback": {
+        "company": "Anthropic",
+        "label": "Claude Fable 5 (No Fallback)",
+        "release_date": "2026-06-09",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": []
+        },
+        "costs_per_million_token": {
+            "input": 10.0,
+            "output": 50.0,
+            "cache": {
+                "read": 1.0,
+                "write": 12.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-fable-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-fable-5-no-fallback",
+        "slug": "anthropic_claude-fable-5-no-fallback"
+    },
+    "anthropic/claude-fable-5-high": {
+        "company": "Anthropic",
+        "label": "Claude Fable 5 (High Effort)",
+        "release_date": "2026-06-09",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-4-8"
+            ]
+        },
+        "costs_per_million_token": {
+            "input": 10.0,
+            "output": 50.0,
+            "cache": {
+                "read": 1.0,
+                "write": 12.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "high"
+        },
+        "provider_endpoint": "claude-fable-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-fable-5-high",
+        "slug": "anthropic_claude-fable-5-high"
+    },
+    "anthropic/claude-fable-5": {
+        "company": "Anthropic",
+        "label": "Claude Fable 5",
+        "release_date": "2026-06-09",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-4-8"
+            ]
+        },
+        "costs_per_million_token": {
+            "input": 10.0,
+            "output": 50.0,
+            "cache": {
+                "read": 1.0,
+                "write": 12.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [
+            {
+                "anthropic/claude-fable-5-high": {
+                    "label": "Claude Fable 5 (High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "high"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-fable-5-no-fallback": {
+                    "label": "Claude Fable 5 (No Fallback)",
+                    "provider_properties": {
+                        "fallback_models": []
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-fable-5",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-fable-5",
+        "slug": "anthropic_claude-fable-5"
+    },
     "alibaba/qwen3.7-plus": {
         "company": "Alibaba",
         "label": "Qwen 3.7 Plus",
@@ -768,6 +2088,131 @@
         "provider_name": "minimax",
         "full_key": "minimax/MiniMax-M3",
         "slug": "minimax_MiniMax-M3"
+    },
+    "anthropic/claude-opus-4-8-high": {
+        "company": "Anthropic",
+        "label": "Claude Opus 4.8 (High Effort)",
+        "release_date": "2026-05-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "high"
+        },
+        "provider_endpoint": "claude-opus-4-8",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-4-8-high",
+        "slug": "anthropic_claude-opus-4-8-high"
+    },
+    "anthropic/claude-opus-4-8": {
+        "company": "Anthropic",
+        "label": "Claude Opus 4.8",
+        "release_date": "2026-05-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "supports": {
+            "images": true,
+            "audio": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "alternative_keys": [
+            {
+                "anthropic/claude-opus-4-8-high": {
+                    "label": "Claude Opus 4.8 (High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "high"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-4-8",
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-4-8",
+        "slug": "anthropic_claude-opus-4-8"
     },
     "devin/swe-1-6-fast": {
         "company": "Devin",
@@ -1205,93 +2650,6 @@
         "provider_name": "mistralai",
         "full_key": "mistralai/mistral-medium-3.5",
         "slug": "mistralai_mistral-medium-3.5"
-    },
-    "poolside/laguna-xs.2:fast": {
-        "company": "Poolside",
-        "label": "Laguna XS.2 Fast",
-        "release_date": "2026-04-28",
-        "open_source": true,
-        "documentation_url": "https://docs.poolside.ai",
-        "properties": {
-            "context_window": 262144,
-            "max_tokens": 32768,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "audio": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.1,
-            "output": 0.2,
-            "cache": {
-                "read": 0.05,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "poolside/laguna-xs.2:fast",
-        "provider_name": "poolside",
-        "full_key": "poolside/laguna-xs.2:fast",
-        "slug": "poolside_laguna-xs.2:fast"
-    },
-    "poolside/laguna-xs.2": {
-        "company": "Poolside",
-        "label": "Laguna XS.2",
-        "release_date": "2026-04-28",
-        "open_source": true,
-        "documentation_url": "https://docs.poolside.ai",
-        "properties": {
-            "context_window": 262144,
-            "max_tokens": 32768,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "audio": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "poolside/laguna-xs.2",
-        "provider_name": "poolside",
-        "full_key": "poolside/laguna-xs.2",
-        "slug": "poolside_laguna-xs.2"
     },
     "poolside/laguna-m.1:fast": {
         "company": "Poolside",
@@ -4108,58 +5466,6 @@
         "full_key": "openai/gpt-5.2-pro",
         "slug": "openai_gpt-5.2-pro"
     },
-    "openai/gpt-5.2-codex": {
-        "company": "OpenAI",
-        "label": "GPT 5.2 Codex",
-        "release_date": "2025-12-11",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-5.2-codex",
-        "properties": {
-            "context_window": 400000,
-            "max_tokens": 128000,
-            "training_cutoff": "2024-09",
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": true,
-            "audio": false,
-            "videos": false,
-            "files": true,
-            "batch": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.75,
-            "output": 14.0,
-            "cache": {
-                "read": 0.175,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gpt-5.2-codex",
-        "provider_name": "openai",
-        "full_key": "openai/gpt-5.2-codex",
-        "slug": "openai_gpt-5.2-codex"
-    },
     "openai/gpt-5.2-2025-12-11": {
         "company": "OpenAI",
         "label": "GPT 5.2",
@@ -4351,58 +5657,6 @@
         "provider_name": "mistralai",
         "full_key": "mistralai/devstral-2512",
         "slug": "mistralai_devstral-2512"
-    },
-    "openai/gpt-5.1-codex-max": {
-        "company": "OpenAI",
-        "label": "GPT 5.1 Codex Max",
-        "release_date": "2025-12-04",
-        "open_source": false,
-        "documentation_url": "",
-        "properties": {
-            "context_window": 400000,
-            "max_tokens": 128000,
-            "training_cutoff": "2024-09",
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": true,
-            "audio": false,
-            "videos": false,
-            "files": true,
-            "batch": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.25,
-            "output": 10.0,
-            "cache": {
-                "read": 0.125,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gpt-5.1-codex-max",
-        "provider_name": "openai",
-        "full_key": "openai/gpt-5.1-codex-max",
-        "slug": "openai_gpt-5.1-codex-max"
     },
     "mistralai/mistral-large-2512": {
         "company": "Mistral",
@@ -4674,110 +5928,6 @@
         "provider_name": "grok",
         "full_key": "grok/grok-4-1-fast-non-reasoning",
         "slug": "grok_grok-4-1-fast-non-reasoning"
-    },
-    "openai/gpt-5.1-codex-mini": {
-        "company": "OpenAI",
-        "label": "GPT 5.1 Codex Mini",
-        "release_date": "2025-11-13",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-5.1-codex-mini",
-        "properties": {
-            "context_window": 400000,
-            "max_tokens": 128000,
-            "training_cutoff": "2024-09",
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": true,
-            "audio": false,
-            "videos": false,
-            "files": true,
-            "batch": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 0.25,
-            "output": 2.0,
-            "cache": {
-                "read": 0.025,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gpt-5.1-codex-mini",
-        "provider_name": "openai",
-        "full_key": "openai/gpt-5.1-codex-mini",
-        "slug": "openai_gpt-5.1-codex-mini"
-    },
-    "openai/gpt-5.1-codex": {
-        "company": "OpenAI",
-        "label": "GPT 5.1 Codex",
-        "release_date": "2025-11-13",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-5.1-codex",
-        "properties": {
-            "context_window": 400000,
-            "max_tokens": 128000,
-            "training_cutoff": "2024-09",
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": true,
-            "audio": false,
-            "videos": false,
-            "files": true,
-            "batch": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.25,
-            "output": 10.0,
-            "cache": {
-                "read": 0.125,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gpt-5.1-codex",
-        "provider_name": "openai",
-        "full_key": "openai/gpt-5.1-codex",
-        "slug": "openai_gpt-5.1-codex"
     },
     "openai/gpt-5.1-2025-11-13": {
         "company": "OpenAI",
@@ -5267,58 +6417,6 @@
         "provider_name": "anthropic",
         "full_key": "anthropic/claude-sonnet-4-5-20250929",
         "slug": "anthropic_claude-sonnet-4-5-20250929"
-    },
-    "openai/gpt-5-codex": {
-        "company": "OpenAI",
-        "label": "GPT 5 Codex",
-        "release_date": "2025-09-23",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-5-codex",
-        "properties": {
-            "context_window": 400000,
-            "max_tokens": 128000,
-            "training_cutoff": "2024-09",
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": true,
-            "audio": false,
-            "videos": false,
-            "files": true,
-            "batch": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 1.25,
-            "output": 10.0,
-            "cache": {
-                "read": 0.125,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gpt-5-codex",
-        "provider_name": "openai",
-        "full_key": "openai/gpt-5-codex",
-        "slug": "openai_gpt-5-codex"
     },
     "alibaba/qwen3-max-2025-09-23": {
         "company": "Alibaba",
@@ -6372,100 +7470,6 @@
         "provider_name": "fireworks",
         "full_key": "fireworks/gpt-oss-120b",
         "slug": "fireworks_gpt-oss-120b"
-    },
-    "bedrock/claude-opus-4-1-20250805-v1-thinking": {
-        "company": "Amazon",
-        "label": "Claude Opus 4.1 (Thinking)",
-        "release_date": "2025-08-05",
-        "open_source": false,
-        "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 32000,
-            "training_cutoff": "2025-03",
-            "reasoning_model": true
-        },
-        "supports": {
-            "images": false,
-            "audio": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 15.0,
-            "output": 75.0
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "us.anthropic.claude-opus-4-1-20250805-v1:0",
-        "provider_name": "bedrock",
-        "full_key": "bedrock/claude-opus-4-1-20250805-v1-thinking",
-        "slug": "bedrock_claude-opus-4-1-20250805-v1-thinking"
-    },
-    "bedrock/claude-opus-4-1-20250805-v1": {
-        "company": "Amazon",
-        "label": "Claude Opus 4.1 (Nonthinking)",
-        "release_date": "2025-08-05",
-        "open_source": false,
-        "documentation_url": "https://docs.anthropic.com/en/docs/models/claude-3-5-sonnet",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 32000,
-            "training_cutoff": "2025-03",
-            "reasoning_model": false
-        },
-        "supports": {
-            "images": false,
-            "audio": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "costs_per_million_token": {
-            "input": 15.0,
-            "output": 75.0
-        },
-        "alternative_keys": [
-            {
-                "bedrock/claude-opus-4-1-20250805-v1-thinking": {
-                    "properties": {
-                        "reasoning_model": true
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "us.anthropic.claude-opus-4-1-20250805-v1:0",
-        "provider_name": "bedrock",
-        "full_key": "bedrock/claude-opus-4-1-20250805-v1",
-        "slug": "bedrock_claude-opus-4-1-20250805-v1"
     },
     "anthropic/claude-opus-4-1-20250805-thinking": {
         "company": "Anthropic",

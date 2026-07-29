@@ -57,6 +57,7 @@ from model_library.base.output import (
     QueryResultMetadata,
     RateLimit,
 )
+from model_library.base.query_deadline import query_deadline_scope
 from model_library.base.query_ids import resolve_query_ids, scoped_query_ids
 from model_library.base.query_logging import (
     log_query_completed,
@@ -438,6 +439,38 @@ class LLM(ABC):
         )
 
     async def query(
+        self,
+        input: Sequence[InputItem] | str,
+        *,
+        history: Sequence[InputItem] = [],
+        tools: list[ToolDefinition] = [],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
+        logger: logging.Logger | None = None,
+        run_id: str | None = None,
+        question_id: str | None = None,
+        in_agent: bool = False,
+        deadline: float | None = None,
+        **kwargs: object,
+    ) -> QueryResult:
+        """Query the model.
+
+        ``deadline`` is an optional absolute timestamp from the current event
+        loop's ``time()`` clock. It bounds the complete local query lifecycle.
+        """
+        async with query_deadline_scope(deadline):
+            return await self._execute_query(
+                input,
+                history=history,
+                tools=tools,
+                output_schema=output_schema,
+                logger=logger,
+                run_id=run_id,
+                question_id=question_id,
+                in_agent=in_agent,
+                **kwargs,
+            )
+
+    async def _execute_query(
         self,
         input: Sequence[InputItem] | str,
         *,

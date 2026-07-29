@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING, Any
+
 from model_library.agent.agent import Agent, AgentResult, AgentStopReason
 from model_library.agent.conductor import (
     ConductorAgent,
@@ -48,7 +50,18 @@ from model_library.agent.metadata import (
     TurnSummary,
 )
 from model_library.agent.tool import NativeWebSearch, Tool, ToolOutput
-from model_library.atif import ATIFTrajectory
+
+if TYPE_CHECKING:
+    from model_library.atif import ATIFTrajectory
+
+
+def __getattr__(name: str) -> Any:
+    if name == "ATIFTrajectory":
+        from model_library.atif import ATIFTrajectory
+
+        return ATIFTrajectory
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
 
 __all__ = [
     "Agent",

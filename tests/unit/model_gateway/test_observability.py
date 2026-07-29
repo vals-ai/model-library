@@ -473,7 +473,7 @@ def test_create_app_observability_wraps_auth_short_circuit(
     caplog: pytest.LogCaptureFixture,
 ):
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -543,7 +543,7 @@ def test_create_app_lifespan_logs_process_lifecycle(
     caplog: pytest.LogCaptureFixture,
 ):
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:

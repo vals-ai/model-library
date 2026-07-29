@@ -17,6 +17,7 @@ from model_library.utils import SecondsMetric, ValsModel
 class AsyncRedisClient(Protocol):
     """Typed protocol for the subset of async Redis commands we use."""
 
+    async def ping(self) -> bool: ...
     async def get(self, name: str) -> str | None: ...
     async def set(
         self, name: str, value: str | int | float, ex: int | None = None
@@ -62,7 +63,12 @@ class AsyncRedisClient(Protocol):
     async def eval(
         self, script: str, numkeys: int, *keys_and_args: str | int | float
     ) -> Any: ...
-    def lock(self, name: str, timeout: float | None = None) -> Lock: ...
+    def lock(
+        self,
+        name: str,
+        timeout: float | None = None,
+        blocking_timeout: float | None = None,
+    ) -> Lock: ...
     def pipeline(self, transaction: bool = True) -> Pipeline: ...
 
 

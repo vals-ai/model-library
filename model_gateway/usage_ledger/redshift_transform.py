@@ -25,7 +25,7 @@ _DIMENSION_FIELDS = (
     "benchmark_name",
     "agent_name",
     "identity_email",
-    "api_key_fingerprint",
+    "api_key_name",
 )
 
 
@@ -64,7 +64,7 @@ def redshift_rows_from_usage_event(
         "benchmark_name": event.get("benchmark_name"),
         "agent_name": event.get("agent_name"),
         "identity_email": event.get("identity_email"),
-        "api_key_fingerprint": event.get("api_key_fingerprint"),
+        "api_key_name": event.get("api_key_name"),
         "input_tokens": event["input_tokens"],
         "output_tokens": event["output_tokens"],
         "reasoning_tokens": event["reasoning_tokens"],

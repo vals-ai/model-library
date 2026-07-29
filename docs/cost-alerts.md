@@ -16,6 +16,8 @@ Set these environment variables on the alert process:
 | `GATEWAY_USAGE_REDSHIFT_DATABASE_NAME` | Shared Redshift database name |
 | `GATEWAY_USAGE_REDSHIFT_SCHEMA_NAME` | Redshift schema containing the usage aggregate tables |
 | `GATEWAY_STAGE` | Stage label included in Slack messages and state keys |
+| `GATEWAY_REGISTRY_BASE_URL` | Optional gateway base URL used to fetch the live `/registry` snapshot for ignored-model classification |
+| `GATEWAY_REGISTRY_API_KEYS_SECRET_NAME` | Optional Secrets Manager gateway config secret whose `api_keys` field authenticates the registry fetch |
 
 The alert process sends active and worsening messages through a Slack incoming
 webhook. Scoped rules keep independent deduplication state per breached
@@ -116,11 +118,15 @@ ellipsis.
 - Each rule uses `max(data_through_utc)` across all rows in its aggregate table
   as the evaluation watermark.
 - Comparison and breakdown queries include every model's request activity, but
-  treat cost as zero for model keys whose current generated registry metadata
-  sets `ignored_for_cost: true`. Registry changes therefore reclassify alert
-  cost in existing evaluated windows without changing stored usage events,
-  aggregate rows, request counts, or source costs. Historical model keys absent
-  from the current active registry are not masked.
+  treat cost as zero for model keys whose registry metadata sets
+  `ignored_for_cost: true`. When the registry fetch variables are configured,
+  each run fetches the live gateway `/registry` snapshot so registry changes
+  take effect at the next release without redeploying the alert Lambda; on any
+  fetch failure the run logs a fallback record and uses the registry generated
+  at deploy time. Registry changes reclassify alert cost in existing evaluated
+  windows without changing stored usage events, aggregate rows, request
+  counts, or source costs. Historical model keys absent from the current
+  active registry are not masked.
 - Slack Traffic includes every request in the evaluated alert scope. Cost per
   request divides policy-eligible cost by policy-eligible requests, excluding
   ignored-model requests from that denominator.

@@ -2,6 +2,7 @@
 
 import hashlib
 import hmac
+from collections.abc import Mapping
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
@@ -14,9 +15,12 @@ EXEMPT_PATHS = {"/health/live", "/health/ready"}
 TRACE_AUTH_FAILURE_PATHS = telemetry.HTTP_TRACE_ALLOWED_ROUTES
 
 
-def create_auth_middleware(valid_keys: set[str]):
+def create_auth_middleware(api_keys_by_name: Mapping[str, str]):
     # Pre-hash keys for constant-time comparison (prevents timing side-channel)
-    hashed_keys = {hashlib.sha256(k.encode()).digest() for k in valid_keys}
+    hashed_keys = tuple(
+        (name, hashlib.sha256(api_key.encode()).digest())
+        for name, api_key in api_keys_by_name.items()
+    )
 
     async def auth_middleware(
         request: Request, call_next: RequestResponseEndpoint
@@ -32,10 +36,14 @@ def create_auth_middleware(valid_keys: set[str]):
             )
 
         token_hash = hashlib.sha256(auth_header[7:].encode()).digest()
-        if not any(hmac.compare_digest(token_hash, h) for h in hashed_keys):
+        matched_name: str | None = None
+        for name, expected_hash in hashed_keys:
+            if hmac.compare_digest(token_hash, expected_hash):
+                matched_name = name
+        if matched_name is None:
             return _unauthorized_response(request, "Invalid API key")
 
-        request.state.gateway_api_key_fingerprint = token_hash.hex()[:16]
+        request.state.gateway_api_key_name = matched_name
         return await call_next(request)
 
     return auth_middleware

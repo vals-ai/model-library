@@ -24,6 +24,7 @@ from model_library.base.base import (
     LLMConfig,
     TokenRetryParams,
 )
+from model_library.base.query_deadline import query_deadline_scope
 from model_library.base.query_ids import resolve_query_ids
 from model_library.base.query_logging import (
     log_query_completed,
@@ -329,13 +330,14 @@ class GatewayLLM(LLM):
         request_body: BaseModel | dict[str, Any],
         *,
         timeout: float | httpx.Timeout | None = None,
+        http_client: httpx.AsyncClient | None = None,
     ) -> dict[str, Any]:
         body = (
             _dump_request(request_body)
             if isinstance(request_body, BaseModel)
             else request_body
         )
-        client: httpx.AsyncClient = self.get_client()
+        client = http_client or self.get_client()
         request_timeout = client.timeout if timeout is None else timeout
         url = f"{model_library.model_library_settings.MODEL_GATEWAY_URL.rstrip('/')}{path}"
 
@@ -409,6 +411,31 @@ class GatewayLLM(LLM):
 
     @override
     async def query(
+        self,
+        input: Sequence[InputItem] | str,
+        *,
+        history: Sequence[InputItem] = [],
+        tools: list[ToolDefinition] = [],
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
+        logger: logging.Logger | None = None,
+        deadline: float | None = None,
+        **kwargs: object,
+    ) -> QueryResult:
+        """Query through the gateway with an optional local event-loop deadline.
+
+        The process-local deadline is not serialized to the gateway server.
+        """
+        async with query_deadline_scope(deadline):
+            return await self._execute_query(
+                input,
+                history=history,
+                tools=tools,
+                output_schema=output_schema,
+                logger=logger,
+                **kwargs,
+            )
+
+    async def _execute_query(
         self,
         input: Sequence[InputItem] | str,
         *,

@@ -1,0 +1,29 @@
+base-config:
+  company: Poolside
+  documentation_url: https://huggingface.co/poolside/Laguna-S-2.1-INT4
+  open_source: true
+  supports:
+    images: false
+    audio: false
+    videos: false
+    files: false
+    batch: false
+    temperature: true
+    tools: true
+    output_schema: false
+  metadata:
+    available_for_everyone: false
+    ignored_for_cost: true
+
+laguna-models:
+  baseten/laguna-s-2.1-int4:
+    label: Laguna S 2.1 INT4
+    release_date: 2026-07-20
+    provider_endpoint: poolside/laguna-s-2.1
+    properties:
+      context_window: 1_048_576
+      max_tokens: 131_072
+      reasoning_model: true
+    default_parameters:
+      temperature: 1.0
+    costs_per_million_token: null

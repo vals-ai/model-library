@@ -3,7 +3,7 @@
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
-from typing import TypeVar
+from typing import TypeVar, cast
 
 from fastapi import FastAPI, Request
 
@@ -32,6 +32,15 @@ from model_gateway.usage_ledger.store import build_success_usage_event
 from model_library.base import LLM, dump_gateway_config, dump_llm_config
 
 _T = TypeVar("_T")
+
+# Reserve enough of the capacity-owned request budget for cancellation cleanup,
+# provider-error serialization, and delivery before the outer gateway timeout.
+PROVIDER_OPERATION_TIMEOUT_SLACK_SECONDS = 200
+
+
+def _provider_operation_deadline(request: Request) -> float:
+    request_deadline = cast(float, request.state.gateway_request_deadline)
+    return request_deadline - PROVIDER_OPERATION_TIMEOUT_SLACK_SECONDS
 
 
 def _is_local_startup_canary(request: Request, body: QueryRequest) -> bool:
@@ -166,6 +175,7 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                     question_id=body.question_id,
                     in_agent=body.in_agent,
                     query_id=body.query_id,
+                    deadline=_provider_operation_deadline(request),
                 ),
                 span_attrs=query_attrs,
             )
@@ -208,9 +218,7 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                         dimensions=dimensions,
                         result=result,
                         request=usage_request,
-                        api_key_fingerprint=getattr(
-                            request.state, "gateway_api_key_fingerprint", None
-                        ),
+                        api_key_name=request.state.gateway_api_key_name,
                     )
                     telemetry.set_attributes(
                         {"gateway.usage_event_id": usage_event["usage_event_id"]}

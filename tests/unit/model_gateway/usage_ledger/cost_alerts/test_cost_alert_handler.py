@@ -159,6 +159,95 @@ def test_ignored_for_cost_model_keys_come_from_generated_registry(
     assert list(ignored_model_keys) == ["provider/ignored"]
 
 
+class _FakeRegistryResponse:
+    def __init__(self, payload: dict[str, object]) -> None:
+        self._payload = payload
+
+    def __enter__(self) -> _FakeRegistryResponse:
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        return None
+
+    def read(self) -> bytes:
+        return json.dumps(self._payload).encode("utf-8")
+
+
+def _install_live_registry_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GATEWAY_REGISTRY_BASE_URL", "https://gateway.example")
+    monkeypatch.setenv("GATEWAY_REGISTRY_API_KEYS_SECRET_NAME", "gateway-config")
+    monkeypatch.setattr(
+        cost_alert_handler,
+        "_secret_value",
+        lambda _name: json.dumps(
+            {"api_keys": json.dumps({"alerts": "test-key"}), "hmac_secret": "hmac"}
+        ),
+    )
+
+
+def test_ignored_for_cost_model_keys_come_from_live_registry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _install_live_registry_env(monkeypatch)
+    requested: list[object] = []
+
+    def fake_urlopen(request: object, timeout: float) -> _FakeRegistryResponse:
+        requested.append(request)
+        return _FakeRegistryResponse(
+            {
+                "models": {
+                    "provider/live-included": {
+                        "metadata": {"ignored_for_cost": False}
+                    },
+                    "provider/live-ignored": {"metadata": {"ignored_for_cost": True}},
+                }
+            }
+        )
+
+    monkeypatch.setattr(
+        cost_alert_handler.urllib.request,
+        "urlopen",
+        fake_urlopen,
+    )
+
+    ignored_model_keys = cost_alert_handler._ignored_for_cost_model_keys()
+
+    assert list(ignored_model_keys) == ["provider/live-ignored"]
+    request = cast(Any, requested[0])
+    assert request.full_url == "https://gateway.example/registry"
+    assert request.get_header("Authorization") == "Bearer test-key"
+
+
+def test_ignored_for_cost_model_keys_fall_back_to_bundled_registry(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _install_live_registry_env(monkeypatch)
+
+    def failing_urlopen(request: object, timeout: float) -> _FakeRegistryResponse:
+        raise OSError("gateway unreachable")
+
+    monkeypatch.setattr(
+        cost_alert_handler.urllib.request,
+        "urlopen",
+        failing_urlopen,
+    )
+    registry_path = tmp_path / "all_models.json"
+    registry_path.write_text(
+        json.dumps(
+            {
+                "provider/included": {"metadata": {"ignored_for_cost": False}},
+                "provider/ignored": {"metadata": {"ignored_for_cost": True}},
+            }
+        )
+    )
+    monkeypatch.setattr(cost_alert_handler, "_MODEL_REGISTRY_PATH", registry_path)
+
+    ignored_model_keys = cost_alert_handler._ignored_for_cost_model_keys()
+
+    assert list(ignored_model_keys) == ["provider/ignored"]
+
+
 def test_handler_posts_and_persists_each_breached_scope(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

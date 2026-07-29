@@ -319,6 +319,7 @@ def _identity_with_compact_json_size(size: int) -> dict[str, str]:
 
 def _build_success_usage_event(**kwargs: Any) -> dict[str, object]:
     request = cast(QueryRequest, kwargs["body"])
+    kwargs.setdefault("api_key_name", "test")
     return build_success_usage_event(
         **kwargs,
         request=snapshot_usage_request(request),
@@ -541,17 +542,18 @@ def test_build_success_usage_event_owns_each_value_once_in_root_or_details():
         dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
         result=result,
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
-        api_key_fingerprint="keyfingerprint",
+        api_key_name="security-testing",
     )
 
     assert event["run_id"] == "run-1"
     assert event["question_id"] == "question-1"
     assert event["query_id"] == "query-1"
     assert event[ledger_schema.IDENTITY_EMAIL] == "user@example.com"
-    assert event["api_key_fingerprint"] == "keyfingerprint"
+    assert event["api_key_name"] == "security-testing"
+    assert "api_key_fingerprint" not in event
     assert event["finish_reason"] == "unknown"
     assert not event["finish_reason_raw"]
-    assert event["schema_version"] == 2
+    assert event["schema_version"] == 3
     assert event["input_tokens"] == 100
     assert event["cache_read_tokens"] == 10
     assert event["total_input_tokens"] == 113
@@ -560,7 +562,7 @@ def test_build_success_usage_event_owns_each_value_once_in_root_or_details():
     shard = event["usage_shard"]
     assert event["GSI1PK"] == f"RUN#run-1#S#{shard}"
     assert event["GSI2PK"] == "QUERY#query-1"
-    assert event["GSI3PK"] == f"KEY#keyfingerprint#DAY#20260529#S#{shard}"
+    assert event["GSI3PK"] == f"KEY#security-testing#DAY#20260529#S#{shard}"
     assert event["GSI4PK"] == f"BENCHMARK#swebench#S#{shard}"
     assert event["GSI5PK"] == f"AGENT#swe-agent#S#{shard}"
     assert event["GSI4SK"] == (
@@ -845,7 +847,7 @@ async def test_dynamodb_usage_ledger_writes_only_event_row():
         dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
         result=result,
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
-        api_key_fingerprint="keyfingerprint",
+        api_key_name="security-testing",
     )
     client = FakeDynamoClient()
     ledger = cast(Any, object.__new__(DynamoDbUsageLedger))
@@ -982,7 +984,7 @@ def test_reused_query_id_records_distinct_completed_usage_events():
         dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
         result=result,
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
-        api_key_fingerprint="keyfingerprint",
+        api_key_name="security-testing",
     )
     second = _build_success_usage_event(
         body=request,
@@ -991,7 +993,7 @@ def test_reused_query_id_records_distinct_completed_usage_events():
         dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
         result=result,
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
-        api_key_fingerprint="keyfingerprint",
+        api_key_name="security-testing",
     )
 
     assert first["query_id"] == second["query_id"]
@@ -1958,7 +1960,7 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
     from model_library.base.input import RawInput
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -2022,7 +2024,8 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
     assert event["query_id"] == "query-a"
     assert event[ledger_schema.IDENTITY_EMAIL] == "user@example.com"
     assert "identity" not in event
-    assert event["api_key_fingerprint"] == "f3abf2a6cc4f0098"
+    assert event["api_key_name"] == "test"
+    assert "api_key_fingerprint" not in event
     assert event["provider_endpoint"] == "custom"
     assert event["input_tokens"] == 12
     assert event["output_tokens"] == 3
@@ -2057,7 +2060,7 @@ def test_local_startup_canary_query_skips_usage_ledger():
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -2111,7 +2114,7 @@ def test_query_marks_usage_ledger_phase_when_enforced_write_fails():
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -2167,7 +2170,7 @@ def test_query_does_not_write_usage_event_on_provider_error():
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:

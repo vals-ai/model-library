@@ -117,24 +117,6 @@ claude-models:
           properties:
             reasoning_model: true
 
-  bedrock/claude-opus-4-1-20250805-v1:
-    label: Claude Opus 4.1 (Nonthinking)
-    release_date: 2025-08-05
-    properties:
-      context_window: 200_000
-      max_tokens: 32_000
-      training_cutoff: 2025-03
-    metadata:
-      available_for_everyone: false
-    costs_per_million_token:
-      input: 15.0
-      output: 75.0
-    provider_endpoint: us.anthropic.claude-opus-4-1-20250805-v1:0
-    alternative_keys:
-      - bedrock/claude-opus-4-1-20250805-v1-thinking:
-          properties:
-            reasoning_model: true
-
 llama-models:
   base-config:
     documentation_url: https://aws.amazon.com/bedrock/meta/

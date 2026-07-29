@@ -8,6 +8,7 @@ import asyncio
 from types import SimpleNamespace
 from typing import Literal, cast
 from unittest.mock import MagicMock
+from anthropic.types.beta import BetaFallbackBlock
 from pydantic import SecretStr, ValidationError
 
 import pytest
@@ -35,6 +36,8 @@ async def _query_anthropic_with_provider_config(
     provider_config: AnthropicConfig,
     *,
     model_name: str = "claude-primary-test",
+    thinking_tokens: int | None = None,
+    fallback_block: BetaFallbackBlock | None = None,
 ) -> tuple[dict[str, object], QueryResult]:
     captured: dict[str, object] = {}
 
@@ -44,7 +47,8 @@ async def _query_anthropic_with_provider_config(
 
     class _DummyUsage:
         input_tokens = 1
-        output_tokens = 1
+        output_tokens = 7 if thinking_tokens is not None else 1
+        output_tokens_details = None
         cache_read_input_tokens = 0
         cache_creation_input_tokens = 0
         iterations = [_DummyIteration()]
@@ -52,7 +56,10 @@ async def _query_anthropic_with_provider_config(
     class _DummyMessage:
         id = "msg_test"
         model = "claude-primary-test"
-        content = [SimpleNamespace(type="text", text="ok")]
+        content = [
+            SimpleNamespace(type="text", text="ok"),
+            *([fallback_block] if fallback_block is not None else []),
+        ]
         usage = _DummyUsage()
         stop_reason = "end_turn"
 
@@ -64,8 +71,15 @@ async def _query_anthropic_with_provider_config(
             return False
 
         async def __aiter__(self):
-            if False:
-                yield None
+            if thinking_tokens is not None:
+                yield SimpleNamespace(
+                    type="message_delta",
+                    usage=SimpleNamespace(
+                        output_tokens_details=SimpleNamespace(
+                            thinking_tokens=thinking_tokens
+                        )
+                    ),
+                )
 
         async def get_final_message(self):
             return _DummyMessage()
@@ -195,6 +209,63 @@ class TestAnthropicConfig:
         extra_body = cast(dict[str, object], captured["extra_body"])
         assert extra_body == {"fallbacks": [{"model": "claude-fallback-test"}]}
         assert result.metadata.extra["fallback"] is True
+        assert "anthropic_fallback_blocks" not in result.metadata.extra
+
+    async def test_server_side_fallback_retains_native_boundary_block(self):
+        fallback_block = BetaFallbackBlock.model_validate(
+            {
+                "type": "fallback",
+                "from": {"model": "claude-primary-test"},
+                "to": {"model": "claude-fallback-test"},
+                "trigger": {"type": "refusal", "category": "general_harms"},
+            }
+        )
+
+        _, result = await _query_anthropic_with_provider_config(
+            AnthropicConfig(fallback_models=["claude-fallback-test"]),
+            fallback_block=fallback_block,
+        )
+
+        assert result.metadata.extra["fallback"] is True
+        assert result.metadata.extra["anthropic_response_model"] == (
+            "claude-primary-test"
+        )
+        assert "anthropic_usage_iterations" in result.metadata.extra
+        assert result.metadata.extra["anthropic_fallback_blocks"] == [
+            {
+                "type": "fallback",
+                "from": {"model": "claude-primary-test"},
+                "to": {"model": "claude-fallback-test"},
+                "trigger": {"type": "refusal", "category": "general_harms"},
+            }
+        ]
+
+    async def test_stream_thinking_tokens_are_split_and_billed_once(self):
+        _, result = await _query_anthropic_with_provider_config(
+            AnthropicConfig(supports_auto_thinking=True),
+            thinking_tokens=3,
+        )
+
+        assert result.metadata.out_tokens == 4
+        assert result.metadata.reasoning_tokens == 3
+        assert result.metadata.total_output_tokens == 7
+
+        model = get_registry_model("anthropic/claude-opus-5-max")
+        cost = await model._calculate_cost(result.metadata)
+
+        assert cost is not None
+        assert cost.output == pytest.approx(4 * 25 / 1_000_000)
+        assert cost.reasoning == pytest.approx(3 * 25 / 1_000_000)
+        assert cost.total_output == pytest.approx(7 * 25 / 1_000_000)
+
+    async def test_zero_stream_thinking_tokens_preserve_none(self):
+        _, result = await _query_anthropic_with_provider_config(
+            AnthropicConfig(supports_auto_thinking=True),
+            thinking_tokens=0,
+        )
+
+        assert result.metadata.out_tokens == 7
+        assert result.metadata.reasoning_tokens is None
 
     async def test_server_side_fallback_models_preserve_order(self):
         captured, result = await _query_anthropic_with_provider_config(
@@ -301,8 +372,6 @@ class TestRegistryProviderConfigs:
             alias_config = get_registry_config(alias)
             assert alias_config is not None
             assert alias_config.provider_endpoint == "grok-4.5"
-
-
 class TestMetaConfig:
     async def test_use_responses_configures_openai_delegate_responses_mode(self):
         model = MetaModel(

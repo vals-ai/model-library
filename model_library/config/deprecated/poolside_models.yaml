@@ -1,0 +1,79 @@
+base-config:
+  company: Poolside
+  documentation_url: https://docs.poolside.ai
+  open_source: false
+  supports:
+    images: false
+    tools: true
+    files: false
+
+
+deprecated:
+  base-config:
+    metadata:
+      deprecated: true
+
+  poolside/laguna-xs.2:fast:
+    company: Poolside
+    label: Laguna XS.2 Fast
+    release_date: 2026-04-28
+    open_source: true
+    documentation_url: https://docs.poolside.ai
+    properties:
+      context_window: 262144
+      max_tokens: 32768
+      reasoning_model: true
+    supports:
+      images: false
+      audio: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.1
+      output: 0.2
+      cache:
+        read: 0.05
+        read_discount: 1.0
+        write_markup: 1.0
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+    provider_endpoint: poolside/laguna-xs.2:fast
+
+  poolside/laguna-xs.2:
+    company: Poolside
+    label: Laguna XS.2
+    release_date: 2026-04-28
+    open_source: true
+    documentation_url: https://docs.poolside.ai
+    properties:
+      context_window: 262144
+      max_tokens: 32768
+      reasoning_model: true
+    supports:
+      images: false
+      audio: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+    provider_endpoint: poolside/laguna-xs.2

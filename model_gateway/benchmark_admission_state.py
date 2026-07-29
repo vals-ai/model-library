@@ -23,6 +23,7 @@ from model_library.retriers.token.benchmark_queue import (
 from model_library.retriers.token.utils import KEY_PREFIX, AsyncRedisClient
 
 ADMISSION_OPERATION_LOCK_TTL = HEARTBEAT_INTERVAL * 10
+ADMISSION_OPERATION_LOCK_BLOCKING_TIMEOUT = 1.0
 
 
 class BenchmarkAdmissionConflict(Exception):
@@ -57,6 +58,7 @@ class BenchmarkAdmissionStore:
         async with self.redis.lock(
             f"{pointer_key}:lock",
             timeout=ADMISSION_OPERATION_LOCK_TTL,
+            blocking_timeout=ADMISSION_OPERATION_LOCK_BLOCKING_TIMEOUT,
         ):
             pointer = await self.redis.hgetall(pointer_key)
             if pointer:
@@ -175,6 +177,7 @@ class BenchmarkAdmissionStore:
         async with self.redis.lock(
             f"{pointer_key}:lock",
             timeout=ADMISSION_OPERATION_LOCK_TTL,
+            blocking_timeout=ADMISSION_OPERATION_LOCK_BLOCKING_TIMEOUT,
         ):
             pointer = await self._require_pointer(pointer_key, model, run_id)
             keys = BenchmarkQueueKeys.for_base(pointer["base"], run_id)
@@ -205,6 +208,7 @@ class BenchmarkAdmissionStore:
         async with self.redis.lock(
             f"{pointer_key}:lock",
             timeout=ADMISSION_OPERATION_LOCK_TTL,
+            blocking_timeout=ADMISSION_OPERATION_LOCK_BLOCKING_TIMEOUT,
         ):
             pointer = await self._require_pointer(pointer_key, model, run_id)
             keys = BenchmarkQueueKeys.for_base(pointer["base"], run_id)
@@ -243,6 +247,7 @@ class BenchmarkAdmissionStore:
         async with self.redis.lock(
             f"{pointer_key}:lock",
             timeout=ADMISSION_OPERATION_LOCK_TTL,
+            blocking_timeout=ADMISSION_OPERATION_LOCK_BLOCKING_TIMEOUT,
         ):
             pointer = await self._require_pointer(pointer_key, model, run_id)
             keys = BenchmarkQueueKeys.for_base(pointer["base"], run_id)
@@ -264,6 +269,7 @@ class BenchmarkAdmissionStore:
         async with self.redis.lock(
             f"{pointer_key}:lock",
             timeout=ADMISSION_OPERATION_LOCK_TTL,
+            blocking_timeout=ADMISSION_OPERATION_LOCK_BLOCKING_TIMEOUT,
         ):
             pointer = await self._require_pointer(pointer_key, model, run_id)
             keys = BenchmarkQueueKeys.for_base(pointer["base"], run_id)

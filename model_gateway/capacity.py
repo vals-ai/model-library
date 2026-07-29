@@ -241,8 +241,15 @@ def create_capacity_middleware() -> Callable[
         if request.url.path not in MODEL_CALL_PATHS:
             return await call_next(request)
         limiter = cast(GatewayCapacityLimiter, request.app.state.capacity_limiter)
+
+        async def run_request() -> Response:
+            request.state.gateway_request_deadline = (
+                asyncio.get_running_loop().time() + limiter.request_timeout_seconds
+            )
+            return await call_next(request)
+
         try:
-            return await limiter.run(lambda: call_next(request))
+            return await limiter.run(run_request)
         except (CapacityRejectedError, CapacityQueueTimeoutError) as exc:
             await _attach_request_identity(request)
             error_attrs = {

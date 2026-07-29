@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from model_library.base.output import FinishReasonInfo
 
 from ai21 import TooManyRequestsError as AI21RateLimitError
+from aiohttp import ClientPayloadError
 from anthropic import InternalServerError
 from anthropic import RateLimitError as AnthropicRateLimitError
 from httpcore import ReadError as HTTPCoreReadError
@@ -61,6 +62,16 @@ class BackoffRetryException(RetryException): ...
 
 # Base class for a non-retryable exception
 class NoRetryException(ModelLibraryException): ...
+
+
+class QueryDeadlineExceededError(NoRetryException, TimeoutError):
+    """Raised when a caller-owned local query deadline expires."""
+
+    code = "query_deadline_exceeded"
+    DEFAULT_MESSAGE = "Query deadline exceeded"
+
+    def __init__(self):
+        super().__init__(self.DEFAULT_MESSAGE)
 
 
 class ImmediateRetryExhaustedError(NoRetryException):
@@ -314,14 +325,13 @@ RETRIABLE_EXCEPTIONS = [
     AnthropicRateLimitError,
     InternalServerError,
     AI21RateLimitError,
+    ClientPayloadError,
     RemoteProtocolError,  # httpx connection closing when running models from sdk
     HTTPXReadError,
     HTTPXConnectError,
     HTTPCoreReadError,
 ]
 
-# Some providers do not have typed exceptions, so we need to manually check for
-# api status codes.
 RETRIABLE_EXCEPTION_CODES = [
     "429",  # rate limit / too many requests
     "500",  # internal server error
@@ -352,6 +362,13 @@ RETRIABLE_EXCEPTION_CODES = [
 ]
 
 
+def exception_http_status_code(exception: Exception) -> int | None:
+    status_code = getattr(exception, "status_code", None)
+    if isinstance(status_code, int) and not isinstance(status_code, bool):
+        return status_code
+    return None
+
+
 def is_retriable_error(e: Exception) -> bool:
     if isinstance(e, NoRetryException):
         return False
@@ -365,7 +382,6 @@ def is_retriable_error(e: Exception) -> bool:
     if any(isinstance(e, exception) for exception in RETRIABLE_EXCEPTIONS):
         return True
 
-    # check error message
     error_message = str(e).lower()
     return any(code in error_message for code in RETRIABLE_EXCEPTION_CODES)
 

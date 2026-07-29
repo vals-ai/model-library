@@ -102,7 +102,7 @@ def test_fact_staging_performance_and_dimension_table_ddls_are_specific():
         "benchmark_name varchar(1024)",
         "agent_name varchar(1024)",
         "identity_email varchar(1024)",
-        "api_key_fingerprint varchar(512)",
+        "api_key_name varchar(512)",
         "input_tokens bigint not null default 0",
         "output_tokens bigint not null default 0",
         "reasoning_tokens bigint not null default 0",
@@ -276,10 +276,7 @@ def test_aggregate_refresh_sql_uses_missing_sentinel_and_excludes_non_additive_s
     assert "coalesce(benchmark_name, '__missing__') as benchmark_name" in insert_sql
     assert "coalesce(agent_name, '__missing__') as agent_name" in insert_sql
     assert "coalesce(identity_email, '__missing__') as identity_email" in insert_sql
-    assert (
-        "coalesce(api_key_fingerprint, '__missing__') as api_key_fingerprint"
-        in insert_sql
-    )
+    assert "coalesce(api_key_name, '__missing__') as api_key_name" in insert_sql
     assert "reserved_dimension_guard" in insert_sql
     assert "then 0 else 1 end as reserved_dimension_guard" in insert_sql
     for dimension in redshift_schema.ANALYTICS_DIMENSIONS:
@@ -294,7 +291,7 @@ def test_aggregate_refresh_sql_uses_missing_sentinel_and_excludes_non_additive_s
         "group by\n  bucket_start_utc,\n  bucket_end_utc,\n  provider,\n  provider_model,"
         in insert_sql
     )
-    assert "agent_name,\n  identity_email,\n  api_key_fingerprint;" in insert_sql
+    assert "agent_name,\n  identity_email,\n  api_key_name;" in insert_sql
     assert "percentile_cont" not in insert_sql.lower()
     assert "count(distinct" not in insert_sql.lower()
 

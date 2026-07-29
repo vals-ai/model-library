@@ -1,5 +1,6 @@
+import asyncio
 import logging
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from fakeredis import aioredis
@@ -12,7 +13,12 @@ import model_gateway.routes.benchmark_admission as benchmark_admission_routes
 from model_gateway.benchmark_admission_types import BenchmarkAcquireRequest
 from model_gateway.cache import ModelCache
 from model_gateway.types import QueryRequest
-from model_library.base import LLMConfig, ResolvedTokenRetryParams, TokenRetryParams
+from model_library.base import (
+    FileWithId,
+    LLMConfig,
+    ResolvedTokenRetryParams,
+    TokenRetryParams,
+)
 from model_library.retriers.token import utils as token_utils
 from model_library.retriers.token.utils import set_redis_client
 
@@ -50,7 +56,7 @@ def redis():
 
 def _make_client() -> TestClient:
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -105,7 +111,7 @@ def _acquire_body(
         ),
     ],
 )
-async def test_acquire_and_query_share_model_resolution_and_token_retry(
+async def test_admission_and_query_share_model_identity_but_only_query_starts_token_retry(
     config: LLMConfig,
 ) -> None:
     cache = ModelCache()
@@ -129,12 +135,13 @@ async def test_acquire_and_query_share_model_resolution_and_token_retry(
     )
 
     with patch.object(model_helpers, "get_registry_model", return_value=llm):
-        query_llm = await model_helpers.get_query_llm(cache, query)
-        admission_llm = await model_helpers.get_query_llm(
+        admission_llm = model_helpers.get_gateway_llm(
             cache,
             acquire,
             resolved_token_retry_params=resolved_params,
         )
+        assert llm.init_calls == []
+        query_llm = await model_helpers.get_query_llm(cache, query)
 
     assert query_llm is admission_llm
     assert llm.token_retry_params == params
@@ -144,7 +151,7 @@ async def test_admission_routes_coordinate_through_shared_redis(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     llm = FakeLLM()
-    resolve_llm = AsyncMock(return_value=llm)
+    resolve_llm = MagicMock(return_value=llm)
     monkeypatch.setenv("REDIS_URL", "redis://shared-benchmark-admission")
 
     with (
@@ -153,7 +160,7 @@ async def test_admission_routes_coordinate_through_shared_redis(
         ) as from_url,
         patch.object(
             benchmark_admission_routes,
-            "get_query_llm",
+            "get_gateway_llm",
             resolve_llm,
         ),
         _make_client() as first_client,
@@ -206,10 +213,43 @@ async def test_admission_routes_coordinate_through_shared_redis(
         "redis://shared-benchmark-admission",
         "redis://shared-benchmark-admission",
     ]
-    assert [call.args[1].run_id for call in resolve_llm.await_args_list] == [
+    assert [call.args[1].run_id for call in resolve_llm.call_args_list] == [
         "run-1",
         "run-2",
     ]
+
+
+async def test_control_role_serves_authenticated_admission_through_lifespan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    llm = FakeLLM()
+    lifecycle_redis = aioredis.FakeRedis(decode_responses=True)
+    monkeypatch.setenv("GATEWAY_RUNTIME_ROLE", "control")
+    monkeypatch.setenv("REDIS_URL", "redis://control-benchmark-admission")
+    monkeypatch.setattr(token_utils, "redis_client", None)
+
+    with (
+        patch.object(
+            gateway_app.async_redis,
+            "from_url",
+            return_value=lifecycle_redis,
+        ),
+        patch.object(
+            benchmark_admission_routes,
+            "get_gateway_llm",
+            return_value=llm,
+        ),
+        _make_client() as client,
+    ):
+        response = client.post(
+            "/benchmark-runs/acquire",
+            headers=HEADERS,
+            json=_acquire_body("control-run"),
+        )
+
+    assert response.status_code == 200
+    assert response.json()["state"] == "acquired"
+    assert llm.init_calls == []
 
 
 @pytest.mark.parametrize(
@@ -259,6 +299,34 @@ def test_admission_returns_503_when_redis_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(token_utils, "redis_client", None)
+    response = _make_client().post(
+        "/benchmark-runs/renew",
+        headers=HEADERS,
+        json={"model": MODEL, "run_id": "run-1"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "benchmark_admission_unavailable"
+
+
+def test_admission_returns_503_when_operation_exceeds_server_budget(
+    redis,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def never_complete(_operation):
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(
+        benchmark_admission_routes,
+        "SHORT_OPERATION_TIMEOUT_SECONDS",
+        0.001,
+    )
+    monkeypatch.setattr(
+        benchmark_admission_routes,
+        "_execute_admission_operation",
+        never_complete,
+    )
+
     response = _make_client().post(
         "/benchmark-runs/renew",
         headers=HEADERS,

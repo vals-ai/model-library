@@ -265,6 +265,7 @@ def default_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncCl
 
 def gateway_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncClient:
     return httpx.AsyncClient(
+        http2=True,
         timeout=httpx.Timeout(
             connect=GATEWAY_CLIENT_CONNECT_TIMEOUT_SECONDS,
             read=GATEWAY_CLIENT_READ_TIMEOUT_SECONDS,

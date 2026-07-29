@@ -1,3 +1,4 @@
+import httpx
 from pydantic import ValidationError
 
 from model_gateway.benchmark_admission_types import (
@@ -18,8 +19,14 @@ _LONG_POLL_TIMEOUT_BUFFER_SECONDS = 5.0
 
 
 class GatewayBenchmarkAdmissionClient:
-    def __init__(self, model: GatewayLLM) -> None:
+    def __init__(
+        self,
+        model: GatewayLLM,
+        *,
+        http_client: httpx.AsyncClient | None = None,
+    ) -> None:
         self.gateway = model
+        self.http_client = http_client or model.get_client()
         self.model = model.gateway_model_key
 
     async def acquire(
@@ -104,6 +111,7 @@ class GatewayBenchmarkAdmissionClient:
                     _HTTP_TIMEOUT_SECONDS,
                     long_poll_seconds + _LONG_POLL_TIMEOUT_BUFFER_SECONDS,
                 ),
+                http_client=self.http_client,
             )
         except Exception as exc:
             raise BenchmarkCoordinatorError(str(exc)) from exc

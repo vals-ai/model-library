@@ -5,6 +5,7 @@ import time
 from typing import Any, Literal, Sequence, cast
 
 from anthropic import APIConnectionError, AsyncAnthropic, transform_schema
+from anthropic.types.beta.beta_fallback_block import BetaFallbackBlock
 from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
 from anthropic.types.beta.beta_web_search_tool_result_block import (
     BetaWebSearchToolResultBlock,
@@ -14,6 +15,7 @@ from pydantic import BaseModel, Field, JsonValue, SecretStr, model_validator
 from typing_extensions import override
 
 from model_library import model_library_settings
+from model_library.agent.tool import is_native_web_search
 from model_library.base import (
     LLM,
     BatchResult,
@@ -42,8 +44,8 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
-from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.input import normalize_query_input
+from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.output.result import ProviderToolEvent
 from model_library.exceptions import (
     BadInputError,
@@ -54,7 +56,6 @@ from model_library.exceptions import (
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.providers.openai import OpenAIModel
-from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 from model_library.utils import (
     create_anthropic_client_with_defaults,
@@ -773,6 +774,7 @@ class AnthropicModel(LLM):
             stream_kwargs["betas"] = betas
 
         result_builder = QueryResultBuilder()
+        stream_thinking_tokens: int | None = None
 
         try:
             async with client.beta.messages.stream(
@@ -803,6 +805,16 @@ class AnthropicModel(LLM):
                                 pass
                     elif event_type == "content_block_stop":
                         result_builder.finish_current_segment()
+                    elif event_type == "message_delta":
+                        event_usage = getattr(event, "usage", None)
+                        output_token_details = getattr(
+                            event_usage, "output_tokens_details", None
+                        )
+                        thinking_tokens = getattr(
+                            output_token_details, "thinking_tokens", None
+                        )
+                        if thinking_tokens is not None:
+                            stream_thinking_tokens = thinking_tokens
                 message = await stream.get_final_message()
             query_logger.debug(f"Anthropic Response finished: {message.id}")
         except APIConnectionError:
@@ -812,6 +824,7 @@ class AnthropicModel(LLM):
         reasoning_parts: list[str] = []
         tool_calls: list[ToolCall] = []
         provider_tool_events: list[ProviderToolEvent] = []
+        fallback_blocks: list[dict[str, Any]] = []
         web_search_queries: dict[str, str] = {}
         for i, content in enumerate(message.content):
             if content.type == "text":
@@ -826,6 +839,10 @@ class AnthropicModel(LLM):
                         args=cast(Any, content.input),
                         sequence=i,
                     )
+                )
+            elif isinstance(content, BetaFallbackBlock):
+                fallback_blocks.append(
+                    content.model_dump(mode="json", by_alias=True, exclude_none=True)
                 )
             if (
                 content.type == "server_tool_use"
@@ -880,9 +897,17 @@ class AnthropicModel(LLM):
             handle_empty_response(mapped_finish_reason, {"raw": str(message)})
 
         usage = message.usage
+        output_token_details = getattr(usage, "output_tokens_details", None)
+        reasoning_tokens = (
+            stream_thinking_tokens
+            or getattr(output_token_details, "thinking_tokens", None)
+            or None
+        )
         metadata_extra: dict[str, Any] = {
             "anthropic_response_model": message.model,
         }
+        if fallback_blocks:
+            metadata_extra["anthropic_fallback_blocks"] = fallback_blocks
         if usage.iterations is not None:
             metadata_extra["anthropic_usage_iterations"] = _json_safe_anthropic_value(
                 usage.iterations
@@ -897,7 +922,8 @@ class AnthropicModel(LLM):
             metadata=QueryResultMetadata(
                 # see _calculate_cost
                 in_tokens=usage.input_tokens,
-                out_tokens=usage.output_tokens,
+                out_tokens=usage.output_tokens - (reasoning_tokens or 0),
+                reasoning_tokens=reasoning_tokens,
                 cache_read_tokens=usage.cache_read_input_tokens,
                 cache_write_tokens=usage.cache_creation_input_tokens,
                 extra=metadata_extra,
@@ -1011,4 +1037,8 @@ class AnthropicModel(LLM):
         """
         # prompt caching manually enabled
         # assumed that cache tokens are ephemeral_5m_input_tokens
-        return await super()._calculate_cost(metadata, batch, bill_reasoning=False)
+        return await super()._calculate_cost(
+            metadata,
+            batch,
+            bill_reasoning=False or metadata.reasoning_tokens is not None,
+        )

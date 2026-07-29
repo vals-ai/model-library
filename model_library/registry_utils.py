@@ -215,11 +215,12 @@ def get_model_input_context_window(model_name: str) -> int:
 def get_input_context_window_from_config(model: ModelConfig) -> int:
     """Return usable input tokens from a registry config.
 
-    OpenAI and Meta configs express a total context window that includes the
-    output budget, so subtract max output tokens for prompt/input capacity.
+    OpenAI, Meta, and Baseten configs express a total context window that
+    includes the output budget, so subtract max output tokens for prompt/input
+    capacity.
     """
     context_window = model.properties.context_window
-    if model.provider_name in {"openai", "meta"}:
+    if model.provider_name in {"openai", "meta", "baseten"}:
         context_window -= model.properties.max_tokens
     return max(context_window, 0)
 

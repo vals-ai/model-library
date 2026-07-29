@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import io
 import json
@@ -19,6 +20,7 @@ import model_gateway.model_helpers as model_helpers
 from model_gateway import startup_canary
 from model_gateway import telemetry_helpers
 from model_library.base import (
+    LLM,
     LLMConfig,
     TextInput,
     TokenRetryParams,
@@ -38,7 +40,7 @@ def _make_client(*, client: tuple[str, int] = ("testclient", 50000)):
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = json.dumps({"test": "sk-test"})
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -236,11 +238,14 @@ def test_metrics_http_span_uses_method_and_route_name():
             "MODEL_GATEWAY_API_KEYS must be set",
         ),
         (
-            {"MODEL_GATEWAY_API_KEYS": "sk-test", "MODEL_GATEWAY_HMAC_SECRET": ""},
+            {
+                "MODEL_GATEWAY_API_KEYS": json.dumps({"test": "sk-test"}),
+                "MODEL_GATEWAY_HMAC_SECRET": "",
+            },
             "MODEL_GATEWAY_HMAC_SECRET must be set",
         ),
         (
-            {"MODEL_GATEWAY_API_KEYS": "sk-test"},
+            {"MODEL_GATEWAY_API_KEYS": json.dumps({"test": "sk-test"})},
             "MODEL_GATEWAY_HMAC_SECRET must be set",
         ),
     ],
@@ -275,7 +280,7 @@ def test_lifespan_survives_malformed_otel_env():
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -427,7 +432,7 @@ def test_lifespan_loads_model_registry_at_startup():
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -674,7 +679,7 @@ def test_lifespan_starts_and_closes_usage_ledger():
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -719,7 +724,7 @@ def test_lifespan_close_continues_after_usage_ledger_close_failure():
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -779,7 +784,7 @@ def test_lifespan_closes_owned_redis_client():
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:
@@ -1303,6 +1308,81 @@ def test_query_provider_error_returns_200_error_envelope_with_searchable_phase()
     assert "gateway.provider_error.status_code" not in error_attrs
 
 
+def test_query_provider_operation_deadline_precedes_outer_timeouts():
+    from model_gateway.capacity import REQUEST_TIMEOUT_SECONDS
+    from model_gateway.routes.query import PROVIDER_OPERATION_TIMEOUT_SLACK_SECONDS
+    from model_library.utils import PROVIDER_READ_TIMEOUT_SECONDS
+
+    assert (
+        REQUEST_TIMEOUT_SECONDS - PROVIDER_OPERATION_TIMEOUT_SLACK_SECONDS
+        < PROVIDER_READ_TIMEOUT_SECONDS
+    )
+    assert PROVIDER_READ_TIMEOUT_SECONDS < REQUEST_TIMEOUT_SECONDS
+
+
+def test_query_provider_operation_deadline_reserves_response_budget():
+    from model_gateway.routes.query import (
+        PROVIDER_OPERATION_TIMEOUT_SLACK_SECONDS,
+        _provider_operation_deadline,
+    )
+
+    request = MagicMock()
+    request.state.gateway_request_deadline = 1000.0
+
+    provider_deadline = _provider_operation_deadline(request)
+
+    assert (
+        request.state.gateway_request_deadline - provider_deadline
+        == PROVIDER_OPERATION_TIMEOUT_SLACK_SECONDS
+    )
+
+
+def test_query_provider_operation_deadline_returns_provider_error(mock_llm: LLM):
+    cancelled = False
+
+    async def blocked_query(*args, **kwargs):
+        nonlocal cancelled
+        try:
+            await asyncio.wait_for(asyncio.Event().wait(), timeout=1)
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
+        except TimeoutError as exc:
+            raise AssertionError("provider deadline did not cancel query") from exc
+
+    mock_llm._query_impl = AsyncMock(  # pyright: ignore[reportPrivateUsage]
+        side_effect=blocked_query
+    )
+    client = _make_client()
+    with (
+        patch.object(model_helpers, "get_registry_model", return_value=mock_llm),
+        patch(
+            "model_gateway.routes.query._provider_operation_deadline",
+            side_effect=lambda request: asyncio.get_running_loop().time() + 0.1,
+        ),
+    ):
+        resp = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+            },
+            headers=HEADERS,
+        )
+
+    assert cancelled
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "error": {
+            "type": "ProviderError",
+            "code": "query_deadline_exceeded",
+            "message": "Query deadline exceeded",
+            "provider": "openai",
+            "exception_type": "QueryDeadlineExceededError",
+        }
+    }
+
+
 def test_query_rejects_custom_endpoint_without_custom_api_key():
     client = _make_client()
     resp = client.post(
@@ -1559,7 +1639,7 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = "sk-test"
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 
@@ -19,12 +20,15 @@ from model_gateway.benchmark_admission_types import (
 from model_gateway.cache import ModelCache
 from model_gateway.errors import ErrorBody, ErrorResponse, map_exception_to_error
 from model_gateway.model_helpers import (
-    get_query_llm,
+    get_gateway_llm,
     resolve_gateway_token_retry_params,
 )
 from model_library.retriers.token import utils as token_utils
 
 logger = logging.getLogger("model_gateway.benchmark_admission")
+
+SHORT_OPERATION_TIMEOUT_SECONDS = 5.0
+WAIT_OPERATION_GRACE_SECONDS = 2.0
 
 
 def _error_response(error: ErrorResponse) -> JSONResponse:
@@ -40,7 +44,15 @@ def _admission_error(status_code: int, code: str, message: str) -> JSONResponse:
     )
 
 
-async def _run_admission_operation(
+def _unavailable_response() -> JSONResponse:
+    return _admission_error(
+        503,
+        "benchmark_admission_unavailable",
+        "Benchmark admission Redis is unavailable",
+    )
+
+
+async def _execute_admission_operation(
     operation: Callable[
         [BenchmarkAdmissionStore], Awaitable[BenchmarkAdmissionResponse]
     ],
@@ -48,11 +60,7 @@ async def _run_admission_operation(
     try:
         await token_utils.validate_redis_client()
     except Exception:
-        return _admission_error(
-            503,
-            "benchmark_admission_unavailable",
-            "Benchmark admission Redis is unavailable",
-        )
+        return _unavailable_response()
 
     store = BenchmarkAdmissionStore(token_utils.redis_client, logger)
     try:
@@ -60,13 +68,23 @@ async def _run_admission_operation(
     except BenchmarkAdmissionConflict as exc:
         return _admission_error(409, "benchmark_admission_conflict", str(exc))
     except RedisError:
-        return _admission_error(
-            503,
-            "benchmark_admission_unavailable",
-            "Benchmark admission Redis is unavailable",
-        )
+        return _unavailable_response()
     except Exception as exc:
         return _error_response(map_exception_to_error(exc))
+
+
+async def _run_admission_operation(
+    operation: Callable[
+        [BenchmarkAdmissionStore], Awaitable[BenchmarkAdmissionResponse]
+    ],
+    *,
+    timeout_seconds: float,
+) -> BenchmarkAdmissionResponse | JSONResponse:
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            return await _execute_admission_operation(operation)
+    except TimeoutError:
+        return _unavailable_response()
 
 
 def register_benchmark_admission_routes(app: FastAPI, *, cache: ModelCache) -> None:
@@ -84,7 +102,7 @@ def register_benchmark_admission_routes(app: FastAPI, *, cache: ModelCache) -> N
                 body.model,
                 body.token_retry_params,
             )
-            llm = await get_query_llm(
+            llm = get_gateway_llm(
                 cache,
                 body,
                 resolved_token_retry_params=resolved_token_retry_params,
@@ -99,7 +117,10 @@ def register_benchmark_admission_routes(app: FastAPI, *, cache: ModelCache) -> N
                 immediate_queue_release=body.immediate_queue_release,
             )
 
-        return await _run_admission_operation(operation)
+        return await _run_admission_operation(
+            operation,
+            timeout_seconds=SHORT_OPERATION_TIMEOUT_SECONDS,
+        )
 
     @app.post(
         "/benchmark-runs/wait",
@@ -117,7 +138,10 @@ def register_benchmark_admission_routes(app: FastAPI, *, cache: ModelCache) -> N
                 timeout_seconds=body.timeout_seconds,
             )
 
-        return await _run_admission_operation(operation)
+        return await _run_admission_operation(
+            operation,
+            timeout_seconds=body.timeout_seconds + WAIT_OPERATION_GRACE_SECONDS,
+        )
 
     @app.post(
         "/benchmark-runs/renew",
@@ -131,7 +155,10 @@ def register_benchmark_admission_routes(app: FastAPI, *, cache: ModelCache) -> N
         ) -> BenchmarkAdmissionResponse:
             return await store.renew(model=body.model, run_id=body.run_id)
 
-        return await _run_admission_operation(operation)
+        return await _run_admission_operation(
+            operation,
+            timeout_seconds=SHORT_OPERATION_TIMEOUT_SECONDS,
+        )
 
     @app.post(
         "/benchmark-runs/release",
@@ -149,4 +176,7 @@ def register_benchmark_admission_routes(app: FastAPI, *, cache: ModelCache) -> N
                 outcome=body.outcome,
             )
 
-        return await _run_admission_operation(operation)
+        return await _run_admission_operation(
+            operation,
+            timeout_seconds=SHORT_OPERATION_TIMEOUT_SECONDS,
+        )

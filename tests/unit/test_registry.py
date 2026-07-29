@@ -188,16 +188,16 @@ async def test_none_costs():
     from model_library.base import QueryResultMetadata
     from model_library.registry_utils import get_model_cost, get_registry_config
 
-    # poolside/laguna-xs.2 has no costs defined in its YAML config
-    config = get_registry_config("poolside/laguna-xs.2")
+    # poolside/laguna-m.1 has no costs defined in its YAML config
+    config = get_registry_config("poolside/laguna-m.1")
     assert config is not None
     assert config.costs_per_million_token is None
 
-    cost = get_model_cost("poolside/laguna-xs.2")
+    cost = get_model_cost("poolside/laguna-m.1")
     assert cost is None
 
     # _calculate_cost should return None when costs are missing
-    model = get_registry_model("poolside/laguna-xs.2")
+    model = get_registry_model("poolside/laguna-m.1")
     metadata = QueryResultMetadata(in_tokens=100, out_tokens=50)
     result = await model._calculate_cost(metadata)
     assert result is None

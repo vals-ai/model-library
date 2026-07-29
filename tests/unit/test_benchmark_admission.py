@@ -134,6 +134,43 @@ def test_heartbeat_ttl_exceeds_wait_and_initial_renewal_margin() -> None:
     )
 
 
+async def test_context_uses_isolated_control_client() -> None:
+    model = _model()
+    coordinator = FakeCoordinator(_response("acquired"))
+    control_http_client = AsyncMock()
+    control_http_client.__aenter__.return_value = control_http_client
+    control_http_client.__aexit__.return_value = None
+
+    with (
+        patch(
+            "model_library.retriers.token.benchmark_admission.gateway_httpx_client",
+            return_value=control_http_client,
+        ) as client_factory,
+        patch(
+            "model_library.retriers.token.benchmark_admission.GatewayBenchmarkAdmissionClient",
+            return_value=coordinator,
+        ) as admission_client_type,
+    ):
+        async with gateway_benchmark_admission(
+            model,
+            "run-123",
+            token_retry_params=TokenRetryParams(
+                input_modifier=1.0,
+                output_modifier=1.0,
+                limit=10_000,
+            ),
+        ):
+            pass
+
+    client_factory.assert_called_once_with(headers=dict(model.get_client().headers))
+    admission_client_type.assert_called_once_with(
+        model,
+        http_client=control_http_client,
+    )
+    control_http_client.__aenter__.assert_awaited_once()
+    control_http_client.__aexit__.assert_awaited_once()
+
+
 async def test_context_heartbeats_while_waiting_for_admission(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

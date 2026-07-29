@@ -16,6 +16,77 @@ base-config:
       output_discount: 0.5
   default_parameters:
     reasoning_effort: "high"
+gpt-5.6-models:
+  base-config:
+    documentation_url: ""
+    supports:
+      images: true
+      files: true
+      temperature: false
+    properties:
+      context_window: 1_000_000
+      max_tokens: 128_000
+      reasoning_model: true
+    provider_properties:
+      verbosity: "medium"
+
+  openai/gpt-5.6-sol:
+    label: GPT-5.6 Sol
+    release_date: 2026-07-09
+    costs_per_million_token:
+      input: 5
+      output: 30
+      cache:
+        read_discount: 0.1
+        write_markup: 1.25
+    default_parameters:
+      reasoning_effort: "max"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-5.6-sol-high:
+          label: GPT-5.6 Sol (High)
+          default_parameters:
+            reasoning_effort: "high"
+
+  openai/gpt-5.6-terra:
+    label: GPT-5.6 Terra
+    release_date: 2026-07-09
+    costs_per_million_token:
+      input: 2.5
+      output: 15
+      cache:
+        read_discount: 0.1
+        write_markup: 1.25
+    default_parameters:
+      reasoning_effort: "xhigh"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-5.6-terra-high:
+          label: GPT-5.6 Terra (High)
+          default_parameters:
+            reasoning_effort: "high"
+
+  openai/gpt-5.6-luna:
+    label: GPT-5.6 Luna
+    release_date: 2026-07-09
+    costs_per_million_token:
+      input: 1
+      output: 6
+      cache:
+        read_discount: 0.1
+        write_markup: 1.25
+    default_parameters:
+      reasoning_effort: "max"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-5.6-luna-high:
+          label: GPT-5.6 Luna (High)
+          default_parameters:
+            reasoning_effort: "high"
+
 gpt-5-models:
   base-config:
     documentation_url: ""
@@ -173,19 +244,6 @@ gpt-5-models:
         read: 0.175
         read_discount: 1.0
 
-  openai/gpt-5.2-codex:
-    label: GPT 5.2 Codex
-    documentation_url: https://platform.openai.com/docs/models/gpt-5.2-codex
-    release_date: 2025-12-11
-    properties:
-      context_window: 400_000
-      training_cutoff: "2024-09"
-    costs_per_million_token:
-      input: 1.75
-      output: 14
-      cache:
-        read: 0.175
-
   openai/gpt-5.2-2025-12-11:
     label: GPT 5.2
     documentation_url: https://platform.openai.com/docs/models/gpt-5.2
@@ -217,56 +275,6 @@ gpt-5-models:
       output: 168
     alternative_keys:
       - openai/gpt-5.2-pro
-
-  openai/gpt-5.1-codex-max:
-    label: GPT 5.1 Codex Max
-    release_date: 2025-12-04
-    properties:
-      context_window: 400_000
-      training_cutoff: "2024-09"
-    costs_per_million_token:
-      input: 1.25
-      output: 10.0
-      cache:
-        read: 0.125
-  openai/gpt-5.1-codex:
-    label: GPT 5.1 Codex
-    documentation_url: https://platform.openai.com/docs/models/gpt-5.1-codex
-    release_date: 2025-11-13
-    properties:
-      context_window: 400_000
-      training_cutoff: "2024-09"
-    costs_per_million_token:
-      input: 1.25
-      output: 10.0
-      cache:
-        read: 0.125
-
-  openai/gpt-5.1-codex-mini:
-    label: GPT 5.1 Codex Mini
-    documentation_url: https://platform.openai.com/docs/models/gpt-5.1-codex-mini
-    release_date: 2025-11-13
-    properties:
-      context_window: 400_000
-      training_cutoff: "2024-09"
-    costs_per_million_token:
-      input: 0.25
-      output: 2.00
-      cache:
-        read: 0.025
-
-  openai/gpt-5-codex:
-    label: GPT 5 Codex
-    documentation_url: https://platform.openai.com/docs/models/gpt-5-codex
-    release_date: 2025-09-23
-    properties:
-      context_window: 400_000
-      training_cutoff: "2024-09"
-    costs_per_million_token:
-      input: 1.25
-      output: 10.0
-      cache:
-        read: 0.125
 
   openai/gpt-5.1-2025-11-13:
     label: GPT 5.1

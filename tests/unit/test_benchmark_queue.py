@@ -5,6 +5,8 @@ Unit tests for benchmark queue FIFO serialization.
 import asyncio
 import importlib
 import logging
+from contextlib import asynccontextmanager
+from typing import cast
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -15,7 +17,12 @@ from model_library.retriers.token.benchmark_queue import (
     BenchmarkQueueCancelled,
     benchmark_queue,
 )
-from model_library.retriers.token.utils import KEY_PREFIX, get_status, set_redis_client
+from model_library.retriers.token.utils import (
+    KEY_PREFIX,
+    AsyncRedisClient,
+    get_status,
+    set_redis_client,
+)
 
 bq_module = importlib.import_module("model_library.retriers.token.benchmark_queue")
 
@@ -795,6 +802,51 @@ async def test_concurrent_eviction_only_promotes_one(redis):
     assert "run-2" in order
     assert "run-3" in order
     assert order.index("run-2") < order.index("run-3")
+
+
+async def test_dead_head_eviction_bounds_lock_acquisition(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    lock_calls: list[dict[str, object]] = []
+
+    class RedisStub:
+        async def lindex(self, _name: str, _index: int) -> str:
+            return "dead-run"
+
+        async def exists(self, _name: str) -> int:
+            return 0
+
+        @asynccontextmanager
+        async def lock(self, name: str, **kwargs: object):
+            lock_calls.append({"name": name, **kwargs})
+            yield
+
+        async def lrem(self, _name: str, _count: int, _value: str) -> int:
+            return 1
+
+        async def zrem(self, _name: str, _value: str) -> int:
+            return 1
+
+    control = AsyncMock()
+    monkeypatch.setattr(bq_module, "_control_and_admit_heads", control)
+    keys = bq_module.BenchmarkQueueKeys.for_run(MODEL_KEY, "current-run")
+
+    await bq_module.control_benchmark_run(
+        cast(AsyncRedisClient, RedisStub()),
+        keys,
+        "current-run",
+        logger,
+        self_promote=False,
+    )
+
+    assert lock_calls == [
+        {
+            "name": f"{keys.queue}:evict",
+            "timeout": bq_module.HEARTBEAT_INTERVAL,
+            "blocking_timeout": bq_module.QUEUE_EVICTION_LOCK_BLOCKING_TIMEOUT,
+        }
+    ]
+    assert control.await_count == 2
 
 
 # ── Queue status ─────────────────────────────────────────────────────

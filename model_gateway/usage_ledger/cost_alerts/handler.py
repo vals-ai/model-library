@@ -13,6 +13,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Final, Literal, cast
 
+import urllib.request
+
 import boto3  # pyright: ignore[reportMissingImports]
 
 import model_gateway.usage_ledger.cost_alerts.rules as cost_alerts
@@ -25,6 +27,7 @@ _ESCALATION_STEP = Decimal("0.25")
 _MODEL_REGISTRY_PATH: Final = (
     Path(__file__).resolve().parents[3] / "model_library" / "config" / "all_models.json"
 )
+_REGISTRY_FETCH_TIMEOUT_SECONDS: Final = 10.0
 
 
 @dataclass(frozen=True)
@@ -35,8 +38,19 @@ class AlertState:
 
 
 def _ignored_for_cost_model_keys() -> tuple[str, ...]:
+    registry = _live_registry_models()
+    if registry is None:
+        registry = _bundled_registry_models()
+    return tuple(
+        model_key
+        for model_key, config in registry.items()
+        if cast(dict[str, object], config["metadata"])["ignored_for_cost"]
+    )
+
+
+def _bundled_registry_models() -> dict[str, dict[str, Any]]:
     try:
-        registry = cast(
+        return cast(
             dict[str, dict[str, Any]],
             json.loads(_MODEL_REGISTRY_PATH.read_text(encoding="utf-8")),
         )
@@ -44,11 +58,43 @@ def _ignored_for_cost_model_keys() -> tuple[str, ...]:
         raise RuntimeError(
             f"Unable to load generated model registry: {_MODEL_REGISTRY_PATH}"
         ) from exc
-    return tuple(
-        model_key
-        for model_key, config in registry.items()
-        if cast(dict[str, object], config["metadata"])["ignored_for_cost"]
-    )
+
+
+def _live_registry_models() -> dict[str, dict[str, Any]] | None:
+    base_url = os.environ.get("GATEWAY_REGISTRY_BASE_URL", "").strip()
+    secret_name = os.environ.get("GATEWAY_REGISTRY_API_KEYS_SECRET_NAME", "").strip()
+    if not base_url or not secret_name:
+        return None
+    try:
+        api_key = _gateway_api_key(_secret_value(secret_name))
+        request = urllib.request.Request(
+            f"{base_url.rstrip('/')}/registry",
+            headers={"Authorization": f"Bearer {api_key}"},
+        )
+        with urllib.request.urlopen(
+            request, timeout=_REGISTRY_FETCH_TIMEOUT_SECONDS
+        ) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        models = cast(dict[str, object], payload)["models"]
+        if not isinstance(models, dict) or not models:
+            raise ValueError("registry response must include a non-empty models map")
+        return cast(dict[str, dict[str, Any]], models)
+    except (OSError, ValueError, KeyError, TypeError) as exc:
+        print(
+            json.dumps({"cost_alert_registry_fallback": f"{type(exc).__name__}: {exc}"})
+        )
+        return None
+
+
+def _gateway_api_key(config_secret_value: str) -> str:
+    config = cast(dict[str, object], json.loads(config_secret_value))
+    api_keys_raw = config["api_keys"]
+    if not isinstance(api_keys_raw, str):
+        raise ValueError("gateway config secret api_keys field must be a JSON string")
+    api_keys = cast(dict[str, str], json.loads(api_keys_raw))
+    if not api_keys:
+        raise ValueError("gateway config secret api_keys must not be empty")
+    return api_keys[min(api_keys)]
 
 
 def handler(_event: Mapping[str, object], _context: object) -> None:

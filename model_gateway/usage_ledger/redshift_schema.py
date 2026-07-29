@@ -41,7 +41,7 @@ USAGE_EVENT_FACT_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "benchmark_name",
     "agent_name",
     "identity_email",
-    "api_key_fingerprint",
+    "api_key_name",
     "input_tokens",
     "output_tokens",
     "reasoning_tokens",
@@ -153,14 +153,14 @@ ANALYTICS_DIMENSIONS: Final[tuple[AnalyticsDimension, ...]] = (
         50,
     ),
     AnalyticsDimension(
-        "api_key_fingerprint",
-        "api_key_fingerprint",
-        "api_key_fingerprint",
+        "api_key_name",
+        "api_key_name",
+        "api_key_name",
         "varchar(512)",
         True,
         True,
         True,
-        "API key fingerprint",
+        "API key name",
         60,
     ),
 )
@@ -244,7 +244,7 @@ def usage_events_column_sql(*, include_batch_id: bool = False) -> str:
   benchmark_name varchar(1024),
   agent_name varchar(1024),
   identity_email varchar(1024),
-  api_key_fingerprint varchar(512),
+  api_key_name varchar(512),
 
   input_tokens bigint not null default 0,
   output_tokens bigint not null default 0,
@@ -339,7 +339,7 @@ sortkey (
   benchmark_name,
   agent_name,
   identity_email,
-  api_key_fingerprint,
+  api_key_name,
   provider_model
 );"""
 

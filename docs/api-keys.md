@@ -23,6 +23,7 @@ and never sends server-held provider keys to arbitrary endpoints.
 | `anthropic/*` | Anthropic | `ANTHROPIC_API_KEY` |
 | `arcee-ai/*` | Arcee AI | `ARCEE_API_KEY` |
 | `azure/*` | Azure OpenAI | `AZURE_API_KEY`, `AZURE_ENDPOINT`; optional `AZURE_API_VERSION` |
+| `baseten/*` | Baseten | `BASETEN_API_KEY`, `BASETEN_API_BASE_URL` (full OpenAI-compatible `/v1` base URL) |
 | `cohere/*` | Cohere | `COHERE_API_KEY` |
 | `deepseek/*` | DeepSeek | `DEEPSEEK_API_KEY` |
 | `fireworks/*` | Fireworks | `FIREWORKS_API_KEY` |
@@ -49,7 +50,7 @@ Amazon Bedrock can also use the default boto3 credential chain when
 `custom_api_key`.
 ## Gateway settings
 
-- `MODEL_GATEWAY_API_KEYS`: comma-separated server-side gateway client keys.
+- `MODEL_GATEWAY_API_KEYS`: JSON object mapping stable names to server-side gateway client keys.
 - `MODEL_GATEWAY_API_KEY`: single client key used to call a gateway server.
 - `MODEL_GATEWAY_URL`: routes client calls through a gateway server.
 - `MODEL_GATEWAY_HMAC_SECRET`: signs gateway history blobs server-side.

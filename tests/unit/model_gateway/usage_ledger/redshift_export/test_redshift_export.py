@@ -38,7 +38,7 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
                 "benchmark_name": None,
                 "agent_name": None,
                 "identity_email": None,
-                "api_key_fingerprint": None,
+                "api_key_name": None,
                 "input_tokens": Decimal("100"),
                 "output_tokens": Decimal("20"),
                 "reasoning_tokens": Decimal("0"),
@@ -50,8 +50,8 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
                 "cost_usd": Decimal("0.123456789012"),
                 "finish_reason": "stop",
                 "finish_reason_raw": None,
-                "schema_version": Decimal("2"),
-                "metadata_schema_version": Decimal("2"),
+                "schema_version": Decimal("3"),
+                "metadata_schema_version": Decimal("3"),
                 "normalization_version": "v1",
                 "usage_shard": None,
                 "source_pk": "pk",
@@ -79,8 +79,8 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
     assert row["usage_event_id"] == "usage-1"
     assert row["run_id"] is None
     assert row["input_tokens"] == 100
-    assert row["schema_version"] == 2
-    assert row["metadata_schema_version"] == 2
+    assert row["schema_version"] == 3
+    assert row["metadata_schema_version"] == 3
     assert row["cost_usd"] == Decimal("0.123456789012")
     assert not row["performance_truncated"]
     assert len(row["performance"]) > 65_535

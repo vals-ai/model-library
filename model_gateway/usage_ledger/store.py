@@ -987,8 +987,8 @@ def build_success_usage_event(
     dimensions: Mapping[str, str],
     result: QueryResult,
     request: Mapping[str, object],
+    api_key_name: str,
     completed_at: datetime | None = None,
-    api_key_fingerprint: str | None = None,
 ) -> dict[str, object]:
     completed = completed_at or datetime.now(UTC)
     completed_at_iso = _isoformat(completed)
@@ -1031,7 +1031,7 @@ def build_success_usage_event(
         ledger_schema.IDENTITY_BENCHMARK_NAME: benchmark_name,
         ledger_schema.IDENTITY_AGENT_NAME: agent_name,
         ledger_schema.IDENTITY_EMAIL: identity_email,
-        "api_key_fingerprint": api_key_fingerprint,
+        "api_key_name": api_key_name,
         "model": body.model,
         "provider": body.model.partition("/")[0] or "unknown",
         "provider_endpoint": "custom" if config.get("custom_endpoint") else "default",
@@ -1062,13 +1062,12 @@ def build_success_usage_event(
     if query_id:
         event[ledger_schema.QUERY_INDEX_PK] = ledger_schema.query_pk(query_id)
         event[ledger_schema.QUERY_INDEX_SK] = f"USG#{usage_event_id}"
-    if api_key_fingerprint:
-        event[ledger_schema.API_KEY_DAY_INDEX_PK] = ledger_schema.api_key_day_pk(
-            api_key_fingerprint, day, shard
-        )
-        event[ledger_schema.API_KEY_DAY_INDEX_SK] = (
-            f"TS#{completed_at_iso}#USG#{usage_event_id}"
-        )
+    event[ledger_schema.API_KEY_DAY_INDEX_PK] = ledger_schema.api_key_name_day_pk(
+        api_key_name, day, shard
+    )
+    event[ledger_schema.API_KEY_DAY_INDEX_SK] = (
+        f"TS#{completed_at_iso}#USG#{usage_event_id}"
+    )
     dimension_sk = ledger_schema.dimension_sort_key(
         completed_at_iso=completed_at_iso,
         run_id=body.run_id,

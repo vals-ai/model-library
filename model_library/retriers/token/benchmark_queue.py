@@ -23,6 +23,7 @@ HEARTBEAT_TTL = 300  # 5 minutes
 QUEUE_NOTIFY_POLL_INTERVAL = 0.5
 QUEUE_WAITER_STALL_LOG_THRESHOLD = 5
 HEARTBEAT_STALL_LOG_THRESHOLD = 5
+QUEUE_EVICTION_LOCK_BLOCKING_TIMEOUT = 1.0
 BENCHMARK_QUEUE_DEBUG_ENABLED = False
 EARLY_RELEASE_GRACE_PERIOD = 5  # seconds to wait after all dispatched before releasing
 
@@ -540,6 +541,7 @@ async def control_benchmark_run(
             async with redis_client.lock(
                 f"{keys.queue}:evict",
                 timeout=HEARTBEAT_INTERVAL,
+                blocking_timeout=QUEUE_EVICTION_LOCK_BLOCKING_TIMEOUT,
             ):
                 # re-check after acquiring lock
                 head = await redis_client.lindex(keys.queue, 0)

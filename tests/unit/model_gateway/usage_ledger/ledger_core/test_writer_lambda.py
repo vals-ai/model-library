@@ -58,6 +58,7 @@ def _usage_event() -> dict[str, object]:
         dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
         result=result,
         request=snapshot_usage_request(request),
+        api_key_name="test",
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
     )
 

@@ -1,5 +1,7 @@
 # tests/unit/test_atif.py
 import json
+import subprocess
+import sys
 from collections.abc import Sequence
 from typing import Any
 from unittest.mock import AsyncMock
@@ -40,6 +42,7 @@ from model_library.base.output import (
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
+    ProviderToolEvent,
 )
 
 
@@ -48,6 +51,17 @@ def _load_json(value: str) -> Any:
         return json.loads(value)
     except json.JSONDecodeError as exc:
         raise AssertionError(f"Expected valid JSON: {exc}") from exc
+
+
+def test_atif_module_can_be_imported_directly() -> None:
+    result = subprocess.run(
+        [sys.executable, "-c", "from model_library.atif import ATIFTrajectory"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.unit
@@ -63,7 +77,7 @@ class TestATIFModels:
                 total_steps=0,
             ),
         )
-        assert trajectory.schema_version == "ATIF-v1.6"
+        assert trajectory.schema_version == "ATIF-v1.7"
         assert trajectory.session_id == "test-session-123"
         assert trajectory.steps == []
 
@@ -183,7 +197,7 @@ class TestAgentResultToATIF:
             model_name="openai/gpt-4",
         )
 
-        assert trajectory.schema_version == "ATIF-v1.6"
+        assert trajectory.schema_version == "ATIF-v1.7"
         assert trajectory.agent.name == "test-agent"
         assert trajectory.agent.model_name == "openai/gpt-4"
 
@@ -195,6 +209,7 @@ class TestAgentResultToATIF:
         assert trajectory.steps[0].message == expected_question
         assert trajectory.steps[1].source == "agent"
         assert trajectory.steps[1].message == expected_answer
+        assert trajectory.steps[1].llm_call_count == 1
         assert trajectory.steps[1].metrics is not None
         assert trajectory.steps[1].metrics.prompt_tokens == 10
         assert trajectory.steps[1].metrics.completion_tokens == 5
@@ -265,6 +280,42 @@ class TestAgentResultToATIF:
         expected_answer = "The answer is X."
         assert trajectory.steps[2].message == expected_answer
 
+    def test_preserves_provider_tool_events(self):
+        turn = self._make_turn("Search complete")
+        turn.query_result.provider_tool_events = [
+            ProviderToolEvent(
+                id="search-1",
+                provider="openai",
+                type="web_search_call",
+                name="web_search",
+                status="completed",
+                input={"query": "ATIF"},
+                output=[{"url": "https://example.com"}],
+                sequence=0,
+            )
+        ]
+
+        trajectory = ATIFTrajectory.from_agent_result(
+            turns=[turn],
+            agent_name="agent",
+            model_name="openai/model",
+        )
+
+        step = trajectory.steps[0]
+        assert step.tool_calls is not None
+        assert step.tool_calls[0].tool_call_id == "provider:1:search-1"
+        assert step.tool_calls[0].arguments == {"query": "ATIF"}
+        assert step.tool_calls[0].extra == {
+            "provider": "openai",
+            "type": "web_search_call",
+            "status": "completed",
+            "sequence": 0,
+            "native_id": "search-1",
+        }
+        assert step.observation is not None
+        assert step.observation.results[0].source_call_id == "provider:1:search-1"
+        assert step.observation.results[0].content == '[{"url": "https://example.com"}]'
+
     def test_error_turn(self):
         """ErrorTurn becomes a system step with error in extra."""
         question = TextInput(text="Do something")
@@ -312,6 +363,37 @@ class TestAgentResultToATIF:
         )
 
         assert trajectory.steps[1].reasoning_content == "Let me think step by step..."
+
+    def test_records_provider_fallback_on_the_model_turn(self):
+        turns: list[AgentTurn | ErrorTurn] = [
+            self._make_turn(
+                "Fallback response",
+                metadata=QueryResultMetadata(
+                    extra={
+                        "anthropic_response_model": "claude-opus-4-8",
+                        "fallback": True,
+                    }
+                ),
+            )
+        ]
+
+        trajectory = ATIFTrajectory.from_agent_result(
+            turns=turns,
+            agent_name="agent",
+            model_name="anthropic/claude-fable-5",
+        )
+
+        assert trajectory.agent.model_name == "anthropic/claude-fable-5"
+        assert trajectory.steps[0].model_name == "anthropic/claude-opus-4-8"
+        assert trajectory.steps[0].extra == {
+            "vals": {
+                "model_routing": {
+                    "requested_model": "anthropic/claude-fable-5",
+                    "resolved_model": "anthropic/claude-opus-4-8",
+                    "fallback_used": True,
+                }
+            }
+        }
 
     def test_raw_response_not_exported_in_extra(self):
         """Provider raw responses stay in history and are not duplicated in ATIF extra."""
@@ -364,6 +446,39 @@ class TestAgentResultToATIF:
         assert trajectory.final_metrics.total_completion_tokens == 150
         assert trajectory.final_metrics.total_cost_usd == pytest.approx(0.009)
 
+    def test_preserves_usage_breakdown_and_query_duration(self):
+        turns: list[AgentTurn | ErrorTurn] = [
+            self._make_turn(
+                "Answer",
+                metadata=QueryResultMetadata(
+                    in_tokens=100,
+                    out_tokens=25,
+                    reasoning_tokens=7,
+                    cache_read_tokens=4,
+                    cache_write_tokens=3,
+                    duration_seconds=1.25,
+                ),
+            )
+        ]
+
+        trajectory = ATIFTrajectory.from_agent_result(
+            turns=turns,
+            agent_name="agent",
+            model_name="gpt-4",
+        )
+
+        assert trajectory.steps[0].metrics is not None
+        assert trajectory.steps[0].metrics.extra == {
+            "reasoning_tokens": 7,
+            "cache_write_tokens": 3,
+            "duration_seconds": 1.25,
+        }
+        assert trajectory.final_metrics.extra == {
+            "total_reasoning_tokens": 7,
+            "total_cache_write_tokens": 3,
+            "total_duration_seconds": 1.25,
+        }
+
     def test_system_input_in_extra(self):
         """SystemInput becomes a source='system' step extracted from history."""
         system = SystemInput(text="Be concise.")
@@ -405,7 +520,7 @@ class TestAgentResultToATIF:
         d = trajectory.to_json_dict()
         json_str = json.dumps(d)
         parsed = _load_json(json_str)
-        assert parsed["schema_version"] == "ATIF-v1.6"
+        assert parsed["schema_version"] == "ATIF-v1.7"
         assert len(parsed["steps"]) == 2
 
 
@@ -449,6 +564,7 @@ class TestAgentATIFExport:
         result = await agent.run(
             input=[TextInput(text="What?")],
             question_id="q1",
+            run_id="run-123",
             atif_export=True,
         )
 
@@ -456,9 +572,48 @@ class TestAgentATIFExport:
         assert atif_path.exists()
 
         data = _load_json(atif_path.read_text())
-        assert data["schema_version"] == "ATIF-v1.6"
+        assert data["schema_version"] == "ATIF-v1.7"
+        assert data["session_id"] == "run-123:q1"
+        assert data["extra"]["vals"] == {
+            "run_id": "run-123",
+            "task_id": "q1",
+            "fidelity": "partial",
+            "omitted": ["tool_result_timestamps"],
+            "termination": {
+                "status": "completed",
+                "stop_reason": "done_tool",
+                "duration_seconds": result.final_duration_seconds,
+            },
+        }
         assert data["agent"]["model_name"] == "openai/gpt-4"
         assert len(data["steps"]) >= 2  # user + agent
+
+    async def test_atif_records_error_termination(self, tmp_path):
+        mock_llm = AsyncMock()
+        mock_llm.model_name = "openai/gpt-4"
+        mock_llm.query = AsyncMock(side_effect=RuntimeError("provider failed"))
+        mock_llm.serialize_input = lambda x: b""
+        agent = Agent(
+            llm=mock_llm,
+            tools=[],
+            name="test",
+            log_dir=tmp_path,
+            config=AgentConfig(turn_limit=TurnLimit(max_turns=1), time_limit=None),
+        )
+
+        result = await agent.run(
+            input=[TextInput(text="What?")],
+            question_id="q1",
+            atif_export=True,
+        )
+
+        data = _load_json((result.output_dir / "trajectory_atif.json").read_text())
+        assert data["extra"]["vals"]["termination"] == {
+            "status": "error",
+            "stop_reason": "max_turns",
+            "duration_seconds": result.final_duration_seconds,
+            "error": result.final_error.model_dump(mode="json", exclude={"traceback"}),
+        }
 
     async def test_atif_file_written_with_gateway_model(self, tmp_path):
         llm = GatewayLLM("gpt-4o-mini", "openai")

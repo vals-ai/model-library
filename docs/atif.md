@@ -1,6 +1,6 @@
 # ATIF Export
 
-Export agent trajectories in [ATIF v1.6](https://www.harborframework.com/docs/agents/trajectory-format) format.
+Export agent trajectories in [ATIF v1.7](https://www.harborframework.com/docs/agents/trajectory-format) format.
 
 ## Usage
 
@@ -37,8 +37,11 @@ data = trajectory.to_json_dict()  # dict, None fields excluded
 | `step.metrics.completion_tokens` | `QueryResultMetadata.total_output_tokens` |
 | `step.metrics.cached_tokens` | `QueryResultMetadata.cache_read_tokens` |
 | `step.metrics.cost_usd` | `QueryResultCost.total` |
+| `step.model_name` | Actual response model when the provider reports it; otherwise the requested model |
 | `step.reasoning_effort` | Passed to `from_agent_result(reasoning_effort=...)` |
 | `step.is_copied_context` | Set manually on `ATIFStep` |
+| `step.llm_call_count` | `1` for each `AgentTurn` |
+| `step.extra.vals.model_routing` | Requested/resolved model and `fallback_used` when the provider reports a fallback |
 | Initial `step.source = "system"` | `SystemInput.text` from the first turn's history |
 | Initial `step.source = "user"` | `TextInput.text` from the first turn's history |
 | Error `step.source = "system"` | `ErrorTurn`; message is `Error: <message>`, with `error_type` and `duration_seconds` in `step.extra` and no step metrics |

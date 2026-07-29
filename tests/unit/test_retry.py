@@ -2,14 +2,18 @@
 Unit tests for retry logic.
 """
 
+import asyncio
 from contextlib import nullcontext
-from typing import Type
+from typing import Callable, Type
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
+import aiohttp
 import httpcore
 import httpx
 import pytest
+from anthropic import InternalServerError as AnthropicInternalServerError
 from openai import BadRequestError
+from openai import InternalServerError as OpenAIInternalServerError
 
 from model_library.base import LLM, QueryResult
 from model_library.base import FinishReason
@@ -26,6 +30,7 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
+    QueryDeadlineExceededError,
     RateLimitException,
     RetryException,
     ToolCallingNotSupportedError,
@@ -45,6 +50,36 @@ def mock_asyncio_sleep():
         yield mock_sleep
 
 
+def _openai_internal_server_error() -> OpenAIInternalServerError:
+    body = {"error": {"message": "Internal Server Error"}}
+    request = httpx.Request("POST", "https://provider.example/v1/chat/completions")
+    response = httpx.Response(500, request=request, json=body)
+    return OpenAIInternalServerError(
+        "Error code: 500 - Internal Server Error",
+        response=response,
+        body=body,
+    )
+
+
+def _anthropic_internal_server_error() -> AnthropicInternalServerError:
+    body = {"error": {"message": "Internal Server Error"}}
+    request = httpx.Request("POST", "https://provider.example/v1/messages")
+    response = httpx.Response(500, request=request, json=body)
+    return AnthropicInternalServerError(
+        "Error code: 500 - Internal Server Error",
+        response=response,
+        body=body,
+    )
+
+
+_PROVIDER_HTTP_500_ERRORS: tuple[
+    tuple[Callable[[], Exception], type[Exception]], ...
+] = (
+    (_openai_internal_server_error, OpenAIInternalServerError),
+    (_anthropic_internal_server_error, AnthropicInternalServerError),
+)
+
+
 @pytest.mark.parametrize(
     "exc",
     [
@@ -59,6 +94,7 @@ def mock_asyncio_sleep():
         UnexpectedSystemInputError(),
         GatewayMethodNotSupported(),
         NoMatchingToolCallError(),
+        QueryDeadlineExceededError(),
     ],
 )
 def test_model_library_exceptions_serialize_to_provider_errors(exc: Exception):
@@ -108,6 +144,91 @@ def test_provider_error_serialization_best_effort_for_unknown_exceptions():
         "code": "rate_limit_exceeded",
         "status_code": 429,
     }
+
+
+async def test_query_deadline_cancels_provider_attempt(mock_llm: LLM):
+    cancelled = False
+
+    async def blocked_query(*args, **kwargs):
+        nonlocal cancelled
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled = True
+            raise
+
+    query_impl = AsyncMock(side_effect=blocked_query)
+    mock_llm._query_impl = query_impl  # pyright: ignore[reportPrivateUsage]
+    deadline = asyncio.get_running_loop().time() + 0.1
+
+    with pytest.raises(QueryDeadlineExceededError) as exc_info:
+        await asyncio.wait_for(mock_llm.query("hi", deadline=deadline), timeout=1)
+
+    assert isinstance(exc_info.value, TimeoutError)
+    assert is_retriable_error(exc_info.value) is False
+    assert cancelled
+    assert query_impl.await_count == 1
+
+
+async def test_query_deadline_in_past_expires_before_provider_attempt(mock_llm: LLM):
+    query_impl = AsyncMock()
+    mock_llm._query_impl = query_impl  # pyright: ignore[reportPrivateUsage]
+    deadline = asyncio.get_running_loop().time() - 1
+
+    with pytest.raises(QueryDeadlineExceededError):
+        await mock_llm.query("hi", deadline=deadline)
+
+    query_impl.assert_not_awaited()
+
+
+async def test_query_deadline_covers_custom_retrier(mock_llm: LLM):
+    cancelled = False
+
+    def custom_retrier(_query_func):
+        async def blocked_retrier():
+            nonlocal cancelled
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled = True
+                raise
+
+        return blocked_retrier
+
+    query_impl = AsyncMock()
+    mock_llm._query_impl = query_impl  # pyright: ignore[reportPrivateUsage]
+    mock_llm.custom_retrier = custom_retrier
+    deadline = asyncio.get_running_loop().time() + 0.1
+
+    with pytest.raises(QueryDeadlineExceededError):
+        await asyncio.wait_for(mock_llm.query("hi", deadline=deadline), timeout=1)
+
+    assert cancelled
+    query_impl.assert_not_awaited()
+
+
+async def test_query_deadline_does_not_rewrite_provider_timeout(mock_llm: LLM):
+    mock_llm.custom_retrier = lambda query_func: query_func
+    mock_llm._query_impl = AsyncMock(  # pyright: ignore[reportPrivateUsage]
+        side_effect=TimeoutError("provider timed out")
+    )
+    deadline = asyncio.get_running_loop().time() + 60
+
+    with pytest.raises(TimeoutError, match="provider timed out") as exc_info:
+        await mock_llm.query("hi", deadline=deadline)
+
+    assert type(exc_info.value) is TimeoutError
+
+
+@pytest.mark.parametrize("deadline", [float("-inf"), float("inf"), float("nan")])
+async def test_query_deadline_rejects_non_finite_values(mock_llm: LLM, deadline: float):
+    query_impl = AsyncMock()
+    mock_llm._query_impl = query_impl  # pyright: ignore[reportPrivateUsage]
+
+    with pytest.raises(ValueError, match="deadline must be finite"):
+        await mock_llm.query("hi", deadline=deadline)
+
+    query_impl.assert_not_awaited()
 
 
 async def test_jitter():
@@ -172,6 +293,130 @@ async def test_max_retries_giveup():
     assert mock_func.call_count == 3
 
 
+@pytest.mark.parametrize(
+    ("error_factory", "error_type"),
+    _PROVIDER_HTTP_500_ERRORS,
+    ids=("openai", "anthropic"),
+)
+async def test_http_500_retry_budget_allows_success_on_eighth_call(
+    error_factory: Callable[[], Exception],
+    error_type: type[Exception],
+):
+    failures = [error_factory() for _ in range(7)]
+    mock_func = AsyncMock(side_effect=[*failures, "success"])
+    retrier = ExponentialBackoffRetrier(MagicMock())
+
+    result = await retrier.execute(mock_func)
+
+    assert result == "success"
+    assert mock_func.await_count == 8
+    assert all(isinstance(error, error_type) for error in failures)
+
+
+@pytest.mark.parametrize(
+    ("error_factory", "error_type"),
+    _PROVIDER_HTTP_500_ERRORS,
+    ids=("openai", "anthropic"),
+)
+@pytest.mark.parametrize(
+    ("max_tries", "expected_calls"),
+    [(3, 3), (20, 8)],
+    ids=("stricter-limit", "default-limit"),
+)
+async def test_http_500_retry_budget_gives_up_at_effective_limit(
+    error_factory: Callable[[], Exception],
+    error_type: type[Exception],
+    max_tries: int,
+    expected_calls: int,
+):
+    errors = [error_factory() for _ in range(20)]
+    mock_func = AsyncMock(side_effect=errors)
+    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=max_tries)
+
+    with pytest.raises(error_type) as exc_info:
+        await retrier.execute(mock_func)
+
+    assert exc_info.value is errors[expected_calls - 1]
+    assert mock_func.await_count == expected_calls
+
+
+async def test_max_time_precedes_http_500_retry_budget():
+    errors = [_openai_internal_server_error() for _ in range(8)]
+    mock_func = AsyncMock(side_effect=errors)
+    logger = MagicMock()
+    retrier = ExponentialBackoffRetrier(logger, max_time=5)
+
+    with (
+        patch(
+            "model_library.retriers.base.time.time",
+            side_effect=[100.0, *([100.0] * 7), 106.0],
+        ),
+        pytest.raises(OpenAIInternalServerError) as exc_info,
+    ):
+        await retrier.execute(mock_func)
+
+    assert exc_info.value is errors[-1]
+    assert mock_func.await_count == 8
+    assert "max_time exceeded" in logger.error.call_args.args[0]
+
+
+async def test_generic_retryable_http_500_uses_http_500_budget():
+    errors = [RetryException() for _ in range(20)]
+    for error in errors:
+        setattr(error, "status_code", 500)
+    mock_func = AsyncMock(side_effect=errors)
+    retrier = ExponentialBackoffRetrier(MagicMock())
+
+    with pytest.raises(RetryException) as exc_info:
+        await retrier.execute(mock_func)
+
+    assert exc_info.value is errors[7]
+    assert mock_func.await_count == 8
+
+
+@pytest.mark.parametrize("status_code", [True, "500", 500.0])
+async def test_non_integer_status_code_does_not_consume_http_500_budget(
+    status_code: object,
+):
+    errors = [RetryException() for _ in range(9)]
+    for error in errors:
+        setattr(error, "status_code", status_code)
+    mock_func = AsyncMock(side_effect=errors)
+    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=9)
+
+    with pytest.raises(RetryException) as exc_info:
+        await retrier.execute(mock_func)
+
+    assert exc_info.value is errors[-1]
+    assert mock_func.await_count == 9
+
+
+async def test_non_500_retries_keep_default_budget():
+    mock_func = AsyncMock(side_effect=RetryException())
+    retrier = ExponentialBackoffRetrier(MagicMock())
+
+    with pytest.raises(RetryException):
+        await retrier.execute(mock_func)
+
+    assert mock_func.await_count == 20
+
+
+async def test_non_500_failures_do_not_consume_http_500_budget():
+    mock_func = AsyncMock(
+        side_effect=[
+            RetryException(),
+            *[_openai_internal_server_error() for _ in range(7)],
+            "success",
+        ]
+    )
+    retrier = ExponentialBackoffRetrier(MagicMock())
+
+    result = await retrier.execute(mock_func)
+
+    assert result == "success"
+    assert mock_func.await_count == 9
+
+
 async def test_retry_success_after_failures():
     """
     Test that after some retryable exceptions, the function succeeds
@@ -212,7 +457,8 @@ async def test_retry_success_after_failures():
         (ToolCallingNotSupportedError, False),
         (BadInputError, False),
         (ValueError, False),
-        # httpx/httpcore
+        # aiohttp/httpx/httpcore
+        (aiohttp.ClientPayloadError, True),
         (httpx.ReadError, True),
         (httpx.ConnectError, True),
         (httpcore.ReadError, True),
@@ -442,6 +688,33 @@ async def test_retry_by_exception_message(
     """
     exc = ValueError(exception_message)
     assert is_retriable_error(exc) == expected_retriable
+
+
+@pytest.mark.parametrize("status_attribute", ["status_code", "status", "code"])
+def test_arbitrary_status_attributes_do_not_make_errors_retriable(
+    status_attribute: str,
+):
+    exc = RuntimeError("provider rejected the request")
+    setattr(exc, status_attribute, 500)
+
+    assert is_retriable_error(exc) is False
+
+
+@pytest.mark.parametrize(
+    ("error_factory", "error_type"),
+    _PROVIDER_HTTP_500_ERRORS,
+    ids=("openai", "anthropic"),
+)
+def test_typed_provider_http_500_is_retriable(
+    error_factory: Callable[[], Exception],
+    error_type: type[Exception],
+):
+    error = error_factory()
+
+    assert isinstance(error, error_type)
+    assert isinstance(error, (OpenAIInternalServerError, AnthropicInternalServerError))
+    assert error.status_code == 500
+    assert is_retriable_error(error) is True
 
 
 async def test_context_window_error_gives_up(mock_llm: LLM):

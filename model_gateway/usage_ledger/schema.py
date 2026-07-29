@@ -12,7 +12,7 @@ import re
 from typing import Final, cast
 
 DEFAULT_SHARD_COUNT: Final = 16
-USAGE_EVENT_SCHEMA_VERSION: Final = 2
+USAGE_EVENT_SCHEMA_VERSION: Final = 3
 MAX_DIMENSION_VALUE_BYTES: Final = 512
 DETAILS_FIELD: Final = "details"
 
@@ -82,6 +82,7 @@ COMMON_PROJECTION_FIELDS: Final = (
     "run_id",
     "question_id",
     "query_id",
+    # Preserve the deployed INCLUDE projection; changing it would recreate the GSIs.
     "api_key_fingerprint",
     "model",
     "provider",
@@ -139,8 +140,8 @@ def query_pk(query_id: str) -> str:
     return f"QUERY#{query_id}"
 
 
-def api_key_day_pk(fingerprint: str, day: str, shard: int | str) -> str:
-    return f"KEY#{fingerprint}#DAY#{day}#S#{format_shard(shard)}"
+def api_key_name_day_pk(api_key_name: str, day: str, shard: int | str) -> str:
+    return f"KEY#{api_key_name}#DAY#{day}#S#{format_shard(shard)}"
 
 
 def benchmark_pk(benchmark_name: str, shard: int | str) -> str:

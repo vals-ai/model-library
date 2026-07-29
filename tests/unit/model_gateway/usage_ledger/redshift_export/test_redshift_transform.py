@@ -35,7 +35,7 @@ def _usage_event(**overrides: object) -> dict[str, object]:
         "benchmark_name": "swebench",
         "agent_name": "swe-agent",
         "identity_email": "user@example.com",
-        "api_key_fingerprint": "keyfingerprint",
+        "api_key_name": "security-testing",
         "model": "openai/gpt-4.1-mini",
         "provider": "openai",
         "provider_endpoint": "default",
@@ -47,7 +47,7 @@ def _usage_event(**overrides: object) -> dict[str, object]:
         "completed_at": "2026-05-29T12:34:56Z",
         "day": "20260529",
         "usage_shard": "03",
-        "schema_version": 2,
+        "schema_version": 3,
         "normalization_version": "v1",
         "input_tokens": 100,
         "output_tokens": 25,
@@ -63,7 +63,7 @@ def _usage_event(**overrides: object) -> dict[str, object]:
     return event
 
 
-def test_redshift_rows_from_usage_event_maps_v2_fact_and_performance_rows() -> None:
+def test_redshift_rows_from_usage_event_maps_v3_fact_and_performance_rows() -> None:
     rows = redshift_rows_from_usage_event(
         _usage_event(),
         batch_id="batch-1",
@@ -88,7 +88,7 @@ def test_redshift_rows_from_usage_event_maps_v2_fact_and_performance_rows() -> N
         "benchmark_name": "swebench",
         "agent_name": "swe-agent",
         "identity_email": "user@example.com",
-        "api_key_fingerprint": "keyfingerprint",
+        "api_key_name": "security-testing",
         "input_tokens": 100,
         "output_tokens": 25,
         "reasoning_tokens": 5,
@@ -100,8 +100,8 @@ def test_redshift_rows_from_usage_event_maps_v2_fact_and_performance_rows() -> N
         "cost_usd": Decimal("0.123456789012"),
         "finish_reason": "stop",
         "finish_reason_raw": "stop",
-        "schema_version": 2,
-        "metadata_schema_version": 2,
+        "schema_version": 3,
+        "metadata_schema_version": 3,
         "normalization_version": "v1",
         "usage_shard": "03",
         "source_pk": "USAGE#DAY#20260529#S#03",
@@ -155,7 +155,7 @@ def test_redshift_rows_from_usage_event_handles_optional_root_and_performance() 
     event = _usage_event(
         query_id="query-1",
         identity_email=None,
-        api_key_fingerprint=None,
+        api_key_name=None,
         finish_reason="length",
         details=_details(performance=None),
     )
@@ -169,7 +169,7 @@ def test_redshift_rows_from_usage_event_handles_optional_root_and_performance() 
 
     assert rows.fact["query_id_normalized"] == "query-1"
     assert rows.fact["identity_email"] is None
-    assert rows.fact["api_key_fingerprint"] is None
+    assert rows.fact["api_key_name"] is None
     assert rows.fact["finish_reason"] == "length"
     assert rows.fact["finish_reason_raw"] is None
     assert rows.performance["performance"] is None

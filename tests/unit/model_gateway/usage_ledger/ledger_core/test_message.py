@@ -51,7 +51,7 @@ def _usage_event() -> dict[str, object]:
         result=result,
         request=snapshot_usage_request(request),
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
-        api_key_fingerprint="keyfingerprint",
+        api_key_name="security-testing",
     )
 
 
@@ -98,6 +98,7 @@ def test_external_non_finite_request_detail_is_reduced_before_serialization() ->
         dimensions={},
         result=QueryResult(output_text="ok"),
         request=snapshot_usage_request(request),
+        api_key_name="test",
     )
 
     message = serialize_usage_event_message(event)

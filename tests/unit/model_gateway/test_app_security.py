@@ -9,7 +9,7 @@ import model_gateway.routes.query as query_routes
 class GatewaySettings:
     def get(self, name: str, default: str = "") -> str:
         return {
-            "MODEL_GATEWAY_API_KEYS": "sk-test",
+            "MODEL_GATEWAY_API_KEYS": '{"test":"sk-test"}',
             "MODEL_GATEWAY_HMAC_SECRET": "test-secret",
         }.get(name, default)
 

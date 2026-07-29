@@ -6,6 +6,8 @@ import pytest
 from fakeredis import aioredis
 
 from model_gateway.benchmark_admission_state import (
+    ADMISSION_OPERATION_LOCK_BLOCKING_TIMEOUT,
+    ADMISSION_OPERATION_LOCK_TTL,
     BenchmarkAdmissionConflict,
     BenchmarkAdmissionStore,
     get_benchmark_run_pointer_key,
@@ -75,6 +77,37 @@ async def test_acquire_is_idempotent_while_run_is_live(store, redis):
         "model": MODEL,
         "base": keys.base,
     }
+
+
+async def test_admission_operations_bound_distributed_lock_acquisition(
+    store,
+    redis,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    original_lock = redis.lock
+    lock_calls: list[dict[str, object]] = []
+
+    def recording_lock(name: str, **kwargs: object):
+        lock_calls.append({"name": name, **kwargs})
+        return original_lock(name, **kwargs)
+
+    monkeypatch.setattr(redis, "lock", recording_lock)
+
+    await _acquire(store, "run-1")
+    await store.wait(model=MODEL, run_id="run-1", timeout_seconds=0)
+    await store.renew(model=MODEL, run_id="run-1")
+    await store.release(model=MODEL, run_id="run-1", outcome="finished")
+
+    assert len(lock_calls) == 4
+    assert all(
+        call
+        == {
+            "name": f"{get_benchmark_run_pointer_key('run-1')}:lock",
+            "timeout": ADMISSION_OPERATION_LOCK_TTL,
+            "blocking_timeout": ADMISSION_OPERATION_LOCK_BLOCKING_TIMEOUT,
+        }
+        for call in lock_calls
+    )
 
 
 async def test_store_uses_injected_redis_instead_of_global_client(

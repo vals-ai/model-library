@@ -8,6 +8,31 @@ base-config:
     files: false
 
 kimi-models:
+
+  kimi/kimi-k3:
+    label: Kimi K3
+    release_date: 2026-07-16
+    documentation_url: https://platform.kimi.ai/docs/api/chat
+    provider_endpoint: kimi-k3
+    supports:
+      images: true
+      temperature: false
+    properties:
+      reasoning_model: true
+      context_window: 1_048_576
+      max_tokens: 1_048_576
+    default_parameters:
+      reasoning_effort: max
+      max_tokens: 262_144
+    provider_properties:
+      prompt_cache_key: hash
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache:
+        read: 0.3
+    alternative_keys:
+      - kimi/kimi-k3-public
   kimi/kimi-k2.7-code:
     label: Kimi K2.7 Code
     release_date: 2026-06-12

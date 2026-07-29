@@ -1,10 +1,12 @@
 """FastAPI app factory for the model gateway."""
 
 import asyncio
+import json
 import logging
 import os
 from contextlib import asynccontextmanager, suppress
 from functools import partial
+from typing import Literal, cast
 
 import redis.asyncio as async_redis
 from dotenv import load_dotenv
@@ -24,6 +26,7 @@ from model_gateway.cache import ModelCache
 from model_gateway.capacity import GatewayCapacityLimiter, create_capacity_middleware
 from model_gateway.errors import ErrorBody, ErrorResponse
 from model_gateway.metrics import (
+    MetricPublisher,
     create_metrics_middleware,
     publish_metrics_periodically,
     record_runtime,
@@ -41,7 +44,10 @@ from model_gateway.routes.query import register_query_routes
 from model_gateway.routes.token_retry import register_token_retry_routes
 from model_gateway.startup_canary import run_startup_canary, startup_canary_state
 from model_gateway.telemetry_helpers import error_telemetry_attributes
-from model_gateway.usage_ledger.store import create_usage_ledger_from_env
+from model_gateway.usage_ledger.store import (
+    NoopUsageLedger,
+    create_usage_ledger_from_env,
+)
 
 logger = logging.getLogger("model_proxy_server")
 
@@ -51,11 +57,21 @@ load_dotenv()
 model_library_settings.unset("MODEL_GATEWAY_URL")
 
 
+GatewayRuntimeRole = Literal["combined", "query", "control"]
+
+
 def env_flag(name: str, *, default: bool = False) -> bool:
     value = os.environ.get(name)
     if value is None:
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
+def gateway_runtime_role() -> GatewayRuntimeRole:
+    value = os.environ.get("GATEWAY_RUNTIME_ROLE", "combined").strip().lower()
+    if value not in {"combined", "query", "control"}:
+        raise ValueError("GATEWAY_RUNTIME_ROLE must be combined, query, or control")
+    return cast(GatewayRuntimeRole, value)
 
 
 async def _record_runtime_current(loop: asyncio.AbstractEventLoop) -> None:
@@ -68,12 +84,14 @@ async def _record_runtime_current(loop: asyncio.AbstractEventLoop) -> None:
 
 
 def create_app() -> FastAPI:
+    runtime_role = gateway_runtime_role()
+    query_enabled = runtime_role in {"combined", "query"}
+    control_enabled = runtime_role in {"combined", "control"}
     api_keys = model_library_settings.get("MODEL_GATEWAY_API_KEYS", None)
-    if not isinstance(api_keys, str):
+    if not isinstance(api_keys, str) or not api_keys:
         raise RuntimeError("MODEL_GATEWAY_API_KEYS must be set")
-    valid_keys = {k for k in api_keys.split(",") if k}
-    if not valid_keys:
-        raise RuntimeError("MODEL_GATEWAY_API_KEYS must be set")
+    api_keys_by_name = cast(dict[str, str], json.loads(api_keys))
+    valid_keys = set(api_keys_by_name.values())
 
     hmac_secret_value = model_library_settings.get("MODEL_GATEWAY_HMAC_SECRET", None)
     if not isinstance(hmac_secret_value, str) or not hmac_secret_value:
@@ -81,8 +99,12 @@ def create_app() -> FastAPI:
     hmac_secret = hmac_secret_value.encode()
     cache = ModelCache()
     capacity_limiter = GatewayCapacityLimiter()
-    startup_canary_enabled = env_flag("GATEWAY_STARTUP_CANARY_ENABLED")
-    usage_ledger = create_usage_ledger_from_env()
+    startup_canary_enabled = query_enabled and env_flag(
+        "GATEWAY_STARTUP_CANARY_ENABLED"
+    )
+    usage_ledger = (
+        create_usage_ledger_from_env() if query_enabled else NoopUsageLedger()
+    )
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -114,20 +136,22 @@ def create_app() -> FastAPI:
         app.state.usage_ledger = usage_ledger
 
         metrics_stop = asyncio.Event()
+        metrics_publishers: list[MetricPublisher] = [
+            partial(_record_runtime_current, loop)
+        ]
+        if query_enabled:
+            metrics_publishers.insert(0, capacity_limiter.record_current)
         metrics_task = asyncio.create_task(
             publish_metrics_periodically(
                 metrics_stop,
-                publishers=[
-                    capacity_limiter.record_current,
-                    partial(_record_runtime_current, loop),
-                ],
+                publishers=metrics_publishers,
             )
         )
         usage_ledger_started = False
         canary_task: asyncio.Task[None] | None = None
         if startup_canary_enabled:
             canary_task = asyncio.create_task(
-                run_startup_canary(app, sorted(valid_keys)[0])
+                run_startup_canary(app, next(iter(api_keys_by_name.values())))
             )
         try:
             await usage_ledger.start()
@@ -157,15 +181,24 @@ def create_app() -> FastAPI:
             loop.set_exception_handler(previous_exception_handler)
             log_process_lifecycle("gateway.process.shutdown_done")
 
-    app = FastAPI(title="Model Proxy", lifespan=lifespan, redirect_slashes=False)
+    app = FastAPI(
+        title="Model Proxy",
+        lifespan=lifespan,
+        redirect_slashes=False,
+        docs_url=None if runtime_role == "control" else "/docs",
+        redoc_url=None if runtime_role == "control" else "/redoc",
+        openapi_url=None if runtime_role == "control" else "/openapi.json",
+    )
     app.state.cache = cache
     app.state.hmac_secret = hmac_secret
+    app.state.runtime_role = runtime_role
     app.state.capacity_limiter = capacity_limiter
     app.state.usage_ledger = usage_ledger
     app.state.startup_canary = startup_canary_state(startup_canary_enabled)
-    app.middleware("http")(create_capacity_middleware())
+    if query_enabled:
+        app.middleware("http")(create_capacity_middleware())
     app.middleware("http")(create_metrics_middleware())
-    app.middleware("http")(create_auth_middleware(valid_keys))
+    app.middleware("http")(create_auth_middleware(api_keys_by_name))
     app.add_middleware(GatewayObservabilityMiddleware)
 
     @app.exception_handler(RequestValidationError)
@@ -182,11 +215,18 @@ def create_app() -> FastAPI:
         telemetry.add_event("gateway.request_validation.error", error_attrs)
         return JSONResponse(status_code=err.status_code, content=err.body.model_dump())
 
-    register_health_routes(app, valid_keys=valid_keys, hmac_secret=hmac_secret)
-    register_model_routes(app)
-    register_benchmark_admission_routes(app, cache=cache)
-    register_token_retry_routes(app)
-    register_query_routes(app, cache=cache)
-    register_provider_ops_routes(app, cache=cache)
+    register_health_routes(
+        app,
+        valid_keys=valid_keys,
+        hmac_secret=hmac_secret,
+        require_redis=runtime_role == "control",
+    )
+    if control_enabled:
+        register_benchmark_admission_routes(app, cache=cache)
+    if query_enabled:
+        register_model_routes(app)
+        register_token_retry_routes(app)
+        register_query_routes(app, cache=cache)
+        register_provider_ops_routes(app, cache=cache)
 
     return app
