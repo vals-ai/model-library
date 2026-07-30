@@ -39,6 +39,13 @@ gpt-5.6-models:
       cache:
         read_discount: 0.1
         write_markup: 1.25
+      context:
+        threshold: 272_000
+        input: 10
+        output: 45
+        cache:
+          read: 1
+          write: 12.5
     default_parameters:
       reasoning_effort: "max"
     provider_properties:
