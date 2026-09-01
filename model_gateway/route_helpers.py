@@ -117,6 +117,29 @@ class GatewayOperation:
             latency_ms=(time.perf_counter() - start) * 1000,
         )
 
+    def _record_provider_error(
+        self,
+        err: ProviderError,
+        *,
+        phase_start: float,
+        capture_exception: bool,
+    ) -> None:
+        self.record_phase("provider_call", outcome="error", start=phase_start)
+        error_attrs = provider_error_telemetry_attributes(err)
+        error_code = str(error_attrs["gateway.error.code"])
+        if capture_exception:
+            telemetry.record_exception(
+                ProviderCallTelemetryError("Provider call failed"),
+                error_attrs,
+            )
+        telemetry.set_status_error(error_code)
+        self.add_event("error", error_attrs)
+        emit_model_error(
+            self.dimensions,
+            error_code=error_code,
+            latency_ms=latency_ms(self.start),
+        )
+
     async def provider_call(
         self,
         awaitable: Awaitable[T],
@@ -133,23 +156,19 @@ class GatewayOperation:
             try:
                 result = await awaitable
             except Exception as exc:
-                self.record_phase("provider_call", outcome="error", start=phase_start)
                 err = provider_error_from_exception(exc, provider=self.provider)
-                error_attrs = provider_error_telemetry_attributes(err)
-                error_code = str(error_attrs["gateway.error.code"])
-                telemetry.record_exception(
-                    ProviderCallTelemetryError("Provider call failed"),
-                    error_attrs,
-                )
-                telemetry.set_status_error(error_code)
-                self.add_event("error", error_attrs)
-                emit_model_error(
-                    self.dimensions,
-                    error_code=error_code,
-                    latency_ms=latency_ms(self.start),
+                self._record_provider_error(
+                    err,
+                    phase_start=phase_start,
+                    capture_exception=True,
                 )
                 return err
             if isinstance(result, ProviderError):
+                self._record_provider_error(
+                    result,
+                    phase_start=phase_start,
+                    capture_exception=False,
+                )
                 return result
             self.record_phase("provider_call", outcome="success", start=phase_start)
             return result

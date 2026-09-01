@@ -98,17 +98,14 @@ class TestAnthropicBuildBodyOutputSchema:
 
 
 UNSUPPORTED_PROVIDER_MODELS = [
-    "perplexity/sonar-pro",
     "cohere/command-a-03-2025",
     "deepseek/deepseek-chat",
     "mistralai/mistral-large-2512",
-    "ai21labs/jamba-large-1.7",
     "amazon/amazon.nova-pro-v1:0",
     "grok/grok-3",
 ]
 
 UNSUPPORTED_BIG_THREE_MODELS = [
-    "anthropic/claude-opus-4-1-20250805",
     "openai/gpt-4o-2024-05-13",
     "openai/o3-deep-research",
 ]

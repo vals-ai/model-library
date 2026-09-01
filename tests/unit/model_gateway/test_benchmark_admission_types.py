@@ -70,6 +70,23 @@ def test_live_benchmark_admission_response_has_no_terminal_outcome(
     assert response.outcome is None
 
 
+@pytest.mark.parametrize("state", ["waiting", "acquired"])
+def test_benchmark_admission_response_allows_rpm_only_effective_token_limit(
+    state: Literal["waiting", "acquired"],
+) -> None:
+    """RPM-only runs have no TPM; the wire contract must accept None rather
+    than forcing a fake zero-or-positive value."""
+    response = BenchmarkAdmissionResponse(
+        state=state,
+        model="openai/gpt-4o",
+        run_id="run-123",
+        effective_token_limit=None,
+        outcome=None,
+    )
+
+    assert response.effective_token_limit is None
+
+
 @pytest.mark.parametrize(
     "payload",
     [

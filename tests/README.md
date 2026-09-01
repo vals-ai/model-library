@@ -65,9 +65,7 @@ Use `MODEL=...` with Makefile targets. Use `--model=...` only when invoking `pyt
 
 ## Environment setup
 
-Integration tests load environment variables from the repo root `.env`.
-
-In internal checkouts, integration-test setup can create `.env` from AWS Secrets Manager when `.env` is missing. Public users should create `.env` themselves or export the provider API keys required by the integration tests they run.
+Integration tests load environment variables from the repo root `.env`. Create `.env` yourself or export the provider API keys required by the integration tests you run.
 
 ## Notes
 

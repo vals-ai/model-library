@@ -1,5 +1,6 @@
 base-config:
   company: xAI
+  country: United States
   documentation_url: https://docs.x.ai/docs#models
   open_source: false
   supports:

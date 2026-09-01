@@ -5,6 +5,7 @@ base-config:
 poolside-models:
   base-config:
     company: Poolside
+    country: United States
     open_source: true
     supports:
       images: false

@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -55,7 +56,7 @@ from model_library.base.output import (
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
-    RateLimit,
+    TranscriptionResult,
 )
 from model_library.base.query_deadline import query_deadline_scope
 from model_library.base.query_ids import resolve_query_ids, scoped_query_ids
@@ -66,6 +67,7 @@ from model_library.base.query_logging import (
 )
 from model_library.base.utils import serialize_for_tokenizing
 from model_library.exceptions import InvalidStructuredOutputError
+from model_library.rate_limits import RateLimit
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
 from model_library.utils import (
@@ -94,29 +96,37 @@ class ProviderConfig(BaseModel):
 class TokenRetryParams(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    input_modifier: float
-    output_modifier: float
+    input_modifier: float = Field(ge=0)
+    output_modifier: float = Field(ge=0)
     use_dynamic_estimate: bool = True
     limit: int | None = Field(default=None, gt=0)
+    requests_per_minute: int | None = Field(
+        default=None,
+        gt=0,
+        strict=True,
+        exclude_if=lambda value: value is None,
+    )
     limit_refresh_seconds: Literal[60] = 60
 
 
 class ResolvedTokenRetryParams(BaseModel):
-    input_modifier: float
-    output_modifier: float
+    input_modifier: float = Field(ge=0)
+    output_modifier: float = Field(ge=0)
     use_dynamic_estimate: bool
-    limit: int
+    limit: int | None = Field(default=None, gt=0)
     limit_refresh_seconds: Literal[60] = 60
+    requests_per_minute: int | None = Field(default=None, gt=0, strict=True)
 
 
 def resolve_token_retry_params(
     token_retry_params: TokenRetryParams,
     effective_token_limit: int | None,
+    effective_requests_per_minute: int | None = None,
 ) -> ResolvedTokenRetryParams:
-    if effective_token_limit is None:
+    if effective_token_limit is None and effective_requests_per_minute is None:
         raise ValueError(
-            "Token retry requires an explicit limit when no configured provider "
-            "default is available"
+            "Token retry requires an explicit TPM or RPM limit when no configured "
+            "provider default is available"
         )
 
     return ResolvedTokenRetryParams(
@@ -125,6 +135,7 @@ def resolve_token_retry_params(
         use_dynamic_estimate=token_retry_params.use_dynamic_estimate,
         limit=effective_token_limit,
         limit_refresh_seconds=token_retry_params.limit_refresh_seconds,
+        requests_per_minute=effective_requests_per_minute,
     )
 
 
@@ -139,6 +150,7 @@ class LLMConfig(ValsModel):
     supports_images: bool = False
     supports_files: bool = False
     supports_audio: bool = False
+    supports_transcription: bool = False
     supports_videos: bool = False
     supports_batch: bool = False
     supports_temperature: bool = True
@@ -149,6 +161,23 @@ class LLMConfig(ValsModel):
     registry_key: str | None = None
     custom_api_key: SecretStr | None = None
     custom_endpoint: str | None = None
+
+
+class TranscriptionConfig(ValsModel):
+    provider_config: dict[str, Any] | ProviderConfig | None = None
+    registry_key: str | None = None
+    custom_api_key: SecretStr | None = None
+    custom_endpoint: str | None = None
+
+    def as_llm_config(self) -> LLMConfig:
+        return LLMConfig(
+            provider_config=self.provider_config,
+            registry_key=self.registry_key,
+            custom_api_key=self.custom_api_key,
+            custom_endpoint=self.custom_endpoint,
+            supports_transcription=True,
+            supports_temperature=False,
+        )
 
 
 def dump_llm_config(config: LLMConfig | None) -> dict[str, Any]:
@@ -323,12 +352,17 @@ class LLM(ABC):
         model_name: str,
         provider: str,
         *,
-        config: LLMConfig | None = None,
+        config: LLMConfig | TranscriptionConfig | None = None,
     ):
         self.provider: str = provider
         self.model_name: str = model_name
 
+        if isinstance(config, TranscriptionConfig):
+            config = config.as_llm_config()
         config = config or LLMConfig()
+        self._has_custom_connection = (
+            config.custom_api_key is not None or config.custom_endpoint is not None
+        )
         self._registry_key = config.registry_key
         self._metadata: ModelConfig | None = None
 
@@ -343,6 +377,7 @@ class LLM(ABC):
 
         self.supports_files: bool = config.supports_files
         self.supports_audio: bool = config.supports_audio
+        self.supports_transcription: bool = config.supports_transcription
         self.supports_videos: bool = config.supports_videos
         self.supports_images: bool = config.supports_images
         self.supports_batch: bool = config.supports_batch
@@ -368,6 +403,10 @@ class LLM(ABC):
 
         self.token_retry_params: TokenRetryParams | None = None
         self._resolved_token_retry_params: ResolvedTokenRetryParams | None = None
+        # This instance is shared across concurrently-handled requests (ModelCache),
+        # so this guards the local resolved-params cache below, not Redis -- Redis's
+        # own init path is already safe for concurrent/repeated calls on its own.
+        self._token_retry_init_lock = asyncio.Lock()
         self._own_registry_key: tuple[str, str] | None = None
         self._own_registry_key_model_specific: tuple[str, str] | None = None
         # set _client_registry_key after initializing delegate
@@ -597,14 +636,21 @@ class LLM(ABC):
             if self._resolved_token_retry_params:
                 from model_library.retriers.token.token import TokenRetrier
 
-                (
-                    estimate_input_tokens,
-                    estimate_output_tokens,
-                ) = await self.estimate_query_tokens(
-                    input,
-                    tools=tools,
-                    **kwargs,
-                )
+                manages_tokens = self._resolved_token_retry_params.limit is not None
+                if manages_tokens:
+                    (
+                        estimate_input_tokens,
+                        estimate_output_tokens,
+                    ) = await self.estimate_query_tokens(
+                        input,
+                        tools=tools,
+                        **kwargs,
+                    )
+                else:
+                    # RPM-only policy: no TPM to estimate against, so skip the
+                    # (potentially provider-calling) token estimate entirely.
+                    estimate_input_tokens = 0
+                    estimate_output_tokens = 0
                 retrier = TokenRetrier(
                     logger=query_logger,
                     client_registry_key=self._client_registry_key_model_specific,
@@ -613,6 +659,7 @@ class LLM(ABC):
                     estimate_input_tokens=estimate_input_tokens,
                     estimate_output_tokens=estimate_output_tokens,
                     use_dynamic_estimate=self._resolved_token_retry_params.use_dynamic_estimate,
+                    manages_tokens=manages_tokens,
                 )
             else:
                 retrier = ExponentialBackoffRetrier(logger=query_logger)
@@ -684,11 +731,23 @@ class LLM(ABC):
 
     async def init_token_retry(self, token_retry_params: TokenRetryParams) -> None:
         effective_token_limit = token_retry_params.limit
-        await self._init_resolved_token_retry(
+        effective_requests_per_minute = token_retry_params.requests_per_minute
+
+        rate_limit = self.metadata.rate_limit if self.metadata is not None else None
+        if rate_limit is not None:
+            effective_token_limit, effective_requests_per_minute = (
+                rate_limit.apply_token_retry_defaults(
+                    effective_token_limit,
+                    effective_requests_per_minute,
+                )
+            )
+
+        await self.ensure_resolved_token_retry(
             token_retry_params,
             resolve_token_retry_params(
                 token_retry_params,
                 effective_token_limit,
+                effective_requests_per_minute,
             ),
         )
 
@@ -697,28 +756,28 @@ class LLM(ABC):
         token_retry_params: TokenRetryParams,
         resolved_token_retry_params: ResolvedTokenRetryParams,
     ) -> None:
-        if self._resolved_token_retry_params != resolved_token_retry_params:
-            await self._init_resolved_token_retry(
-                token_retry_params,
-                resolved_token_retry_params,
+        if self._resolved_token_retry_params == resolved_token_retry_params:
+            return
+
+        async with self._token_retry_init_lock:
+            if self._resolved_token_retry_params == resolved_token_retry_params:
+                return
+
+            from model_library.retriers.token.token import TokenRetrier
+
+            await TokenRetrier.init_remaining_tokens(
+                client_registry_key=self._client_registry_key_model_specific,
+                limit=resolved_token_retry_params.limit,
+                limit_refresh_seconds=resolved_token_retry_params.limit_refresh_seconds,
+                requests_per_minute=resolved_token_retry_params.requests_per_minute,
+                get_rate_limit_func=self.get_rate_limit,
+                logger=self.instance_logger,
             )
-
-    async def _init_resolved_token_retry(
-        self,
-        token_retry_params: TokenRetryParams,
-        resolved_token_retry_params: ResolvedTokenRetryParams,
-    ) -> None:
-        from model_library.retriers.token.token import TokenRetrier
-
-        self.token_retry_params = token_retry_params
-        self._resolved_token_retry_params = resolved_token_retry_params
-        await TokenRetrier.init_remaining_tokens(
-            client_registry_key=self._client_registry_key_model_specific,
-            limit=resolved_token_retry_params.limit,
-            limit_refresh_seconds=resolved_token_retry_params.limit_refresh_seconds,
-            get_rate_limit_func=self.get_rate_limit,
-            logger=self.instance_logger,
-        )
+            self.token_retry_params = token_retry_params
+            self._resolved_token_retry_params = resolved_token_retry_params
+            if self.delegate is not None:
+                self.delegate.token_retry_params = token_retry_params
+                self.delegate._resolved_token_retry_params = resolved_token_retry_params
 
     async def _calculate_cost(
         self,
@@ -827,6 +886,19 @@ class LLM(ABC):
     ) -> FileWithId:
         """Upload a file to the model provider"""
         ...
+
+    async def transcribe_audio(
+        self,
+        *,
+        name: str,
+        mime: str,
+        audio: bytes,
+        language: str | None = None,
+    ) -> TranscriptionResult:
+        """Transcribe an audio file with a model that supports transcription."""
+        raise NotImplementedError(
+            f"Audio transcription is not supported by {type(self).__name__}"
+        )
 
     async def get_rate_limit(self) -> RateLimit | None:
         """Get the rate limit for the model provider"""

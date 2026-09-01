@@ -23,6 +23,7 @@ deprecated:
 
   together/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8:
     company: Meta
+    country: United States
     label: Llama 4 Maverick
     release_date: 2025-04-05
     open_source: true
@@ -57,6 +58,7 @@ deprecated:
   together/moonshotai/Kimi-K2-Instruct:
     label: Kimi K2 Instruct
     company: Moonshot AI
+    country: China
     documentation_url: https://www.kimi.com/
     release_date: 2025-07-11
     supports:
@@ -76,6 +78,7 @@ deprecated:
   together/meta-llama/Llama-4-Scout-17B-16E-Instruct:
     label: Llama 4 Scout
     company: Meta
+    country: United States
     release_date: 2025-04-05
     documentation_url: https://ai.meta.com/blog/llama-4-multimodal-intelligence/
     supports:
@@ -91,6 +94,7 @@ deprecated:
   together/meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo:
     label: Llama 3.1 Instruct Turbo (8B)
     company: Meta
+    country: United States
     release_date: 2024-07-23
     properties:
       context_window: 131_072
@@ -105,6 +109,7 @@ deprecated:
   together/meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo:
     label: Llama 3.1 Instruct Turbo (70B)
     company: Meta
+    country: United States
     release_date: 2024-07-23
     properties:
       context_window: 131_072
@@ -121,6 +126,7 @@ deprecated:
   together/meta-llama/Meta-Llama-3.1-405B-Instruct-Turbo:
     label: Llama 3.1 Instruct Turbo (405B)
     company: Meta
+    country: United States
     release_date: 2024-07-23
     properties:
       context_window: 130_815
@@ -135,6 +141,7 @@ deprecated:
   together/meta-llama/Llama-3-8b-hf:
     label: Llama 3 (8B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 8_192
@@ -149,6 +156,7 @@ deprecated:
   together/meta-llama/Llama-3-70B:
     label: Llama 3 (70B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 8_192
@@ -163,6 +171,7 @@ deprecated:
   together/meta-llama/Llama-3-70b-chat-hf:
     label: Llama 3 Chat (70B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 8_192
@@ -177,6 +186,7 @@ deprecated:
   together/meta-llama/Meta-Llama-3-8B-Instruct-Turbo:
     label: Llama 3 Instruct Turbo (8B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 8_192
@@ -191,6 +201,7 @@ deprecated:
   together/meta-llama/Meta-Llama-3-70B-Instruct-Turbo:
     label: Llama 3 Instruct Turbo (70B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 8_192
@@ -205,6 +216,7 @@ deprecated:
   together/meta-llama/Llama-3.2-3B-Instruct-Turbo:
     label: Llama 3.2 Instruct Turbo (3B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 131_072
@@ -219,6 +231,7 @@ deprecated:
   together/meta-llama/Llama-3.3-70B-Instruct-Turbo:
     label: Llama 3.3 Instruct Turbo (70B)
     company: Meta
+    country: United States
     release_date: 2024-12-06
     supports:
       images: false
@@ -235,6 +248,7 @@ deprecated:
   together/meta-llama/Meta-Llama-3-8B-Instruct-Lite:
     label: Llama 3 Instruct Lite (8B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 8_192
@@ -247,6 +261,7 @@ deprecated:
   together/meta-llama/Meta-Llama-3-70B-Instruct-Lite:
     label: Llama 3 Instruct Lite (70B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 8_192
@@ -259,6 +274,7 @@ deprecated:
   together/meta-llama/Llama-3-8b-chat-hf:
     label: Llama 3 Chat (8B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 8_192
@@ -273,6 +289,7 @@ deprecated:
   together/meta-llama/Llama-2-7b-chat-hf:
     label: Llama 2 Chat (7B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -285,6 +302,7 @@ deprecated:
   together/togethercomputer/llama-2-7b-chat:
     label: Llama 2 Chat (7B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -299,6 +317,7 @@ deprecated:
   together/meta-llama/Llama-2-13b-chat-hf:
     label: Llama 2 Chat (13B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -311,6 +330,7 @@ deprecated:
   together/togethercomputer/llama-2-13b-chat:
     label: Llama 2 Chat (13B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -325,6 +345,7 @@ deprecated:
   together/meta-llama/Llama-2-70b-chat-hf:
     label: Llama 2 Chat (70B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -337,6 +358,7 @@ deprecated:
   together/togethercomputer/llama-2-70b-chat:
     label: Llama 2 Chat (70B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -351,6 +373,7 @@ deprecated:
   together/meta-llama/Llama-2-7b-hf:
     label: Llama 2 (7B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -363,6 +386,7 @@ deprecated:
   together/togethercomputer/llama-2-7b:
     label: Llama 2 (7B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -377,6 +401,7 @@ deprecated:
   together/meta-llama/Llama-2-13b-hf:
     label: Llama 2 (13B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -389,6 +414,7 @@ deprecated:
   together/togethercomputer/llama-2-13b:
     label: Llama 2 (13B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -403,6 +429,7 @@ deprecated:
   together/meta-llama/Llama-2-70b-hf:
     label: Llama 2 (70B)
     company: Meta
+    country: United States
     release_date: 2023-07-18
     properties:
       context_window: 4_096
@@ -418,6 +445,7 @@ deprecated:
   together/nvidia/Llama-3.1-Nemotron-70B-Instruct-HF:
     label: Llama 3.1 Nemotron (70B)
     company: NVIDIA
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 32_768
@@ -430,6 +458,7 @@ deprecated:
   together/Qwen/Qwen2.5-Coder-32B-Instruct:
     label: Qwen 2.5 Coder (32B)
     company: Alibaba
+    country: China
     release_date: 2024-04-18
     supports:
       images: false
@@ -449,6 +478,7 @@ deprecated:
   together/Qwen/Qwen2.5-7B-Instruct-Turbo:
     label: Qwen 2.5 Instruct Turbo (7B)
     company: Alibaba
+    country: China
     release_date: 2024-04-18
     supports:
       images: false
@@ -470,6 +500,7 @@ deprecated:
   together/Qwen/Qwen2.5-72B-Instruct-Turbo:
     label: Qwen 2.5 Instruct Turbo (72B)
     company: Alibaba
+    country: China
     release_date: 2024-04-18
     supports:
       images: false
@@ -492,6 +523,7 @@ deprecated:
   together/mistralai/Mistral-7B-v0.1:
     label: Mistral (7B)
     company: Mistral
+    country: France
     release_date: 2023-09-27
     supports:
       images: false
@@ -508,6 +540,7 @@ deprecated:
   together/mistralai/Mistral-7B-Instruct-v0.1:
     label: Mistral Instruct (7B) v0.1
     company: Mistral
+    country: France
     release_date: 2023-09-27
     supports:
       images: false
@@ -524,6 +557,7 @@ deprecated:
   together/mistralai/Mistral-7B-Instruct-v0.2:
     label: Mistral Instruct (7B) v0.2
     company: Mistral
+    country: France
     release_date: 2023-12-15
     supports:
       images: false
@@ -540,6 +574,7 @@ deprecated:
   together/mistralai/Mistral-7B-Instruct-v0.3:
     label: Mistral Instruct (7B) v0.3
     company: Mistral
+    country: France
     release_date: 2024-04-18
     supports:
       images: false
@@ -556,6 +591,7 @@ deprecated:
   together/mistralai/Mixtral-8x7B-v0.1:
     label: Mixtral (8x7B)
     company: Mistral
+    country: France
     release_date: 2023-12-15
     supports:
       images: false
@@ -572,6 +608,7 @@ deprecated:
   together/mistralai/Mixtral-8x7B-Instruct-v0.1:
     label: Mixtral Instruct (8x7B)
     company: Mistral
+    country: France
     release_date: 2023-12-15
     supports:
       images: false
@@ -588,6 +625,7 @@ deprecated:
   together/mistralai/Mixtral-8x22B-Instruct-v0.1:
     label: Mixtral Instruct (8x22B)
     company: Mistral
+    country: France
     release_date: 2024-02-15
     supports:
       images: false
@@ -608,6 +646,7 @@ deprecated:
   together/meta-llama/Llama-Vision-Free:
     label: Llama Vision Free
     company: Meta
+    country: United States
     release_date: 2024-04-18
     supports:
       images: true
@@ -624,6 +663,7 @@ deprecated:
   together/meta-llama/Llama-3.2-11B-Vision-Instruct-Turbo:
     label: Llama 3.2 Vision (11B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     supports:
       images: true
@@ -642,6 +682,7 @@ deprecated:
   together/llama-3.2-11b-instruct:
     label: Llama 3.2 Instruct Turbo (11B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 131_072
@@ -655,6 +696,7 @@ deprecated:
   together/meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo:
     label: Llama 3.2 Vision (90B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     supports:
       images: true
@@ -673,6 +715,7 @@ deprecated:
   together/llama-3.2-90b-instruct:
     label: Llama 3.2 Instruct Turbo (90B)
     company: Meta
+    country: United States
     release_date: 2024-04-18
     properties:
       context_window: 131_072
@@ -687,6 +730,7 @@ deprecated:
   together/google/gemma-2-27b-it:
     label: Gemma 2 (27B)
     company: Google
+    country: United States
     release_date: 2024-02-21
     supports:
       images: false
@@ -705,6 +749,7 @@ deprecated:
   together/google/gemma-2-9b-it:
     label: Gemma 2 (9B)
     company: Google
+    country: United States
     release_date: 2024-02-21
     properties:
       context_window: 8_192
@@ -721,6 +766,7 @@ deprecated:
   together/google/gemma-2-2b-it:
     label: Gemma 2 (2B)
     company: Google
+    country: United States
     release_date: 2024-02-21
     properties:
       context_window: 8_192
@@ -738,6 +784,7 @@ deprecated:
   together/togethercomputer/falcon-7b-instruct:
     label: Falcon Instruct (7B)
     company: Technology Innovation Institute
+    country: United Arab Emirates
     release_date: 2023-06-20
     properties:
       max_tokens: 0
@@ -751,6 +798,7 @@ deprecated:
   together/togethercomputer/falcon-40b-instruct:
     label: Falcon Instruct (40B)
     company: Technology Innovation Institute
+    country: United Arab Emirates
     release_date: 2023-05-25
     properties:
       max_tokens: 0
@@ -764,6 +812,7 @@ deprecated:
   together/togethercomputer/falcon-7b:
     label: Falcon (7B)
     company: Technology Innovation Institute
+    country: United Arab Emirates
     release_date: 2023-06-20
     properties:
       max_tokens: 0
@@ -777,6 +826,7 @@ deprecated:
   together/togethercomputer/falcon-40b:
     label: Falcon (40B)
     company: Technology Innovation Institute
+    country: United Arab Emirates
     release_date: 2023-05-25
     properties:
       max_tokens: 0
@@ -791,6 +841,7 @@ deprecated:
   together/togethercomputer/alpaca-7b:
     label: Alpaca (7B)
     company: Stanford
+    country: United States
     release_date: 2023-03-13
     properties:
       max_tokens: 0
@@ -805,6 +856,7 @@ deprecated:
   together/deepseek-ai/DeepSeek-V3:
     label: DeepSeek V3
     company: DeepSeek
+    country: China
     release_date: 2024-12-26
     supports:
       images: false
@@ -822,6 +874,7 @@ deprecated:
   together/deepseek-ai/DeepSeek-R1:
     label: DeepSeek V3
     company: DeepSeek
+    country: China
     release_date: 2025-01-20
     supports:
       images: false

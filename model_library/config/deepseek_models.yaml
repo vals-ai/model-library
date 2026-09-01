@@ -1,5 +1,6 @@
 base-config:
   company: DeepSeek
+  country: China
   documentation_url: https://api-docs.deepseek.com/
   open_source: true
   supports:
@@ -17,7 +18,6 @@ v4-models:
     open_source: true
     supports:
       temperature: false
-
   deepseek/deepseek-v4-pro:
     label: DeepSeek V4
     release_date: 2026-04-23
@@ -29,12 +29,43 @@ v4-models:
       reasoning_effort: "max"
       max_tokens: 384_000
     costs_per_million_token:
-      input: 1.74
-      output: 3.48
+      input: 1.32
+      output: 3.96
       cache:
-        read: 0.145
+        read: 0.044
     alternative_keys:
+      - deepseek/deepseek-v4-pro-medium:
+          label: DeepSeek V4 (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
       - deepseek/deepseek-v4-pro-nonthinking:
+          supports:
+            temperature: true
+          properties:
+            reasoning_model: false
+          default_parameters:
+            reasoning_effort: null
+            temperature: 1
+            top_p: 0.95
+
+  deepseek/deepseek-v4-pro-0813:
+    label: DeepSeek V4 Pro 0813
+    release_date: 2026-08-13
+    provider_endpoint: deepseek-v4-pro
+    properties:
+      context_window: 1_000_000
+      max_tokens: 384_000
+      reasoning_model: true
+    default_parameters:
+      reasoning_effort: "max"
+      max_tokens: 384_000
+    costs_per_million_token:
+      input: 1.32
+      output: 3.96
+      cache:
+        read: 0.044
+    alternative_keys:
+      - deepseek/deepseek-v4-pro-0813-nonthinking:
           supports:
             temperature: true
           properties:
@@ -55,12 +86,39 @@ v4-models:
       reasoning_effort: "high"
       max_tokens: 384_000
     costs_per_million_token:
-      input: 0.14
-      output: 0.28
+      input: 0.44
+      output: 1.32
       cache:
-        read: 0.028
+        read: 0.014
     alternative_keys:
       - deepseek/deepseek-v4-flash-nonthinking:
+          supports:
+            temperature: true
+          properties:
+            reasoning_model: false
+          default_parameters:
+            reasoning_effort: null
+            temperature: 1
+            top_p: 0.95
+
+  deepseek/deepseek-v4-flash-0731:
+    label: DeepSeek V4 Flash 0731
+    release_date: 2026-07-31
+    provider_endpoint: deepseek-v4-flash
+    properties:
+      context_window: 1_000_000
+      max_tokens: 384_000
+      reasoning_model: true
+    default_parameters:
+      reasoning_effort: "high"
+      max_tokens: 384_000
+    costs_per_million_token:
+      input: 0.44
+      output: 1.32
+      cache:
+        read: 0.014
+    alternative_keys:
+      - deepseek/deepseek-v4-flash-0731-nonthinking:
           supports:
             temperature: true
           properties:

@@ -15,7 +15,7 @@ from model_library.register_models import (
 from model_library.registry_utils import create_config
 
 ROOT = Path(__file__).resolve().parents[2]
-_ALLOWED_UNREGISTERED_PROVIDERS = {"cursor", "devin"}
+_ALLOWED_UNREGISTERED_PROVIDERS = {"cursor", "devin", "factory"}
 
 
 @pytest.mark.unit
@@ -98,6 +98,9 @@ def test_active_registry_defaults_round_trip_to_llm_config() -> None:
         assert llm_config.supports_images is registry_config.supports.images
         assert llm_config.supports_files is registry_config.supports.files
         assert llm_config.supports_audio is registry_config.supports.audio
+        assert (
+            llm_config.supports_transcription is registry_config.supports.transcription
+        )
         assert llm_config.supports_videos is registry_config.supports.videos
         assert llm_config.supports_batch is registry_config.supports.batch
         assert llm_config.supports_temperature is registry_config.supports.temperature
@@ -110,6 +113,17 @@ def test_active_registry_defaults_round_trip_to_llm_config() -> None:
                 registry_config.full_key,
                 field_name,
             )
+
+
+def test_openai_transcription_model_is_registered() -> None:
+    registry_config = get_model_registry()["openai/gpt-4o-transcribe"]
+    llm_config = create_config(registry_config, override_config=None)
+
+    assert registry_config.provider_endpoint == "gpt-4o-transcribe"
+    assert registry_config.supports.transcription is True
+    assert registry_config.costs_per_million_token is not None
+    assert registry_config.costs_per_million_token.batch is None
+    assert llm_config.supports_transcription is True
 
 
 @pytest.mark.unit

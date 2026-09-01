@@ -95,31 +95,30 @@ class AmazonModel(LLM):
                 "custom_endpoint is not supported by this provider and will be ignored"
             )
 
+        aws_client_kwargs: dict[str, Any] = {}
+        if api_key is not None and api_key != "using-environment":
+            creds = json.loads(api_key)
+            aws_client_kwargs = {
+                "aws_access_key_id": creds["AWS_ACCESS_KEY_ID"],
+                "aws_secret_access_key": creds["AWS_SECRET_ACCESS_KEY"],
+                "aws_session_token": creds.get("AWS_SESSION_TOKEN"),
+                "region_name": creds["AWS_DEFAULT_REGION"],
+            }
+
         if not self.has_client():
             assert api_key
-            if api_key != "using-environment":
-                creds = json.loads(api_key)
-                client = cast(
-                    BaseClient,
-                    boto3.client(
-                        "bedrock-runtime",
-                        aws_access_key_id=creds["AWS_ACCESS_KEY_ID"],
-                        aws_secret_access_key=creds["AWS_SECRET_ACCESS_KEY"],
-                        aws_session_token=creds.get("AWS_SESSION_TOKEN"),
-                        region_name=creds["AWS_DEFAULT_REGION"],
-                        config=botocore.config.Config(max_pool_connections=1000),  # pyright: ignore[reportAttributeAccessIssue]
-                    ),
-                )
-            else:
-                client = cast(
-                    BaseClient,
-                    boto3.client(
-                        "bedrock-runtime",
+            client = cast(
+                BaseClient,
+                boto3.client(
+                    "bedrock-runtime",
+                    **aws_client_kwargs,
+                    config=botocore.config.Config(  # pyright: ignore[reportAttributeAccessIssue]
                         # default connection pool is 10
-                        config=botocore.config.Config(max_pool_connections=1000),  # pyright: ignore[reportAttributeAccessIssue]
+                        max_pool_connections=1000,
+                        tcp_keepalive=True,
                     ),
-                )
-
+                ),
+            )
             self.assign_client(client)
         return super().get_client()
 

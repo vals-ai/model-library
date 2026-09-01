@@ -11,22 +11,25 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import time
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fastapi import Request
 import model_library.telemetry as telemetry
+from model_gateway.observability import DEFAULT_SERVICE, DEFAULT_STAGE, worker_id
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
+if TYPE_CHECKING:
+    from model_gateway.rate_limit_monitor.types import MonitorSourceName
+
 NAMESPACE = "ModelProxy/Gateway"
-DEFAULT_SERVICE = "gateway"
-DEFAULT_STAGE = "unknown"
 METRICS_FLUSH_INTERVAL_SECONDS = 10
 QUERY_INFLIGHT_PATH = "/query"
 
@@ -34,6 +37,9 @@ MetricValue = int | float
 MetricSpec = tuple[MetricValue, str]
 DimensionSet = tuple[str, ...]
 MetricPublisher = Callable[[], Awaitable[None] | None]
+RateLimitMonitorOwnershipOutcome = Literal["acquired", "contended", "lost"]
+RateLimitMonitorPollOutcome = Literal["ok", "unsupported", "provider_error"]
+RateLimitMonitorPublishOutcome = Literal["accepted", "rejected"]
 
 _GAUGE_METRICS = {
     "InFlightRequests",
@@ -62,6 +68,8 @@ _pending_lock = Lock()
 _pending: dict[
     tuple[tuple[tuple[str, str], ...], tuple[DimensionSet, ...]], "Bucket"
 ] = {}
+_telemetry_delivery_handler_lock = Lock()
+_telemetry_delivery_handler: logging.Handler | None = None
 
 
 @dataclass
@@ -179,6 +187,23 @@ def _usage_ledger_sqs_dimensions(**extra: str) -> dict[str, str]:
 
 
 _SERVICE_DIMENSION_SET: DimensionSet = ("Stage", "Service")
+_RATE_LIMIT_MONITOR_OWNERSHIP_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Outcome",
+)
+_RATE_LIMIT_MONITOR_POLL_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Provider",
+    "Source",
+    "Outcome",
+)
+_RATE_LIMIT_MONITOR_PUBLISH_DIMENSION_SET: DimensionSet = (
+    "Stage",
+    "Service",
+    "Outcome",
+)
 _USAGE_LEDGER_SQS_DIMENSION_SET: DimensionSet = (
     "Stage",
     "Service",
@@ -327,6 +352,53 @@ def flush_metrics() -> int:
     return len(pending)
 
 
+class TelemetryDeliveryMetricHandler(logging.Handler):
+    """Count locally observed trace-export warnings without logging recursively."""
+
+    def __init__(self) -> None:
+        super().__init__(level=logging.WARNING)
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            if (
+                record.levelno < logging.WARNING
+                or not telemetry.is_telemetry_delivery_logger(record.name)
+            ):
+                return
+            metric_name = (
+                "TelemetryDeliveryErrorCount"
+                if record.levelno >= logging.ERROR
+                else "TelemetryDeliveryWarningCount"
+            )
+            record_metrics(
+                service_dimensions(),
+                {metric_name: (1, "Count")},
+                dimension_sets=[["Stage", "Service"], ["Stage"]],
+            )
+        except Exception:
+            return
+
+
+def install_telemetry_delivery_metric_handler() -> logging.Handler:
+    """Install and return the process-wide telemetry delivery metric handler."""
+    global _telemetry_delivery_handler
+    with _telemetry_delivery_handler_lock:
+        if _telemetry_delivery_handler is None:
+            _telemetry_delivery_handler = TelemetryDeliveryMetricHandler()
+            logging.getLogger().addHandler(_telemetry_delivery_handler)
+        return _telemetry_delivery_handler
+
+
+def remove_telemetry_delivery_metric_handler(handler: logging.Handler) -> None:
+    """Remove the installed handler when ``handler`` is its current owner."""
+    global _telemetry_delivery_handler
+    with _telemetry_delivery_handler_lock:
+        if handler is not _telemetry_delivery_handler:
+            return
+        logging.getLogger().removeHandler(handler)
+        _telemetry_delivery_handler = None
+
+
 async def adjust_inflight(delta: int) -> int:
     global _inflight_requests
     async with _inflight_lock:
@@ -357,7 +429,7 @@ def record_capacity(
     """Record per-worker model-call capacity gauges."""
     capacity_dimensions = {
         **service_dimensions(),
-        "WorkerId": str(os.getpid()),
+        "WorkerId": worker_id(),
     }
     capacity_metrics: dict[str, MetricSpec] = {
         "ActiveRequests": (active, "Count"),
@@ -394,7 +466,7 @@ def record_runtime(snapshot: Mapping[str, int]) -> None:
     record_metrics(
         {
             **service_dimensions(),
-            "WorkerId": str(snapshot["pid"]),
+            "WorkerId": worker_id(pid=snapshot["pid"]),
         },
         {
             "ThreadCount": (snapshot["thread_count"], "Count"),
@@ -409,6 +481,48 @@ def record_runtime(snapshot: Mapping[str, int]) -> None:
             ["Stage", "Service"],
             ["Stage", "Service", "WorkerId"],
         ],
+    )
+
+
+def record_rate_limit_monitor_ownership(
+    outcome: RateLimitMonitorOwnershipOutcome,
+) -> None:
+    record_metrics(
+        {**service_dimensions(), "Outcome": outcome},
+        {"RateLimitMonitorOwnershipCount": (1, "Count")},
+        dimension_sets=[_RATE_LIMIT_MONITOR_OWNERSHIP_DIMENSION_SET],
+    )
+
+
+def record_rate_limit_monitor_poll(
+    *,
+    provider: str,
+    source: MonitorSourceName,
+    outcome: RateLimitMonitorPollOutcome,
+    latency_ms: float,
+) -> None:
+    record_metrics(
+        {
+            **service_dimensions(),
+            "Provider": provider,
+            "Source": source,
+            "Outcome": outcome,
+        },
+        {
+            "RateLimitMonitorPollCount": (1, "Count"),
+            "RateLimitMonitorPollLatencyMs": (latency_ms, "Milliseconds"),
+        },
+        dimension_sets=[_RATE_LIMIT_MONITOR_POLL_DIMENSION_SET],
+    )
+
+
+def record_rate_limit_monitor_publish(
+    outcome: RateLimitMonitorPublishOutcome,
+) -> None:
+    record_metrics(
+        {**service_dimensions(), "Outcome": outcome},
+        {"RateLimitMonitorPublishCount": (1, "Count")},
+        dimension_sets=[_RATE_LIMIT_MONITOR_PUBLISH_DIMENSION_SET],
     )
 
 
@@ -630,6 +744,7 @@ def create_metrics_middleware() -> Callable[
                     "http.request.method": method,
                     "url.path": route,
                     "gateway.route": route,
+                    "gateway.api_key_name": request.state.gateway_api_key_name,
                 },
                 kind="server",
             )

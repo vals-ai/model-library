@@ -1,5 +1,6 @@
 base-config:
   company: Amazon
+  country: United States
   open_source: false
   supports:
     images: false
@@ -17,6 +18,7 @@ deprecated:
 
   bedrock/claude-opus-4-1-20250805-v1:
     company: Amazon
+    country: United States
     label: Claude Opus 4.1 (Nonthinking)
     release_date: 2025-08-05
     open_source: false
@@ -53,6 +55,7 @@ deprecated:
 
   bedrock/claude-3-5-haiku-20241022-v1:
     company: Amazon
+    country: United States
     label: Claude 3.5 Haiku (Bedrock)
     release_date: 2024-10-22
     open_source: false
@@ -89,6 +92,7 @@ deprecated:
 
   bedrock/claude-3-5-sonnet-20240620-v2:
     company: Amazon
+    country: United States
     label: Claude 3.5 Sonnet (Bedrock)
     release_date: 2024-10-22
     open_source: false

@@ -621,7 +621,7 @@ async def test_metadata_cleaned_on_pre_function_failure(redis):
     original_eval = redis.eval
 
     async def cancel_eval(script, numkeys, *args):  # noqa: S307
-        if numkeys == 3 and args and args[0] == TOKEN_KEY:
+        if numkeys == 5 and args and args[0] == TOKEN_KEY:
             raise asyncio.CancelledError()
         return await original_eval(script, numkeys, *args)  # noqa: S307
 
@@ -724,3 +724,44 @@ async def test_run_id_and_question_id_forwarded_to_token_retrier():
 
     assert captured["run_id"] == "my-run-id"
     assert captured["question_id"] == "my-question-id"
+
+
+async def test_rpm_only_query_skips_token_estimate():
+    """An RPM-only policy (no TPM) must not call estimate_query_tokens — there
+    is no TPM to estimate against, and for some providers that call is a real
+    provider request."""
+    MockLLM = _make_mock_llm_class()
+    llm = MockLLM("gpt-4o", "openai")
+    llm.token_retry_params = TokenRetryParams(  # pyright: ignore[reportAttributeAccessIssue]
+        input_modifier=1.0,
+        output_modifier=1.0,
+        requests_per_minute=75,
+    )
+    llm._resolved_token_retry_params = ResolvedTokenRetryParams(  # pyright: ignore[reportAttributeAccessIssue]
+        input_modifier=1.0,
+        output_modifier=1.0,
+        use_dynamic_estimate=True,
+        limit=None,
+        requests_per_minute=75,
+    )
+    llm.estimate_query_tokens = AsyncMock(return_value=(100, 50))  # pyright: ignore[reportAttributeAccessIssue]
+
+    captured: dict[str, Any] = {}
+
+    class CapturingRetrier:
+        def __init__(self, **kwargs: Any):
+            captured.update(kwargs)
+
+        async def execute(self, func: Any, *args: Any, **kwargs: Any) -> Any:
+            return await func()
+
+        async def validate(self) -> None:
+            pass
+
+    with patch("model_library.retriers.token.token.TokenRetrier", CapturingRetrier):
+        await llm.query("test input", run_id="my-run-id", question_id="my-question-id")
+
+    llm.estimate_query_tokens.assert_not_called()  # pyright: ignore[reportAttributeAccessIssue]
+    assert captured["estimate_input_tokens"] == 0
+    assert captured["estimate_output_tokens"] == 0
+    assert captured["manages_tokens"] is False

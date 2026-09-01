@@ -2,7 +2,7 @@
 
 import time
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, cast
 
 import model_library.telemetry as telemetry
 
@@ -22,11 +22,23 @@ def query_config_params(config: Mapping[str, Any]) -> dict[str, object]:
 def llm_config_telemetry_attributes(
     config: Mapping[str, Any],
 ) -> dict[str, object | None]:
-    return {
+    attributes: dict[str, object | None] = {
         f"llm.config.{key}": telemetry.json_attribute(value)
         for key, value in config.items()
         if value is not None
     }
+    provider_config = config.get("provider_config")
+    if not isinstance(provider_config, Mapping):
+        return attributes
+
+    for key, value in cast(Mapping[str, object], provider_config).items():
+        if not telemetry.is_safe_config_attribute_key(key):
+            continue
+        attribute_value = telemetry.otel_scalar_attribute(value)
+        if attribute_value is not None:
+            attributes[f"llm.config.provider_config.{key}"] = attribute_value
+
+    return attributes
 
 
 def query_telemetry_attributes(

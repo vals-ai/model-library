@@ -1,28 +1,29 @@
 import asyncio
 import logging
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
 from fakeredis import aioredis
 from pydantic import SecretStr
-from starlette.testclient import TestClient
 
 import model_gateway.app as gateway_app
 import model_gateway.model_helpers as model_helpers
 import model_gateway.routes.benchmark_admission as benchmark_admission_routes
 from model_gateway.benchmark_admission_types import BenchmarkAcquireRequest
 from model_gateway.cache import ModelCache
-from model_gateway.types import QueryRequest
+from model_gateway.types import QueryRequest, TokenCountRequest
+from tests.unit.model_gateway._support import HEADERS, _make_client
 from model_library.base import (
     FileWithId,
     LLMConfig,
     ResolvedTokenRetryParams,
     TokenRetryParams,
 )
+from model_library.register_models import DefaultRateLimit
 from model_library.retriers.token import utils as token_utils
 from model_library.retriers.token.utils import set_redis_client
 
-HEADERS = {"Authorization": "Bearer sk-test"}
 MODEL = "openai/gpt-4o"
 MODEL_KEY = ("openai.gpt-4o", "server-key-hash")
 
@@ -52,21 +53,6 @@ def redis():
     client = aioredis.FakeRedis(decode_responses=True)
     set_redis_client(client)
     return client
-
-
-def _make_client() -> TestClient:
-    class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
-        MODEL_GATEWAY_HMAC_SECRET = "test-secret"
-
-        def get(self, name: str, default: str = "") -> str:
-            return getattr(self, name, default)
-
-        def unset(self, _key: str) -> None:
-            pass
-
-    with patch.object(gateway_app, "model_library_settings", ServerSettings()):
-        return TestClient(gateway_app.create_app())
 
 
 def _token_retry_params() -> TokenRetryParams:
@@ -111,13 +97,19 @@ def _acquire_body(
         ),
     ],
 )
-async def test_admission_and_query_share_model_identity_but_only_query_starts_token_retry(
+async def test_gateway_paths_share_identity_but_only_provider_ops_start_token_retry(
     config: LLMConfig,
 ) -> None:
     cache = ModelCache()
     llm = FakeLLM()
-    params = _token_retry_params()
+    params = _token_retry_params().model_copy(update={"requests_per_minute": 77})
     query = QueryRequest(
+        model=MODEL,
+        config=config,
+        inputs=[],
+        token_retry_params=params,
+    )
+    token_count = TokenCountRequest(
         model=MODEL,
         config=config,
         inputs=[],
@@ -142,10 +134,12 @@ async def test_admission_and_query_share_model_identity_but_only_query_starts_to
         )
         assert llm.init_calls == []
         query_llm = await model_helpers.get_query_llm(cache, query)
+        token_count_llm = await model_helpers.get_query_llm(cache, token_count)
 
-    assert query_llm is admission_llm
+    assert query_llm is token_count_llm is admission_llm
     assert llm.token_retry_params == params
     assert llm.init_calls == [resolved_params]
+    assert resolved_params.requests_per_minute == 77
 async def test_admission_routes_coordinate_through_shared_redis(
     redis,
     monkeypatch: pytest.MonkeyPatch,

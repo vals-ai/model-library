@@ -6,7 +6,7 @@ from contextlib import suppress
 from math import exp, floor
 from typing import Any, Callable, Coroutine
 
-from model_library.base.base import RateLimit
+from model_library.rate_limits import RateLimit
 from model_library.retriers.token import utils
 from model_library.retriers.token.token import (
     CORRECT_TOKENS_LUA,
@@ -68,6 +68,14 @@ async def _refresh_active_key_if_unowned_or_owned(
         REFRESH_ACTIVE_LUA, 1, active_key, loop_id, ttl
     )
     return int(refreshed) == 1
+
+
+def _token_correction_observation(rate_limit: RateLimit) -> tuple[int, int] | None:
+    limit = rate_limit.token_limit_total
+    remaining = rate_limit.token_remaining_total
+    if limit is None or remaining is None:
+        return None
+    return limit, remaining
 
 
 async def background_loops(
@@ -134,24 +142,28 @@ async def background_loops(
                     return
 
                 # store last header to Redis for status visibility
-                header_data = rate_limit.model_dump(exclude={"raw"})
-                redis_mapping = {k: str(v) for k, v in header_data.items()}
+                redis_mapping = utils.serialize_last_header(rate_limit)
                 header_redis_key = f"{cfg.key}:last_header"
                 async with utils.redis_client.pipeline(transaction=True) as pipe:
+                    pipe.delete(header_redis_key)
                     pipe.hset(  # pyright: ignore[reportUnknownMemberType]
                         header_redis_key, mapping=redis_mapping
                     )
                     pipe.expire(header_redis_key, 60)
                     await pipe.execute()
 
-                header_limit = rate_limit.token_limit_total
+                observation = _token_correction_observation(rate_limit)
+                if observation is None:
+                    logger.debug(
+                        f"no compatible observed token capacity, exiting correction for {cfg.key}"
+                    )
+                    return
+                header_limit, tokens_remaining = observation
                 if not (0.8 * cfg.limit <= header_limit <= 1.2 * cfg.limit):
                     logger.debug(
                         f"header token limit ({header_limit}) outside 80-120% of configured limit ({cfg.limit}), exiting correction for {cfg.key}"
                     )
                     return
-
-                tokens_remaining = rate_limit.token_remaining_total
 
                 # atomic correct-down via Lua
                 elapsed = time.time() - rate_limit.unix_timestamp

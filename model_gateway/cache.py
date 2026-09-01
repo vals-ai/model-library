@@ -21,7 +21,7 @@ class ModelCache:
         self._cache: OrderedDict[str, tuple[object, float]] = OrderedDict()
 
     @staticmethod
-    def _make_key(model: str, config: dict[str, Any]) -> str:
+    def make_key(model: str, config: dict[str, Any]) -> str:
         config_json = json.dumps(config, sort_keys=True, default=str)
         config_hash = hashlib.sha256(config_json.encode()).hexdigest()[:16]
         return f"{model}:{config_hash}"
@@ -34,7 +34,7 @@ class ModelCache:
     ) -> T:
         now = time.monotonic()
         self._prune_expired(now)
-        key = self._make_key(model, config)
+        key = self.make_key(model, config)
         entry = self._cache.get(key)
         if entry is not None:
             instance, _last_used = entry

@@ -28,7 +28,7 @@ def _local_model_names(provider_name: str | None = None) -> list[str]:
 def is_cli_model(model: str) -> bool:
     config = get_registry_config(model)
     assert config is not None
-    return config.provider_name in {"cursor", "devin"}
+    return config.provider_name in {"cursor", "devin", "factory"}
 
 
 def parametrize_all_models(func: F) -> F:

@@ -8,11 +8,11 @@ from functools import cache
 from pathlib import Path
 from time import monotonic
 from urllib.parse import urljoin
-from typing import Any, Callable, Type, TypeVar, cast, get_type_hints
+from typing import Any, Callable, Literal, Type, TypeVar, cast, get_type_hints
 
 import httpx
 import yaml
-from pydantic import ConfigDict, create_model, model_validator
+from pydantic import ConfigDict, ValidationError, create_model, model_validator
 from pydantic.fields import Field
 from pydantic.main import BaseModel
 
@@ -39,6 +39,7 @@ class Supports(BaseModel):
 
     images: bool | None = None
     audio: bool | None = None
+    transcription: bool | None = None
     videos: bool | None = None
     files: bool | None = None
     batch: bool | None = None
@@ -208,6 +209,100 @@ def get_dynamic_provider_properties_model() -> type[BaseProviderProperties]:
     )
 
 
+class TokenRateLimitCapacity(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    limit: int = Field(gt=0)
+
+
+class RequestRateLimit(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    limit: int = Field(gt=0)
+    mode: Literal["sliding_window", "concurrency"] = "sliding_window"
+
+
+class TokenRateLimit(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    mode: Literal["token_bucket"] = "token_bucket"
+    total: TokenRateLimitCapacity | None = None
+    input: TokenRateLimitCapacity | None = None
+    uncached_input: TokenRateLimitCapacity | None = None
+    output: TokenRateLimitCapacity | None = None
+
+    @model_validator(mode="after")
+    def validate_shape(self):
+        if self.total is not None:
+            if any(
+                value is not None
+                for value in (self.input, self.uncached_input, self.output)
+            ):
+                raise ValueError(
+                    "total cannot be combined with directional token limits"
+                )
+            return self
+        if self.input is None or self.output is None:
+            raise ValueError("directional token limits require both input and output")
+        return self
+
+    @property
+    def limit_total(self) -> int:
+        if self.total is not None:
+            return self.total.limit
+        assert self.input is not None and self.output is not None
+        return self.input.limit + self.output.limit
+
+
+class DefaultRateLimit(BaseModel):
+    """Static token-retry capacity configured for one resolved model."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    requests: list[RequestRateLimit] = Field(default_factory=list)
+    tokens: TokenRateLimit | None = None
+
+    @model_validator(mode="after")
+    def validate_limits(self):
+        if not self.requests and self.tokens is None:
+            raise ValueError("at least one default rate limit is required")
+        modes = [request.mode for request in self.requests]
+        if len(modes) != len(set(modes)):
+            raise ValueError("only one request limit per mode is allowed")
+        return self
+
+    @property
+    def token_limit_total(self) -> int | None:
+        return self.tokens.limit_total if self.tokens is not None else None
+
+    @property
+    def token_retry_defaults(self) -> tuple[int | None, int | None]:
+        """Return capacities enforced by the aggregate token-retry buckets."""
+        requests_per_minute = next(
+            (
+                request.limit
+                for request in self.requests
+                if request.mode == "sliding_window"
+            ),
+            None,
+        )
+        return self.token_limit_total, requests_per_minute
+
+    def apply_token_retry_defaults(
+        self,
+        token_limit: int | None,
+        requests_per_minute: int | None,
+    ) -> tuple[int | None, int | None]:
+        """Fill missing aggregate token-retry capacities from this config."""
+        default_token_limit, default_requests_per_minute = self.token_retry_defaults
+        return (
+            token_limit if token_limit is not None else default_token_limit,
+            requests_per_minute
+            if requests_per_minute is not None
+            else default_requests_per_minute,
+        )
+
+
 class DefaultParameters(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -223,6 +318,7 @@ class RawModelConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     company: str
+    country: str | None = None
     label: str
     release_date: date | None = None
     open_source: bool
@@ -234,6 +330,8 @@ class RawModelConfig(BaseModel):
         default_factory=BaseProviderProperties
     )
     costs_per_million_token: CostProperties | None
+    supports_rate_limit_monitoring: bool = False
+    rate_limit: DefaultRateLimit | None = None
     alternative_keys: list[str | dict[str, Any]] = Field(default_factory=list)
     default_parameters: DefaultParameters = Field(default_factory=DefaultParameters)
     provider_endpoint: str | None = None
@@ -264,10 +362,36 @@ class ModelConfig(RawModelConfig):
 ModelRegistry = dict[str, ModelConfig]
 
 
+def visible_registry_keys(
+    registry: ModelRegistry,
+    include_alt_keys: bool,
+) -> set[str]:
+    if include_alt_keys:
+        return set(registry)
+
+    same_provider_alternative_keys = {
+        alternative_key
+        for config in registry.values()
+        for alternative_item in config.alternative_keys
+        for alternative_key in [
+            alternative_item
+            if isinstance(alternative_item, str)
+            else next(iter(alternative_item))
+        ]
+        if alternative_key.split("/", 1)[0] == config.provider_name
+    }
+    return set(registry) - same_provider_alternative_keys
+
+
 def model_config_from_json(data: dict[str, Any]) -> ModelConfig:
     """Build a ModelConfig from a gateway registry JSON object."""
     provider_properties = data["provider_properties"]
-    model = ModelConfig.model_validate_json(json.dumps(data))
+    payload = json.dumps(data)
+    try:
+        model = ModelConfig.model_validate_json(payload)
+    except ValidationError as error:
+        logger.warning("Retrying gateway registry parse ignoring extras: %s", error)
+        model = ModelConfig.model_validate_json(payload, extra="ignore")
     model.supports = model.supports.resolve()
     model.provider_properties = GatewayProviderProperties.model_validate(
         provider_properties
@@ -357,6 +481,11 @@ def parse_yaml_blocks(
             current_model_config = deep_update(current_model_config, model_config)
 
             provider_properties = current_model_config.pop("provider_properties", {})
+            if (
+                "rate_limit" in current_model_config
+                and current_model_config["rate_limit"] is None
+            ):
+                raise ValueError("rate_limit must be omitted, not null")
 
             # create model config object
             raw_model_obj: RawModelConfig = RawModelConfig.model_validate(
@@ -399,6 +528,9 @@ def parse_yaml_blocks(
                         key = list(key_item.keys())[0]
                         alt_config = key_item[key]
 
+                if "rate_limit" in alt_config and alt_config["rate_limit"] is None:
+                    raise ValueError("rate_limit must be omitted, not null")
+
                 alternative_provider_properties = deep_update(
                     deepcopy(provider_properties),
                     alt_config.get("provider_properties", {}),
@@ -410,6 +542,8 @@ def parse_yaml_blocks(
                 if provider_name != copy.provider_name:
                     copy.provider_name = provider_name
                     copy.provider_endpoint = alternative_model
+                    # A provider-specific capacity cannot be inherited by a different provider.
+                    copy.rate_limit = None
 
                 if alt_config:
                     copy_dict = copy.model_dump()
@@ -430,20 +564,26 @@ def parse_yaml_blocks(
                 registry[key] = copy
 
 
-def _register_models() -> ModelRegistry:
+def _register_models(deprecated_only: bool = False) -> ModelRegistry:
     logger.debug(f"Loading model registry from {path_library}")
 
     registry: ModelRegistry = {}
 
-    # load each provider YAML
-    yaml_files = list(Path(path_library).glob("*.yaml"))
+    deprecated_dir = Path(path_library) / "deprecated"
 
-    # include deprecated model configs (default: not included)
-    include_deprecated = model_library_settings.get("MODEL_LIBRARY_INCLUDE_DEPRECATED")
-    if isinstance(include_deprecated, str) and include_deprecated.lower() == "true":
-        deprecated_dir = Path(path_library) / "deprecated"
-        if deprecated_dir.exists():
-            yaml_files.extend(deprecated_dir.glob("*.yaml"))
+    if deprecated_only:
+        yaml_files = list(deprecated_dir.glob("*.yaml"))
+    else:
+        # load each provider YAML
+        yaml_files = list(Path(path_library).glob("*.yaml"))
+
+        # include deprecated model configs (default: not included)
+        include_deprecated = model_library_settings.get(
+            "MODEL_LIBRARY_INCLUDE_DEPRECATED"
+        )
+        if isinstance(include_deprecated, str) and include_deprecated.lower() == "true":
+            if deprecated_dir.exists():
+                yaml_files.extend(deprecated_dir.glob("*.yaml"))
 
     sections = sorted(yaml_files, key=lambda x: "openai" in x.name.lower())
     for section in sections:
@@ -534,6 +674,14 @@ def _load_model_registry() -> ModelRegistry:
         logger.info(f"Loading custom config from {custom_config}")
         load_custom_model_configs(custom_config, registry=registry)
     return registry
+
+
+@cache
+def get_deprecated_model_registry() -> ModelRegistry:
+    """Registry built only from `config/deprecated/*.yaml`, kept separate from the
+    shared registry so asking for retired entries never changes what it serves."""
+    get_provider_registry()
+    return _register_models(deprecated_only=True)
 
 
 def get_model_registry() -> ModelRegistry:

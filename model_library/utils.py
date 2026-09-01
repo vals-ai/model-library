@@ -30,7 +30,42 @@ GATEWAY_CLIENT_READ_TIMEOUT_SECONDS = (
 )
 GATEWAY_CLIENT_WRITE_TIMEOUT_SECONDS = 60.0
 GATEWAY_CLIENT_POOL_TIMEOUT_SECONDS = 60.0
+TCP_KEEPALIVE_IDLE_SECONDS = 60
+TCP_KEEPALIVE_INTERVAL_SECONDS = 30
+TCP_KEEPALIVE_PROBES = 5
 logger = logging.getLogger("llm")
+
+SocketOption = tuple[int, int, int]
+SocketAddressInfo = tuple[
+    int | socket.AddressFamily,
+    int | socket.SocketKind,
+    int,
+    str,
+    tuple[object, ...],
+]
+
+
+def tcp_keepalive_socket_options() -> tuple[SocketOption, ...]:
+    """Return portable TCP keepalive options for client transports."""
+    options: list[SocketOption] = [(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)]
+    for option_name, value in (
+        ("TCP_KEEPIDLE", TCP_KEEPALIVE_IDLE_SECONDS),
+        ("TCP_KEEPINTVL", TCP_KEEPALIVE_INTERVAL_SECONDS),
+        ("TCP_KEEPCNT", TCP_KEEPALIVE_PROBES),
+    ):
+        option = getattr(socket, option_name, None)
+        if isinstance(option, int):
+            options.append((socket.IPPROTO_TCP, option, value))
+    return tuple(options)
+
+
+def tcp_keepalive_socket(addr_info: SocketAddressInfo) -> socket.socket:
+    """Create a socket with TCP keepalive enabled for aiohttp."""
+    family, type_, proto, _, _ = addr_info
+    sock = socket.socket(family=family, type=type_, proto=proto)
+    for level, option, value in tcp_keepalive_socket_options():
+        sock.setsockopt(level, option, value)
+    return sock
 
 
 def round_to_milliseconds(value: float) -> float:
@@ -226,6 +261,7 @@ def make_aiohttp_session(
         keepalive_timeout=60,
         family=socket.AF_INET,  # force IPv4, skip Happy Eyeballs dual-stack
         resolver=StaticResolver(dns_resolve) if dns_resolve else None,
+        socket_factory=tcp_keepalive_socket,
     )
     return aiohttp.ClientSession(connector=connector)
 
@@ -249,30 +285,45 @@ def default_aiohttp_httpx_client(
 
 def default_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncClient:
     """Fallback httpx client without aiohttp (used when aiohttp is not available)."""
+    limits = httpx.Limits(
+        max_connections=2000, max_keepalive_connections=300
+    )  # TODO: increase, but make sure prod enough sockets to not hit file descriptor limit
     return httpx.AsyncClient(
+        mounts={
+            "all://*": httpx.AsyncHTTPTransport(
+                limits=limits,
+                socket_options=tcp_keepalive_socket_options(),
+            )
+        },
         timeout=httpx.Timeout(
             connect=PROVIDER_CONNECT_TIMEOUT_SECONDS,
             read=PROVIDER_READ_TIMEOUT_SECONDS,
             write=PROVIDER_WRITE_TIMEOUT_SECONDS,
             pool=PROVIDER_POOL_TIMEOUT_SECONDS,
         ),
-        limits=httpx.Limits(
-            max_connections=2000, max_keepalive_connections=300
-        ),  # TODO: increase, but make sure prod enough sockets to not hit file descriptor limit
+        limits=limits,
         headers=headers,
     )
 
 
 def gateway_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncClient:
+    limits = httpx.Limits(max_connections=2000, max_keepalive_connections=300)
     return httpx.AsyncClient(
         http2=True,
+        mounts={
+            "all://*": httpx.AsyncHTTPTransport(
+                http2=True,
+                limits=limits,
+                socket_options=tcp_keepalive_socket_options(),
+            )
+        },
         timeout=httpx.Timeout(
             connect=GATEWAY_CLIENT_CONNECT_TIMEOUT_SECONDS,
             read=GATEWAY_CLIENT_READ_TIMEOUT_SECONDS,
             write=GATEWAY_CLIENT_WRITE_TIMEOUT_SECONDS,
             pool=GATEWAY_CLIENT_POOL_TIMEOUT_SECONDS,
         ),
-        limits=httpx.Limits(max_connections=2000, max_keepalive_connections=300),
+        limits=limits,
         headers=headers,
     )
 

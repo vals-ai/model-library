@@ -1,5 +1,6 @@
 base-config:
   company: Poolside
+  country: United States
   documentation_url: https://docs.poolside.ai
   open_source: false
   supports:
@@ -23,7 +24,6 @@ laguna-models:
       reasoning_model: true
       max_tokens: 32_768
     costs_per_million_token: null
-
   poolside/laguna-m.1:fast:
     label: Laguna M.1 Fast
     release_date: 2026-04-28

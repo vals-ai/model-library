@@ -189,24 +189,12 @@ class GoogleModel(LLM):
             )
 
             if self.provider_config.use_vertex:
-                # Gemini preview releases are only server from the global Vertex region after September 2025.
-                MODEL_REGION_OVERRIDES: dict[str, str] = {
-                    "gemini-2.5-flash-preview-09-2025": "global",
-                    "gemini-2.5-flash-lite-preview-09-2025": "global",
-                    "gemini-3-flash-preview": "global",
-                    "gemini-3-pro-preview": "global",
-                }
-
                 creds = json.loads(api_key)
-
-                region = creds["GCP_REGION"]
-                if self.model_name in MODEL_REGION_OVERRIDES:
-                    region = MODEL_REGION_OVERRIDES[self.model_name]
 
                 client = Client(
                     vertexai=True,
                     project=creds["GCP_PROJECT_ID"],
-                    location=region,
+                    location=creds["GCP_REGION"],
                     credentials=service_account.Credentials.from_service_account_info(  # type: ignore
                         json.loads(creds["GCP_CREDS"]),
                         scopes=["https://www.googleapis.com/auth/cloud-platform"],
@@ -348,6 +336,7 @@ class GoogleModel(LLM):
     @property
     @override
     def search_tool(self) -> Tool:
+        # Strict ZDR requires EnterpriseWebSearch; GoogleSearch retains reliability logs.
         return Tool(google_search=GoogleSearch())
 
     @override

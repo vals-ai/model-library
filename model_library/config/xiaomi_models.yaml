@@ -1,5 +1,6 @@
 base-config:
   company: Xiaomi
+  country: China
   open_source: true
   documentation_url: https://platform.xiaomimimo.com/#/docs/
   supports:

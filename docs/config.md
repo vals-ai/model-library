@@ -1,6 +1,6 @@
 # Model Configuration
 
-YAML-based model registry with 3-level inheritance.
+The model registry is defined in YAML and uses three levels of inheritance.
 
 ## Directory Structure
 
@@ -32,6 +32,7 @@ Three levels, each merged via `deep_update()`:
 ```yaml
 base-config: # level 1: provider
   company: Anthropic
+  country: United States
   supports:
     images: true
   properties:
@@ -49,30 +50,35 @@ claude-sonnet-models: # named block
       max_tokens: 65_536
 ```
 
-Result: `claude-sonnet-4-6` gets `company: Anthropic`, `images: true`, `batch: true`, `reasoning_model: false`, plus its own `context_window` and `max_tokens`.
+Result: `claude-sonnet-4-6` gets `company: Anthropic`, `country: United States`, `images: true`, `batch: true`, `reasoning_model: false`, plus its own `context_window` and `max_tokens`.
 
 ## Provider Properties
 
 Provider-specific `provider_properties` are validated by each provider:
 
-- **Anthropic**: Set `fallback_models` to an ordered list of up to three server-side fallback models for the Messages API. Fallback-served responses set `QueryResult.metadata.extra["fallback"]` to `true`.
+- **Anthropic**: Set `fallback_models` to an ordered list of up to three server-side fallback models for the Messages API. Fallback-served responses set `QueryResult.metadata.extra["fallback"]` to `true`, and their assistant turns are replayed verbatim, including the `fallback` boundary block.
+- **Anthropic**: Set `task_budget_tokens` to send `output_config.task_budget` with the task-budgets beta, an advisory token budget the model paces its agentic loop against. It is not enforced; `max_tokens` remains the hard ceiling.
+- **Anthropic**: Set `returns_thinking_truncated_turns: true` to return a turn that ran out of tokens inside a thinking block as a `max_tokens` result with its reasoning, instead of raising, so the client can continue the turn. On these keys only, replaying such a turn appends a short text block, since Anthropic rejects an assistant message whose final block is thinking.
 - **OpenAI-compatible completions**: Set `stream_completions: false` to use non-streaming chat completions. The default is `true`.
 - **OpenAI Responses**: Set `code_mode: true` to add the hosted Code Mode tool. When enabled, function tools without explicit `allowed_callers` are sent with `allowed_callers: ["code_mode", "direct"]`.
 - **Meta**: Set `use_responses: true` on selected models to route the OpenAI-compatible delegate through the Responses API instead of Chat Completions.
 - **OpenAI-compatible providers**: Set `prompt_cache_key: id` to derive an OpenAI prompt-cache key from the resolved `run_id` and `question_id`, or `prompt_cache_key: hash` to derive it from the stable prompt prefix, for Responses and Chat Completions.
 - **Alibaba Qwen reasoning models**: Set `preserve_thinking: true` to preserve reasoning context across turns.
+- **Alibaba**: Set `mainland: true` to route to the mainland China DashScope endpoint, authenticated with `DASHSCOPE_CN_API_KEY` instead of `DASHSCOPE_API_KEY`. Model Studio keys are region-scoped and are rejected by the other region's endpoint.
 
-Models may also set `provider_endpoint` when the registry key should differ from the upstream provider model ID.
+## Common model fields
 
-Configured provider default rate limits are not bundled in the public package; use live provider rate-limit headers when available.
+Set `country` to the model creator's country, not the hosting provider's country. Declare it wherever `company` is defined.
 
-Use `supports.files` only for provider-supported non-image document/file inputs. Providers with image/video-only multimodal APIs should keep `supports.files: false` and set `supports.images`/`supports.videos` instead, so callers can choose image or video fallbacks rather than provider file-upload paths. The validator still runs file examples when `supports.files` is false and fails if a file example works, because that means the registry config is stale.
+Set `provider_endpoint` when the registry key differs from the model ID sent to the provider.
 
-Set `supports.audio: true` only for providers that accept audio inputs (e.g. Gemini via `FileWithBytes`). Leave it `false` otherwise.
+See the [field reference](../model_library/config/README.md#fields) for the `rate_limit` YAML shape. This field stores static retry and admission capacity. Live provider observations are separate and never rewrite YAML. Omit `rate_limit` when no static limit exists; public exports remove it.
 
-To restore a deprecated model to the active registry, move its entry from
-`config/deprecated/<provider>_models.yaml` back to the matching active provider
-YAML file and run `make config`.
+Use `supports.files` only for non-image document or file inputs supported by the provider. For image- or video-only APIs, leave it `false` and set `supports.images` or `supports.videos` instead.
+
+The validator still runs file examples when `supports.files` is `false`. If one succeeds, validation fails because the registry entry is stale.
+
+Set `supports.audio: true` only when the provider accepts audio input, such as Gemini through `FileWithBytes`.
 
 ## Deprecating Models
 
@@ -89,7 +95,11 @@ This will:
 3. Remove the entry from the active config file
 4. Regenerate `all_models.json`
 
-Alternative keys are handled automatically — they travel with the primary model entry.
+Alternative keys travel with the primary model entry.
+
+### Restore a model
+
+Move the entry from `config/deprecated/<provider>_models.yaml` back to the matching active provider file, then run `make config`.
 
 ## Loading Deprecated Models
 
@@ -109,6 +119,10 @@ Or via environment variable:
 MODEL_LIBRARY_INCLUDE_DEPRECATED=True
 ```
 
+`/registry?include_deprecated=true` adds deprecated entries to the Gateway response without changing the default registry. Active entries win when the same key exists in both registries.
+
+`/registry?include_alt_keys=false` removes same-provider aliases. Cross-provider aliases remain in the response.
+
 ## Gateway registry loading
 
 ### Discovery and helper behavior
@@ -119,6 +133,9 @@ When `MODEL_GATEWAY_URL` is set before the registry is initialized:
   with `MODEL_GATEWAY_API_KEY`. `get_registry_config()` and
   `get_registry_model()` construction use that snapshot. No-argument calls
   retain it for the process lifetime.
+- The snapshot omits fields older clients reject as unknown (currently
+  `country`, `rate_limit`, `supports.transcription`, and
+  `supports_rate_limit_monitoring`).
 - `refresh_model_registry()` provides opt-in lazy refresh without changing the
   `get_model_registry()` singleton contract. It reloads whichever source the
   current settings select: Gateway, local YAML, or custom config. A successful
@@ -127,9 +144,12 @@ When `MODEL_GATEWAY_URL` is set before the registry is initialized:
 - Refresh failures are strict by default and never switch registry sources.
   `allow_stale_on_error=True` returns a snapshot previously loaded by a
   successful refresh and restarts a positive-TTL refresh cooldown.
-- Cached metadata helpers such as `get_model_cost()`,
-  `get_model_input_context_window()`, and `get_model_names()` remain
-  direct-provider-only and raise in Gateway mode.
+- Metadata helpers such as `get_model_cost()`,
+  `get_model_input_context_window()`, and `get_model_names()` read the current
+  snapshot, so in Gateway mode they return Gateway metadata and follow
+  `refresh_model_registry()`. Missing Gateway keys raise instead of falling back
+  to direct provider discovery; direct-provider mode keeps its existing lookup
+  behavior.
 
 ```python
 from datetime import timedelta

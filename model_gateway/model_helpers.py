@@ -1,7 +1,8 @@
 """Model lookup and query helper functions for gateway routes."""
 
 import hashlib
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, Literal
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -13,11 +14,11 @@ from model_library.base import (
     resolve_token_retry_params,
 )
 from model_library.base.input import FileWithId, InputItem, RawInput, RawResponse
-from model_library.registry_utils import get_registry_model
+from model_library.registry_utils import get_registry_config, get_registry_model
 
 from model_gateway.benchmark_admission_types import BenchmarkAcquireRequest
 from model_gateway.cache import ModelCache
-from model_gateway.types import GatewayRequestBase, QueryRequest
+from model_gateway.types import GatewayRequestBase, QueryRequest, TokenCountRequest
 
 
 def provider_from_model(model: str) -> str | None:
@@ -42,23 +43,33 @@ def get_cached_llm(
     )
 
 
+@dataclass(frozen=True)
+class ManagedApiKey:
+    source: Literal["pool_1", "pool_2"]
+    key_setting: str
+
+
+def managed_api_keys(model: str) -> tuple[ManagedApiKey, ...]:
+    return ()
+
+
 def _managed_api_key(
-    body: QueryRequest | BenchmarkAcquireRequest,
+    body: QueryRequest | TokenCountRequest | BenchmarkAcquireRequest,
 ) -> str | None:
     if body.config.custom_api_key is not None or not isinstance(body, QueryRequest):
         return None
     if any(isinstance(item, FileWithId) for item in body.inputs):
         return None
 
-    key_names: tuple[str, ...] = ()
-    pinned_key_index: int | None = None
-    if not key_names:
+    managed_keys = managed_api_keys(body.model)
+    if not managed_keys:
         return None
 
-    keys = tuple(getattr(model_library_settings, name) for name in key_names)
-    if pinned_key_index is not None:
-        return keys[pinned_key_index]
-
+    keys_by_source = {
+        managed_key.source: getattr(model_library_settings, managed_key.key_setting)
+        for managed_key in managed_keys
+    }
+    keys = tuple(keys_by_source.values())
     digest = hashlib.sha256(f"{body.run_id}{body.question_id}".encode()).digest()
     return keys[int.from_bytes(digest, "big") % len(keys)]
 
@@ -83,15 +94,34 @@ def resolve_gateway_token_retry_params(
     token_retry_params: TokenRetryParams,
 ) -> ResolvedTokenRetryParams:
     effective_token_limit = token_retry_params.limit
+    effective_requests_per_minute = token_retry_params.requests_per_minute
+
+    # Only consult the registry when a dimension still needs a configured
+    # default; explicit params must resolve without a registry entry.
+    if effective_token_limit is None or effective_requests_per_minute is None:
+        registry_config = get_registry_config(model)
+        if registry_config is None:
+            raise ValueError(f"Model {model} not found in registry")
+
+        rate_limit = registry_config.rate_limit
+        if rate_limit is not None:
+            effective_token_limit, effective_requests_per_minute = (
+                rate_limit.apply_token_retry_defaults(
+                    effective_token_limit,
+                    effective_requests_per_minute,
+                )
+            )
+
     return resolve_token_retry_params(
         token_retry_params,
         effective_token_limit,
+        effective_requests_per_minute,
     )
 
 
 def get_gateway_llm(
     cache: ModelCache,
-    body: QueryRequest | BenchmarkAcquireRequest,
+    body: QueryRequest | TokenCountRequest | BenchmarkAcquireRequest,
     *,
     resolved_token_retry_params: ResolvedTokenRetryParams | None = None,
 ) -> LLM:
@@ -117,7 +147,7 @@ def get_gateway_llm(
 
 async def get_query_llm(
     cache: ModelCache,
-    body: QueryRequest | BenchmarkAcquireRequest,
+    body: QueryRequest | TokenCountRequest | BenchmarkAcquireRequest,
     *,
     resolved_token_retry_params: ResolvedTokenRetryParams | None = None,
 ) -> LLM:

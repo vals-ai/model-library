@@ -1,12 +1,13 @@
 # Model Configs
 
-Each YAML file defines models for one provider. Configs use a three-level inheritance system: provider base → model-block base → individual model.
+Each YAML file defines one provider's models. Values merge from provider base → model-block base → model entry.
 
 ## Structure
 
 ```yaml
 base-config:                        # inherited by all models in this file
   company: Anthropic
+  country: United States
   open_source: false
   supports:
     images: true
@@ -40,24 +41,27 @@ claude-4-models:                    # model block
 
 | Field | Description |
 |-------|-------------|
+| `country` | Country of origin of `company`, declared wherever `company` is |
 | `properties` | `context_window`, `max_tokens`, `training_cutoff`, `reasoning_model` |
 | `supports` | Boolean flags: `images`, `audio`, `videos`, `files`, `batch`, `temperature`, `tools`, `output_schema` |
 | `costs_per_million_token` | `input`, `output`, optional `cache`, `batch`, `context` pricing. Set to `null` for models without known pricing |
 | `metadata` | `deprecated`, `available_for_everyone`, `available_as_evaluator`, `ignored_for_cost`, `internal_only` |
 | `default_parameters` | `temperature`, `top_p`, `top_k`, `reasoning_effort` |
+| `rate_limit` | Optional static retry and admission capacity. `requests` is a list of `{limit, mode}` entries. `tokens` uses either `total` or `input` plus `output`, with optional `uncached_input`; each capacity is `{limit}`. Request mode defaults to `sliding_window`; token mode defaults to `token_bucket`. Omit unknown limits; `null` is invalid. |
+| `supports_rate_limit_monitoring` | Set to `true` when the provider returns live rate-limit data for the model. Defaults to `false`; define it on the provider base and override exceptions. |
 | `provider_properties` | Provider-specific flags (e.g. `supports_auto_thinking`) |
 | `provider_endpoint` | Override the model name sent to the provider API |
 | `alternative_keys` | Alternative model identifiers/aliases |
 
 ## Configuration Inheritance
 
-Configurations support hierarchical inheritance through `base-config` blocks:
+Values merge in this order:
 
-1. Provider-level `base-config` applies to every model in the YAML file.
-2. Model-block `base-config` applies to every model in that block.
-3. Individual model fields override both base levels.
+1. Provider-level `base-config` applies to every model in the file.
+2. Model-block `base-config` applies to every model in the block.
+3. Model fields override both base levels.
 
-Nested dictionaries are merged recursively instead of replaced wholesale.
+Nested dictionaries merge recursively.
 
 ## Alternative Keys
 
@@ -71,42 +75,10 @@ alternative_keys:
         reasoning_model: true
 ```
 
-## Custom Configs
+## Contributor workflow
 
-Use `load_custom_model_configs` to load additional YAML files at runtime from a local path or URL. Models defined there override bundled defaults.
+See [Model Configuration](../../docs/config.md) for deprecating or restoring models, loading custom configs, and Gateway registry behavior.
 
-Use `load_latest_vals_model_configs` to pull bundled config YAML files from a branch of the public model-library repository and merge them into the runtime registry.
+After editing active YAML, run `make config`. This regenerates the bundled `all_models.json` snapshot from local YAML; do not edit the snapshot directly.
 
-Set `MODEL_LIBRARY_CUSTOM_CONFIG` to load a local path or URL automatically during registry initialization.
-
-## After Editing
-
-Run `make config` to regenerate `all_models.json`. The generated file is used by the model registry at runtime; do not edit it manually.
-
-## Schema Validation
-
-The configuration is validated using Pydantic models defined in `register_models.py`:
-
-- `Properties` - Model properties
-- `Supports` - Feature support flags
-- `Metadata` - Platform metadata
-- `DefaultParameters` - Default parameter values
-- `CostProperties` - Pricing information
-- `ProviderProperties` - Provider-specific config, generated dynamically from provider config classes
-
-## Migration Notes
-
-### Previous Structure (Deprecated)
-
-The old configuration used `class_properties` which mixed support flags and metadata:
-
-```yaml
-# OLD - Do not use
-class_properties:
-  supports_images: true
-  supports_batch_requests: true
-  deprecated: false
-  available_for_everyone: true
-properties:
-  max_token_output: 32_000
-```
+Pydantic models in `model_library/register_models.py` validate the schema. `class_properties` is deprecated; use `properties`, `supports`, and `metadata`.

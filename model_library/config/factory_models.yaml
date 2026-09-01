@@ -1,0 +1,45 @@
+base-config:
+  company: Factory
+  country: United States
+  open_source: false
+  documentation_url: https://docs.factory.ai/docs/model-independence/factory-router
+  supports:
+    images: false
+    videos: false
+    files: true
+    batch: false
+    temperature: false
+    tools: true
+    output_schema: false
+  properties:
+    context_window: 1_000_000
+    max_tokens: 64_000
+    reasoning_model: true
+  metadata:
+    available_for_everyone: false
+    internal_only: true
+    available_as_evaluator: false
+    ignored_for_cost: true
+  costs_per_million_token: null
+
+router-models:
+  # Factory Router ("Auto Model") is the hosted router in the Factory CLI:
+  # `droid exec --model auto` picks a model per task. Factory bills its own
+  # platform usage, not our tokens, so no real per-token price exists. The
+  # rates below are nominal Sonnet-tier placeholders that let the model pass
+  # ValSmith catalog admission and land in the right credit bucket.
+  # `ignored_for_cost` keeps them out of dollar accounting.
+  factory/router:
+    label: Factory Router
+    release_date: 2026-05-22
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: true
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache:
+        read: 0.3
+        write: 3.75

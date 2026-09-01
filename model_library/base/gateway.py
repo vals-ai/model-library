@@ -40,8 +40,13 @@ from model_library.base.input import (
     ToolDefinition,
     normalize_query_input,
 )
-from model_library.base.output import QueryResult, RateLimit
-from model_library.exceptions import GatewayMethodNotSupported, GatewayProviderError
+from model_library.base.output import QueryResult, TranscriptionResult
+from model_library.exceptions import (
+    GatewayMethodNotSupported,
+    GatewayProviderError,
+    MaxContextWindowExceededError,
+)
+from model_library.rate_limits import RateLimit
 from model_library.utils import gateway_httpx_client
 
 
@@ -168,7 +173,7 @@ def _raise_for_gateway_error_envelope(data: dict[str, Any]) -> None:
         if isinstance(raw_status_code, int) and not isinstance(raw_status_code, bool)
         else None
     )
-    raise GatewayProviderError(
+    gateway_error = GatewayProviderError(
         error_type=error_type,
         code=code,
         message=message,
@@ -177,6 +182,9 @@ def _raise_for_gateway_error_envelope(data: dict[str, Any]) -> None:
         exception_type=exception_type,
         status_code=status_code,
     )
+    if exception_type == MaxContextWindowExceededError.__name__:
+        raise MaxContextWindowExceededError(message) from gateway_error
+    raise gateway_error
 
 
 def _decode_gateway_success(resp: httpx.Response) -> dict[str, Any]:
@@ -343,6 +351,15 @@ class GatewayLLM(LLM):
 
         headers = _gateway_correlation_headers(body) if path == "/query" else None
         run_id, question_id, query_id, identity = _gateway_retry_log_ids(body)
+        gateway_retry_attrs = {
+            "gateway.path": path,
+            "run_id": run_id,
+            "question_id": question_id,
+            "query_id": query_id,
+            "identity": identity,
+            "retry.strategy": "gateway_http",
+            "retry.max_attempts": GATEWAY_HTTP_MAX_ATTEMPTS,
+        }
         for attempt in range(GATEWAY_HTTP_MAX_ATTEMPTS):
             is_last_attempt = attempt == GATEWAY_HTTP_MAX_ATTEMPTS - 1
             try:
@@ -356,41 +373,64 @@ class GatewayLLM(LLM):
                 if is_last_attempt:
                     raise
                 delay = _gateway_retry_delay_seconds(attempt)
-                GATEWAY_RETRY_LOGGER.warning(
-                    "gateway_http_retry path=%s attempt=%s max_attempts=%s "
-                    "run_id=%s question_id=%s query_id=%s identity=%s "
-                    "error_type=%s retry_after_s=%.3f",
-                    path,
-                    attempt + 1,
-                    GATEWAY_HTTP_MAX_ATTEMPTS,
-                    run_id,
-                    question_id,
-                    query_id,
-                    identity,
-                    type(exc).__name__,
-                    delay,
+                logger_msg = (
+                    f"gateway_http_retry path={path} attempt={attempt + 1} "
+                    f"max_attempts={GATEWAY_HTTP_MAX_ATTEMPTS} run_id={run_id} "
+                    f"question_id={question_id} query_id={query_id} "
+                    f"identity={identity} error_type={type(exc).__name__} "
+                    f"retry_after_s={delay:.3f}"
+                )
+                GATEWAY_RETRY_LOGGER.info(logger_msg)
+                telemetry.log_sentry_info(
+                    logger_msg,
+                    {
+                        **gateway_retry_attrs,
+                        "retry.attempt": attempt + 1,
+                        "retry.next_wait_seconds": delay,
+                        "exception.type": type(exc).__name__,
+                    },
                 )
                 await _sleep_before_gateway_retry(attempt, delay_seconds=delay)
                 continue
 
             if resp.status_code == 200:
-                return _decode_gateway_success(resp)
+                data = _decode_gateway_success(resp)
+                if attempt > 0:
+                    logger_msg = (
+                        f"gateway_http_recovered path={path} attempts={attempt + 1} "
+                        f"max_attempts={GATEWAY_HTTP_MAX_ATTEMPTS} run_id={run_id} "
+                        f"question_id={question_id} query_id={query_id} "
+                        f"identity={identity}"
+                    )
+                    GATEWAY_RETRY_LOGGER.info(logger_msg)
+                    telemetry.log_sentry_info(
+                        logger_msg,
+                        {
+                            **gateway_retry_attrs,
+                            "retry.attempts": attempt,
+                            "retry.total_attempts": attempt + 1,
+                        },
+                    )
+                return data
 
             if _is_retryable_gateway_response(resp) and not is_last_attempt:
                 delay = _gateway_retry_delay_seconds(attempt)
-                GATEWAY_RETRY_LOGGER.warning(
-                    "gateway_http_retry path=%s attempt=%s max_attempts=%s "
-                    "run_id=%s question_id=%s query_id=%s identity=%s "
-                    "status_code=%s retry_after_s=%.3f",
-                    path,
-                    attempt + 1,
-                    GATEWAY_HTTP_MAX_ATTEMPTS,
-                    run_id,
-                    question_id,
-                    query_id,
-                    identity,
-                    resp.status_code,
-                    delay,
+                logger_msg = (
+                    f"gateway_http_retry path={path} attempt={attempt + 1} "
+                    f"max_attempts={GATEWAY_HTTP_MAX_ATTEMPTS} run_id={run_id} "
+                    f"question_id={question_id} query_id={query_id} "
+                    f"identity={identity} status_code={resp.status_code} "
+                    f"retry_after_s={delay:.3f}"
+                )
+                GATEWAY_RETRY_LOGGER.info(logger_msg)
+                telemetry.log_sentry_info(
+                    logger_msg,
+                    {
+                        **gateway_retry_attrs,
+                        "retry.attempt": attempt + 1,
+                        "retry.next_wait_seconds": delay,
+                        "http.response.status_code": resp.status_code,
+                    },
                 )
                 await _sleep_before_gateway_retry(attempt, delay_seconds=delay)
                 continue
@@ -534,6 +574,7 @@ class GatewayLLM(LLM):
                 inputs=_request_items(all_input),
                 tools=_request_tools(tools),
                 config=self.gateway_config,
+                token_retry_params=self.token_retry_params,
             ),
         )
         return int(data["tokens"])
@@ -550,7 +591,11 @@ class GatewayLLM(LLM):
             ),
         )
         raw_rate_limit = data.get("rate_limit")
-        return RateLimit(**raw_rate_limit) if raw_rate_limit else None
+        return (
+            RateLimit.model_validate(raw_rate_limit)
+            if raw_rate_limit is not None
+            else None
+        )
 
     @override
     async def _query_impl(self, *args: Any, **kwargs: Any) -> Any:
@@ -657,6 +702,30 @@ class GatewayLLM(LLM):
             ),
         )
         return cast(list[float], data["embedding"])
+
+    @override
+    async def transcribe_audio(
+        self,
+        *,
+        name: str,
+        mime: str,
+        audio: bytes,
+        language: str | None = None,
+    ) -> TranscriptionResult:
+        from model_gateway.types import TranscriptionRequest
+
+        data = await self.post_gateway(
+            "/audio/transcriptions",
+            TranscriptionRequest(
+                model=self.gateway_model_key,
+                name=name,
+                mime=mime,
+                content_base64=base64.b64encode(audio).decode(),
+                language=language,
+                config=self.gateway_config,
+            ),
+        )
+        return TranscriptionResult.model_validate(data)
 
     async def moderate_content(self, text: str) -> ModerationCreateResponse:
         from model_gateway.types import ModerationRequest

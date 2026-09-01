@@ -10,8 +10,6 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Any, Coroutine
-
 from tqdm import tqdm
 
 from model_library.base import LLM, TextInput, TokenRetryParams
@@ -66,6 +64,11 @@ async def main():
     dataset_output_modifier = 0.001
 
     limit = 100_000
+    metadata = model.metadata
+    configured_limit = metadata.rate_limit if metadata is not None else None
+    if configured_limit is not None and configured_limit.token_limit_total is not None:
+        limit = configured_limit.token_limit_total
+
     await model.init_token_retry(
         token_retry_params=TokenRetryParams(
             input_modifier=provider_tokenizer_input_modifier,
@@ -88,7 +91,7 @@ async def main():
         )
 
         async with benchmark_queue(
-            model_registry_key=model._client_registry_key_model_specific,  # pyright: ignore[reportPrivateUsage]
+            model_registry_key=(model.provider, model.model_name),
             run_id=run_id,
             logger=model.instance_logger,
             enabled=not args.no_benchmark_queue,
@@ -96,9 +99,7 @@ async def main():
         ):
             bar.set_description(f"{short_id} running")
 
-            tasks: list[Coroutine[Any, Any, None]] = []
-            for _ in range(n):
-                tasks.append(token_retry(model))
+            tasks = [token_retry(model) for _ in range(n)]
 
             start = time.time()
             for coro in asyncio.as_completed(tasks):

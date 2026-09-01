@@ -17,6 +17,7 @@ from starlette.testclient import TestClient
 
 import model_gateway.app as gateway_app
 import model_gateway.model_helpers as model_helpers
+import model_gateway.route_helpers as route_helpers
 from model_gateway import startup_canary
 from model_gateway import telemetry_helpers
 from model_library.base import (
@@ -24,37 +25,32 @@ from model_library.base import (
     LLMConfig,
     TextInput,
     TokenRetryParams,
+    TranscriptionMetadata,
+    TranscriptionResult,
     dump_gateway_config,
 )
 from model_library.register_models import get_model_registry
+from tests.unit.model_gateway._support import HEADERS, _load_json, _make_client
 
 
-def _load_json(value: Any) -> Any:
-    try:
-        return json.loads(value)
-    except (json.JSONDecodeError, TypeError) as exc:
-        raise AssertionError(f"Expected valid JSON: {exc}") from exc
+def _transcription_body(**overrides: object) -> dict[str, object]:
+    body: dict[str, object] = {
+        "model": "openai/gpt-4o-transcribe",
+        "name": "clip.wav",
+        "mime": "audio/wav",
+        "content_base64": base64.b64encode(b"RIFF-test").decode(),
+        "config": {},
+    }
+    body.update(overrides)
+    return body
 
 
-def _make_client(*, client: tuple[str, int] = ("testclient", 50000)):
-    from model_gateway import main
-
-    class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = json.dumps({"test": "sk-test"})
-        MODEL_GATEWAY_HMAC_SECRET = "test-secret"
-
-        def get(self, name: str, default: str = "") -> str:
-            return getattr(self, name, default)
-
-        def unset(self, key: str):
-            pass
-
-    with patch.object(gateway_app, "model_library_settings", ServerSettings()):
-        app = main.create_app()
-        return TestClient(app, client=client)
-
-
-HEADERS = {"Authorization": "Bearer sk-test"}
+def _post_transcription(client: TestClient, **overrides: object) -> httpx.Response:
+    return client.post(
+        "/audio/transcriptions",
+        json=_transcription_body(**overrides),
+        headers=HEADERS,
+    )
 
 
 def test_query_result_response_body_renames_history_to_signed_history():
@@ -118,23 +114,49 @@ def test_provider_operation_responses_require_success_xor_error(
         cls(error=error, **{payload_field: payload_value})
 
 
-def test_llm_config_telemetry_attributes_keeps_arbitrary_safe_provider_config_keys():
-    attrs = telemetry_helpers.llm_config_telemetry_attributes(  # pyright: ignore[reportPrivateUsage]
-        {
-            "provider_config": {
-                "new_boolean": True,
-                "new_limit": 3,
-                "new_mode": "fast",
-                "prompt": "raw prompt",
-                "api_key": "secret",
-                "nested": {"value": "not scalar"},
-            }
-        }
-    )
-
-    assert attrs == {
-        "llm.config.provider_config": '{"api_key":"<redacted>","nested":{"value":"not scalar"},"new_boolean":true,"new_limit":3,"new_mode":"fast","prompt":"raw prompt"}'
+def test_llm_config_telemetry_attributes_keeps_json_and_adds_safe_scalars():
+    provider_config = {
+        "empty_string": "",
+        "false_boolean": False,
+        "new_boolean": True,
+        "new_float": 0.5,
+        "new_limit": 3,
+        "new_mode": "fast",
+        "zero_float": 0.0,
+        "zero_integer": 0,
+        "none_value": None,
+        "prompt": "raw prompt",
+        "api_key": "secret",
+        "nested": {"value": "not scalar"},
+        "values": ["not", "scalar"],
     }
+
+    attrs = telemetry_helpers.llm_config_telemetry_attributes(  # pyright: ignore[reportPrivateUsage]
+        {"provider_config": provider_config}
+    )
+    provider_config_json = attrs.pop("llm.config.provider_config")
+    retained_provider_config = _load_json(provider_config_json)
+
+    assert retained_provider_config == {
+        **provider_config,
+        "api_key": "<redacted>",
+    }
+    assert retained_provider_config["false_boolean"] is False
+    assert type(retained_provider_config["zero_integer"]) is int
+    assert type(retained_provider_config["zero_float"]) is float
+    assert attrs == {
+        "llm.config.provider_config.empty_string": "",
+        "llm.config.provider_config.false_boolean": False,
+        "llm.config.provider_config.new_boolean": True,
+        "llm.config.provider_config.new_float": 0.5,
+        "llm.config.provider_config.new_limit": 3,
+        "llm.config.provider_config.new_mode": "fast",
+        "llm.config.provider_config.zero_float": 0.0,
+        "llm.config.provider_config.zero_integer": 0,
+    }
+    assert attrs["llm.config.provider_config.false_boolean"] is False
+    assert type(attrs["llm.config.provider_config.zero_integer"]) is int
+    assert type(attrs["llm.config.provider_config.zero_float"]) is float
 
 
 def test_query_telemetry_buckets_custom_endpoint_without_raw_url():
@@ -269,7 +291,7 @@ def test_create_app_requires_gateway_keys_and_hmac_secret(
     ):
         main.create_app()
 
-    client = _make_client()
+    client = _make_client(runtime_role="query")
     resp = client.get("/health/ready")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
@@ -289,11 +311,18 @@ def test_lifespan_survives_malformed_otel_env():
         def unset(self, key: str):
             pass
 
+    class FakeRedis:
+        async def aclose(self) -> None:
+            return None
+
+    fake_redis = FakeRedis()
+    rate_limit_monitor = MagicMock(spec=["start", "close", "check_health"])
     telemetry.shutdown_telemetry()
     with (
         patch.dict(
             os.environ,
             {
+                "REDIS_URL": "redis://localhost:6379/0",
                 "GATEWAY_OTEL_ENABLED": "true",
                 "OTEL_EXPORTER_OTLP_TIMEOUT": "not-a-float",
             },
@@ -301,6 +330,9 @@ def test_lifespan_survives_malformed_otel_env():
         ),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
+        patch.object(gateway_app.async_redis, "from_url", return_value=fake_redis),
+        patch.object(gateway_app, "set_redis_client"),
+        patch.object(gateway_app, "RateLimitMonitor", return_value=rate_limit_monitor),
     ):
         app = main.create_app()
         with TestClient(app) as client:
@@ -400,7 +432,7 @@ async def test_startup_canary_fails_without_signed_history():
 
 
 def test_health_ready_waits_for_enabled_startup_canary():
-    client = _make_client()
+    client = _make_client(runtime_role="query")
     cast(Any, client.app).state.startup_canary = {
         "enabled": True,
         "status": "pending",
@@ -441,12 +473,25 @@ def test_lifespan_loads_model_registry_at_startup():
         def unset(self, key: str):
             pass
 
+    class FakeRedis:
+        async def aclose(self) -> None:
+            return None
+
+    fake_redis = FakeRedis()
+    rate_limit_monitor = MagicMock(spec=["start", "close", "check_health"])
     with (
-        patch.dict(os.environ, {}, clear=True),
+        patch.dict(
+            os.environ,
+            {"REDIS_URL": "redis://localhost:6379/0"},
+            clear=True,
+        ),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
         patch.object(
             gateway_app, "get_model_names", return_value=["openai/gpt-4o"]
         ) as mock_get_model_names,
+        patch.object(gateway_app.async_redis, "from_url", return_value=fake_redis),
+        patch.object(gateway_app, "set_redis_client"),
+        patch.object(gateway_app, "RateLimitMonitor", return_value=rate_limit_monitor),
     ):
         app = main.create_app()
         with TestClient(app):
@@ -457,19 +502,149 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     client = _make_client()
     assert client.get("/registry").status_code == 401
 
-    config = get_model_registry()["openai/gpt-4o"]
+    registry = get_model_registry()
+    transcribe = registry["openai/gpt-4o-transcribe"].model_copy(deep=True)
+    transcribe.rate_limit = None
+    configs = {
+        "openai/gpt-4o": registry["openai/gpt-4o"],
+        "openai/gpt-4o-transcribe": transcribe,
+    }
     with patch(
         "model_gateway.routes.models.get_model_registry",
-        return_value={config.full_key: config},
+        return_value=configs,
     ):
         resp = client.get("/registry", headers=HEADERS)
 
     assert resp.status_code == 200
-    response_config = resp.json()["models"][config.full_key]
-    assert response_config["full_key"] == config.full_key
-    assert response_config[
-        "provider_properties"
-    ] == config.provider_properties.model_dump(mode="json")
+    models = resp.json()["models"]
+    response_config = models["openai/gpt-4o"]
+    assert response_config["full_key"] == "openai/gpt-4o"
+    assert response_config["provider_properties"] == configs[
+        "openai/gpt-4o"
+    ].provider_properties.model_dump(mode="json")
+    assert "transcription" not in models["openai/gpt-4o-transcribe"]["supports"]
+    assert "country" not in response_config
+    assert "rate_limit" not in response_config
+    assert "supports_rate_limit_monitoring" not in response_config
+
+    with patch(
+        "model_gateway.routes.models.get_model_registry",
+        return_value=configs,
+    ):
+        full_resp = client.get(
+            "/registry?include_excluded_fields=true",
+            headers=HEADERS,
+        )
+
+    assert full_resp.status_code == 200
+    full_models = full_resp.json()["models"]
+    expected_rate_limit = None
+    assert full_models["openai/gpt-4o-transcribe"]["supports"]["transcription"] is True
+    assert "rate_limit" not in full_models["openai/gpt-4o-transcribe"]
+    assert full_models["openai/gpt-4o"]["country"] == configs["openai/gpt-4o"].country
+    assert full_models["openai/gpt-4o"].get("rate_limit") == expected_rate_limit
+    assert (
+        full_models["openai/gpt-4o"]["supports_rate_limit_monitoring"]
+        is configs["openai/gpt-4o"].supports_rate_limit_monitoring
+    )
+
+
+def test_registry_snapshot_can_exclude_same_provider_alternative_keys():
+    client = _make_client()
+
+    canonical = get_model_registry()["openai/gpt-4o"].model_copy(deep=True)
+    canonical.alternative_keys = ["openai/gpt-4o-alias", "azure/gpt-4o"]
+    same_provider_alternative = canonical.model_copy(
+        update={"full_key": "openai/gpt-4o-alias", "slug": "openai_gpt-4o-alias"}
+    )
+    cross_provider_alternative = canonical.model_copy(
+        update={
+            "full_key": "azure/gpt-4o",
+            "slug": "azure_gpt-4o",
+            "provider_name": "azure",
+            "provider_endpoint": "gpt-4o",
+            "alternative_keys": [],
+        }
+    )
+    registry = {
+        canonical.full_key: canonical,
+        same_provider_alternative.full_key: same_provider_alternative,
+        cross_provider_alternative.full_key: cross_provider_alternative,
+    }
+
+    with patch(
+        "model_gateway.routes.models.get_model_registry",
+        return_value=registry,
+    ):
+        full = client.get("/registry", headers=HEADERS)
+        filtered = client.get(
+            "/registry", params={"include_alt_keys": "false"}, headers=HEADERS
+        )
+
+    assert full.status_code == 200
+    assert set(full.json()["models"]) == set(registry)
+    assert filtered.status_code == 200
+    assert set(filtered.json()["models"]) == {
+        "openai/gpt-4o",
+        "azure/gpt-4o",
+    }
+
+
+def test_registry_snapshot_include_deprecated_serves_retired_entries():
+    client = _make_client()
+
+    registry = get_model_registry()
+    active = {"openai/gpt-4o": registry["openai/gpt-4o"]}
+    retired = registry["openai/gpt-4o"].model_copy(
+        update={
+            "full_key": "retired/model",
+            "slug": "retired_model",
+            "provider_name": "retired",
+            "alternative_keys": ["retired/model-alias"],
+        }
+    )
+    retired_alternative = retired.model_copy(
+        update={"full_key": "retired/model-alias", "slug": "retired_model-alias"}
+    )
+
+    with (
+        patch(
+            "model_gateway.routes.models.get_model_registry",
+            return_value=active,
+        ),
+        patch(
+            "model_gateway.routes.models.get_deprecated_model_registry",
+            return_value={
+                "openai/gpt-4o": registry["openai/gpt-4o-transcribe"],
+                retired.full_key: retired,
+                retired_alternative.full_key: retired_alternative,
+            },
+        ) as mock_deprecated,
+    ):
+        default = client.get("/registry", headers=HEADERS)
+        included = client.get(
+            "/registry", params={"include_deprecated": "true"}, headers=HEADERS
+        )
+        filtered = client.get(
+            "/registry",
+            params={"include_deprecated": "true", "include_alt_keys": "false"},
+            headers=HEADERS,
+        )
+
+    assert default.status_code == 200
+    assert "retired/model" not in default.json()["models"]
+    assert mock_deprecated.call_count == 2
+
+    assert included.status_code == 200
+    models = included.json()["models"]
+    assert models["retired/model"]["full_key"] == "retired/model"
+    assert "retired/model-alias" in models
+    # Active entries win over retired ones sharing a key.
+    assert models["openai/gpt-4o"]["full_key"] == "openai/gpt-4o"
+
+    assert filtered.status_code == 200
+    assert "retired/model" in filtered.json()["models"]
+    assert "retired/model-alias" not in filtered.json()["models"]
 
 
 def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
@@ -486,6 +661,9 @@ def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
     )
 
     class FakeLLM:
+        async def ensure_resolved_token_retry(self, params, resolved):
+            seen["resolved_retry_limit"] = resolved.limit
+
         async def count_tokens(self, inputs, *, tools, **kwargs):
             seen["inputs"] = inputs
             seen["tools"] = tools
@@ -513,6 +691,11 @@ def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
             }
         ],
         "config": {"max_tokens": 7},
+        "token_retry_params": {
+            "input_modifier": 1,
+            "output_modifier": 1,
+            "limit": 1000,
+        },
     }
     assert client.post("/tokens/count", json=token_body).status_code == 401
 
@@ -532,6 +715,7 @@ def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
     assert seen_inputs[1].text == "count this"
     assert len(cast(list[object], seen["tools"])) == 1
     assert seen["kwargs"] == {}
+    assert seen["resolved_retry_limit"] == 1000
 
 
 def test_token_count_is_not_rejected_by_query_capacity_limit():
@@ -600,16 +784,6 @@ def test_token_count_rejects_malformed_raw_history_with_400():
     assert error_attrs["gateway.error.code"] == "hmac_verification_failed"
     assert error_attrs["gateway.error.phase"] == "restore_history"
     assert error_attrs["http.response.status_code"] == 400
-
-
-def test_rate_limit_endpoint_is_token_retry_only():
-    client = _make_client()
-
-    rate_body = {"model": "openai/gpt-4o", "config": {}}
-    assert client.post("/rate-limit", json=rate_body).status_code == 401
-    rate_resp = client.post("/rate-limit", headers=HEADERS, json=rate_body)
-    assert rate_resp.status_code == 501
-    assert rate_resp.json() == {"detail": "Gateway token retry use only"}
 
 
 def test_token_retry_status_requires_auth_and_returns_redis_status():
@@ -704,7 +878,13 @@ def test_lifespan_starts_and_closes_usage_ledger():
 
     fake_ledger = FakeUsageLedger()
     with (
-        patch.dict(os.environ, {"GATEWAY_STARTUP_CANARY_ENABLED": "false"}),
+        patch.dict(
+            os.environ,
+            {
+                "GATEWAY_RUNTIME_ROLE": "query",
+                "GATEWAY_STARTUP_CANARY_ENABLED": "false",
+            },
+        ),
         patch.object(
             gateway_app, "create_usage_ledger_from_env", return_value=fake_ledger
         ),
@@ -756,6 +936,7 @@ def test_lifespan_close_continues_after_usage_ledger_close_failure():
         patch.dict(
             os.environ,
             {
+                "GATEWAY_RUNTIME_ROLE": "query",
                 "GATEWAY_STARTUP_CANARY_ENABLED": "false",
                 "REDIS_URL": "redis://localhost:6379/0",
             },
@@ -780,6 +961,78 @@ def test_lifespan_close_continues_after_usage_ledger_close_failure():
     mock_shutdown_telemetry.assert_called_once_with()
 
 
+def test_lifespan_flushes_delivery_metrics_after_telemetry_shutdown():
+    from model_gateway import main
+
+    class ServerSettings:
+        MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
+        MODEL_GATEWAY_HMAC_SECRET = "test-secret"
+
+        def get(self, name: str, default: str = "") -> str:
+            return getattr(self, name, default)
+
+        def unset(self, key: str):
+            pass
+
+    events: list[str] = []
+    handler = MagicMock()
+
+    class FakeRedis:
+        async def aclose(self) -> None:
+            return None
+
+    fake_redis = FakeRedis()
+    rate_limit_monitor = MagicMock(spec=["start", "close", "check_health"])
+
+    async def publish_until_stopped(stop_event, publishers=()):
+        _ = publishers
+        await stop_event.wait()
+        events.append("final_flush")
+
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "GATEWAY_STARTUP_CANARY_ENABLED": "false",
+                "REDIS_URL": "redis://localhost:6379/0",
+            },
+        ),
+        patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
+        patch.object(gateway_app, "model_library_settings", ServerSettings()),
+        patch.object(gateway_app.async_redis, "from_url", return_value=fake_redis),
+        patch.object(gateway_app, "set_redis_client"),
+        patch.object(gateway_app, "RateLimitMonitor", return_value=rate_limit_monitor),
+        patch.object(
+            gateway_app,
+            "install_telemetry_delivery_metric_handler",
+            return_value=handler,
+        ),
+        patch.object(gateway_app.telemetry, "configure_telemetry"),
+        patch.object(
+            gateway_app.telemetry,
+            "shutdown_telemetry",
+            side_effect=lambda: events.append("telemetry_shutdown"),
+        ),
+        patch.object(
+            gateway_app,
+            "remove_telemetry_delivery_metric_handler",
+            side_effect=lambda removed: events.append(
+                "handler_removed" if removed is handler else "wrong_handler"
+            ),
+        ),
+        patch.object(
+            gateway_app,
+            "publish_metrics_periodically",
+            side_effect=publish_until_stopped,
+        ),
+    ):
+        app = main.create_app()
+        with TestClient(app):
+            pass
+
+    assert events == ["telemetry_shutdown", "handler_removed", "final_flush"]
+
+
 def test_lifespan_closes_owned_redis_client():
     from model_gateway import main
 
@@ -800,12 +1053,17 @@ def test_lifespan_closes_owned_redis_client():
             self.closed = True
 
     fake_redis = FakeRedis()
+    rate_limit_monitor = MagicMock(spec=["start", "close", "check_health"])
     with (
-        patch.dict(os.environ, {"REDIS_URL": "redis://localhost:6379/0"}),
+        patch.dict(
+            os.environ,
+            {"REDIS_URL": "redis://localhost:6379/0"},
+        ),
         patch.object(
             gateway_app.async_redis, "from_url", return_value=fake_redis
         ) as mock_from_url,
         patch.object(gateway_app, "set_redis_client") as mock_set_redis_client,
+        patch.object(gateway_app, "RateLimitMonitor", return_value=rate_limit_monitor),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
     ):
         app = main.create_app()
@@ -1274,6 +1532,7 @@ def test_query_provider_error_returns_200_error_envelope_with_searchable_phase()
     with (
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
         patch.object(gateway_app.telemetry, "record_exception") as record_exception,
+        patch.object(route_helpers, "emit_model_error") as emit_model_error,
     ):
         resp = client.post(
             "/query",
@@ -1295,6 +1554,8 @@ def test_query_provider_error_returns_200_error_envelope_with_searchable_phase()
             "exception_type": "RuntimeError",
         }
     }
+    emit_model_error.assert_called_once()
+    assert emit_model_error.call_args.kwargs["error_code"] == "provider_error"
     record_exception.assert_called_once()
     captured_exc = record_exception.call_args.args[0]
     assert str(captured_exc) == "Provider call failed"
@@ -1306,6 +1567,76 @@ def test_query_provider_error_returns_200_error_envelope_with_searchable_phase()
     assert error_attrs["gateway.provider_error.exception_type"] == "RuntimeError"
     assert error_attrs["http.response.status_code"] == 200
     assert "gateway.provider_error.status_code" not in error_attrs
+
+
+def test_query_returned_provider_error_records_model_error():
+    from model_gateway.types import ProviderError
+
+    class FakeLLM:
+        async def query(self, inputs, **kwargs):
+            return ProviderError(
+                message="OpenAI rate limit",
+                provider="openai",
+                exception_type="RuntimeError",
+            )
+
+    client = _make_client()
+    with (
+        patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+        patch.object(gateway_app.telemetry, "record_exception") as record_exception,
+        patch.object(gateway_app.telemetry, "set_status_error") as set_status_error,
+        patch.object(gateway_app.telemetry, "add_event") as add_event,
+        patch.object(route_helpers, "record_gateway_phase") as record_gateway_phase,
+        patch.object(route_helpers, "emit_model_error") as emit_model_error,
+    ):
+        resp = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+                "run_id": "run-a",
+                "question_id": "q-a",
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "error": {
+            "type": "ProviderError",
+            "message": "OpenAI rate limit",
+            "provider": "openai",
+            "exception_type": "RuntimeError",
+        }
+    }
+    provider_phase_calls = [
+        call
+        for call in record_gateway_phase.call_args_list
+        if call.kwargs["phase"] == "provider_call"
+    ]
+    assert len(provider_phase_calls) == 1
+    provider_phase = provider_phase_calls[0].kwargs
+    assert provider_phase["operation"] == "query"
+    assert provider_phase["provider"] == "openai"
+    assert provider_phase["outcome"] == "error"
+    assert provider_phase["latency_ms"] >= 0
+
+    error_events = [
+        call
+        for call in add_event.call_args_list
+        if call.args and call.args[0] == "gateway.query.error"
+    ]
+    assert len(error_events) == 1
+    error_attrs = error_events[0].args[1]
+    assert error_attrs["gateway.error.code"] == "provider_error"
+    assert error_attrs["gateway.error.provider"] == "openai"
+    assert error_attrs["gateway.error.phase"] == "provider_call"
+    assert error_attrs["http.response.status_code"] == 200
+    assert error_attrs["gateway.provider_error.exception_type"] == "RuntimeError"
+    set_status_error.assert_called_once_with("provider_error")
+    emit_model_error.assert_called_once()
+    assert emit_model_error.call_args.kwargs["error_code"] == "provider_error"
+    record_exception.assert_not_called()
 
 
 def test_query_provider_operation_deadline_precedes_outer_timeouts():
@@ -1679,6 +2010,7 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
             patch.dict(
                 os.environ,
                 {
+                    "GATEWAY_RUNTIME_ROLE": "query",
                     "GATEWAY_OTEL_ENABLED": "true",
                     "SENTRY_DSN": "https://public@example.com/1",
                     "SENTRY_OTLP_COLLECTOR_URL": f"http://127.0.0.1:{server.server_port}",
@@ -1958,6 +2290,64 @@ def test_upload_file_invalid_base64_returns_client_error():
     assert error_attrs["http.response.status_code"] == 400
 
 
+def test_audio_transcription_success_decodes_audio_and_returns_metadata():
+    seen: dict[str, object] = {}
+
+    class FakeLLM:
+        async def transcribe_audio(
+            self,
+            *,
+            name: str,
+            mime: str,
+            audio: bytes,
+            language: str | None,
+        ) -> TranscriptionResult:
+            seen.update(
+                {"name": name, "mime": mime, "audio": audio, "language": language}
+            )
+            return TranscriptionResult(
+                text="hello world",
+                metadata=TranscriptionMetadata(
+                    audio_bytes=len(audio),
+                    request_duration_seconds=0.25,
+                    input_tokens=12,
+                    output_tokens=3,
+                    total_tokens=15,
+                ),
+            )
+
+    client = _make_client()
+    with patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()):
+        resp = _post_transcription(client, language="en")
+
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "text": "hello world",
+        "metadata": {
+            "audio_bytes": 9,
+            "request_duration_seconds": 0.25,
+            "input_tokens": 12,
+            "output_tokens": 3,
+            "total_tokens": 15,
+        },
+    }
+    assert seen == {
+        "name": "clip.wav",
+        "mime": "audio/wav",
+        "audio": b"RIFF-test",
+        "language": "en",
+    }
+
+
+def test_audio_transcription_invalid_base64_returns_client_error():
+    client = _make_client()
+
+    resp = _post_transcription(client, content_base64="not base64!")
+
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "invalid_request"
+
+
 @pytest.mark.parametrize(
     ("endpoint", "request_body", "expected_message"),
     [
@@ -2002,6 +2392,11 @@ def test_upload_file_invalid_base64_returns_client_error():
             },
             "OpenAI moderation failed",
         ),
+        (
+            "/audio/transcriptions",
+            _transcription_body(),
+            "OpenAI transcription failed",
+        ),
     ],
 )
 def test_provider_operation_provider_errors_return_200_error_envelope(
@@ -2027,6 +2422,16 @@ def test_provider_operation_provider_errors_return_200_error_envelope(
 
         async def moderate_content(self, text: str) -> dict[str, Any]:
             raise RuntimeError("OpenAI moderation failed")
+
+        async def transcribe_audio(
+            self,
+            *,
+            name: str,
+            mime: str,
+            audio: bytes,
+            language: str | None,
+        ) -> dict[str, object]:
+            raise RuntimeError("OpenAI transcription failed")
 
     client = _make_client()
     with (

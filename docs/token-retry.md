@@ -6,7 +6,7 @@ Rate-limit-aware request scheduling and multi-run coordination via Redis.
 
 The system has two layers:
 
-1. **Token Retry** (`TokenRetrier`) — Tracks available tokens in Redis, queues requests by priority, deducts estimated tokens before each API call, and refunds the difference after. Background loops refill tokens at the provider's rate and correct drift using response headers.
+1. **Token Retry** (`TokenRetrier`) — Tracks available tokens in Redis, queues requests by priority, deducts estimated tokens before each API call, and refunds the difference after. When a resolved RPM policy is supplied, the same atomic admission also records managed provider requests in a rolling Redis ledger. Background loops refill tokens at the provider's rate and correct drift using response headers.
 
 2. **Benchmark Queue** (`benchmark_queue`) — FIFO queue with a token-health concurrency window per model. One run starts first; additional FIFO runs become active heads as observed token health stays high. Supports early release (slot freed when all requests are dispatched, stragglers finish at high priority).
 
@@ -26,7 +26,7 @@ App calls model.query(input, run_id=..., question_id=...)
   → run_id / question_id auto-generated if not provided
   → creates TokenRetrier(run_id, question_id) per request
   → _pre_function: lpos check (lazy, cached) to detect if queued
-  → _pre_function: wait for tokens, deduct, enter inflight
+  → _pre_function: atomically admit request + deduct tokens, enter inflight
   → _query_impl: call provider API
   → _post_function: refund difference, update dynamic estimate
   → cleanup: remove from inflight
@@ -58,10 +58,10 @@ Benchmark runs wrap all of the above:
 
 `LLM.init_token_retry(params)` → `TokenRetrier.init_remaining_tokens(...)`:
 
-1. Sets token count in Redis via `INIT_TOKENS_LUA` (only resets if limit changed or key missing)
-2. Stores config hash (limit, tokens_per_second, burst_limit, initialized_at)
-3. Checks `task:active`: unchanged duplicate config starts in standby; changed config replaces a same-process loop immediately, but a different process keeps ownership until it releases the key or its TTL expires
-4. Spawns one `background_loops` coroutine (in `background.py`) managing a TaskGroup with:
+1. When a TPM limit is configured: sets token count in Redis via `INIT_TOKENS_LUA` (only resets if limit changed or key missing)
+2. Stores config hash: `limit`/`tokens_per_second`/`burst_limit`/`initialized_at` only when TPM is configured, `requests_per_minute`/`request_window_seconds` only when RPM is configured
+3. Checks `task:active` (TPM only): unchanged duplicate config starts in standby; changed config replaces a same-process loop immediately, but a different process keeps ownership until it releases the key or its TTL expires
+4. When TPM is configured, spawns one `background_loops` coroutine (in `background.py`) managing a TaskGroup with:
    - **Refill loop** — every 1s, adds `limit / limit_refresh_seconds` tokens (capped at limit) and updates 2-minute and 15-second EWMAs of remaining-token ratio for queue admission
    - **Correction loop** — every 20s, reads provider rate-limit headers and corrects token count down if it's too high
    - **Cleanup/reaper loop** — every 30s, reaps stale entries and checks idle shutdown
@@ -104,7 +104,8 @@ On each retry, priority increments by 1 (toward MIN). A request waits if any low
 5. Register in priority ZSET at current level, store initial per-question metadata hash
 6. Loop until tokens deducted (jittered wait: `uniform(TOKEN_WAIT_TIME * 0.5, TOKEN_WAIT_TIME * 1.5)`):
    - Check for lower-priority waiters → if found, sleep and retry
-   - Attempt atomic deduction via `DEDUCT_TOKENS_LUA`. The same Redis operation checks the run metadata outcome, token count, and burst limit.
+   - Attempt atomic admission via `ADMIT_REQUEST_LUA`. It reads `requests_per_minute` from the config hash and checks the terminal run outcome, rolling request ledger, token count, and burst limit before changing either budget. RPM is checked ahead of TPM, and its slot is recorded only once TPM also clears, so a request that passes RPM but fails TPM leaves the window untouched. A model with no configured RPM skips the window and pays only the token cost.
+   - Redis `TIME` is authoritative across Gateway workers. Recent admissions are retained for 61 seconds (the provider minute plus a one-second buffer between Redis admission and the expected provider dispatch).
    - If the run outcome is `cancelled` or `failed`, return the terminal sentinel without deducting tokens and raise `BenchmarkRunTerminated` (`NoRetryException`).
    - On success: add to per-run inflight ZSET, register run in active_runs SET, add `question_id` to per-run dispatched SET, store per-question metadata hash
 7. Finally (shielded): remove from priority ZSET; if no deduction occurred, delete metadata hash
@@ -115,8 +116,11 @@ Missing run metadata and non-terminal outcomes retain the normal deduction path.
 
 - On success → `_post_function`
 - On `RetryException` → increment priority, wait, re-enter `_pre_function`
-- On `ImmediateRetryException` → retry immediately (no priority change)
+- On `ImmediateRetryException` → retry immediately without another TPM or RPM admission
 - Finally (shielded): remove from per-run inflight ZSET; if empty, remove run from active_runs; delete per-question metadata hash
+
+RPM covers requests dispatched through the retrier. Provider calls made outside it
+(such as a native `count_tokens`) are not charged against the rolling window.
 
 **\_post_function** (token adjustment):
 
@@ -151,6 +155,8 @@ For agentic runs where one question makes multiple sequential `model.query()` ca
 
 Each model has a Redis LIST of run IDs plus an `active_heads` ZSET. Runs may dispatch only after they are admitted into `active_heads`. The active-head window starts at 1, scales up by 1 when current and 2-minute EWMA remaining-token ratios are both at least 25%, and scales down by 1 only after current and 15-second EWMA health stay below 15% for 15 seconds. Active runs are never revoked; downscale happens by attrition as active heads finish or early-release.
 
+RPM-only policies have no token, token-limit, or EWMA health keys (nothing in `init_remaining_tokens` writes them), so `CONTROL_AND_ADMIT_HEADS_LUA` never observes the health needed to scale up. The active-head window for an RPM-only identity therefore stays at its default of 1 — benchmark runs for that identity remain serial. This is a known current limitation, not a correctness issue with RPM admission itself; a queue-scaling policy for RPM-only is a candidate follow-up.
+
 ### Slot Lifecycle
 
 ```text
@@ -174,7 +180,7 @@ benchmark_queue(model_key, run_id, total_requests=N, early_release=True):
 
 ### Terminal Outcome Boundary
 
-Admission release writes `outcome` to the model-scoped run metadata hash before queue cleanup. That write is the terminal linearization point: a later `DEDUCT_TOKENS_LUA` call sees `cancelled` or `failed` and exits without changing the token or burst counters. The retrier then raises `BenchmarkRunTerminated`, so it does not continue waiting or call the provider, and its existing shielded cleanup removes priority and per-question metadata.
+Admission release writes `outcome` to the model-scoped run metadata hash before queue cleanup. That write is the terminal linearization point: a later `ADMIT_REQUEST_LUA` call sees `cancelled` or `failed` and exits without changing the token or burst counters. The retrier then raises `BenchmarkRunTerminated`, so it does not continue waiting or call the provider, and its existing shielded cleanup removes priority and per-question metadata.
 
 A deduction that completes immediately before the terminal write is already admitted and cannot be revoked by Redis; cancellation of already-running request tasks remains responsible for that boundary. Reacquiring the run initializes a new attempt and clears the previous `outcome`, so retained 24-hour history does not permanently block the run ID.
 
@@ -227,6 +233,7 @@ Prefix: `model_library` (`KEY_PREFIX`). Identifiers: `{P}` = provider.model_name
 | `{P}:{K}:tokens:remaining_ratio_ewma_2m`         | STRING | 300s   | 2-minute EWMA used with current ratio for scale-up                  |
 | `{P}:{K}:tokens:remaining_ratio_ewma_15s`        | STRING | 300s   | 15-second EWMA used with current ratio for scale-down               |
 | `{P}:{K}:tokens:remaining_ratio_ewma_updated_at` | STRING | 300s   | Last EWMA update timestamp                                          |
+| `{P}:{K}:requests`                               | ZSET   | 122s   | Rolling managed requests (Redis-time score, unique member)          |
 
 ### Inflight Tracking
 
@@ -265,7 +272,7 @@ All scripts run atomically in Redis (no interleaving with other commands).
 
 | Script                        | Keys                           | Args                               | Returns                                                              | Purpose                                                    |
 | ----------------------------- | ------------------------------ | ---------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `DEDUCT_TOKENS_LUA`           | token_key, burst_key, optional run_meta_key | required_tokens, burst_limit | -1 terminal / 0 unavailable / 1 deducted | Atomically reject cancelled/failed runs or check-and-deduct tokens with the burst cap |
+| `ADMIT_REQUEST_LUA`           | token, burst, request log, config hash, optional run metadata | required tokens, burst limit, unique member, window, TTL | admitted, blocked reason, retry delay, RPM | Atomically admit a request and deduct TPM; RPM is checked first and committed last, so neither budget changes when the other is blocked, and a nonpositive configured RPM skips the window entirely |
 | `REFILL_TOKENS_LUA`           | token_key                      | amount, cap                        | new_count                                                            | Apply positive or negative adjustment, clamped to `[0, cap]` |
 | `CORRECT_TOKENS_LUA`          | token_key                      | adjusted                           | [corrected, current, adjusted]                                       | Correct down from headers                                  |
 | `ADJUST_RATIO_LUA`            | ratio_key                      | observed, alpha                    | [old, new]                                                           | EMA ratio update                                           |
@@ -283,17 +290,22 @@ All scripts run atomically in Redis (no interleaving with other commands).
 `TokenRetryParams` is caller-owned configuration. Gateway or the local model
 resolves it before token retry starts.
 
-| Field                   | Type          | Default  | Purpose                                |
-| ----------------------- | ------------- | -------- | -------------------------------------- |
-| `input_modifier`        | float         | required | Scale factor for input token estimate  |
-| `output_modifier`       | float         | required | Scale factor for output token estimate |
-| `use_dynamic_estimate`  | bool          | True     | Enable EMA ratio learning              |
-| `limit`                 | `int \| None` | public: required | Provider token limit override          |
-| `limit_refresh_seconds` | `60`          | 60       | Fixed provider limit refresh interval  |
+| Field                   | Type          | Default          | Purpose                                 |
+| ----------------------- | ------------- | ---------------- | --------------------------------------- |
+| `input_modifier`        | float         | required         | Scale factor for input token estimate   |
+| `output_modifier`       | float         | required         | Scale factor for output token estimate  |
+| `use_dynamic_estimate`  | bool          | True             | Enable EMA ratio learning               |
+| `limit`                 | `int \| None` | None             | Provider TPM override                   |
+| `requests_per_minute`   | `int \| None` | None             | Provider RPM override                   |
+| `limit_refresh_seconds` | `60`          | 60               | Fixed provider limit refresh interval   |
 
-Public callers must provide `limit`.
-`ResolvedTokenRetryParams` is internal. It contains the concrete `limit` and
-fixed `limit_refresh_seconds=60`; only the retrier consumes it.
+TPM and RPM are independent dimensions; either can be `None`. Public callers
+must provide at least one of `limit` or `requests_per_minute` explicitly —
+resolution rejects a policy with neither.
+`ResolvedTokenRetryParams` is internal. It contains an optional positive TPM
+`limit` (`None` for RPM-only policies), fixed `limit_refresh_seconds=60`, and
+an optional positive `requests_per_minute`; at least one of the two is always
+present. Only resolution and the retrier consume it.
 
 ### Constants (token.py)
 
@@ -307,6 +319,7 @@ fixed `limit_refresh_seconds=60`; only the retrier consumes it.
 | `INFLIGHT_MAX_AGE`     | 7200s  | Reap stale inflight entries after this                               |
 | `REAP_INTERVAL`        | 30s    | How often cleanup/reaper loop runs                                   |
 | `DYNAMIC_ESTIMATE_TTL` | 86400s | Expire dynamic estimate ratios for inactive runs                     |
+| `REQUEST_WINDOW_SECONDS` | 61s | Rolling provider minute plus a one-second admission-to-dispatch buffer |
 
 ### Constants (background.py)
 
@@ -366,12 +379,24 @@ async with gateway_benchmark_admission(
 
 `gateway_benchmark_admission` uses the Gateway
 `/benchmark-runs/acquire`, `/wait`, `/renew`, and `/release` endpoints. Gateway
-resolves caller parameters to an effective limit, initializes the provider
-model's token retrier with internal resolved parameters, persists the effective
-limit with admission state, and returns it to
-the client. Query and admission requests use the same resolver. Gateway owns all
+resolves caller parameters to an effective TPM and/or RPM limit — either may
+be `None`, but resolution rejects a policy with neither. It initializes the
+provider model's token retrier with those resolved parameters, persists
+whichever effective TPM limit is present (or its absence, for RPM-only) with
+admission state, and returns it to the client. Query and admission requests use
+the same resolver. Gateway owns all
 token, queue, and background-loop Redis state; clients do not configure Redis or
 inspect those keys.
+
+RPM enforcement is cooperative: requests intended to count toward the shared
+limit must use the same Gateway/Redis admission path. During rollout, all Gateway
+workers must run the RPM-aware version before relying on the limit; older workers
+neither resolve nor record request starts.
+
+Gateway clients also forward the same public retry intent on `/tokens/count` so
+audited native provider counters use the resolved policy. Deploy RPM-aware
+Gateway servers before clients that send this additive field: older servers use
+a strict request schema and reject it.
 
 ### Agent integration
 

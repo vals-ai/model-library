@@ -1,0 +1,44 @@
+base-config:
+  company: Ant Group
+  country: China
+  open_source: true
+  supports:
+    images: false
+    audio: false
+    videos: false
+    files: false
+    batch: false
+    temperature: true
+    tools: true
+    output_schema: true
+  properties:
+    reasoning_model: true
+
+ling-3-models:
+  ant/ling-3.0-flash-2607:
+    label: Ling 3.0 Flash
+    release_date: 2026-07-23
+    properties:
+      # 262,144 total, shared between input and output. Ant recommends
+      # max_tokens=262144, but that is only reachable with an empty prompt since
+      # "the actual maximum output is constrained by the remaining context
+      # window". 131,072 leaves an equal budget for input.
+      context_window: 262_144
+      max_tokens: 131_072
+    costs_per_million_token:
+      input: 0.075
+      output: 0.22
+      cache:
+        read: 0.015
+    # The "2607" suffix is a year-month checkpoint tag, not a release date.
+    default_parameters:
+      # Ant's recommended values, which are also the API's documented defaults.
+      temperature: 0.6
+      top_p: 0.95
+      top_k: 20
+    alternative_keys:
+      - ant/ling-3.0-flash-2607-non-thinking:
+          properties:
+            reasoning_model: false
+            # Non-thinking mode caps generation at 32,768.
+            max_tokens: 32_768

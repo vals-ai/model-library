@@ -3,18 +3,23 @@ import concurrent.futures
 import sys
 import time
 from collections import defaultdict
-from typing import Any, Coroutine
+from typing import Any, Awaitable, Coroutine
 
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 from rich.tree import Tree
 
+from examples.data.audio import speech_webm
 from examples.setup import setup
-from model_library.base import LLMConfig
+from model_library.base import LLM, LLMConfig
 from model_library.exceptions import exception_message
-from model_library.register_models import get_model_registry
-from model_library.registry_utils import get_registry_model
+from model_library.register_models import ModelConfig, get_model_registry
+from model_library.registry_utils import (
+    CLI_ONLY_PROVIDERS,
+    get_registry_config,
+    get_registry_model,
+)
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import retry_decorator
 
@@ -23,8 +28,16 @@ MAX_RETRIES = 5
 DEFAULT_TIMEOUT = 240
 DEEP_RESEARCH_TIMEOUT = 600  # 10 minutes for deep research models
 
+# models resolved at runtime rather than from the compiled registry
+DYNAMIC_MODELS = ["openrouter/openrouter/free"]
+
 # registry
-model_registry = get_model_registry()
+model_registry = dict(get_model_registry())
+for dynamic_key in DYNAMIC_MODELS:
+    dynamic_config = get_registry_config(dynamic_key)
+    if dynamic_config is None:
+        raise Exception(f"Could not resolve {dynamic_key}")
+    model_registry[dynamic_key] = dynamic_config
 providers = {cfg.provider_name for cfg in model_registry.values()}
 
 # concurrency
@@ -45,6 +58,9 @@ completed_models: dict[str, int] = defaultdict(int)  # provider -> success count
 failed_model_names: dict[str, list[str]] = defaultdict(
     list
 )  # provider -> [failed_model_names]
+skipped_model_names: dict[str, list[str]] = defaultdict(
+    list
+)  # provider -> [cli_only_model_names]
 
 
 def create_dashboard(total: int, completed_count: int) -> Table:
@@ -88,15 +104,24 @@ def create_dashboard(total: int, completed_count: int) -> Table:
 
     # completed
     completed_providers = [
-        (p, completed_models[p], len(failed_model_names[p]))
+        (
+            p,
+            completed_models[p],
+            len(failed_model_names[p]),
+            len(skipped_model_names[p]),
+        )
         for p in sorted(providers)
-        if completed_models[p] > 0 or len(failed_model_names[p]) > 0
+        if completed_models[p] > 0
+        or len(failed_model_names[p]) > 0
+        or len(skipped_model_names[p]) > 0
     ]
     if completed_providers:
         table.add_row("\n[bold]Completed:[/bold]")
-        for provider, completed, failed in completed_providers:
-            total = completed + failed
+        for provider, completed, failed, skipped in completed_providers:
+            total = completed + failed + skipped
             result_line = f"[cyan]{provider}[/cyan]: {total} models, {failed} failed"
+            if skipped > 0:
+                result_line += f", {skipped} skipped (cli-only)"
             table.add_row(result_line)
 
             if failed > 0 and failed_model_names[provider]:
@@ -136,7 +161,9 @@ async def process_model(model_str: str, provider_name: str):
             running_models[provider_name][model_str] = (start_time, 0)
 
             # handle blocking providers
-            def query():
+            def query() -> Awaitable[Any]:
+                if model.supports_transcription:
+                    return _run_transcription_smoke(model)
                 return (
                     asyncio.get_event_loop().run_in_executor(
                         sync_executor,
@@ -150,10 +177,11 @@ async def process_model(model_str: str, provider_name: str):
 
             output = await asyncio.wait_for(query(), timeout=timeout)
 
-            if not output.metadata.total_input_tokens:
-                raise Exception("No in tokens")
-            if not output.metadata.total_output_tokens:
-                raise Exception("No out tokens")
+            if not model.supports_transcription:
+                if not output.metadata.total_input_tokens:
+                    raise Exception("No in tokens")
+                if not output.metadata.total_output_tokens:
+                    raise Exception("No out tokens")
 
             completed_models[provider_name] += 1
 
@@ -162,6 +190,19 @@ async def process_model(model_str: str, provider_name: str):
         exceptions.append((model_str, e))
     finally:
         running_models[provider_name].pop(model_str, None)
+
+
+async def _run_transcription_smoke(model: LLM) -> None:
+    audio = speech_webm()
+    result = await model.transcribe_audio(
+        name="smoke.webm",
+        mime="audio/webm",
+        audio=audio,
+    )
+    if "paris" not in result.text.lower():
+        raise Exception(f"Unexpected transcription: {result.text!r}")
+    if result.metadata.total_tokens is None or result.metadata.cost_usd is None:
+        raise Exception("Missing transcription usage metadata")
 
 
 MODEL_OVERRIDES: list[str] = [
@@ -177,6 +218,34 @@ ERROR_OVERRIDES = [
 ]
 
 
+def select_models(
+    registry: dict[str, ModelConfig], *, research: bool
+) -> tuple[list[str], dict[str, list[str]]]:
+    """Split the registry into models the gateway can invoke and CLI-only skips."""
+    runnable: list[str] = []
+    skipped: dict[str, list[str]] = defaultdict(list)
+
+    for key, config in registry.items():
+        if config.metadata.deprecated:
+            continue
+        if "research" in key and not research:
+            continue
+        if getattr(config.provider_properties, "serverless", True) is False:
+            continue
+        if config.metadata.internal_only:
+            continue
+        if key in ignored_models:
+            continue
+
+        if config.provider_name in CLI_ONLY_PROVIDERS:
+            skipped[config.provider_name].append(key)
+            continue
+
+        runnable.append(key)
+
+    return runnable, skipped
+
+
 async def main():
     import argparse
 
@@ -188,22 +257,13 @@ async def main():
     )
     args = parser.parse_args()
 
-    tasks: list[Coroutine[Any, Any, None]] = []
-    for key, config in model_registry.items():
-        if config.metadata.deprecated:
-            continue
-        if "research" in key and not args.research:
-            continue
-        if getattr(config.provider_properties, "serverless", True) is False:
-            continue
-        if config.provider_name == "cursor":
-            continue
-        if config.metadata.internal_only:
-            continue
-        if key in ignored_models:
-            continue
+    runnable, skipped = select_models(model_registry, research=args.research)
+    for provider_name, model_names in skipped.items():
+        skipped_model_names[provider_name].extend(model_names)
 
-        tasks.append(process_model(key, config.provider_name))
+    tasks: list[Coroutine[Any, Any, None]] = [
+        process_model(key, model_registry[key].provider_name) for key in runnable
+    ]
 
     # start tasks
     running_tasks = [asyncio.create_task(task) for task in tasks]
@@ -239,7 +299,9 @@ async def main():
             model_override = next((o for o in MODEL_OVERRIDES if o in model_str), None)
 
             override_text = ""
-            if error_override or model_override:
+            if not model_registry[model_str].supports.transcription and (
+                error_override or model_override
+            ):
                 reason = error_override or model_override
                 override_text = f" [green][OVERRIDDEN | {reason}][/green]"
                 override_count += 1

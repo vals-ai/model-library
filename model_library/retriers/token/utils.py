@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from collections.abc import AsyncIterator, Mapping
 from typing import Any, Protocol, cast
@@ -10,7 +11,7 @@ from redis.asyncio import Redis
 from redis.asyncio.client import Pipeline
 from redis.asyncio.lock import Lock
 
-from model_library.base.output import RateLimit
+from model_library.rate_limits import RateLimit
 from model_library.utils import SecondsMetric, ValsModel
 
 
@@ -76,7 +77,6 @@ KEY_PREFIX = "model_library"
 DEFAULT_STATUS_QUEUE_ENTRY_LIMIT = 100
 STATUS_PIPELINE_COMMAND_LIMIT = 200
 StatusPipelineCommand = tuple[str, tuple[Any, ...], dict[str, Any]]
-
 # Redis key schema: see docs/token-retry.md
 
 redis_client: AsyncRedisClient = None  # pyright: ignore[reportAssignmentType]
@@ -85,6 +85,25 @@ redis_client: AsyncRedisClient = None  # pyright: ignore[reportAssignmentType]
 def set_redis_client(client: Redis):
     global redis_client
     redis_client = client  # pyright: ignore[reportAssignmentType]
+
+
+def serialize_last_header(rate_limit: RateLimit) -> dict[str, str]:
+    return {
+        "rate_limit": json.dumps(
+            rate_limit.model_dump(
+                exclude_none=True,
+                exclude_computed_fields=True,
+                mode="json",
+            )
+        )
+    }
+
+
+def deserialize_last_header(raw: Mapping[str, str]) -> RateLimit | None:
+    payload = raw.get("rate_limit")
+    if payload is None:
+        return None
+    return RateLimit.model_validate_json(payload)
 
 
 async def validate_redis_client(
@@ -114,9 +133,7 @@ async def _execute_status_pipeline(commands: list[StatusPipelineCommand]) -> lis
     Redis. Chunked pipelines keep reads fast while limiting connection fan-out.
     """
     results: list[Any] = []
-    chunks = 0
     for start in range(0, len(commands), STATUS_PIPELINE_COMMAND_LIMIT):
-        chunks += 1
         pipe = redis_client.pipeline(transaction=False)
         for method_name, args, kwargs in commands[
             start : start + STATUS_PIPELINE_COMMAND_LIMIT
@@ -633,34 +650,7 @@ async def _get_status_for_token_key(
     ]
 
     # reconstruct RateLimit from last_header hash
-    last_header: RateLimit | None = None
-    if last_header_raw:
-
-        def _parse_optional_int(v: str | None) -> int | None:
-            return int(v) if v is not None and v != "None" else None
-
-        last_header = RateLimit(
-            request_limit=_parse_optional_int(last_header_raw.get("request_limit")),
-            request_remaining=_parse_optional_int(
-                last_header_raw.get("request_remaining")
-            ),
-            token_limit=_parse_optional_int(last_header_raw.get("token_limit")),
-            token_limit_input=_parse_optional_int(
-                last_header_raw.get("token_limit_input")
-            ),
-            token_limit_output=_parse_optional_int(
-                last_header_raw.get("token_limit_output")
-            ),
-            token_remaining=_parse_optional_int(last_header_raw.get("token_remaining")),
-            token_remaining_input=_parse_optional_int(
-                last_header_raw.get("token_remaining_input")
-            ),
-            token_remaining_output=_parse_optional_int(
-                last_header_raw.get("token_remaining_output")
-            ),
-            unix_timestamp=float(last_header_raw["unix_timestamp"]),
-            raw=None,
-        )
+    last_header = deserialize_last_header(last_header_raw)
 
     status = TokenRetryStatus(
         token_key=token_key,

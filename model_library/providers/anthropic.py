@@ -1,11 +1,11 @@
-import datetime
 import io
 import logging
-import time
 from typing import Any, Literal, Sequence, cast
 
 from anthropic import APIConnectionError, AsyncAnthropic, transform_schema
+from anthropic.types.beta import BetaContentBlock
 from anthropic.types.beta.beta_fallback_block import BetaFallbackBlock
+from anthropic.types.beta.beta_text_block import BetaTextBlock
 from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
 from anthropic.types.beta.beta_web_search_tool_result_block import (
     BetaWebSearchToolResultBlock,
@@ -34,7 +34,6 @@ from model_library.base import (
     QueryResultCost,
     QueryResultExtras,
     QueryResultMetadata,
-    RateLimit,
     RawInput,
     RawResponse,
     SystemInput,
@@ -47,9 +46,18 @@ from model_library.base import (
 from model_library.base.input import normalize_query_input
 from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.output.result import ProviderToolEvent
+from model_library.rate_limits import (
+    RateLimit,
+    RateLimitCapacity,
+    RequestRateLimit,
+    TokenRateLimit,
+    rate_limit_header_int,
+    rate_limit_timestamp_from_headers,
+)
 from model_library.exceptions import (
     BadInputError,
     ImmediateRetryException,
+    ModelNoOutputError,
     NoMatchingToolCallError,
     UnexpectedSystemInputError,
     handle_empty_response,
@@ -64,6 +72,10 @@ from model_library.utils import (
 ANTHROPIC_FILES_BETA = "files-api-2025-04-14"
 ANTHROPIC_INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14"
 ANTHROPIC_SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-06-01"
+ANTHROPIC_TASK_BUDGET_BETA = "task-budgets-2026-03-13"
+# Anthropic rejects an assistant message whose final block is thinking, so a turn that ran out of
+# tokens mid-thought is replayed with this block appended.
+TRUNCATED_THINKING_MARKER = "[response cut off at the output token limit]"
 
 
 def _json_safe_anthropic_value(value: Any) -> Any:
@@ -85,6 +97,26 @@ def _json_safe_anthropic_value(value: Any) -> Any:
         sequence_value = cast(list[object] | tuple[object, ...], value)
         return [_json_safe_anthropic_value(item) for item in sequence_value]
     return str(value)
+
+
+def _strip_fallback_blocks(
+    messages: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Drop `fallback` blocks, which only the beta messages endpoint accepts."""
+    stripped: list[dict[str, Any]] = []
+    for message in messages:
+        content: Any = message.get("content")
+        if isinstance(content, list):
+            message = {
+                **message,
+                "content": [
+                    block
+                    for block in cast(list[Any], content)
+                    if not isinstance(block, BetaFallbackBlock)
+                ],
+            }
+        stripped.append(message)
+    return stripped
 
 
 def map_anthropic_finish_reason(
@@ -114,6 +146,8 @@ def map_anthropic_finish_reason(
 class AnthropicConfig(ProviderConfig):
     supports_compute_effort: bool = False
     supports_auto_thinking: bool = False
+    task_budget_tokens: int | None = None
+    returns_thinking_truncated_turns: bool = False
     fallback_models: list[str] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -145,7 +179,6 @@ class AnthropicBatchMixin(LLMBatchMixin):
 
         Format: {"custom_id": str, "params": {...message params...}}
         """
-        # Build the message body using the parent model's build_body method
         tools = cast(list[ToolDefinition], kwargs.pop("tools", []))
         body = await self._root.build_body(
             input, tools=tools, output_schema=output_schema, **kwargs
@@ -483,8 +516,25 @@ class AnthropicModel(LLM):
 
             match item:
                 case RawResponse():
-                    content = cast(ParsedBetaMessage, item.response).content
-                    new_input.append({"role": "assistant", "content": content})
+                    assistant_content: list[BetaContentBlock] = list(
+                        cast(ParsedBetaMessage, item.response).content
+                    )
+                    if (
+                        self.provider_config.returns_thinking_truncated_turns
+                        and assistant_content
+                        and assistant_content[-1].type
+                        in ("thinking", "redacted_thinking")
+                    ):
+                        assistant_content.append(
+                            BetaTextBlock(
+                                type="text",
+                                text=TRUNCATED_THINKING_MARKER,
+                                citations=None,
+                            )
+                        )
+                    new_input.append(
+                        {"role": "assistant", "content": assistant_content}
+                    )
                 case RawInput():
                     new_input.append(item.input)
                 case SystemInput():
@@ -694,8 +744,16 @@ class AnthropicModel(LLM):
 
         # effort controls compute allocation for text, tool calls, and thinking. Opus-4.5+
         # use instead of reasoning_effort with auto_thinking
+        output_config: dict[str, Any] = {}
         if self.provider_config.supports_compute_effort and self.compute_effort:
-            body["output_config"] = {"effort": self.compute_effort}
+            output_config["effort"] = self.compute_effort
+        if self.provider_config.task_budget_tokens:
+            output_config["task_budget"] = {
+                "type": "tokens",
+                "total": self.provider_config.task_budget_tokens,
+            }
+        if output_config:
+            body["output_config"] = output_config
 
         # Thinking models don't support temperature: https://docs.claude.com/en/docs/build-with-claude/extended-thinking#feature-compatibility
         if self.supports_temperature and not self.reasoning:
@@ -760,6 +818,12 @@ class AnthropicModel(LLM):
             betas = [ANTHROPIC_FILES_BETA]
             if not self.provider_config.supports_auto_thinking:
                 betas.append(ANTHROPIC_INTERLEAVED_THINKING_BETA)
+
+            request_output_config = cast(
+                dict[str, Any], body.get("output_config") or {}
+            )
+            if request_output_config.get("task_budget"):
+                betas.append(ANTHROPIC_TASK_BUDGET_BETA)
 
             fallback_models = self._fallback_models_for_request()
             if fallback_models:
@@ -893,8 +957,34 @@ class AnthropicModel(LLM):
             or bool(tool_calls)
             or bool(provider_tool_events)
         )
-        if not has_observed_output:
+        truncated_inside_thinking = (
+            mapped_finish_reason.reason == FinishReason.MAX_TOKENS
+            and bool(message.content)
+            and message.content[-1].type in ("thinking", "redacted_thinking")
+        )
+        # A turn cut off inside thinking can carry no text and, when the cut lands before any
+        # thinking is emitted, no reasoning either; keys that continue such turns keep it.
+        continuable = (
+            self.provider_config.returns_thinking_truncated_turns
+            and truncated_inside_thinking
+        )
+        if not has_observed_output and not continuable:
             handle_empty_response(mapped_finish_reason, {"raw": str(message)})
+
+        # Anthropic rejects an assistant message whose final block is thinking, so a turn that
+        # ran out of tokens mid-thought cannot be replayed in a later request.
+        if truncated_inside_thinking and not (
+            self.provider_config.returns_thinking_truncated_turns
+        ):
+            raise ModelNoOutputError(
+                str(
+                    {
+                        "reason": "response truncated inside a thinking block",
+                        "finish_reason": mapped_finish_reason.raw,
+                        "response_id": message.id,
+                    }
+                )
+            )
 
         usage = message.usage
         output_token_details = getattr(usage, "output_tokens_details", None)
@@ -938,7 +1028,7 @@ class AnthropicModel(LLM):
         )
 
     @override
-    async def get_rate_limit(self) -> RateLimit:
+    async def get_rate_limit(self) -> RateLimit | None:
         response = await self.get_client().messages.with_raw_response.create(
             max_tokens=1,
             messages=[
@@ -951,24 +1041,48 @@ class AnthropicModel(LLM):
         )
         headers = response.headers
 
-        server_time_str = headers.get("date")
-        if server_time_str:
-            server_time = datetime.datetime.strptime(
-                server_time_str, "%a, %d %b %Y %H:%M:%S GMT"
-            ).replace(tzinfo=datetime.timezone.utc)
-            timestamp = server_time.timestamp()
-        else:
-            timestamp = time.time()
+        def capacity(name: str) -> RateLimitCapacity | None:
+            prefix = f"anthropic-ratelimit-{name}"
+            limit = rate_limit_header_int(headers, f"{prefix}-limit")
+            if limit is None:
+                return None
+            return RateLimitCapacity(
+                limit=limit,
+                remaining=rate_limit_header_int(headers, f"{prefix}-remaining"),
+            )
 
+        request_capacity = capacity("requests")
+        input_capacity = capacity("input-tokens")
+        output_capacity = capacity("output-tokens")
+        total_capacity = (
+            capacity("tokens")
+            if input_capacity is None or output_capacity is None
+            else None
+        )
+
+        requests = (
+            (
+                RequestRateLimit(
+                    limit=request_capacity.limit,
+                    remaining=request_capacity.remaining,
+                ),
+            )
+            if request_capacity is not None
+            else ()
+        )
+        if total_capacity is not None:
+            tokens = TokenRateLimit(total=total_capacity)
+        elif input_capacity is not None and output_capacity is not None:
+            tokens = TokenRateLimit(input=input_capacity, output=output_capacity)
+        else:
+            tokens = None
+
+        if not requests and tokens is None:
+            return None
         return RateLimit(
-            unix_timestamp=timestamp,
-            raw=headers,
-            request_limit=int(headers.get("anthropic-ratelimit-requests-limit", 0)),
-            request_remaining=int(
-                headers.get("anthropic-ratelimit-requests-remaining", 0)
-            ),
-            token_limit=int(response.headers["anthropic-ratelimit-tokens-limit"]),
-            token_remaining=int(headers.get("anthropic-ratelimit-tokens-remaining", 0)),
+            requests=requests,
+            tokens=tokens,
+            unix_timestamp=rate_limit_timestamp_from_headers(headers),
         )
 
     @override
@@ -1012,6 +1126,11 @@ class AnthropicModel(LLM):
             # Remove fields not supported by count_tokens endpoint
             body.pop("max_tokens", None)
             body.pop("temperature", None)
+            output_config = cast(dict[str, Any], body.get("output_config") or {})
+            output_config.pop("task_budget", None)
+            if not output_config:
+                body.pop("output_config", None)
+            body["messages"] = _strip_fallback_blocks(cast(list[Any], body["messages"]))
 
             client = self.get_client()
             response = await client.messages.count_tokens(**body)

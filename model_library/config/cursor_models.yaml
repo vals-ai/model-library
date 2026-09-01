@@ -1,5 +1,6 @@
 base-config:
   company: Cursor
+  country: United States
   open_source: false
   documentation_url: https://cursor.com/docs/models/cursor-composer-2-5
   supports:

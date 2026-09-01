@@ -17,10 +17,19 @@ from model_library.base import (
     ToolDefinition,
 )
 from model_library.base.query_ids import PromptCacheKeyMode
+from model_library.rate_limits import (
+    RateLimit,
+    RateLimitCapacity,
+    RequestRateLimit,
+    TokenRateLimit,
+    rate_limit_timestamp_from_headers,
+)
 from model_library.providers.openai import OpenAIConfig
 from model_library.register_models import register_provider
+from model_library.utils import default_httpx_client
 
 _KIMI_K3_PUBLIC_MODEL = "kimi-k3"
+_DEFAULT_ENDPOINT = "https://api.moonshot.ai/v1/"
 
 
 class KimiConfig(ProviderConfig):
@@ -45,12 +54,13 @@ class KimiModel(DelegateOnly):
 
         # https://platform.moonshot.ai/docs/guide/migrating-from-openai-to-kimi#about-api-compatibility
         config = config or LLMConfig()
+        default_api_key = SecretStr(self._default_api_key())
+        resolved_endpoint = config.custom_endpoint or _DEFAULT_ENDPOINT
+        resolved_api_key = config.custom_api_key or default_api_key
         delegate_config = config.model_copy(
             update={
-                "custom_endpoint": config.custom_endpoint
-                or "https://api.moonshot.ai/v1/",
-                "custom_api_key": config.custom_api_key
-                or SecretStr(self._default_api_key()),
+                "custom_endpoint": resolved_endpoint,
+                "custom_api_key": resolved_api_key,
                 "provider_config": OpenAIConfig(
                     parallel_tool_calls=self.provider_config.parallel_tool_calls,
                     prompt_cache_key=self.provider_config.prompt_cache_key,
@@ -67,6 +77,41 @@ class KimiModel(DelegateOnly):
     def _default_api_key(self) -> str:
         api_key = model_library_settings.KIMI_API_KEY
         return api_key
+
+    @override
+    async def get_rate_limit(self) -> RateLimit | None:
+        if self._has_custom_connection:
+            return None
+
+        async with default_httpx_client() as client:
+            response = await client.get(
+                f"{_DEFAULT_ENDPOINT.rstrip('/')}/users/me",
+                headers={"Authorization": f"Bearer {self._default_api_key()}"},
+            )
+            response.raise_for_status()
+            payload = response.json()
+
+            organization = payload["data"]["organization"]
+            requests: list[RequestRateLimit] = []
+            if (
+                request_limit := organization.get("max_request_per_minute")
+            ) is not None:
+                requests.append(RequestRateLimit(limit=request_limit))
+            if (concurrency := organization.get("max_concurrency")) is not None:
+                requests.append(RequestRateLimit(limit=concurrency, mode="concurrency"))
+            token_limit = organization.get("max_token_per_minute")
+            if not requests and token_limit is None:
+                return None
+            return RateLimit(
+                requests=tuple(requests),
+                tokens=(
+                    TokenRateLimit(total=RateLimitCapacity(limit=token_limit))
+                    if token_limit is not None
+                    else None
+                ),
+                scope="shared",
+                unix_timestamp=rate_limit_timestamp_from_headers(response.headers),
+            )
 
     @override
     def _get_extra_body(self) -> dict[str, Any]:

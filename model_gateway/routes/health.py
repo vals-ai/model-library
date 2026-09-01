@@ -5,6 +5,7 @@ from typing import cast
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from model_gateway.rate_limit_monitor.manager import RateLimitMonitor
 from model_library.retriers.token import utils as token_utils
 
 
@@ -13,7 +14,7 @@ def register_health_routes(
     *,
     valid_keys: set[str],
     hmac_secret: bytes,
-    require_redis: bool = False,
+    control_enabled: bool = False,
 ) -> None:
     @app.get("/health/live")
     async def health_live():
@@ -25,7 +26,7 @@ def register_health_routes(
             return JSONResponse(status_code=503, content={"status": "no gateway keys"})
         if not hmac_secret:
             return JSONResponse(status_code=503, content={"status": "no hmac secret"})
-        if require_redis:
+        if control_enabled:
             try:
                 await token_utils.validate_redis_client()
                 await token_utils.redis_client.ping()
@@ -34,6 +35,8 @@ def register_health_routes(
                     status_code=503,
                     content={"status": "redis unavailable"},
                 )
+            monitor = cast(RateLimitMonitor, app.state.rate_limit_monitor)
+            monitor.check_health()
         canary = cast(dict[str, str | bool], app.state.startup_canary)
         if canary["enabled"] and canary["status"] != "passed":
             return JSONResponse(

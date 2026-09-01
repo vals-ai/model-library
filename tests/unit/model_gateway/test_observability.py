@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 from typing import Any, cast
-from unittest.mock import patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from starlette.testclient import TestClient
@@ -19,6 +19,7 @@ from model_gateway.observability import (
     log_gateway_event,
     request_log_fields_from_scope,
     runtime_snapshot,
+    worker_id,
 )
 
 
@@ -559,19 +560,30 @@ def test_create_app_lifespan_logs_process_lifecycle(
         async def close(self) -> None:
             return None
 
+    class FakeRedis:
+        async def aclose(self) -> None:
+            return None
+
+    fake_redis = FakeRedis()
+    rate_limit_monitor = MagicMock(spec=["start", "close", "check_health"])
     _enable_gateway_observability_logs(caplog)
     with (
         patch.dict(
             "os.environ",
             {
                 "GATEWAY_STARTUP_CANARY_ENABLED": "false",
-                "REDIS_URL": "",
+                "REDIS_URL": "redis://localhost:6379/0",
                 "GATEWAY_STAGE": "preview-test",
                 "GATEWAY_SERVICE": "gateway-test",
             },
         ),
+        patch("model_gateway.observability.socket.gethostname", return_value="task-a"),
+        patch("model_gateway.observability.os.getpid", return_value=123),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
+        patch.object(gateway_app.async_redis, "from_url", return_value=fake_redis),
+        patch.object(gateway_app, "set_redis_client"),
+        patch.object(gateway_app, "RateLimitMonitor", return_value=rate_limit_monitor),
         patch.object(
             gateway_app, "create_usage_ledger_from_env", return_value=FakeUsageLedger()
         ),
@@ -591,7 +603,7 @@ def test_create_app_lifespan_logs_process_lifecycle(
     assert events.count("gateway.process.shutdown_done") == 1
     assert all(record["stage"] == "preview-test" for record in lifecycle_records)
     assert all(record["service"] == "gateway-test" for record in lifecycle_records)
-    assert all(isinstance(record["worker_id"], int) for record in lifecycle_records)
+    assert all(record["worker_id"] == "task-a:123" for record in lifecycle_records)
     assert all("runtime" not in record for record in lifecycle_records)
 
 
@@ -608,6 +620,16 @@ def test_runtime_snapshot_contains_safe_runtime_keys():
         "rss_bytes",
     }
     assert all(isinstance(value, int) for value in snapshot.values())
+
+
+def test_worker_id_combines_container_hostname_and_process_id(monkeypatch):
+    monkeypatch.setattr(
+        "model_gateway.observability.socket.gethostname", lambda: "task-a"
+    )
+    monkeypatch.setattr("model_gateway.observability.os.getpid", lambda: 123)
+
+    assert worker_id() == "task-a:123"
+    assert worker_id(pid=456) == "task-a:456"
 
 
 @pytest.mark.asyncio
@@ -647,7 +669,12 @@ async def test_record_runtime_current_samples_loop_lag_before_snapshot(
 
 def test_record_runtime_metrics_emits_low_cardinality_metrics(
     capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        "model_gateway.observability.socket.gethostname", lambda: "task-a"
+    )
+
     metrics.record_runtime(
         {
             "pid": 123,
@@ -663,7 +690,7 @@ def test_record_runtime_metrics_emits_low_cardinality_metrics(
 
     assert metrics.flush_metrics() == 1
     [payload] = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
-    assert payload["WorkerId"] == "123"
+    assert payload["WorkerId"] == "task-a:123"
     assert payload["ThreadCount"] == 2
     assert payload["AsyncioTaskCount"] == 3
     assert payload["OpenFileDescriptors"] == 4

@@ -19,4 +19,64 @@ base-config:
 llama-models:
   base-config:
     company: Meta
+    country: United States
+
+# NVIDIA open-weights models
+nemotron-models:
+  base-config:
+    company: NVIDIA
+    country: United States
+    documentation_url: https://research.nvidia.com/labs/nemotron/Nemotron-3-Ultra/
+
+  together/nemotron-3-ultra-550b-a55b:
+    label: Nemotron 3 Ultra
+    provider_endpoint: nvidia/nemotron-3-ultra-550b-a55b
+    release_date: 2026-06-04
+    properties:
+      context_window: 512_288
+      max_tokens: 128_000
+      reasoning_model: true
+    supports:
+      images: false
+      tools: true
+      temperature: true
+      output_schema: true
+    default_parameters:
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.6
+      output: 3.6
+      cache:
+        read: 0.2
+
+# Meta Superintelligence Labs open-weights models
+muse-models:
+  base-config:
+    company: Meta
+    country: United States
+    documentation_url: https://dev.meta.ai/docs/muse-glimmer
+
+  together/muse-glimmer-30b:
+    label: Muse Glimmer 30B
+    provider_endpoint: meta-models/Muse-Glimmer-30B
+    release_date: 2026-08-10
+    properties:
+      context_window: 131_072
+      max_tokens: 32_768
+      reasoning_model: true
+    supports:
+      images: true
+      tools: true
+      temperature: true
+      output_schema: true
+    costs_per_million_token:
+      input: 0.35
+      output: 1.5
+      cache:
+        read: 0.04
+    default_parameters:
+      # Meta's recommended sampling settings for Muse Glimmer.
+      temperature: 1.0
+      top_p: 0.95
+      top_k: 64
 

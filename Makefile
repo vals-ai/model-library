@@ -13,6 +13,7 @@ help:
 	@echo "  make deprecate        Deprecate a model"
 	@echo "  make run-models       Run all models"
 	@echo "  make browse_models    Interactively browse models and their configurations"
+	@echo "  make gateway          Run the local gateway and Redis with Docker Compose"
 PYTHON_VERSION ?= 3.11
 
 install:
@@ -59,5 +60,5 @@ run-models: venv_check
 browse_models: venv_check
 	@uv run python -m scripts.browse_models
 
-gateway: venv_check
-	@uv run uvicorn model_gateway.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+gateway:
+	@docker compose up --build

@@ -15,6 +15,8 @@ CLIENT_KEY = ("provider", "model")
 TOKEN_KEY = f"{KEY_PREFIX}:provider:model:tokens"
 BURST_KEY = f"{TOKEN_KEY}:burst"
 PRIORITY_KEY = f"{KEY_PREFIX}:provider:model:priority:0"
+REQUEST_KEY = f"{KEY_PREFIX}:provider:model:requests"
+CONFIG_KEY = f"{TOKEN_KEY}:config"
 
 
 @pytest.fixture
@@ -51,25 +53,35 @@ async def test_terminal_outcome_atomically_prevents_token_deduction(
     await redis.hset(run_meta_key, mapping={"outcome": outcome})
 
     result = await redis.eval(
-        token_module.DEDUCT_TOKENS_LUA,
-        3,
+        token_module.ADMIT_REQUEST_LUA,
+        5,
         TOKEN_KEY,
         BURST_KEY,
+        REQUEST_KEY,
+        CONFIG_KEY,
         run_meta_key,
         600,
         800,
+        "terminal-member",
+        token_module.REQUEST_WINDOW_MILLISECONDS,
+        token_module.REQUEST_LOG_TTL_MILLISECONDS,
     )
 
-    assert result == -1
+    assert result == [0, 4, 0, 0]
     assert await redis.get(TOKEN_KEY) == "1000"
     assert not await redis.exists(BURST_KEY)
 
 
 @pytest.mark.parametrize("outcome", ["cancelled", "failed"])
+@pytest.mark.parametrize("requests_per_minute", [None, "1"])
 async def test_terminal_waiter_exits_without_retry_and_cleans_metadata(
-    redis, outcome: str
+    redis,
+    outcome: str,
+    requests_per_minute: str | None,
 ):
     await initialize_tokens(redis)
+    if requests_per_minute is not None:
+        await redis.hset(CONFIG_KEY, "requests_per_minute", requests_per_minute)
     run_id = f"run-{outcome}"
     question_id = "terminal"
     run_meta_key = f"{KEY_PREFIX}:provider:model:benchmark:run:{run_id}"
@@ -84,6 +96,8 @@ async def test_terminal_waiter_exits_without_retry_and_cleans_metadata(
     provider.assert_not_awaited()
     assert type(exc_info.value).__name__ == "BenchmarkRunTerminated"
     assert await redis.get(TOKEN_KEY) == "1000"
+    assert not await redis.exists(BURST_KEY)
+    assert await redis.zcard(REQUEST_KEY) == 0
     assert await redis.zscore(PRIORITY_KEY, f"{run_id}:{question_id}") is None
     assert not await redis.exists(question_meta_key)
 

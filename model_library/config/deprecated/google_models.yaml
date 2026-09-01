@@ -1,5 +1,6 @@
 base-config:
   company: Google
+  country: United States
   documentation_url: https://ai.google.dev/gemini-api/docs/models
   open_source: false
   supports:
@@ -24,6 +25,7 @@ deprecated:
 
   google/gemini-3-pro-preview:
     company: Google
+    country: United States
     label: Gemini 3 Pro (11/25)
     release_date: 2025-11-18
     open_source: false
@@ -72,6 +74,7 @@ deprecated:
 
   google/gemini-3.1-flash-lite-preview:
     company: Google
+    country: United States
     label: Gemini 3.1 Flash Lite Preview
     release_date: 2026-03-03
     open_source: false
@@ -110,6 +113,7 @@ deprecated:
 
   google/gemini-2.5-flash-lite-preview-09-2025:
     company: Google
+    country: United States
     label: Gemini 2.5 Flash Lite (9/25) (Nonthinking)
     release_date: 2025-09-25
     open_source: false

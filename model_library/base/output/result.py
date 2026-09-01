@@ -2,7 +2,6 @@
 --- OUTPUT ---
 """
 
-from collections.abc import Generator
 from enum import Enum
 from typing import Any, cast
 
@@ -23,6 +22,7 @@ from model_library.base.output.performance import (
     CompressedQueryResultPerformance,
     compress_query_result_performance,
 )
+from model_library.rate_limits import RateLimit
 from model_library.base.utils import add_optional
 from model_library.utils import SecondsMetric, ValsModel
 
@@ -204,48 +204,6 @@ class QueryResultCost(ValsModel):
             f"{format_cost(self.total)} "
             + f"(uncached input: {format_cost(self.input)} | output: {format_cost(self.output)} | reasoning: {format_cost(self.reasoning)} | cache_read: {format_cost(self.cache_read)} | cache_write: {format_cost(self.cache_write)})"
         )
-
-
-class RateLimit(ValsModel):
-    """Rate limit information"""
-
-    request_limit: int | None = None
-    request_remaining: int | None = None
-
-    token_limit: int | None = None
-    token_limit_input: int | None = None
-    token_limit_output: int | None = None
-
-    token_remaining: int | None = None
-    token_remaining_input: int | None = None
-    token_remaining_output: int | None = None
-
-    unix_timestamp: float
-    raw: Any
-
-    @computed_field
-    @property
-    def token_limit_total(self) -> int:
-        if self.token_limit:
-            return self.token_limit
-        else:
-            return (self.token_limit_input or 0) + (self.token_limit_output or 0)
-
-    @computed_field
-    @property
-    def token_remaining_total(self) -> int:
-        if self.token_remaining:
-            return self.token_remaining
-        else:
-            return (self.token_remaining_input or 0) + (
-                self.token_remaining_output or 0
-            )
-
-    @override
-    def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
-        attrs = vars(self).copy()
-        attrs.pop("raw", None)
-        yield from attrs.items()
 
 
 class QueryResultMetadata(ValsModel):

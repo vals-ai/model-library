@@ -15,6 +15,7 @@ from model_library.providers.delegates.fireworks import FireworksModel
 from model_library.providers.google import GoogleModel
 from model_library.register_models import (
     ModelRegistry,
+    get_deprecated_model_registry,
     get_model_registry,
     get_provider_registry,
     register_provider,
@@ -85,6 +86,12 @@ async def test_registry_is_singleton():
     assert registry1 is registry2
 
 
+def test_deprecated_registry_loads_nullable_costs():
+    config = get_deprecated_model_registry()["poolside/laguna-xs.2"]
+
+    assert config.costs_per_million_token is None
+
+
 async def test_register_provider_decorator():
     """Decorator registers a provider correctly."""
 
@@ -102,6 +109,43 @@ async def test_registry_contains_expected_providers():
     expected = ["openai", "zai", "fireworks", "azure"]
     for name in expected:
         assert name in registry
+
+
+def test_gateway_metadata_helpers_do_not_use_openrouter_fallback(monkeypatch):
+    from model_library import openrouter_registry
+
+    registry_config = get_model_registry()["openai/gpt-4o"]
+    resolver = MagicMock(return_value=registry_config)
+    gateway_settings = MagicMock()
+    gateway_settings.get.side_effect = lambda name, default=None: (
+        "https://gateway.test" if name == "MODEL_GATEWAY_URL" else default
+    )
+    direct_settings = MagicMock()
+    direct_settings.get.side_effect = lambda _name, default=None: default
+    metadata_helpers = [
+        (
+            registry_utils.get_model_cost,
+            registry_config.costs_per_million_token,
+        ),
+        (
+            registry_utils.get_model_input_context_window,
+            registry_utils.get_input_context_window_from_config(registry_config),
+        ),
+    ]
+
+    monkeypatch.setattr(registry_utils, "get_model_registry", lambda: {})
+    monkeypatch.setattr(openrouter_registry, "resolve_openrouter_model", resolver)
+    monkeypatch.setattr(model_library, "model_library_settings", gateway_settings)
+
+    for helper, _expected in metadata_helpers:
+        with pytest.raises(Exception, match="not found in registry"):
+            helper("openrouter/test-model")
+    resolver.assert_not_called()
+
+    monkeypatch.setattr(model_library, "model_library_settings", direct_settings)
+    for helper, expected in metadata_helpers:
+        assert helper("openrouter/test-model") == expected
+    assert resolver.call_count == len(metadata_helpers)
 
 
 def test_gateway_registry_model_skips_provider_resolution(monkeypatch):
@@ -163,6 +207,33 @@ async def test_cli_models_not_instantiable():
         get_registry_model("cursor/composer-2.5")
     with pytest.raises(ValueError, match="Devin CLI"):
         get_registry_model("devin/swe-1-6-fast")
+    with pytest.raises(ValueError, match="Factory CLI"):
+        get_registry_model("factory/router")
+
+
+@pytest.mark.parametrize(
+    ("model_key", "label"),
+    [("devin/adaptive", "Devin Adaptive"), ("factory/router", "Factory Router")],
+)
+def test_agent_router_models_are_publicly_selectable(model_key: str, label: str) -> None:
+    config = get_model_registry()[model_key]
+
+    assert config.label == label
+    assert config.metadata.deprecated is False
+    assert config.metadata.internal_only is False
+    assert config.metadata.available_for_everyone is True
+    assert config.metadata.available_as_evaluator is False
+
+
+@pytest.mark.parametrize("model_key", ["devin/adaptive", "factory/router"])
+def test_agent_router_models_carry_nominal_prices_excluded_from_cost(model_key: str) -> None:
+    config = get_model_registry()[model_key]
+    costs = config.costs_per_million_token
+
+    assert costs is not None
+    assert costs.input == 3.0
+    assert costs.output == 15.0
+    assert config.metadata.ignored_for_cost is True
 
 
 async def test_cursor_cli_model_cost_can_be_recomputed_from_registry():

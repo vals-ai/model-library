@@ -6,6 +6,7 @@ import asyncio
 import json
 import logging
 import os
+import socket
 import threading
 import time
 from collections.abc import Callable, MutableMapping
@@ -28,6 +29,10 @@ class RequestLogFields(TypedDict):
     run_id: str | None
     question_id: str | None
     query_id: str | None
+
+
+def worker_id(*, pid: int | None = None) -> str:
+    return f"{socket.gethostname()}:{os.getpid() if pid is None else pid}"
 
 
 def bounded_text(value: object, *, max_length: int = MAX_ID_LENGTH) -> str | None:
@@ -163,5 +168,5 @@ def log_process_lifecycle(event: str) -> None:
         event,
         service=os.environ.get("GATEWAY_SERVICE", DEFAULT_SERVICE),
         stage=os.environ.get("GATEWAY_STAGE", DEFAULT_STAGE),
-        worker_id=os.getpid(),
+        worker_id=worker_id(),
     )

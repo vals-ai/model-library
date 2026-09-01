@@ -1,5 +1,6 @@
 base-config:
   company: Thinking Machines
+  country: United States
   documentation_url: https://tinker-docs.thinkingmachines.ai/tinker/compatible-apis/openai/
   open_source: true
   supports:

@@ -1,5 +1,7 @@
 base-config:
+  supports_rate_limit_monitoring: true
   company: Fireworks
+  country: United States
   documentation_url: https://fireworks.ai/models
   open_source: false
   supports:
@@ -17,6 +19,7 @@ base-config:
 deepseek-models:
   base-config:
     company: DeepSeek
+    country: China
     open_source: true
     supports:
       images: false
@@ -24,9 +27,26 @@ deepseek-models:
     default_parameters:
       temperature: 1
 
+  fireworks/deepseek-v4-flash-0731:
+    label: DeepSeek V4 Flash 0731
+    release_date: 2026-07-31
+    provider_endpoint: deepseek-v4-flash-0731
+    properties:
+      context_window: 1_000_000
+      max_tokens: 131_072
+      reasoning_model: true
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.14
+      output: 0.28
+      cache:
+        read: 0.028
 openai-models:
   base-config:
     company: OpenAI
+    country: United States
     open_source: true
     supports:
       images: false
@@ -43,34 +63,127 @@ openai-models:
       input: 0.15
       output: 0.60
 
-  fireworks/gpt-oss-20b:
-    label: GPT OSS 20B
-    release_date: 2025-08-05
-    properties:
-      context_window: 128_000
-      max_tokens: 32_768
-      training_cutoff: null
-      reasoning_model: true
-    costs_per_million_token:
-      input: 0.07
-      output: 0.3
-
 kimi-models:
   base-config:
     company: Moonshot AI
+    country: China
     open_source: true
     documentation_url: https://www.kimi.com/
     supports:
       images: false
 
+  fireworks/kimi-k3:
+    label: Kimi K3
+    release_date: 2026-07-19
+    properties:
+      context_window: 1_000_000
+      max_tokens: 131_072
+      reasoning_model: true
+    supports:
+      images: true
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache:
+        read: 0.30
+
+nvidia-models:
+  base-config:
+    company: NVIDIA
+    country: United States
+    open_source: true
+    supports:
+      images: false
+      temperature: true
+  fireworks/nemotron-3-ultra-550b-a55b:
+    label: Nemotron 3 Ultra (Fireworks)
+    release_date: 2026-06-04
+    documentation_url: https://research.nvidia.com/labs/nemotron/Nemotron-3-Ultra/
+    provider_endpoint: nemotron-3-ultra-nvfp4
+    properties:
+      context_window: 262_144
+      max_tokens: 65_536
+      reasoning_model: true
+    supports:
+      tools: true
+      output_schema: true
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.6
+      output: 2.4
+      cache:
+        read: 0.119
+
+
+  fireworks/nemotron-lightning-3p5-30b-a3b:
+    label: Nemotron 3.5 Lightning
+    release_date: 2026-08-11
+    documentation_url: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
+    properties:
+      context_window: 262_144
+      max_tokens: 131_072
+      training_cutoff: "2025-09"
+      reasoning_model: true
+    supports:
+      output_schema: true
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.05
+      output: 0.20
+      cache:
+        read: 0.01
+
+
+qwen-models:
+  base-config:
+    company: Alibaba
+    country: China
+    open_source: false
+    documentation_url: https://fireworks.ai/models/fireworks/qwen3p7-plus
+    supports:
+      images: true
+      temperature: true
+  fireworks/qwen3p7-plus:
+    label: Qwen3.7 Plus
+    release_date: 2026-06-12
+    properties:
+      context_window: 262_144
+      max_tokens: 32_768
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.40
+      output: 1.60
+      cache:
+        read: 0.08
+
 zai-models:
   base-config:
     company: zAI
+    country: China
     open_source: true
     documentation_url: https://docs.z.ai/
     supports:
       images: false
       temperature: true
+  fireworks/glm-5p3:
+    label: GLM 5.3 (Fireworks)
+    release_date: 2026-08-18
+    properties:
+      context_window: 1_000_000
+      max_tokens: 131_072
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.40
+      output: 4.40
+      cache:
+        read: 0.26
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
 
   fireworks/glm-5p2:
     label: GLM 5.2 (Fireworks)
@@ -87,3 +200,8 @@ zai-models:
     default_parameters:
       temperature: 1
       top_p: 0.95
+    alternative_keys:
+      - fireworks/glm-5p2-medium:
+          label: GLM 5.2 (Fireworks, Medium)
+          default_parameters:
+            reasoning_effort: "medium"

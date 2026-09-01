@@ -1,5 +1,6 @@
 base-config:
   company: Amazon
+  country: United States
   open_source: false
   supports:
     images: false

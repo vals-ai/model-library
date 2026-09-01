@@ -1,5 +1,6 @@
 base-config:
   company: Cohere
+  country: Canada
   open_source: false
   documentation_url: https://docs.cohere.com/v2/docs/models
   supports:

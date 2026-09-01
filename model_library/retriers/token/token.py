@@ -2,12 +2,14 @@ import asyncio
 import logging
 import random
 import time
+import uuid
 from contextlib import suppress
 from math import ceil, floor
 from typing import Any, Callable, Coroutine
 
 import model_library.telemetry as telemetry
-from model_library.base.base import QueryResult, RateLimit
+from model_library.base.base import QueryResult
+from model_library.rate_limits import RateLimit
 from model_library.exceptions import NoRetryException, exception_message
 from model_library.retriers.base import BaseRetrier
 from model_library.retriers.token import utils
@@ -36,6 +38,12 @@ DYNAMIC_ESTIMATE_TTL: int = (
 
 BURST_FRACTION: float = 0.8  # max 80% of token limit deducted per second
 
+# Retain admissions for one extra second as a conservative buffer between
+# Redis admission and the expected provider dispatch.
+REQUEST_WINDOW_SECONDS: int = 61
+REQUEST_WINDOW_MILLISECONDS: int = REQUEST_WINDOW_SECONDS * 1000
+REQUEST_LOG_TTL_MILLISECONDS: int = REQUEST_WINDOW_MILLISECONDS * 2
+
 _BACKGROUND_LOOP_TASKS: dict[str, asyncio.Task[None]] = {}
 _BACKGROUND_LOOP_LOCKS: dict[str, asyncio.Lock] = {}
 
@@ -47,31 +55,87 @@ class BenchmarkRunTerminated(NoRetryException):
         super().__init__(f"Benchmark run {run_id} terminated with outcome {outcome}")
 
 
-# Lua: atomic terminal-outcome check and token deduction with a burst cap.
-# KEYS[1] = token key, KEYS[2] = burst key, KEYS[3] = optional benchmark run metadata
-# ARGV[1] = required tokens, ARGV[2] = burst limit
-# Returns -1 for cancelled/failed benchmark runs, 0 when capacity is insufficient, 1 on deduction.
-DEDUCT_TOKENS_LUA = """
-local run_meta_key = KEYS[3]
-if run_meta_key then
+# Lua: atomically admit one provider request and, when required > 0,
+# deduct its pessimistic token estimate. Redis TIME is authoritative across
+# Gateway workers. Returns {admitted, blocked_reason, retry_after_ms, limit},
+# where blocked_reason is 1=tokens, 2=requests, and 4=terminal benchmark run.
+# A nonpositive configured limit leaves the rolling window untouched.
+# KEYS[1] = token key, KEYS[2] = burst key, KEYS[3] = request ZSET,
+# KEYS[4] = config hash, KEYS[5] = optional benchmark run metadata.
+# ARGV[1] = required tokens, ARGV[2] = burst limit, ARGV[3] = unique member,
+# ARGV[4] = rolling window ms, ARGV[5] = request-log TTL ms.
+ADMIT_REQUEST_LUA = """
+local run_meta_key = KEYS[5]
+if run_meta_key and run_meta_key ~= '' then
     local outcome = redis.call('HGET', run_meta_key, 'outcome')
-    if outcome == 'cancelled' or outcome == 'failed' then return -1 end
+    if outcome == 'cancelled' or outcome == 'failed' then
+        return {0, 4, 0, 0}
+    end
+end
+
+-- RPM is checked first so a saturated window is reported as such rather than
+-- being masked by a token shortage, and its slot is only recorded below once
+-- TPM has also cleared. A request that passes RPM but fails TPM therefore
+-- leaves the window untouched and is free to retry.
+local request_limit = tonumber(
+    redis.call('HGET', KEYS[4], 'requests_per_minute') or '0'
+) or 0
+local now_ms = 0
+
+if request_limit > 0 then
+    local now_parts = redis.call('TIME')
+    now_ms = (tonumber(now_parts[1]) * 1000) + math.floor(tonumber(now_parts[2]) / 1000)
+    local cutoff = now_ms - tonumber(ARGV[4])
+    redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', cutoff)
+
+    -- a replayed permit already holds both budgets
+    if redis.call('ZSCORE', KEYS[3], ARGV[3]) then
+        return {1, 0, 0, request_limit}
+    end
+
+    local request_count = tonumber(redis.call('ZCARD', KEYS[3]))
+    if request_count >= request_limit then
+        local oldest = redis.call('ZRANGE', KEYS[3], 0, 0, 'WITHSCORES')
+        local retry_after_ms = 1
+        if oldest[2] then
+            retry_after_ms = math.max(
+                1,
+                math.floor(tonumber(oldest[2]) + tonumber(ARGV[4]) - now_ms)
+            )
+        end
+        return {0, 2, retry_after_ms, request_limit}
+    end
 end
 
 local required = tonumber(ARGV[1])
-local remaining = tonumber(redis.call('GET', KEYS[1]))
-if remaining < required then return 0 end
+if required > 0 then
+    local remaining = tonumber(redis.call('GET', KEYS[1]))
+    if remaining < required then
+        return {0, 1, 0, request_limit}
+    end
 
-local burst_limit = tonumber(ARGV[2])
-local used = tonumber(redis.call('GET', KEYS[2]) or '0')
-if used + required > burst_limit then return 0 end
-
-redis.call('DECRBY', KEYS[1], required)
-redis.call('INCRBY', KEYS[2], required)
-if redis.call('TTL', KEYS[2]) == -1 then
-    redis.call('PEXPIRE', KEYS[2], 1000)
+    local burst_limit = tonumber(ARGV[2])
+    local used = tonumber(redis.call('GET', KEYS[2]) or '0')
+    if used + required > burst_limit then
+        return {0, 1, 0, request_limit}
+    end
 end
-return 1
+
+-- both budgets have room: commit them together
+if required > 0 then
+    redis.call('DECRBY', KEYS[1], required)
+    redis.call('INCRBY', KEYS[2], required)
+    if redis.call('TTL', KEYS[2]) == -1 then
+        redis.call('PEXPIRE', KEYS[2], 1000)
+    end
+end
+
+if request_limit > 0 then
+    redis.call('ZADD', KEYS[3], now_ms, ARGV[3])
+    redis.call('PEXPIRE', KEYS[3], ARGV[5])
+end
+
+return {1, 0, 0, request_limit}
 """
 
 # Lua: atomic refill with cap. Returns new token count.
@@ -159,22 +223,49 @@ class TokenRetrier(BaseRetrier):
         return f"{KEY_PREFIX}:{client_registry_key[0]}:{client_registry_key[1]}:priority:{priority}"
 
     @staticmethod
+    def get_request_key(client_registry_key: tuple[str, str]) -> str:
+        """Get the rolling request-admission log key."""
+        return (
+            f"{KEY_PREFIX}:{client_registry_key[0]}:{client_registry_key[1]}:requests"
+        )
+
+    @staticmethod
     async def init_remaining_tokens(
         client_registry_key: tuple[str, str],
-        limit: int,
+        limit: int | None,
         limit_refresh_seconds: int,
         logger: logging.Logger,
         get_rate_limit_func: Callable[[], Coroutine[Any, Any, RateLimit | None]],
+        requests_per_minute: int | None = None,
     ) -> None:
         """
-        Initialize remaining tokens in storage and start background refill process
-        """
+        Initialize remaining tokens in storage and start background refill process.
 
-        from model_library.retriers.token.background import LoopConfig, background_loops
+        A model without a configured TPM limit has no token bucket to initialize
+        or refill: this writes only the RPM config (when configured) and returns
+        without starting the background loop, which exists solely to refill and
+        provider-correct the token bucket.
+        """
 
         await utils.validate_redis_client()
 
         key = TokenRetrier.get_token_key(client_registry_key)
+
+        config_mapping: dict[str, int | float] = {}
+        if requests_per_minute is not None:
+            config_mapping.update(
+                {
+                    "requests_per_minute": requests_per_minute,
+                    "request_window_seconds": REQUEST_WINDOW_SECONDS,
+                }
+            )
+
+        if limit is None:
+            if config_mapping:
+                await utils.redis_client.hset(f"{key}:config", mapping=config_mapping)
+            return
+
+        from model_library.retriers.token.background import LoopConfig, background_loops
 
         limit_key = f"{key}:limit"
         await utils.redis_client.eval(INIT_TOKENS_LUA, 2, key, limit_key, limit)
@@ -193,16 +284,16 @@ class TokenRetrier(BaseRetrier):
                 or int(existing.get("tokens_per_second", 0)) != tokens_per_second
             )
 
-        await utils.redis_client.hset(
-            f"{key}:config",
-            mapping={
+        config_mapping.update(
+            {
                 "limit": limit,
                 "limit_refresh_seconds": limit_refresh_seconds,
                 "tokens_per_second": tokens_per_second,
                 "burst_limit": burst_limit,
                 "initialized_at": time.time(),
-            },
+            }
         )
+        await utils.redis_client.hset(f"{key}:config", mapping=config_mapping)
 
         lock = _BACKGROUND_LOOP_LOCKS.setdefault(key, asyncio.Lock())
         async with lock:
@@ -255,6 +346,7 @@ class TokenRetrier(BaseRetrier):
         estimate_input_tokens: int,
         estimate_output_tokens: int,
         use_dynamic_estimate: bool = True,
+        manages_tokens: bool = True,
     ):
         super().__init__(
             strategy="token",
@@ -265,6 +357,9 @@ class TokenRetrier(BaseRetrier):
         )
 
         self.client_registry_key = client_registry_key
+        # RPM-only policy: there is no TPM bucket to deduct from, refill, or
+        # adjust after the fact — only request-rate admission applies.
+        self._manages_tokens = manages_tokens
 
         self.estimate_input_tokens = estimate_input_tokens
         self.estimate_output_tokens = estimate_output_tokens
@@ -279,6 +374,7 @@ class TokenRetrier(BaseRetrier):
             f"{KEY_PREFIX}:{client_registry_key[0]}:{client_registry_key[1]}"
         )
         self.token_key = TokenRetrier.get_token_key(client_registry_key)
+        self.request_key = TokenRetrier.get_request_key(client_registry_key)
         self._run_id = run_id
         self._telemetry_question_id = question_id
         self._question_id = f"{run_id}:{question_id}"
@@ -299,7 +395,7 @@ class TokenRetrier(BaseRetrier):
 
         self.dynamic_estimate_key = (
             f"{self.token_key}:dynamic_estimate:{self._run_id}"
-            if use_dynamic_estimate
+            if use_dynamic_estimate and manages_tokens
             else None
         )
         telemetry.set_attributes(
@@ -341,20 +437,22 @@ class TokenRetrier(BaseRetrier):
             f"Exception: {exception_message(exception)}"
         )
 
-        self.logger.warning(logger_msg)
+        self.logger.info(logger_msg)
 
-        telemetry.add_event(
-            "retry_queue.provider_retry",
-            {
-                **self._telemetry_ids(),
-                "retry_queue.attempt": self.attempts,
-                "retry_queue.max_tries": self.max_tries,
-                "retry_queue.elapsed_seconds": elapsed,
-                "retry_queue.next_wait_seconds": wait_time,
-                "retry_queue.priority": self.priority,
-                "exception.type": type(exception).__name__ if exception else None,
-            },
+        retry_attributes: dict[str, object | None] = {
+            **self._telemetry_ids(),
+            "retry_queue.attempt": self.attempts,
+            "retry_queue.max_tries": self.max_tries,
+            "retry_queue.elapsed_seconds": elapsed,
+            "retry_queue.next_wait_seconds": wait_time,
+            "retry_queue.priority": self.priority,
+            "exception.type": type(exception).__name__ if exception else None,
+        }
+        telemetry.log_sentry_info(
+            logger_msg,
+            {"retry.strategy": self.strategy, **retry_attributes},
         )
+        telemetry.add_event("retry_queue.provider_retry", retry_attributes)
 
         if self.retry_callback:
             self.retry_callback(self.attempts, exception, elapsed, wait_time)
@@ -435,6 +533,7 @@ class TokenRetrier(BaseRetrier):
         _deducted = False
         last_blocked_event_at = 0.0
         last_insufficient_event_at = 0.0
+        last_request_event_at = 0.0
         try:
             while True:
                 now = time.time()
@@ -476,17 +575,30 @@ class TokenRetrier(BaseRetrier):
                             f"Adjusted actual estimate tokens to {self.actual_estimate_total_tokens} using ratio {ratio}"
                         )
 
-                    # atomic check-and-deduct via Lua (no lock needed)
-                    deducted = await utils.redis_client.eval(
-                        DEDUCT_TOKENS_LUA,
-                        3,
+                    # One admission for both budgets. Models without a configured
+                    # RPM skip the rolling window and pay only the token cost.
+                    admission = await utils.redis_client.eval(
+                        ADMIT_REQUEST_LUA,
+                        5,
                         self.token_key,
                         f"{self.token_key}:burst",
+                        self.request_key,
+                        f"{self.token_key}:config",
                         self._run_meta_key,
                         self.actual_estimate_total_tokens,
                         self._burst_limit,
+                        uuid.uuid4().hex,
+                        REQUEST_WINDOW_MILLISECONDS,
+                        REQUEST_LOG_TTL_MILLISECONDS,
                     )
-                    if deducted == -1:
+                    (
+                        admitted,
+                        blocked_reason,
+                        retry_after_ms,
+                        request_limit,
+                    ) = map(int, admission)
+
+                    if blocked_reason == 4:
                         meta = await utils.redis_client.hgetall(self._run_meta_key)
                         outcome = meta.get("outcome", "failed")
                         telemetry.add_event(
@@ -497,7 +609,7 @@ class TokenRetrier(BaseRetrier):
                             },
                         )
                         raise BenchmarkRunTerminated(self._run_id, outcome)
-                    if deducted:
+                    if admitted:
                         _deducted = True
                         # per-run inflight tracking (pipelined — single round-trip)
                         now = time.time()
@@ -533,26 +645,48 @@ class TokenRetrier(BaseRetrier):
                                 "retry_queue.priority": self.priority,
                                 "retry_queue.estimated_tokens": self.actual_estimate_total_tokens,
                                 "retry_queue.attempt": self.attempts,
+                                "retry_queue.request_kind": "generation",
+                                "retry_queue.requests_per_minute": request_limit
+                                or None,
                             },
                         )
                         return
 
-                    self.logger.debug(
-                        f"[Token Wait] Insufficient tokens, waiting {wait_time:.1f}s | "
-                        f"estimate_tokens: {self.actual_estimate_total_tokens} | "
-                        f"Priority: {self.priority}"
-                    )
-                    if now - last_insufficient_event_at >= 30:
-                        last_insufficient_event_at = now
-                        telemetry.add_event(
-                            "retry_queue.insufficient_tokens",
-                            {
-                                **self._telemetry_ids(),
-                                "retry_queue.priority": self.priority,
-                                "retry_queue.estimated_tokens": self.actual_estimate_total_tokens,
-                                "retry_queue.next_wait_seconds": wait_time,
-                            },
+                    if blocked_reason == 2:
+                        wait_time = (retry_after_ms / 1000) + random.uniform(0.01, 0.1)
+                        self.logger.debug(
+                            f"[Request Wait] generation at {request_limit} RPM, "
+                            f"waiting {wait_time:.3f}s | Priority: {self.priority}"
                         )
+                        if now - last_request_event_at >= 30:
+                            last_request_event_at = now
+                            telemetry.add_event(
+                                "retry_queue.insufficient_requests",
+                                {
+                                    **self._telemetry_ids(),
+                                    "retry_queue.priority": self.priority,
+                                    "retry_queue.request_kind": "generation",
+                                    "retry_queue.requests_per_minute": request_limit,
+                                    "retry_queue.next_wait_seconds": wait_time,
+                                },
+                            )
+                    else:
+                        self.logger.debug(
+                            f"[Token Wait] Insufficient tokens, waiting {wait_time:.1f}s | "
+                            f"estimate_tokens: {self.actual_estimate_total_tokens} | "
+                            f"Priority: {self.priority}"
+                        )
+                        if now - last_insufficient_event_at >= 30:
+                            last_insufficient_event_at = now
+                            telemetry.add_event(
+                                "retry_queue.insufficient_tokens",
+                                {
+                                    **self._telemetry_ids(),
+                                    "retry_queue.priority": self.priority,
+                                    "retry_queue.estimated_tokens": self.actual_estimate_total_tokens,
+                                    "retry_queue.next_wait_seconds": wait_time,
+                                },
+                            )
 
                 # Zzz
                 self.logger.debug(f"Sleeping for {wait_time:.1f}s")
@@ -621,6 +755,11 @@ class TokenRetrier(BaseRetrier):
 
     async def _post_function(self, result: tuple[QueryResult, float]) -> None:
         """Adjust token estimate based on actual usage"""
+
+        if not self._manages_tokens:
+            # RPM-only: no token bucket was initialized, so there is nothing
+            # to refill or correct.
+            return
 
         metadata = result[0].metadata
 
@@ -700,6 +839,7 @@ class TokenRetrier(BaseRetrier):
             )
 
     async def validate(self) -> None:
-        await utils.validate_redis_client(
-            self.token_key, "run `model.init_token_retry`"
-        )
+        # RPM-only never initializes a token bucket, so check the config key
+        # that init_remaining_tokens does write instead.
+        key = self.token_key if self._manages_tokens else f"{self.token_key}:config"
+        await utils.validate_redis_client(key, "run `model.init_token_retry`")

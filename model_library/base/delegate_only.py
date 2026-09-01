@@ -14,6 +14,7 @@ from model_library.base import (
     QueryResult,
     ToolDefinition,
 )
+from model_library.rate_limits import RateLimit
 
 
 class DelegateOnlyException(Exception):
@@ -44,6 +45,7 @@ class DelegateOnly(LLM):
         config: LLMConfig | None,
         delegate_provider: Literal["openai", "anthropic"],
         use_completions: bool = True,
+        normalize_null_assistant_history_fields: bool = False,
     ) -> None:
         from model_library.providers.anthropic import AnthropicModel
         from model_library.providers.openai import OpenAIModel
@@ -55,6 +57,7 @@ class DelegateOnly(LLM):
                     provider=self.provider,
                     config=config,
                     use_completions=use_completions,
+                    normalize_null_assistant_history_fields=normalize_null_assistant_history_fields,
                 )
             case "anthropic":
                 self.delegate = AnthropicModel(
@@ -160,7 +163,7 @@ class DelegateOnly(LLM):
         raise DelegateOnlyException()
 
     @override
-    async def get_rate_limit(self) -> Any:
+    async def get_rate_limit(self) -> RateLimit | None:
         assert self.delegate
         return await self.delegate.get_rate_limit()
 

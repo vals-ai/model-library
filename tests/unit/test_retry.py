@@ -5,7 +5,7 @@ Unit tests for retry logic.
 import asyncio
 from contextlib import nullcontext
 from typing import Callable, Type
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
 
 import aiohttp
 import httpcore
@@ -278,19 +278,39 @@ async def test_max_retries_giveup():
     """
     Test that after max retries, it gives up and re raises the exception
     """
-    mock_func = Mock(side_effect=RetryException())
+    error = RetryException()
+    mock_func = Mock(side_effect=error)
+    logger = MagicMock()
 
-    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=3)
+    retrier = ExponentialBackoffRetrier(logger, max_tries=3, initial=0)
     decorator = retry_decorator(retrier)
 
     @decorator
     async def func():
         mock_func()
 
-    with pytest.raises(RetryException):
+    with (
+        patch(
+            "model_library.retriers.base.telemetry.log_sentry_info"
+        ) as log_sentry_info,
+        pytest.raises(RetryException) as exc_info,
+    ):
         await func()
 
+    assert exc_info.value is error
     assert mock_func.call_count == 3
+    assert logger.info.call_count == 2
+    logger.warning.assert_not_called()
+    logger.error.assert_called_once()
+    assert all(
+        "Retry Recovered" not in call.args[0]
+        for call in logger.info.call_args_list
+    )
+    assert log_sentry_info.call_count == 2
+    assert all(
+        "Retry Recovered" not in call.args[0]
+        for call in log_sentry_info.call_args_list
+    )
 
 
 @pytest.mark.parametrize(
@@ -488,7 +508,7 @@ async def test_core_errors(
         assert query_impl_mock.call_count == 1
 
 
-async def test_immediate_retry_records_attempt_count():
+async def test_immediate_retry_logs_attempts_and_recovery_at_info():
     succeeds_after_retries = AsyncMock(
         side_effect=[
             ImmediateRetryException("Immediate retry"),
@@ -496,26 +516,154 @@ async def test_immediate_retry_records_attempt_count():
             "success",
         ]
     )
+    logger = MagicMock()
 
-    with patch("model_library.retriers.base.telemetry.set_attributes") as set_attrs:
+    with (
+        patch(
+            "model_library.retriers.base.time.time",
+            side_effect=[100.0, 103.0],
+        ),
+        patch("model_library.retriers.base.telemetry.set_attributes") as set_attrs,
+        patch(
+            "model_library.retriers.base.telemetry.log_sentry_info"
+        ) as log_sentry_info,
+    ):
         result = await BaseRetrier.immediate_retry_wrapper(
             succeeds_after_retries,
-            MagicMock(),
+            logger,
         )
 
     assert result == "success"
     set_attrs.assert_called_once_with({"retry.immediate_attempts": 2})
+    logger.warning.assert_not_called()
+    assert logger.info.call_args_list == [
+        call(
+            "[Immediate Retry] | 1/10 | Exception "
+            "ImmediateRetryException: Immediate retry"
+        ),
+        call(
+            "[Immediate Retry] | 2/10 | Exception "
+            "ImmediateRetryException: Immediate retry"
+        ),
+        call("[Immediate Retry Recovered] | Retries: 2/10 | Elapsed: 3.0s"),
+    ]
+    assert log_sentry_info.call_args_list == [
+        call(
+            "[Immediate Retry] | 1/10 | Exception "
+            "ImmediateRetryException: Immediate retry",
+            {
+                "retry.strategy": "immediate",
+                "retry.attempt": 1,
+                "retry.max_tries": 10,
+                "exception.type": "ImmediateRetryException",
+            },
+        ),
+        call(
+            "[Immediate Retry] | 2/10 | Exception "
+            "ImmediateRetryException: Immediate retry",
+            {
+                "retry.strategy": "immediate",
+                "retry.attempt": 2,
+                "retry.max_tries": 10,
+                "exception.type": "ImmediateRetryException",
+            },
+        ),
+        call(
+            "[Immediate Retry Recovered] | Retries: 2/10 | Elapsed: 3.0s",
+            {
+                "retry.strategy": "immediate",
+                "retry.immediate_attempts": 2,
+                "retry.max_tries": 10,
+                "retry.elapsed_seconds": 3.0,
+            },
+        ),
+    ]
 
 
-async def test_backoff_retry_records_attempt_count_on_success():
+async def test_immediate_retry_without_failure_has_no_retry_logs():
+    logger = MagicMock()
+
+    with patch(
+        "model_library.retriers.base.telemetry.log_sentry_info"
+    ) as log_sentry_info:
+        result = await BaseRetrier.immediate_retry_wrapper(
+            AsyncMock(return_value="success"),
+            logger,
+        )
+
+    assert result == "success"
+    logger.info.assert_not_called()
+    log_sentry_info.assert_not_called()
+
+
+async def test_backoff_retry_logs_attempt_and_recovery_at_info():
     succeeds_after_retry = AsyncMock(side_effect=[RetryException("retry"), "success"])
-    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=3)
+    logger = MagicMock()
+    retrier = ExponentialBackoffRetrier(
+        logger,
+        max_tries=3,
+        initial=0,
+    )
 
-    with patch("model_library.retriers.base.telemetry.set_attributes") as set_attrs:
+    with (
+        patch(
+            "model_library.retriers.base.time.time",
+            side_effect=[100.0, 101.0, 103.0],
+        ),
+        patch("model_library.retriers.base.telemetry.set_attributes") as set_attrs,
+        patch(
+            "model_library.retriers.base.telemetry.log_sentry_info"
+        ) as log_sentry_info,
+    ):
         result = await retry_decorator(retrier)(succeeds_after_retry)()
 
     assert result == "success"
     set_attrs.assert_any_call({"retry.attempts": 1})
+    logger.warning.assert_not_called()
+    assert logger.info.call_args_list == [
+        call(
+            "[Retry] | backoff | Attempt: 1 | Elapsed: 1.0s | "
+            "Next wait: 0.0s | Exception: RetryException: retry "
+        ),
+        call("[Retry Recovered] | backoff | Attempts: 1 | Elapsed: 3.0s"),
+    ]
+    assert log_sentry_info.call_args_list == [
+        call(
+            "[Retry] | backoff | Attempt: 1 | Elapsed: 1.0s | "
+            "Next wait: 0.0s | Exception: RetryException: retry ",
+            {
+                "retry.strategy": "backoff",
+                "retry.attempt": 1,
+                "retry.max_tries": 3,
+                "retry.elapsed_seconds": 1.0,
+                "retry.next_wait_seconds": 0.0,
+                "exception.type": "RetryException",
+            },
+        ),
+        call(
+            "[Retry Recovered] | backoff | Attempts: 1 | Elapsed: 3.0s",
+            {
+                "retry.strategy": "backoff",
+                "retry.attempts": 1,
+                "retry.max_tries": 3,
+                "retry.elapsed_seconds": 3.0,
+            },
+        ),
+    ]
+
+
+async def test_backoff_without_failure_has_no_retry_logs():
+    logger = MagicMock()
+    retrier = ExponentialBackoffRetrier(logger, max_tries=3)
+
+    with patch(
+        "model_library.retriers.base.telemetry.log_sentry_info"
+    ) as log_sentry_info:
+        result = await retrier.execute(AsyncMock(return_value="success"))
+
+    assert result == "success"
+    logger.info.assert_not_called()
+    log_sentry_info.assert_not_called()
 
 
 async def test_backoff_retry_records_attempt_and_sleep_spans():
@@ -677,6 +825,10 @@ async def test_immediate_retry_exhausted_is_not_retriable():
             "unknown error, 999 (1000)",
             True,
         ),
+        (
+            "The model is currently at capacity due to high demand.",
+            True,
+        ),
     ],
 )
 async def test_retry_by_exception_message(
@@ -744,6 +896,7 @@ async def test_context_window_error_gives_up(mock_llm: LLM):
         "Invalid request: Your request exceeded model token limit: 262144 (requested: 263162)",  # kimi
         "Payload Too Large",
         "invalid params, context window exceeds limit (2013)",  # minimax
+        "Prompt 262280 > 262144 maximum context length",  # mistral
         "Error code: 400 - {'error': {'code': 400, 'message': 'Input length 264373 exceeds the maximum allowed input length of 262112 tokens.', 'type': 'Bad Request'}}",  # poolside
     ]
 

@@ -96,7 +96,10 @@ def model_to_yaml_entry(model_key: str, data: dict[str, Any]) -> str:
 
 def model_to_deprecated_entry_data(model_config: Any) -> dict[str, Any]:
     """Return a self-contained deprecated YAML entry for a resolved model."""
-    model_data = remove_none(model_config.model_dump(mode="python"))
+    model_data = model_config.model_dump(mode="python")
+    costs_per_million_token = model_data["costs_per_million_token"]
+    model_data = remove_none(model_data)
+    model_data["costs_per_million_token"] = costs_per_million_token
     for field in EXCLUDE_FIELDS:
         model_data.pop(field, None)
     # remove empty provider_properties

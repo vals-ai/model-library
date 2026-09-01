@@ -1,5 +1,6 @@
 base-config:
   company: AI21 Labs
+  country: Israel
   documentation_url: https://www.ai21.com/jamba
   supports:
     images: false
@@ -22,6 +23,41 @@ deprecated:
       temperature: 0.4
     metadata:
       deprecated: true
+
+  ai21labs/jamba-large-1.7:
+    company: AI21 Labs
+    country: Israel
+    label: Jamba 1.7 Large
+    release_date: 2025-07-03
+    open_source: true
+    documentation_url: https://www.ai21.com/jamba
+    properties:
+      context_window: 256000
+      max_tokens: 4096
+      training_cutoff: 2024-08
+      reasoning_model: false
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: false
+      output_schema: false
+    metadata:
+      available_for_everyone: false
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 2.0
+      output: 8.0
+    alternative_keys: []
+    default_parameters:
+      temperature: 0.4
+    provider_endpoint: jamba-large-1.7
 
   ai21labs/jamba-mini-1.7:
     label: Jamba 1.7 Mini

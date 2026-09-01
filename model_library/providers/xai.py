@@ -50,8 +50,22 @@ from model_library.exceptions import (
     handle_empty_response,
 )
 from model_library.providers.openai import OpenAIModel
+from model_library.rate_limits import RateLimit
+from model_library.rate_limits.probe import probe_chat_completions_rate_limit
 from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
+
+
+_XAI_KEEPALIVE_CHANNEL_OPTIONS = (
+    ("grpc.keepalive_time_ms", 30_000),
+    ("grpc.keepalive_timeout_ms", 10_000),
+    ("grpc.keepalive_permit_without_calls", 1),
+    ("grpc.http2.max_pings_without_data", 0),
+    # xai_sdk defaults this to 20 MiB, which long-output responses on
+    # large-document benchmarks exceed (observed 24.6 MiB, failing with
+    # RESOURCE_EXHAUSTED "Received message larger than max").
+    ("grpc.max_receive_message_length", 64 * 1024 * 1024),
+)
 
 
 def map_xai_finish_reason(
@@ -91,10 +105,15 @@ class XAIModel(LLM):
                 client = AsyncClient(
                     api_key=api_key,
                     api_host=base_url,
+                    channel_options=list(_XAI_KEEPALIVE_CHANNEL_OPTIONS),
                     timeout=60 * 60 * 24,
                 )
             else:
-                client = AsyncClient(api_key=api_key, timeout=60 * 60 * 24)
+                client = AsyncClient(
+                    api_key=api_key,
+                    channel_options=list(_XAI_KEEPALIVE_CHANNEL_OPTIONS),
+                    timeout=60 * 60 * 24,
+                )
 
             self.assign_client(client)
         return super().get_client()
@@ -112,12 +131,14 @@ class XAIModel(LLM):
         # https://docs.x.ai/docs/guides/migration
         if self.native:
             self.delegate = None
+            self._rate_limit_base_url = "https://api.x.ai/v1"
         else:
             default_base_url = (
                 "https://us-west-1.api.x.ai/v1"
                 if "grok-3-mini-reasoning" in self.model_name
                 else "https://api.x.ai/v1"
             )
+            self._rate_limit_base_url = default_base_url
 
             config = config or LLMConfig()
             config.custom_endpoint = config.custom_endpoint or default_base_url
@@ -135,6 +156,17 @@ class XAIModel(LLM):
                 use_completions=True,
             )
             config.native = False
+
+    @override
+    async def get_rate_limit(self) -> RateLimit | None:
+        if self._has_custom_connection:
+            return None
+
+        return await probe_chat_completions_rate_limit(
+            base_url=self._rate_limit_base_url,
+            api_key=self._get_default_api_key(),
+            model_name=self.model_name,
+        )
 
     async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
         raw_responses = [x for x in input if isinstance(x, RawResponse)]
@@ -450,16 +482,15 @@ class XAIModel(LLM):
         tools: list[ToolDefinition] = [],
         **kwargs: object,
     ) -> int:
-        if not input and not history:
-            return 0
-
-        string_input = await self.stringify_input(input, history=history, tools=tools)
-        self.instance_logger.debug(string_input)
-
-        tokens = await self.get_client().tokenize.tokenize_text(
-            string_input, self.model_name
+        # File payloads are excluded: their base64 would be counted as text,
+        # while the provider tokenizes images with a separate encoder and
+        # reports the real breakdown in the response usage.
+        return await super().count_tokens(
+            [item for item in input if not isinstance(item, FileBase)],
+            history=[item for item in history if not isinstance(item, FileBase)],
+            tools=tools,
+            **kwargs,
         )
-        return len(tokens)
 
     @override
     async def _calculate_cost(

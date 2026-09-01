@@ -1,5 +1,6 @@
 base-config:
   company: Google
+  country: United States
   documentation_url: https://ai.google.dev/gemini-api/docs/models
   open_source: false
   supports:
@@ -56,6 +57,11 @@ gemini-3-models:
           read: 0.40
     metadata:
       available_as_evaluator: true
+    alternative_keys:
+      - google/gemini-3.1-pro-preview-medium:
+          label: Gemini 3.1 Pro Preview (02/26) (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
 
   google/gemini-3.1-flash-lite:
     label: Gemini 3.1 Flash Lite
@@ -67,6 +73,26 @@ gemini-3-models:
     costs_per_million_token:
       input: 0.25
       output: 1.50
+
+  google/gemini-3.7-flash:
+    label: Gemini 3.7 Flash
+    release_date: 2026-08-13
+    properties:
+      context_window: 1048576
+      max_tokens: 65536
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.50
+      output: 7.50
+      cache:
+        read: 0.15
+    metadata:
+      available_as_evaluator: true
+    alternative_keys:
+      - google/gemini-3.7-flash-medium:
+          label: Gemini 3.7 Flash (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
 
   google/gemini-3.6-flash:
     label: Gemini 3.6 Flash
@@ -128,7 +154,6 @@ gemma-4-models:
     open_source: true
     supports:
       images: true
-      videos: true
       files: true
       temperature: true
       tools: true

@@ -19,8 +19,12 @@ from model_library.base.output.result import (
     QueryResultCost,
     QueryResultExtras,
     QueryResultMetadata,
-    RateLimit,
 )
+from model_library.base.output.transcription import (
+    TranscriptionMetadata,
+    TranscriptionResult,
+)
+from model_library.rate_limits import RateLimit
 
 __all__ = [
     "QueryPerformanceChannel",
@@ -40,4 +44,6 @@ __all__ = [
     "QueryResultMetadata",
     "ProviderToolEvent",
     "QueryResult",
+    "TranscriptionMetadata",
+    "TranscriptionResult",
 ]

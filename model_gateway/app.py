@@ -28,18 +28,27 @@ from model_gateway.errors import ErrorBody, ErrorResponse
 from model_gateway.metrics import (
     MetricPublisher,
     create_metrics_middleware,
+    install_telemetry_delivery_metric_handler,
     publish_metrics_periodically,
     record_runtime,
+    remove_telemetry_delivery_metric_handler,
 )
 from model_gateway.observability import (
     install_loop_exception_handler,
     log_process_lifecycle,
     runtime_snapshot,
 )
+from model_gateway.rate_limit_monitor import RateLimitMonitor
+from model_gateway.rate_limit_monitor.routes import register_rate_limit_monitor_routes
+from model_gateway.rate_limit_monitor.state import MonitorRedis, RateLimitMonitorStore
 from model_gateway.routes.benchmark_admission import register_benchmark_admission_routes
 from model_gateway.routes.health import register_health_routes
 from model_gateway.routes.models import register_model_routes
 from model_gateway.routes.provider_ops import register_provider_ops_routes
+from model_gateway.routes.rate_limit import (
+    RateLimitProbeService,
+    register_rate_limit_route,
+)
 from model_gateway.routes.query import register_query_routes
 from model_gateway.routes.token_retry import register_token_retry_routes
 from model_gateway.startup_canary import run_startup_canary, startup_canary_state
@@ -105,18 +114,21 @@ def create_app() -> FastAPI:
     usage_ledger = (
         create_usage_ledger_from_env() if query_enabled else NoopUsageLedger()
     )
+    rate_limit_probe_service: RateLimitProbeService | None = None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        redis_url = os.environ.get("REDIS_URL", "")
+        if control_enabled and not redis_url:
+            raise RuntimeError("REDIS_URL must be set for a control-enabled runtime")
+
         loop = asyncio.get_running_loop()
         previous_exception_handler = install_loop_exception_handler(loop)
         model_count = len(get_model_names())
         logger.info("Loaded gateway model registry with %s models", model_count)
         log_process_lifecycle("gateway.process.startup")
-        telemetry.configure_telemetry(app)
 
         redis_client: async_redis.Redis | None = None
-        redis_url = os.environ.get("REDIS_URL", "")
         if redis_url:
             redis_client = async_redis.from_url(  # pyright: ignore[reportUnknownMemberType]
                 redis_url,
@@ -130,30 +142,36 @@ def create_app() -> FastAPI:
             )
             set_redis_client(redis_client)
 
-        app.state.cache = cache
-        app.state.hmac_secret = hmac_secret
-        app.state.capacity_limiter = capacity_limiter
-        app.state.usage_ledger = usage_ledger
-
         metrics_stop = asyncio.Event()
         metrics_publishers: list[MetricPublisher] = [
             partial(_record_runtime_current, loop)
         ]
         if query_enabled:
             metrics_publishers.insert(0, capacity_limiter.record_current)
-        metrics_task = asyncio.create_task(
-            publish_metrics_periodically(
-                metrics_stop,
-                publishers=metrics_publishers,
-            )
-        )
+        metrics_task: asyncio.Task[None] | None = None
         usage_ledger_started = False
         canary_task: asyncio.Task[None] | None = None
-        if startup_canary_enabled:
-            canary_task = asyncio.create_task(
-                run_startup_canary(app, next(iter(api_keys_by_name.values())))
-            )
+        rate_limit_monitor: RateLimitMonitor | None = None
+        delivery_metric_handler = install_telemetry_delivery_metric_handler()
         try:
+            telemetry.configure_telemetry(app)
+            if control_enabled:
+                assert redis_client is not None
+                rate_limit_monitor = RateLimitMonitor(
+                    RateLimitMonitorStore(cast(MonitorRedis, redis_client))
+                )
+                app.state.rate_limit_monitor = rate_limit_monitor
+                rate_limit_monitor.start()
+            metrics_task = asyncio.create_task(
+                publish_metrics_periodically(
+                    metrics_stop,
+                    publishers=metrics_publishers,
+                )
+            )
+            if startup_canary_enabled:
+                canary_task = asyncio.create_task(
+                    run_startup_canary(app, next(iter(api_keys_by_name.values())))
+                )
             await usage_ledger.start()
             usage_ledger_started = True
             yield
@@ -163,8 +181,13 @@ def create_app() -> FastAPI:
                 canary_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await canary_task
-            metrics_stop.set()
-            await metrics_task
+            if rate_limit_probe_service is not None:
+                try:
+                    await rate_limit_probe_service.close()
+                except Exception:
+                    logger.exception(
+                        "Gateway rate-limit probe service close failed during shutdown"
+                    )
             if usage_ledger_started:
                 try:
                     await usage_ledger.close()
@@ -172,14 +195,33 @@ def create_app() -> FastAPI:
                     logger.exception(
                         "Gateway usage ledger close failed during shutdown"
                     )
+            if rate_limit_monitor is not None:
+                try:
+                    await rate_limit_monitor.close()
+                except Exception:
+                    logger.exception(
+                        "Gateway rate-limit monitor close failed during shutdown"
+                    )
+                finally:
+                    app.state.rate_limit_monitor = None
             if redis_client is not None:
                 try:
                     await redis_client.aclose()
                 except Exception:
                     logger.exception("Gateway Redis close failed during shutdown")
-            telemetry.shutdown_telemetry()
-            loop.set_exception_handler(previous_exception_handler)
-            log_process_lifecycle("gateway.process.shutdown_done")
+            try:
+                telemetry.shutdown_telemetry()
+            finally:
+                try:
+                    remove_telemetry_delivery_metric_handler(delivery_metric_handler)
+                finally:
+                    metrics_stop.set()
+                    try:
+                        if metrics_task is not None:
+                            await metrics_task
+                    finally:
+                        loop.set_exception_handler(previous_exception_handler)
+                        log_process_lifecycle("gateway.process.shutdown_done")
 
     app = FastAPI(
         title="Model Proxy",
@@ -194,6 +236,7 @@ def create_app() -> FastAPI:
     app.state.runtime_role = runtime_role
     app.state.capacity_limiter = capacity_limiter
     app.state.usage_ledger = usage_ledger
+    app.state.rate_limit_monitor = None
     app.state.startup_canary = startup_canary_state(startup_canary_enabled)
     if query_enabled:
         app.middleware("http")(create_capacity_middleware())
@@ -203,7 +246,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
-        _request: Request, exc: RequestValidationError
+        request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         err = ErrorResponse(
             400,
@@ -219,14 +262,16 @@ def create_app() -> FastAPI:
         app,
         valid_keys=valid_keys,
         hmac_secret=hmac_secret,
-        require_redis=runtime_role == "control",
+        control_enabled=control_enabled,
     )
     if control_enabled:
         register_benchmark_admission_routes(app, cache=cache)
+        register_rate_limit_monitor_routes(app)
     if query_enabled:
         register_model_routes(app)
         register_token_retry_routes(app)
         register_query_routes(app, cache=cache)
+        rate_limit_probe_service = register_rate_limit_route(app, cache=cache)
         register_provider_ops_routes(app, cache=cache)
 
     return app

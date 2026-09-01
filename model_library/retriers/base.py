@@ -43,10 +43,27 @@ class BaseRetrier(ABC):
         """
         MAX_IMMEDIATE_RETRIES = 10
         retries = 0
+        start_time = time.time()
         while True:
             try:
                 result = await func()
                 telemetry.set_attributes({"retry.immediate_attempts": retries})
+                if retries:
+                    elapsed = time.time() - start_time
+                    logger_msg = (
+                        f"[Immediate Retry Recovered] | Retries: {retries}/{MAX_IMMEDIATE_RETRIES} | "
+                        f"Elapsed: {elapsed:.1f}s"
+                    )
+                    logger.info(logger_msg)
+                    telemetry.log_sentry_info(
+                        logger_msg,
+                        {
+                            "retry.strategy": "immediate",
+                            "retry.immediate_attempts": retries,
+                            "retry.max_tries": MAX_IMMEDIATE_RETRIES,
+                            "retry.elapsed_seconds": elapsed,
+                        },
+                    )
                 return result
             except ImmediateRetryException as e:
                 if retries >= MAX_IMMEDIATE_RETRIES:
@@ -55,17 +72,24 @@ class BaseRetrier(ABC):
                         retries, MAX_IMMEDIATE_RETRIES, e
                     ) from e
                 retries += 1
+                retry_attributes = {
+                    "retry.attempt": retries,
+                    "retry.max_tries": MAX_IMMEDIATE_RETRIES,
+                    "exception.type": type(e).__name__,
+                }
                 telemetry.add_event(
                     "model_library.immediate_retry",
-                    {
-                        "retry.attempt": retries,
-                        "retry.max_tries": MAX_IMMEDIATE_RETRIES,
-                        "exception.type": type(e).__name__,
-                    },
+                    retry_attributes,
                 )
 
-                logger.warning(
-                    f"[Immediate Retry] | {retries}/{MAX_IMMEDIATE_RETRIES} | Exception {exception_message(e)}"
+                logger_msg = (
+                    f"[Immediate Retry] | {retries}/{MAX_IMMEDIATE_RETRIES} | "
+                    f"Exception {exception_message(e)}"
+                )
+                logger.info(logger_msg)
+                telemetry.log_sentry_info(
+                    logger_msg,
+                    {"retry.strategy": "immediate", **retry_attributes},
                 )
 
     def __init__(
@@ -234,6 +258,22 @@ class BaseRetrier(ABC):
                     telemetry.add_event(
                         "model_library.retry_attempt_success", attempt_attributes
                     )
+                    if self.attempts:
+                        elapsed = time.time() - self.start_time
+                        logger_msg = (
+                            f"[Retry Recovered] | {self.strategy} | Attempts: {self.attempts} | "
+                            f"Elapsed: {elapsed:.1f}s"
+                        )
+                        self.logger.info(logger_msg)
+                        telemetry.log_sentry_info(
+                            logger_msg,
+                            {
+                                "retry.strategy": self.strategy,
+                                "retry.attempts": self.attempts,
+                                "retry.max_tries": self.max_tries,
+                                "retry.elapsed_seconds": elapsed,
+                            },
+                        )
                     return result
 
             except Exception as e:

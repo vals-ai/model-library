@@ -34,6 +34,12 @@ def get_benchmark_run_pointer_key(run_id: str) -> str:
     return f"{KEY_PREFIX}:benchmark:admission:{run_id}"
 
 
+def _parse_effective_token_limit(meta: dict[str, str]) -> int | None:
+    """RPM-only runs have no TPM: the field is omitted rather than a fake 0."""
+    raw = meta.get("effective_token_limit")
+    return int(raw) if raw is not None else None
+
+
 class BenchmarkAdmissionStore:
     """Request-driven benchmark admission state backed only by shared Redis."""
 
@@ -47,7 +53,7 @@ class BenchmarkAdmissionStore:
         model: str,
         model_registry_key: tuple[str, str],
         run_id: str,
-        effective_token_limit: int,
+        effective_token_limit: int | None,
         total_requests: int | None,
         early_release: bool,
         immediate_queue_release: bool,
@@ -137,16 +143,13 @@ class BenchmarkAdmissionStore:
                 total_requests,
                 self.logger,
             )
-            await self.redis.hset(
-                requested_keys.run_meta,
-                mapping={
-                    "effective_token_limit": effective_token_limit,
-                    "early_release": "1" if early_release else "0",
-                    "immediate_queue_release": (
-                        "1" if immediate_queue_release else "0"
-                    ),
-                },
-            )
+            run_meta_mapping: dict[str, str | int] = {
+                "early_release": "1" if early_release else "0",
+                "immediate_queue_release": "1" if immediate_queue_release else "0",
+            }
+            if effective_token_limit is not None:
+                run_meta_mapping["effective_token_limit"] = effective_token_limit
+            await self.redis.hset(requested_keys.run_meta, mapping=run_meta_mapping)
             await self.redis.hdel(pointer_key, "initializing")
             meta = await self.redis.hgetall(requested_keys.run_meta)
             return self._response(model, run_id, meta)
@@ -354,7 +357,7 @@ class BenchmarkAdmissionStore:
             model=model,
             run_id=run_id,
             state="released",
-            effective_token_limit=int(meta["effective_token_limit"]),
+            effective_token_limit=_parse_effective_token_limit(meta),
             outcome=terminal_outcome,
         )
 
@@ -378,7 +381,7 @@ class BenchmarkAdmissionStore:
         requested_keys: BenchmarkQueueKeys,
         pointer: dict[str, str],
         meta: dict[str, str],
-        effective_token_limit: int,
+        effective_token_limit: int | None,
         total_requests: int | None,
         early_release: bool,
         immediate_queue_release: bool,
@@ -386,7 +389,7 @@ class BenchmarkAdmissionStore:
         compatible = (
             pointer.get("model") == model
             and pointer.get("base") == requested_keys.base
-            and meta.get("effective_token_limit") == str(effective_token_limit)
+            and _parse_effective_token_limit(meta) == effective_token_limit
             and meta.get("total_requests", "0") == str(total_requests or 0)
             and meta.get("early_release", "0") == ("1" if early_release else "0")
             and meta.get("immediate_queue_release", "0")
@@ -409,12 +412,12 @@ class BenchmarkAdmissionStore:
                 model=model,
                 run_id=run_id,
                 state="released",
-                effective_token_limit=int(meta["effective_token_limit"]),
+                effective_token_limit=_parse_effective_token_limit(meta),
                 outcome=cast(BenchmarkAdmissionOutcome, outcome),
             )
         return BenchmarkAdmissionResponse(
             model=model,
             run_id=run_id,
             state="acquired" if meta.get("slot_acquired") == "1" else "waiting",
-            effective_token_limit=int(meta["effective_token_limit"]),
+            effective_token_limit=_parse_effective_token_limit(meta),
         )

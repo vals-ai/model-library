@@ -78,6 +78,11 @@ COMMANDS = [
     ),
     Command(
         "One-off feature examples",
+        "uv run python examples/extras/transcription.py [<model>]",
+        "audio transcription with a transcription-only config",
+    ),
+    Command(
+        "One-off feature examples",
         "uv run python examples/extras/batch.py",
         "batch API",
     ),

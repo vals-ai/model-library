@@ -1,5 +1,6 @@
 base-config:
   company: Poolside
+  country: United States
   documentation_url: https://docs.poolside.ai
   open_source: false
   supports:
@@ -15,6 +16,7 @@ deprecated:
 
   poolside/laguna-xs.2:fast:
     company: Poolside
+    country: United States
     label: Laguna XS.2 Fast
     release_date: 2026-04-28
     open_source: true
@@ -51,6 +53,7 @@ deprecated:
 
   poolside/laguna-xs.2:
     company: Poolside
+    country: United States
     label: Laguna XS.2
     release_date: 2026-04-28
     open_source: true
@@ -73,6 +76,7 @@ deprecated:
       internal_only: false
       available_as_evaluator: false
       ignored_for_cost: false
+    costs_per_million_token: null
     alternative_keys: []
     default_parameters:
       temperature: 1.0

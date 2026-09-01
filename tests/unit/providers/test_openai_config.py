@@ -21,7 +21,7 @@ from openai.types.completion_usage import (
 from openai.types.responses import Response, ResponseOutputMessage, ResponseOutputText
 from openai.types.responses.response_function_tool_call import ResponseFunctionToolCall
 
-from model_library.base import FinishReason, LLMConfig
+from model_library.base import DelegateOnly, FinishReason, LLMConfig
 from model_library.base.input import (
     FileWithBase64,
     RawResponse,
@@ -37,7 +37,12 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
 )
+from model_library.providers.delegates.alibaba import AlibabaModel
+from model_library.providers.delegates.baseten import BasetenModel
+from model_library.providers.delegates.cohere import CohereModel
+from model_library.providers.delegates.fireworks import FireworksModel
 from model_library.providers.delegates.kimi import KimiModel
+from model_library.providers.delegates.nvidia import NvidiaModel
 from model_library.providers.openai import (
     OpenAIConfig,
     OpenAIModel,
@@ -847,6 +852,110 @@ async def test_non_streaming_completions_tool_only_uses_none_for_absent_or_empty
     assert isinstance(final_message, RawResponse)
     assert isinstance(final_message.response, ChatCompletionMessage)
     assert final_message.response.content is None
+
+
+async def test_null_assistant_history_field_normalization_is_capability_gated():
+    model = OpenAIModel(
+        "compatible-test-model",
+        config=LLMConfig(
+            reasoning=True,
+            provider_config=OpenAIConfig(stream_completions=False),
+        ),
+        use_completions=True,
+        normalize_null_assistant_history_fields=True,
+    )
+    message = ChatCompletionMessage(role="assistant", content="")
+    object.__setattr__(message, "reasoning_content", "considered")
+    response = ChatCompletion(
+        id="cmpl_vllm_reasoning_only",
+        created=0,
+        model="compatible-test-model",
+        object="chat.completion",
+        choices=[Choice(finish_reason="length", index=0, message=message)],
+        usage=None,
+    )
+
+    result = await _query_completions(model, response)
+
+    assert result.reasoning == "considered"
+    final_message = result.history[-1]
+    assert isinstance(final_message, RawResponse)
+    assert isinstance(final_message.response, ChatCompletionMessage)
+    assert final_message.response.content == "[reasoning-only response omitted]"
+    assert "tool_calls" not in final_message.response.model_fields_set
+
+    parsed_followup = await model.parse_input(
+        [*result.history, TextInput(text="continue")]
+    )
+    assert parsed_followup[-2].content == "[reasoning-only response omitted]"
+
+
+async def test_null_assistant_history_field_normalization_preserves_tool_calls():
+    model = OpenAIModel(
+        "compatible-test-model",
+        config=LLMConfig(
+            provider_config=OpenAIConfig(stream_completions=False),
+        ),
+        use_completions=True,
+        normalize_null_assistant_history_fields=True,
+    )
+    raw_tool_call = ChatCompletionMessageToolCall(
+        id="call_1",
+        type="function",
+        function=Function(name="lookup", arguments='{"q":"x"}'),
+    )
+    response = ChatCompletion(
+        id="cmpl_tool_only",
+        created=0,
+        model="compatible-test-model",
+        object="chat.completion",
+        choices=[
+            Choice(
+                finish_reason="tool_calls",
+                index=0,
+                message=ChatCompletionMessage(
+                    role="assistant",
+                    content=None,
+                    tool_calls=[raw_tool_call],
+                ),
+            )
+        ],
+        usage=None,
+    )
+
+    result = await _query_completions(model, response)
+
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].id == "call_1"
+    assert result.tool_calls[0].name == "lookup"
+    assert result.tool_calls[0].args == '{"q":"x"}'
+    final_message = result.history[-1]
+    assert isinstance(final_message, RawResponse)
+    assert isinstance(final_message.response, ChatCompletionMessage)
+    assert final_message.response.content == ""
+    assert final_message.response.tool_calls == [raw_tool_call]
+
+
+@pytest.mark.parametrize(
+    ("model_class", "model_name"),
+    [
+        (AlibabaModel, "qwen-test"),
+        (BasetenModel, "baseten-test"),
+        (CohereModel, "command-test"),
+        (FireworksModel, "fireworks-test"),
+        (NvidiaModel, "nvidia-test"),
+    ],
+)
+def test_null_assistant_history_normalization_is_enabled_by_selected_delegates(
+    model_class: type[DelegateOnly], model_name: str
+):
+    model = model_class(
+        model_name,
+        config=LLMConfig(custom_api_key=SecretStr("sk-test")),
+    )
+
+    assert isinstance(model.delegate, OpenAIModel)
+    assert model.delegate.normalize_null_assistant_history_fields is True
 
 
 @pytest.mark.parametrize(

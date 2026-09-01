@@ -1,5 +1,6 @@
 base-config:
   company: Cohere
+  country: Canada
   open_source: false
   documentation_url: https://docs.cohere.com/v2/docs/models
   supports:
@@ -52,7 +53,6 @@ command-models:
       temperature: true
     default_parameters:
       temperature: 0.3
-
   cohere/command-a-03-2025:
     label: Command A
     release_date: 2025-03-13

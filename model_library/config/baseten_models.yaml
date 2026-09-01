@@ -1,5 +1,6 @@
 base-config:
   company: Poolside
+  country: United States
   documentation_url: https://huggingface.co/poolside/Laguna-S-2.1-INT4
   open_source: true
   supports:

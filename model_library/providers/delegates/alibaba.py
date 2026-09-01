@@ -1,35 +1,51 @@
-import re
-from typing import Any, Literal, Sequence
+from typing import Any, Literal
 
-from openai.types.chat import ChatCompletionMessage
-from pydantic import BaseModel, SecretStr
+from pydantic import SecretStr
 from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
     DelegateOnly,
-    InputItem,
     LLMConfig,
     ProviderConfig,
     QueryResultCost,
     QueryResultMetadata,
-    ToolDefinition,
+)
+from model_library.rate_limits import (
+    RateLimit,
+    RateLimitCapacity,
+    RequestRateLimit,
+    TokenRateLimit,
+    rate_limit_timestamp_from_headers,
 )
 from model_library.register_models import register_provider
+from model_library.utils import default_httpx_client
+
+
+# https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen
+_INTERNATIONAL_ENDPOINT = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+_MAINLAND_ENDPOINT = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+_INTERNATIONAL_QUOTA_ENDPOINT = "https://dashscope-intl.aliyuncs.com/api/v1/quotas"
+_MAINLAND_QUOTA_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/quotas"
 
 
 class AlibabaConfig(ProviderConfig):
     """Configuration for Alibaba (Qwen) models.
 
     Attributes:
-        preserve_thinking: When enabled on Qwen 3.6+ reasoning models, previous
-            reasoning content is preserved in context across turns instead of
-            being stripped and re-serialized. This improves KV cache utilization
+        preserve_thinking: When enabled, previous reasoning content is preserved
+            in context across turns instead of being stripped and re-serialized.
+            Supported by Qwen 3.6+ reasoning models. This improves KV cache utilization
             and decision consistency in agentic workflows.
             See: https://qwen.ai/blog?id=qwen3.6-27b
+        mainland: Route to the mainland China DashScope endpoint, authenticated
+            with `DASHSCOPE_CN_API_KEY`. Model Studio accounts and keys are
+            region-scoped: an international key is rejected by the mainland
+            endpoint and vice versa.
     """
 
     preserve_thinking: bool = False
+    mainland: bool = False
 
 
 @register_provider("alibaba")
@@ -45,58 +61,90 @@ class AlibabaModel(DelegateOnly):
     ):
         super().__init__(model_name, provider, config=config)
 
-        self.preserve_thinking = (
-            self.provider_config.preserve_thinking and self._is_qwen_36_or_later()
-        )
+        self.preserve_thinking = self.provider_config.preserve_thinking
 
-        # https://www.alibabacloud.com/help/en/model-studio/first-api-call-to-qwen
         config = config or LLMConfig()
-        config.custom_endpoint = (
-            config.custom_endpoint
-            or "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+        config.custom_endpoint = config.custom_endpoint or (
+            _MAINLAND_ENDPOINT
+            if self.provider_config.mainland
+            else _INTERNATIONAL_ENDPOINT
         )
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.DASHSCOPE_API_KEY
+            self._default_api_key()
         )
 
         self.init_delegate(
             config=config,
             delegate_provider="openai",
             use_completions=True,
+            normalize_null_assistant_history_fields=True,
         )
 
-    def _fix_content_null_in_messages(self, messages: list[Any]) -> list[Any]:
-        """Set content to \"\" for assistant messages with content=None so Qwen API accepts the request."""
-        fixed: list[Any] = []
-        for msg in messages:
-            if isinstance(msg, ChatCompletionMessage) and msg.content is None:
-                fixed.append(msg.model_copy(update={"content": ""}))
-            else:
-                fixed.append(msg)
-        return fixed
+    def _default_api_key(self) -> str:
+        if self.provider_config.mainland:
+            return model_library_settings.DASHSCOPE_CN_API_KEY
+        return model_library_settings.DASHSCOPE_API_KEY
 
     @override
-    async def build_body(
-        self,
-        input: Sequence[InputItem],
-        *,
-        tools: list[ToolDefinition],
-        output_schema: dict[str, Any] | type[BaseModel] | None = None,
-        **kwargs: object,
-    ) -> dict[str, Any]:
-        body = await super().build_body(
-            input, tools=tools, output_schema=output_schema, **kwargs
-        )
-        if "messages" in body:
-            body["messages"] = self._fix_content_null_in_messages(body["messages"])
-        return body
+    async def get_rate_limit(self) -> RateLimit | None:
+        if self._has_custom_connection:
+            return None
 
-    def _is_qwen_36_or_later(self) -> bool:
-        """Check if the model is Qwen 3.6 or later based on the model name."""
-        match = re.search(r"qwen(\d+(?:\.\d+)?)", self.model_name)
-        if not match:
-            return False
-        return float(match.group(1)) >= 3.6
+        def per_minute(limit: int, period_seconds: int) -> int:
+            # This exposes per-minute throughput; shorter provider bursts remain.
+            return limit * 60 // period_seconds
+
+        quota_endpoint = (
+            _MAINLAND_QUOTA_ENDPOINT
+            if self.provider_config.mainland
+            else _INTERNATIONAL_QUOTA_ENDPOINT
+        )
+        async with default_httpx_client() as client:
+            response = await client.get(
+                quota_endpoint,
+                headers={"Authorization": f"Bearer {self._default_api_key()}"},
+                params={"model": self.model_name},
+            )
+            response.raise_for_status()
+            payload = response.json()
+
+            request_limits: list[int] = []
+            token_limits: list[int] = []
+            for quota in payload["output"]["quotas"]:
+                if quota["model"] != self.model_name:
+                    continue
+                model_limit = quota["model_limit"]
+                request_limit = model_limit.get("request_limit")
+                request_limit_period = model_limit.get("request_limit_period")
+                if request_limit is not None and request_limit_period is not None:
+                    request_limits.append(
+                        per_minute(request_limit, request_limit_period)
+                    )
+                usage_limit = model_limit.get("usage_limit")
+                usage_limit_period = model_limit.get("usage_limit_period")
+                if (
+                    model_limit.get("usage_limit_field") == "total_tokens"
+                    and usage_limit is not None
+                    and usage_limit_period is not None
+                ):
+                    token_limits.append(per_minute(usage_limit, usage_limit_period))
+
+            if not request_limits and not token_limits:
+                return None
+            return RateLimit(
+                requests=(
+                    (RequestRateLimit(limit=min(request_limits)),)
+                    if request_limits
+                    else ()
+                ),
+                tokens=(
+                    TokenRateLimit(total=RateLimitCapacity(limit=min(token_limits)))
+                    if token_limits
+                    else None
+                ),
+                scope="api_key",
+                unix_timestamp=rate_limit_timestamp_from_headers(response.headers),
+            )
 
     @override
     def _get_extra_body(self) -> dict[str, Any]:

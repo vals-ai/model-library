@@ -1,4 +1,6 @@
 import json
+import logging
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -24,6 +26,16 @@ def _last_emf(capsys: pytest.CaptureFixture[str]) -> dict[str, object]:
     payloads = _emf_payloads(capsys)
     assert payloads
     return payloads[-1]
+
+
+def _metric_metadata(payload: dict[str, object]) -> dict[str, object]:
+    aws_meta = payload["_aws"]
+    assert isinstance(aws_meta, dict)
+    cloudwatch_metrics = aws_meta["CloudWatchMetrics"]
+    assert isinstance(cloudwatch_metrics, list)
+    metric_meta = cloudwatch_metrics[0]
+    assert isinstance(metric_meta, dict)
+    return metric_meta
 
 
 async def _reset_inflight() -> None:
@@ -211,6 +223,96 @@ def test_inflight_metrics_use_high_resolution(capsys):
     ]
 
 
+def test_record_capacity_uses_container_scoped_worker_id(capsys, monkeypatch):
+    monkeypatch.setenv("GATEWAY_STAGE", "dev")
+    monkeypatch.setenv("GATEWAY_SERVICE", "Gateway-dev-query")
+    monkeypatch.setattr(
+        "model_gateway.observability.socket.gethostname", lambda: "task-a"
+    )
+    monkeypatch.setattr("model_gateway.observability.os.getpid", lambda: 4321)
+
+    metrics.record_capacity(
+        active=2,
+        queued=3,
+        max_active=4,
+        max_queued=5,
+    )
+
+    assert metrics.flush_metrics() == 1
+    payload = _last_emf(capsys)
+    assert payload["WorkerId"] == "task-a:4321"
+    assert _metric_metadata(payload)["Dimensions"] == [
+        ["Stage", "Service"],
+        ["Stage", "Service", "WorkerId"],
+    ]
+
+
+def test_record_rate_limit_monitor_ownership_contract(capsys, monkeypatch):
+    monkeypatch.setenv("GATEWAY_STAGE", "dev")
+    monkeypatch.setenv("GATEWAY_SERVICE", "Gateway-dev-control")
+    outcome = "acquired"
+
+    metrics.record_rate_limit_monitor_ownership(outcome)
+
+    assert metrics.flush_metrics() == 1
+    payload = _last_emf(capsys)
+    assert payload["Stage"] == "dev"
+    assert payload["Service"] == "Gateway-dev-control"
+    assert payload["Outcome"] == outcome
+    assert payload["RateLimitMonitorOwnershipCount"] == 1
+    assert _metric_metadata(payload)["Dimensions"] == [["Stage", "Service", "Outcome"]]
+    assert _metric_metadata(payload)["Metrics"] == [
+        {"Name": "RateLimitMonitorOwnershipCount", "Unit": "Count"}
+    ]
+
+
+def test_record_rate_limit_monitor_poll_contract(capsys, monkeypatch):
+    monkeypatch.setenv("GATEWAY_STAGE", "dev")
+    monkeypatch.setenv("GATEWAY_SERVICE", "Gateway-dev-control")
+    outcome = "provider_error"
+
+    metrics.record_rate_limit_monitor_poll(
+        provider="anthropic",
+        source="pool_1",
+        outcome=outcome,
+        latency_ms=12.5,
+    )
+
+    assert metrics.flush_metrics() == 1
+    payload = _last_emf(capsys)
+    assert payload["Provider"] == "anthropic"
+    assert payload["Source"] == "pool_1"
+    assert payload["Outcome"] == outcome
+    assert payload["RateLimitMonitorPollCount"] == 1
+    assert payload["RateLimitMonitorPollLatencyMs"] == 12.5
+    assert "Model" not in payload
+    metric_meta = _metric_metadata(payload)
+    assert metric_meta["Dimensions"] == [
+        ["Stage", "Service", "Provider", "Source", "Outcome"]
+    ]
+    assert metric_meta["Metrics"] == [
+        {"Name": "RateLimitMonitorPollCount", "Unit": "Count"},
+        {"Name": "RateLimitMonitorPollLatencyMs", "Unit": "Milliseconds"},
+    ]
+
+
+def test_record_rate_limit_monitor_publish_contract(capsys, monkeypatch):
+    monkeypatch.setenv("GATEWAY_STAGE", "dev")
+    monkeypatch.setenv("GATEWAY_SERVICE", "Gateway-dev-control")
+    outcome = "accepted"
+
+    metrics.record_rate_limit_monitor_publish(outcome)
+
+    assert metrics.flush_metrics() == 1
+    payload = _last_emf(capsys)
+    assert payload["Outcome"] == outcome
+    assert payload["RateLimitMonitorPublishCount"] == 1
+    assert _metric_metadata(payload)["Dimensions"] == [["Stage", "Service", "Outcome"]]
+    assert _metric_metadata(payload)["Metrics"] == [
+        {"Name": "RateLimitMonitorPublishCount", "Unit": "Count"}
+    ]
+
+
 def test_record_gateway_phase_emits_without_env_gate(capsys, monkeypatch):
     monkeypatch.delenv("GATEWAY_DIAGNOSTICS_ENABLED", raising=False)
 
@@ -232,6 +334,63 @@ def test_record_gateway_phase_emits_without_env_gate(capsys, monkeypatch):
     assert payload["GatewayPhaseLatencyMs"] == 12.5
 
 
+def _log_record(name: str, level: int) -> logging.LogRecord:
+    return logging.LogRecord(name, level, __file__, 1, "message", (), None)
+
+
+def test_telemetry_delivery_handler_records_bounded_warning_and_error_metrics(
+    capsys, monkeypatch
+):
+    monkeypatch.setenv("GATEWAY_STAGE", "dev")
+    monkeypatch.setenv("GATEWAY_SERVICE", "Gateway-dev-release-control")
+    handler = metrics.TelemetryDeliveryMetricHandler()
+
+    handler.emit(_log_record("opentelemetry.exporter.otlp", logging.INFO))
+    handler.emit(_log_record("mistralai.extra.observability.otel", logging.ERROR))
+    handler.emit(_log_record("opentelemetry.exporter.otlp", logging.WARNING))
+    handler.emit(_log_record("opentelemetry.sdk.trace.export", logging.ERROR))
+    handler.emit(_log_record("opentelemetry.sdk.trace.export.batch", logging.CRITICAL))
+
+    assert metrics.flush_metrics() == 1
+    payload = _last_emf(capsys)
+    assert payload["Stage"] == "dev"
+    assert payload["Service"] == "Gateway-dev-release-control"
+    assert payload["TelemetryDeliveryWarningCount"] == 1
+    assert payload["TelemetryDeliveryErrorCount"] == 2
+    aws_meta = payload["_aws"]
+    assert isinstance(aws_meta, dict)
+    cloudwatch_metrics = aws_meta["CloudWatchMetrics"]
+    assert isinstance(cloudwatch_metrics, list)
+    metric_meta = cloudwatch_metrics[0]
+    assert isinstance(metric_meta, dict)
+    assert metric_meta["Dimensions"] == [["Stage", "Service"], ["Stage"]]
+
+
+def test_telemetry_delivery_handler_never_raises(monkeypatch):
+    handler = metrics.TelemetryDeliveryMetricHandler()
+    monkeypatch.setattr(
+        metrics,
+        "record_metrics",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("failed")),
+    )
+
+    handler.emit(_log_record("opentelemetry.exporter.otlp", logging.ERROR))
+
+
+def test_telemetry_delivery_handler_installation_is_idempotent():
+    root_logger = logging.getLogger()
+    first = metrics.install_telemetry_delivery_metric_handler()
+    try:
+        second = metrics.install_telemetry_delivery_metric_handler()
+
+        assert first is second
+        assert root_logger.handlers.count(first) == 1
+    finally:
+        metrics.remove_telemetry_delivery_metric_handler(first)
+
+    assert first not in root_logger.handlers
+
+
 @pytest.mark.asyncio
 async def test_inflight_adjustment_never_goes_negative():
     await _reset_inflight()
@@ -239,6 +398,90 @@ async def test_inflight_adjustment_never_goes_negative():
     assert await metrics.adjust_inflight(1) == 1
     assert await metrics.adjust_inflight(-1) == 0
     assert await metrics.adjust_inflight(-1) == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/rate-limit-monitor"),
+        ("POST", "/rate-limit-monitor/activate"),
+    ],
+)
+async def test_metrics_middleware_traces_rate_limit_monitor_routes(
+    monkeypatch, method, path
+):
+    captured_names: list[str] = []
+
+    def start_span(
+        name: str,
+        _attributes: dict[str, object],
+        *,
+        kind: str,
+    ):
+        assert kind == "server"
+        captured_names.append(name)
+        return nullcontext()
+
+    monkeypatch.setattr(metrics.telemetry, "start_span", start_span)
+    middleware = metrics.create_metrics_middleware()
+    request = SimpleNamespace(
+        url=SimpleNamespace(path=path),
+        method=method,
+        state=SimpleNamespace(gateway_api_key_name="dashboard"),
+    )
+
+    async def call_next(_request):
+        return Response(status_code=200)
+
+    response = await middleware(request, call_next)  # pyright: ignore[reportArgumentType]
+
+    assert response.status_code == 200
+    assert captured_names == [f"{method} {path}"]
+
+
+@pytest.mark.asyncio
+async def test_metrics_middleware_adds_api_key_name_to_traced_span(monkeypatch):
+    captured: dict[str, object] = {}
+
+    def start_span(
+        name: str,
+        attributes: dict[str, object],
+        *,
+        kind: str,
+    ):
+        captured["name"] = name
+        captured["attributes"] = attributes
+        captured["kind"] = kind
+        return nullcontext()
+
+    monkeypatch.setattr(
+        metrics.telemetry, "should_trace_http_route", lambda _route: True
+    )
+    monkeypatch.setattr(metrics.telemetry, "start_span", start_span)
+    middleware = metrics.create_metrics_middleware()
+    request = SimpleNamespace(
+        url=SimpleNamespace(path="/query"),
+        method="POST",
+        state=SimpleNamespace(gateway_api_key_name="security-testing"),
+    )
+
+    async def call_next(_request):
+        return Response(status_code=200)
+
+    response = await middleware(request, call_next)  # pyright: ignore[reportArgumentType]
+
+    assert response.status_code == 200
+    assert captured == {
+        "name": "POST /query",
+        "attributes": {
+            "http.request.method": "POST",
+            "url.path": "/query",
+            "gateway.route": "/query",
+            "gateway.api_key_name": "security-testing",
+        },
+        "kind": "server",
+    }
 
 
 @pytest.mark.asyncio

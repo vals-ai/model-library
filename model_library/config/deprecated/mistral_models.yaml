@@ -1,5 +1,6 @@
 base-config:
   company: Mistral
+  country: France
   documentation_url: https://docs.mistral.ai/getting-started/models/models_overview/
   open_source: false
   supports:

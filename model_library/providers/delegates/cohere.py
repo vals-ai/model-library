@@ -35,6 +35,7 @@ class CohereModel(DelegateOnly):
             config=config,
             delegate_provider="openai",
             use_completions=True,
+            normalize_null_assistant_history_fields=True,
         )
 
     @override

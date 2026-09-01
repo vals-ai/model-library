@@ -1,5 +1,7 @@
 base-config:
+  supports_rate_limit_monitoring: true
   company: Alibaba
+  country: China
   open_source: false
   supports:
     temperature: true
@@ -28,7 +30,6 @@ qwen-3-max-models:
       context_window: 256_000
       max_tokens: 32_000
       reasoning_model: true
-
   alibaba/qwen3-max-preview:
     label: Qwen 3 Max Preview
     release_date: 2025-09-05
@@ -36,7 +37,6 @@ qwen-3-max-models:
       context_window: 262_144
       max_tokens: 65_536
       reasoning_model: true
-
   alibaba/qwen3-max-2025-09-23:
     label: Qwen 3 Max 2025-09-23
     release_date: 2025-09-23
@@ -45,7 +45,6 @@ qwen-3-max-models:
       max_tokens: 65_536
       training_cutoff: ""
       reasoning_model: true
-
   alibaba/qwen3-max:
     label: Qwen 3 Max
     release_date: 2025-09-23
@@ -55,7 +54,6 @@ qwen-3-max-models:
       context_window: 262_144
       max_tokens: 65_536
       training_cutoff: ""
-
 qwen-3.5-models:
   base-config:
     supports:
@@ -92,6 +90,28 @@ qwen-3.5-models:
             reasoning_model: true
           default_parameters:
             temperature: 0.6 # from https://huggingface.co/Qwen/Qwen3.5-397B-A17B
+  alibaba/qwen3.5-397b-a17b:
+    label: Qwen 3.5 397B A17B
+    open_source: true
+    documentation_url: https://www.alibabacloud.com/help/en/model-studio/qwen3-5-397b-a17b
+    release_date: 2026-02-16
+    metadata:
+      available_for_everyone: true
+    supports:
+      output_schema: true
+    properties:
+      context_window: 262_144
+      max_tokens: 65_536
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.172
+      output: 1.032
+      context:
+        threshold: 128_000
+        input: 0.43
+        output: 2.58
+    provider_properties:
+      preserve_thinking: true
 
   alibaba/qwen3.5-flash:
     label: Qwen 3.5 Flash
@@ -111,7 +131,6 @@ qwen-3.5-models:
         read: 0.02
     default_parameters:
       temperature: 1.0
-
 qwen-3.6-models:
   base-config:
     supports:
@@ -141,7 +160,6 @@ qwen-3.6-models:
       temperature: 1.0
       top_p: 0.95
       top_k: 20
-
   alibaba/qwen3.6-max-preview:
     label: Qwen 3.6 Max Preview
     documentation_url: https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=doc#/doc/?type=model&url=2840914_2&modelId=qwen3.6-max-preview&serviceSite=international
@@ -242,5 +260,34 @@ qwen-3.7-models:
         cache:
           read: 0.12
           write: 1.5
+    provider_properties:
+      preserve_thinking: true
+
+qwen-3.8-models:
+  base-config:
+    supports:
+      images: true
+      videos: true
+      tools: true
+
+  alibaba/qwen3.8-max:
+    label: Qwen 3.8 Max
+    open_source: true
+    documentation_url: https://qwen.ai/blog?id=qwen3.8
+    release_date: 2026-08-03
+    supports:
+      output_schema: true
+    metadata:
+      available_for_everyone: true
+    properties:
+      context_window: 1_000_000
+      max_tokens: 128_000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 2.0
+      output: 6.0
+      cache:
+        read: 0.25
+        write: 2.5
     provider_properties:
       preserve_thinking: true

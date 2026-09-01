@@ -17,7 +17,11 @@ import fakeredis
 import pytest
 
 bg_module = importlib.import_module("model_library.retriers.token.background")
-from model_library.base.output import RateLimit  # noqa: E402
+from model_library.rate_limits import (  # noqa: E402
+    RateLimit,
+    RateLimitCapacity,
+    TokenRateLimit,
+)
 from model_library.retriers.token.background import (  # noqa: E402
     REFILL_TASK_TTL,
     LoopConfig,
@@ -240,10 +244,11 @@ async def test_correction_corrects_down(redis, clock):
     async def get_rate_limit():
         # always return a fresh timestamp so elapsed is ~0
         return RateLimit(
-            token_limit=limit,
-            token_remaining=header_remaining,
+            tokens=TokenRateLimit(
+                input=RateLimitCapacity(limit=6_000, remaining=1_800),
+                output=RateLimitCapacity(limit=4_000, remaining=1_200),
+            ),
             unix_timestamp=clock.now,
-            raw={},
         )
 
     patches = _make_patches(
@@ -277,10 +282,8 @@ async def test_correction_skips_when_header_limit_too_low(redis, clock):
 
     async def get_rate_limit():
         return RateLimit(
-            token_limit=1_000,
-            token_remaining=500,
+            tokens=TokenRateLimit(total=RateLimitCapacity(limit=1_000, remaining=500)),
             unix_timestamp=clock.now,
-            raw={},
         )
 
     patches = _make_patches(
@@ -312,10 +315,10 @@ async def test_correction_skips_when_header_limit_too_high(redis, clock):
 
     async def get_rate_limit():
         return RateLimit(
-            token_limit=50_000,
-            token_remaining=40_000,
+            tokens=TokenRateLimit(
+                total=RateLimitCapacity(limit=50_000, remaining=40_000)
+            ),
             unix_timestamp=clock.now,
-            raw={},
         )
 
     patches = _make_patches(
@@ -350,10 +353,8 @@ async def test_correction_does_not_correct_up(redis, clock):
     async def get_rate_limit():
         # 8000 > 2000 current -> should NOT correct up
         return RateLimit(
-            token_limit=limit,
-            token_remaining=8000,
+            tokens=TokenRateLimit(total=RateLimitCapacity(limit=limit, remaining=8000)),
             unix_timestamp=clock.now,
-            raw={},
         )
 
     patches = _make_patches(

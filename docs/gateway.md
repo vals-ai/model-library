@@ -12,12 +12,14 @@ MODEL_GATEWAY_HMAC_SECRET="some-secret"        # required for startup and signed
 ```
 
 ```bash
-make gateway  # localhost:8000
+make gateway
 ```
+
+The gateway listens at `http://localhost:8001`.
 
 ```env
 # Client .env
-MODEL_GATEWAY_URL="http://localhost:8000"
+MODEL_GATEWAY_URL="http://localhost:8001"
 MODEL_GATEWAY_API_KEY="key1"
 ```
 
@@ -36,6 +38,7 @@ The gateway server uses server-side auth/signing config. Do not set `MODEL_GATEW
 - `MODEL_GATEWAY_API_KEYS` (**required**): JSON object mapping stable names to valid client API keys. Gateway startup fails if unset or empty.
 - `MODEL_GATEWAY_HMAC_SECRET` (**required**): secret for HMAC-signing pickled fields in history blobs. Gateway startup fails without this so every task can safely return and accept raw history blobs.
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc. (**usually required**): provider API keys for providers served by this gateway. See [Provider API keys](api-keys.md). Per-request `custom_api_key` can supply caller credentials at call time. Per-request `custom_endpoint` is accepted only with `custom_api_key`; the gateway uses that caller-supplied key for the custom URL and never sends server-held provider keys to arbitrary endpoints.
+- `GCP_CREDS`, `GCP_PROJECT_ID`, and `GCP_REGION` (**required for Google Vertex requests**): service-account credentials, project ID, and region loaded from the stage's `ModelGatewayProviderApiKeys` shared secret. Managed secrets set `GCP_REGION` to `global`. `config.provider_config.use_vertex=true` selects Vertex; other Google requests use `GOOGLE_API_KEY`.
 #### Capacity and timeouts
 
 | Contract | Behavior |
@@ -84,7 +87,7 @@ usage-ledger section.
 - `GATEWAY_OTEL_ENABLED` (**optional**): enables OpenTelemetry tracing when set to `true`, `1`, `yes`, or `on`. Disabled by default and safe to leave unset locally.
 - `SENTRY_DSN` (**required when tracing is enabled**): Sentry project DSN used for gateway traces, logs, and handled exception events.
 - `SENTRY_ENVIRONMENT` (**optional**): Sentry environment label.
-- `SENTRY_RELEASE` (**optional**): release string attached to Sentry events/traces.
+- `SENTRY_RELEASE` (**optional**): immutable release string attached to Sentry events/traces. Persistent dev/prod gateway releases set this to the full CodePipeline source Git SHA; manual preview releases leave it unset.
 - `SENTRY_OTLP_COLLECTOR_URL` (**optional**): local/sidecar OTLP HTTP collector URL. When unset, Sentry's OTLP integration exports directly to the Sentry endpoint derived from `SENTRY_DSN`.
 - `OTEL_SERVICE_NAME` (**optional**): OpenTelemetry service name. Defaults to `model-proxy-gateway` when tracing is enabled.
 
@@ -92,7 +95,7 @@ usage-ledger section.
 
 | Variable | Required | Description |
 | ----------------- | -------- | ----------------------------------------------------------- |
-| `MODEL_GATEWAY_URL` | Yes | URL of the gateway server (e.g. `http://localhost:8000`) |
+| `MODEL_GATEWAY_URL` | Yes | URL of the gateway server (e.g. `http://localhost:8001`) |
 | `MODEL_GATEWAY_API_KEY` | Yes | Client API key (must be in the server's `MODEL_GATEWAY_API_KEYS`) |
 | `IDENTITY` | No | JSON object attached to gateway query telemetry and usage ledger rows. |
 | `RUN_ID` | No | Default run ID for gateway queries when `query(run_id=...)` is absent or `None`. |
@@ -145,8 +148,8 @@ Local query deadlines:
 Gateway client HTTP retry policy:
 
 - Gateway-mode `LLM.query()` does not use the normal model/provider retry wrapper; provider retries happen inside the gateway server.
-- Provider-call failures from `/query`, `/tokens/count`, `/files/upload`, `/embeddings`, and `/moderation` return HTTP `200` with a top-level `error` envelope such as `{"error":{"type":"ProviderError","message":"...","exception_type":"RateLimitError"}}`.
-- The client raises HTTP `200` error envelopes as `GatewayProviderError` without retrying, including provider-operation deadline errors.
+- Provider-call failures from `/query`, `/tokens/count`, `/files/upload`, `/audio/transcriptions`, `/embeddings`, and `/moderation` return HTTP `200` with a top-level `error` envelope such as `{"error":{"type":"ProviderError","message":"...","exception_type":"RateLimitError"}}`.
+- The client raises HTTP `200` error envelopes as `GatewayProviderError` without retrying, including provider-operation deadline errors, except envelopes with `exception_type` `MaxContextWindowExceededError`, which raise `MaxContextWindowExceededError` with the `GatewayProviderError` as `__cause__`.
 - Provider-error envelopes include the provider-operation exception type and sanitized message. They include `code` and `status_code` only when the provider/library exception already exposes those fields; the gateway does not synthesize mapped provider codes or mapped provider status codes for the response body.
 - Provider-error responses do not include `signed_history`, pickled exception objects, tracebacks, or raw provider exception transport.
 - The client retries gateway HTTP transport failures, actual HTTP `429`, and actual HTTP `5xx` responses.
@@ -164,18 +167,55 @@ For deployed environments, keep server and client Secrets Manager entries separa
 | GET    | `/health/live`        | No   | Liveness check                                                             |
 | GET    | `/health/ready`       | No   | Readiness check (verifies gateway auth/signing config and startup canary)  |
 | GET    | `/models`             | Yes  | List available models with capability flags                                |
-| GET    | `/registry`           | Yes  | Return the full model registry snapshot for client construction            |
+| GET    | `/registry`           | Yes  | Return the model registry snapshot                                         |
 | POST   | `/query`              | Yes  | Execute an LLM query                                                       |
 | POST   | `/tokens/count`       | Yes  | Count input tokens by using the gateway-side model implementation          |
-| POST   | `/rate-limit`         | Yes  | Reserved endpoint; currently rejects with `Gateway token retry use only`   |
+| POST   | `/rate-limit`         | Yes  | Probe the configured provider account's rate limits                        |
+| GET    | `/rate-limit-monitor` | Yes  | List active and retained rate-limit snapshots                              |
+| POST   | `/rate-limit-monitor/activate` | Yes | Start or extend monitoring for an eligible model key                |
 | GET    | `/token-retry/status` | Yes  | Return 1s-cached Redis token retry and benchmark queue status              |
 | POST   | `/benchmark-runs/acquire` | Yes | Request admission and resolve the effective token-retry limit           |
 | POST   | `/benchmark-runs/wait`    | Yes | Long-poll until the benchmark run is admitted                           |
 | POST   | `/benchmark-runs/renew`   | Yes | Renew the admitted run's heartbeat                                      |
 | POST   | `/benchmark-runs/release` | Yes | Release admission with the terminal outcome                             |
 | POST   | `/files/upload`       | Yes  | Upload a provider file and return a `FileWithId`                           |
+| POST   | `/audio/transcriptions` | Yes | Transcribe one base64-encoded audio file                                  |
 | POST   | `/embeddings`         | Yes  | Create an embedding vector                                                 |
 | POST   | `/moderation`         | Yes  | Run content moderation                                                     |
+
+### Registry snapshot
+
+`GET /registry` omits `country`, `rate_limit`, `supports.transcription`, and
+`supports_rate_limit_monitoring` by default for compatibility with older
+model-library clients. Set `include_excluded_fields=true` to include them. Set
+`include_alt_keys=false` to omit same-provider alternative keys.
+
+### One-off rate-limit probes
+
+`POST /rate-limit` uses the model's registry/default provider endpoint and credentials. It does not probe caller-supplied custom endpoints or API keys.
+
+The response contains:
+
+- `rate_limit` when the provider reports data;
+- `error` when the probe fails;
+- neither field when no data is available.
+
+It never contains both fields. A rate limit includes typed request and token capacity, optional remaining values and scope, and the observation timestamp. Unknown remaining values stay unset. Raw provider data, reset data, quota identifiers, and arbitrary windows are not returned.
+
+The gateway returns HTTP 429 when probe admission is full. A probe timeout returns HTTP 200 with a sanitized `RateLimitResponse.error`.
+
+### Shared rate-limit monitor
+
+Start or extend monitoring with `POST /rate-limit-monitor/activate` and `{"model": "<model-key>"}`. The key must be registered and have rate-limit monitoring enabled; alternative keys are valid.
+
+Successful responses are:
+
+- `GET /rate-limit-monitor`: `{"server_time": <timestamp>, "states": [<state>, ...]}`
+- `POST /rate-limit-monitor/activate`: `{"server_time": <timestamp>, "state": <state>}`
+
+Each state contains `model`, `active`, `active_until`, `retention_until`, `status`, and `sources`. Each source contains `source`, `status`, nullable `last_attempt_at`, `last_success_at`, `rate_limit`, and `error_code`. State and source statuses are `starting`, `ok`, `stale`, `unsupported`, or `error`. Provider poll failures use the generic `provider_error` code and are retried only by the next scheduled poll.
+
+Invalid activation returns HTTP 400 with `{"code": "invalid_model", "message": "Invalid model activation request"}`. Redis, persisted-state, and monitor timeout failures use the gateway's normal server-error boundary rather than a monitor-specific response. `control` and `combined` runtimes require Redis and become unready if monitor supervision stops.
 
 ## Architecture
 
@@ -215,7 +255,7 @@ Client (get_model_registry / get_registry_model)
        - `question_id`
        - `query_id`
        - `in_agent`
-   - Provider-specific overrides live under `config.provider_config`, not as top-level fields.
+   - Provider-specific overrides live under `config.provider_config`, not as top-level fields. For example, a `google/*` request selects Vertex with `config.provider_config.use_vertex=true`; the gateway supplies the server-side GCP credentials.
    - `model.metadata` is a copy of the registry entry used at construction.
    - Existing model instances retain that construction snapshot; newly constructed models use the refreshed registry.
    - Gateway batch capability metadata is preserved.
@@ -276,9 +316,7 @@ Client (get_model_registry / get_registry_model)
 
 ## Running locally
 
-```bash
-make gateway  # uvicorn with --reload on port 8000
-```
+The [quick-start command](#quick-start) uses Docker Compose. It builds the gateway, loads `.env`, exposes Redis at `redis://127.0.0.1:6380`, and mounts `model_gateway/` and `model_library/` so Uvicorn reloads source changes.
 ## Source files
 
 | File | Role |

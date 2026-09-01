@@ -151,6 +151,7 @@ CONTEXT_WINDOW_PATTERN = re.compile(
     r"exceeds maximum length|"
     r"too long.*tokens.*maximum|"
     r"too large for model with \d+ maximum context length|"
+    r"prompt \d+ > \d+ maximum context length|"  # mistral
     r"longer than the model's context length|"
     r"too many tokens.*size limit exceeded|"
     r"prompt is too long|"
@@ -163,7 +164,8 @@ CONTEXT_WINDOW_PATTERN = re.compile(
     r"payload.*too large|"
     r"string too long|"
     r"input exceeded the context window|"
-    r"input length \d+ exceeds the maximum allowed input length"  # poolside
+    r"input length \d+ exceeds the maximum allowed input length|"  # poolside
+    r"configured context length exceeded"
 )
 
 
@@ -354,6 +356,8 @@ RETRIABLE_EXCEPTION_CODES = [
     "statuscode.internal",  # gRPC INTERNAL errors (e.g. xAI native SDK)
     "statuscode.unavailable",  # gRPC UNAVAILABLE errors (e.g. broken pipe)
     "statuscode.invalid_argument",  # gRPC INVALID_ARGUMENT (transient under concurrency)
+    "currently at capacity",  # provider-side capacity rejection (xAI gRPC RESOURCE_EXHAUSTED)
+    "download multimodal file timed out",  # transient DashScope multimodal fetch timeout
     "statuscode.unknown",  # gRPC UNKNOWN errors (e.g. "Stream removed")
     "stream removed",  # gRPC stream dropped by peer
     "rst_stream",  # gRPC RST_STREAM errors

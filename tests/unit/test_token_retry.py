@@ -6,24 +6,31 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable, Coroutine
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from types import SimpleNamespace
+from typing import Any, cast
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import fakeredis
 import pytest
 
+from model_library.base.base import LLM, TokenRetryParams
 from model_library.base.output import QueryResult, QueryResultMetadata
-from model_library.exceptions import ImmediateRetryException, RetryException
+from model_library.exceptions import (
+    ImmediateRetryException,
+    RetryException,
+)
 from model_library.retriers.base import BaseRetrier
 from model_library.retriers.token import TokenRetrier, set_redis_client
 from model_library.retriers.token import token as token_module
 from model_library.retriers.token.utils import KEY_PREFIX, get_status
+from model_library.register_models import DefaultRateLimit
 
 CLIENT_KEY = ("provider", "model")
 TOKEN_KEY = f"{KEY_PREFIX}:provider:model:tokens"
+REQUEST_KEY = f"{KEY_PREFIX}:provider:model:requests"
+BURST_KEY = f"{TOKEN_KEY}:burst"
+CONFIG_KEY = f"{TOKEN_KEY}:config"
 PRIORITY_KEY_PREFIX = f"{KEY_PREFIX}:provider:model:priority"
-
-
 @pytest.fixture(autouse=True)
 def mock_asyncio_sleep():
     with patch("asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
@@ -121,6 +128,7 @@ def _make_retrier(
     estimate_input_tokens: int = 100,
     estimate_output_tokens: int = 50,
     use_dynamic_estimate: bool = True,
+    manages_tokens: bool = True,
 ) -> TokenRetrier:
     """Helper to create a TokenRetrier with sensible defaults."""
     return TokenRetrier(
@@ -131,6 +139,7 @@ def _make_retrier(
         estimate_input_tokens=estimate_input_tokens,
         estimate_output_tokens=estimate_output_tokens,
         use_dynamic_estimate=use_dynamic_estimate,
+        manages_tokens=manages_tokens,
     )
 
 
@@ -144,6 +153,53 @@ async def _init_tokens(redis, value: int = 1000, limit: int = 1000):
     """Set up token state in redis."""
     await redis.set(TOKEN_KEY, str(value))
     await redis.set(f"{TOKEN_KEY}:limit", str(limit))
+
+
+async def _combined_admission(
+    redis,
+    *,
+    member: str,
+    required_tokens: int,
+    burst_limit: int = 1_000,
+    client_key: tuple[str, str] = CLIENT_KEY,
+    run_meta_key: str = "",
+):
+    token_key = TokenRetrier.get_token_key(client_key)
+    return await redis.eval(
+        token_module.ADMIT_REQUEST_LUA,
+        5,
+        token_key,
+        f"{token_key}:burst",
+        TokenRetrier.get_request_key(client_key),
+        f"{token_key}:config",
+        run_meta_key,
+        required_tokens,
+        burst_limit,
+        member,
+        token_module.REQUEST_WINDOW_MILLISECONDS,
+        token_module.REQUEST_LOG_TTL_MILLISECONDS,
+    )
+
+
+async def _now_ms(redis) -> int:
+    seconds, microseconds = await redis.time()
+    return (int(seconds) * 1000) + (int(microseconds) // 1000)
+
+
+async def _initialize_request_policy(requests_per_minute: int | None) -> None:
+    token_module._BACKGROUND_LOOP_TASKS.clear()  # pyright: ignore[reportPrivateUsage]
+    with patch(
+        "asyncio.create_task",
+        side_effect=_fake_create_task_factory([_FakeTask()]),
+    ):
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=CLIENT_KEY,
+            limit=3000,
+            limit_refresh_seconds=60,
+            requests_per_minute=requests_per_minute,
+            logger=logging.getLogger("test"),
+            get_rate_limit_func=AsyncMock(),
+        )
 
 
 async def test_token_retrier_initialization(redis):
@@ -164,6 +220,383 @@ async def test_token_retrier_initialization(redis):
     assert await redis.get(f"{KEY_PREFIX}:p:m:tokens") == "3000"
     assert await redis.get(f"{KEY_PREFIX}:p:m:tokens:limit") == "3000"
     assert mock_create_task.call_count == 1
+
+
+async def test_rpm_only_initialization_skips_token_bucket_and_background_loop(redis):
+    """A model with no configured TPM must not get a token bucket, a limit
+    key, or a background refill/correction loop — only the RPM config."""
+    key_tuple = ("p", "rpm-only")
+
+    with patch("asyncio.create_task") as mock_create_task:
+        await TokenRetrier.init_remaining_tokens(
+            client_registry_key=key_tuple,
+            limit=None,
+            limit_refresh_seconds=60,
+            requests_per_minute=42,
+            logger=logging.getLogger("test"),
+            get_rate_limit_func=AsyncMock(),
+        )
+
+    assert await redis.get(f"{KEY_PREFIX}:p:rpm-only:tokens") is None
+    assert await redis.get(f"{KEY_PREFIX}:p:rpm-only:tokens:limit") is None
+    config = await redis.hgetall(f"{KEY_PREFIX}:p:rpm-only:tokens:config")
+    assert config == {"requests_per_minute": "42", "request_window_seconds": "61"}
+    mock_create_task.assert_not_called()
+
+
+async def test_reinitialization_preserves_managed_policy_and_history(redis):
+    await _initialize_request_policy(2)
+    seconds, microseconds = await redis.time()
+    now_ms = (int(seconds) * 1000) + (int(microseconds) // 1000)
+    await redis.zadd(REQUEST_KEY, {"recent": now_ms})
+
+    await _initialize_request_policy(None)
+    assert (await redis.hgetall(CONFIG_KEY))["requests_per_minute"] == "2"
+
+    await _initialize_request_policy(1)
+    assert (await redis.hgetall(CONFIG_KEY))["requests_per_minute"] == "1"
+    assert await redis.zrange(REQUEST_KEY, 0, -1) == ["recent"]
+
+
+async def test_request_window_and_shared_limit(redis):
+    seconds, microseconds = await redis.time()
+    now_ms = (int(seconds) * 1000) + (int(microseconds) // 1000)
+    window = token_module.REQUEST_WINDOW_MILLISECONDS
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 3)
+    await redis.zadd(
+        REQUEST_KEY,
+        {
+            "expired": now_ms - window - 1_000,
+            "recent": now_ms - window + 1_000,
+        },
+    )
+
+    admitted = await asyncio.gather(
+        *(
+            _combined_admission(
+                redis,
+                member=f"window-{index}",
+                required_tokens=0,
+                burst_limit=0,
+            )
+            for index in range(10)
+        )
+    )
+
+    assert sum(result[0] for result in admitted) == 2
+    assert await redis.zscore(REQUEST_KEY, "expired") is None
+    assert await redis.zscore(REQUEST_KEY, "recent") is not None
+    assert await redis.zcard(REQUEST_KEY) == 3
+    assert 121_000 <= await redis.pttl(REQUEST_KEY) <= 122_000
+
+
+async def test_combined_admission_is_all_or_nothing(redis):
+    await _init_tokens(redis)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+
+    assert (await _combined_admission(redis, member="first", required_tokens=100))[0]
+    assert await redis.get(TOKEN_KEY) == "900"
+
+    rpm_blocked = await _combined_admission(
+        redis,
+        member="rpm-full",
+        required_tokens=100,
+    )
+    assert rpm_blocked[:2] == [0, 2]
+    assert await redis.get(TOKEN_KEY) == "900"
+
+    await redis.delete(REQUEST_KEY)
+    await redis.set(TOKEN_KEY, 0)
+    tpm_blocked = await _combined_admission(
+        redis,
+        member="tpm-empty",
+        required_tokens=100,
+    )
+    assert tpm_blocked[:2] == [0, 1]
+    assert await redis.zcard(REQUEST_KEY) == 0
+
+
+async def test_combined_admission_is_idempotent_for_same_member(redis):
+    await _init_tokens(redis)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+
+    first = await _combined_admission(
+        redis,
+        member="stable-permit-id",
+        required_tokens=100,
+    )
+    first_score = await redis.zscore(REQUEST_KEY, "stable-permit-id")
+    replay = await _combined_admission(
+        redis,
+        member="stable-permit-id",
+        required_tokens=100,
+    )
+
+    assert first == [1, 0, 0, 1]
+    assert replay == [1, 0, 0, 1]
+    assert await redis.get(TOKEN_KEY) == "900"
+    assert await redis.zcard(REQUEST_KEY) == 1
+    assert await redis.zscore(REQUEST_KEY, "stable-permit-id") == first_score
+
+
+async def test_saturated_window_is_reported_before_a_token_shortage(redis):
+    """RPM is evaluated first, so a full window is not masked by an empty budget."""
+    await redis.set(TOKEN_KEY, 0)
+    await redis.set(f"{TOKEN_KEY}:limit", 1_000)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+    await redis.zadd(REQUEST_KEY, {"held": await _now_ms(redis)})
+
+    # both budgets are exhausted; the reason must be the window, not the tokens
+    blocked = await _combined_admission(redis, member="both", required_tokens=100)
+
+    assert blocked[1] == 2
+
+
+async def test_admission_errors_when_the_token_key_is_missing(redis):
+    """An uninitialized limiter fails loudly rather than parking the caller forever."""
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+
+    with pytest.raises(Exception, match="(?i)error"):
+        await _combined_admission(redis, member="uninitialized", required_tokens=100)
+
+    assert await redis.zcard(REQUEST_KEY) == 0
+
+
+async def test_rpm_pass_with_tpm_failure_leaves_the_window_free(redis):
+    """Clearing RPM but failing TPM must not strand a slot the request never used."""
+    await _init_tokens(redis, value=50)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+
+    blocked = await _combined_admission(redis, member="hopeful", required_tokens=100)
+
+    assert blocked[:2] == [0, 1]
+    assert await redis.zcard(REQUEST_KEY) == 0
+    assert await redis.get(TOKEN_KEY) == "50"
+
+    # the single slot is still available once tokens come back
+    await redis.set(TOKEN_KEY, 1_000)
+    retried = await _combined_admission(redis, member="hopeful", required_tokens=100)
+
+    assert retried[0] == 1
+    assert await redis.zcard(REQUEST_KEY) == 1
+    assert await redis.get(TOKEN_KEY) == "900"
+
+
+@pytest.mark.parametrize("request_limit", [None, 0, -1, "invalid"])
+async def test_admission_without_configured_rpm_skips_window(
+    redis,
+    request_limit: int | str | None,
+):
+    """A nonpositive configured RPM deducts tokens without touching the window."""
+    if request_limit is not None:
+        await redis.hset(CONFIG_KEY, "requests_per_minute", request_limit)
+    await _init_tokens(redis)
+
+    retrier = _make_retrier()
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    assert await redis.zcard(REQUEST_KEY) == 0
+    assert await redis.get(TOKEN_KEY) == "850"
+
+
+async def test_cancellation_while_waiting_does_not_consume_request(redis):
+    await _init_tokens(redis)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+    assert (await _combined_admission(redis, member="first", required_tokens=0))[0]
+
+    with (
+        patch(
+            "asyncio.sleep",
+            new_callable=AsyncMock,
+            side_effect=asyncio.CancelledError,
+        ),
+        pytest.raises(asyncio.CancelledError),
+    ):
+        retrier = _make_retrier()
+        await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    assert await redis.zcard(REQUEST_KEY) == 1
+
+
+async def test_retry_after_points_at_the_oldest_slot_expiry(redis):
+    """A blocked request is told to wait exactly until the oldest slot ages out."""
+    window = token_module.REQUEST_WINDOW_MILLISECONDS
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+    # one second into its window, so it frees up in (window - 1s)
+    await redis.zadd(REQUEST_KEY, {"held": await _now_ms(redis) - 1_000})
+
+    blocked = await _combined_admission(redis, member="waiter", required_tokens=0)
+
+    admitted, blocked_reason, retry_after_ms, request_limit = blocked
+    assert (admitted, blocked_reason, request_limit) == (0, 2, 1)
+    # allow for elapsed time between our TIME read and the script's
+    assert window - 1_500 <= retry_after_ms <= window - 1_000
+
+
+async def test_admission_surfaces_the_configured_limit(redis):
+    """Every outcome reports the RPM in force, which _pre_function emits as telemetry."""
+    await _init_tokens(redis)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 2)
+
+    admitted = await _combined_admission(redis, member="one", required_tokens=100)
+    assert admitted == [1, 0, 0, 2]
+
+    await redis.set(TOKEN_KEY, 0)
+    token_blocked = await _combined_admission(redis, member="two", required_tokens=100)
+    assert token_blocked == [0, 1, 0, 2]
+
+    await redis.set(TOKEN_KEY, 1_000)
+    await redis.zadd(REQUEST_KEY, {"filler": await _now_ms(redis)})
+    window_blocked = await _combined_admission(
+        redis, member="three", required_tokens=100
+    )
+    assert window_blocked[0] == 0
+    assert window_blocked[1] == 2
+    assert window_blocked[3] == 2
+
+
+async def test_burst_rejection_does_not_consume_a_request_slot(redis):
+    """The window check passes first, so a burst rejection must not leave a slot behind."""
+    await _init_tokens(redis)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 10)
+
+    blocked = await _combined_admission(
+        redis,
+        member="bursty",
+        required_tokens=100,
+        burst_limit=50,
+    )
+
+    assert blocked[:2] == [0, 1]
+    assert await redis.zcard(REQUEST_KEY) == 0
+    assert await redis.get(TOKEN_KEY) == "1000"
+    assert not await redis.exists(BURST_KEY)
+
+
+async def test_request_limit_changes_take_effect_without_reinitialization(redis):
+    """The limit is read from the config hash per admission, not cached at init."""
+    await _init_tokens(redis)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+
+    assert (await _combined_admission(redis, member="a", required_tokens=0))[0] == 1
+    assert (await _combined_admission(redis, member="b", required_tokens=0))[0] == 0
+
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 3)
+
+    assert (await _combined_admission(redis, member="b", required_tokens=0))[0] == 1
+    assert await redis.zcard(REQUEST_KEY) == 2
+
+
+async def test_terminal_run_is_rejected_before_the_request_window(redis):
+    """A cancelled run short-circuits ahead of the window and leaves it untouched."""
+    run_meta_key = f"{KEY_PREFIX}:provider:model:benchmark:run:gone"
+    await _init_tokens(redis)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+    await redis.hset(run_meta_key, mapping={"outcome": "cancelled"})
+    await redis.zadd(REQUEST_KEY, {"held": await _now_ms(redis)})
+
+    result = await _combined_admission(
+        redis,
+        member="terminal",
+        required_tokens=100,
+        run_meta_key=run_meta_key,
+    )
+
+    # reason 4 rather than 2, proving the outcome check runs before the window
+    assert result == [0, 4, 0, 0]
+    assert await redis.zrange(REQUEST_KEY, 0, -1) == ["held"]
+    assert await redis.get(TOKEN_KEY) == "1000"
+
+
+async def test_request_window_is_scoped_per_model(redis):
+    """Exhausting one model's window leaves another model's window free."""
+    other_key = ("provider", "other-model")
+    other_request_key = TokenRetrier.get_request_key(other_key)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+    await redis.hset(
+        f"{TokenRetrier.get_token_key(other_key)}:config",
+        "requests_per_minute",
+        1,
+    )
+
+    assert (await _combined_admission(redis, member="a", required_tokens=0))[0] == 1
+    assert (await _combined_admission(redis, member="b", required_tokens=0))[0] == 0
+
+    other = await _combined_admission(
+        redis,
+        member="a",
+        required_tokens=0,
+        client_key=other_key,
+    )
+
+    assert other[0] == 1
+    assert await redis.zcard(REQUEST_KEY) == 1
+    assert await redis.zcard(other_request_key) == 1
+
+
+async def test_expired_member_is_readmitted_as_a_new_request(redis):
+    """An aged-out permit is not mistaken for a still-held one."""
+    window = token_module.REQUEST_WINDOW_MILLISECONDS
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 2)
+
+    assert (await _combined_admission(redis, member="permit", required_tokens=0))[0] == 1
+    stale_score = await _now_ms(redis) - window - 1_000
+    await redis.zadd(REQUEST_KEY, {"permit": stale_score})
+
+    replay = await _combined_admission(redis, member="permit", required_tokens=0)
+
+    assert replay[0] == 1
+    assert await redis.zcard(REQUEST_KEY) == 1
+    # re-added at the current time rather than left at its expired score
+    assert await redis.zscore(REQUEST_KEY, "permit") > stale_score
+
+
+async def test_pre_function_waits_for_the_request_window_not_the_token_interval(redis):
+    """An RPM block sleeps until the next slot, not the much shorter token interval."""
+    window = token_module.REQUEST_WINDOW_MILLISECONDS
+    await _init_tokens(redis)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+    await redis.zadd(REQUEST_KEY, {"held": await _now_ms(redis) - 1_000})
+
+    async def free_the_window(*_args: object, **_kwargs: object) -> None:
+        await redis.delete(REQUEST_KEY)
+
+    with patch(
+        "asyncio.sleep", new_callable=AsyncMock, side_effect=free_the_window
+    ) as mock_sleep:
+        retrier = _make_retrier()
+        await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    mock_sleep.assert_called_once()
+    waited = mock_sleep.call_args.args[0]
+    # derived from retry_after_ms plus small jitter, far above TOKEN_WAIT_TIME's 5-15s
+    assert (window - 1_500) / 1_000 <= waited <= (window - 1_000) / 1_000 + 0.1
+    assert await redis.zcard(REQUEST_KEY) == 1
+    assert await redis.get(TOKEN_KEY) == "850"
+
+
+async def test_lower_priority_waiter_is_checked_before_the_request_window(redis):
+    """Yielding to a lower priority must not attempt admission or burn a slot."""
+    await _init_tokens(redis)
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 1)
+    await redis.zadd(REQUEST_KEY, {"held": await _now_ms(redis)})
+    await redis.zadd(f"{PRIORITY_KEY_PREFIX}:1", {"other-req": time.time()})
+
+    async def clear_both(*_args: object, **_kwargs: object) -> None:
+        await redis.zrem(f"{PRIORITY_KEY_PREFIX}:1", "other-req")
+        await redis.delete(REQUEST_KEY)
+
+    with patch(
+        "asyncio.sleep", new_callable=AsyncMock, side_effect=clear_both
+    ) as mock_sleep:
+        retrier = _make_retrier()
+        retrier.priority = 2
+        await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+
+    # the first wait is the jittered token interval, not the ~60s window delay,
+    # so the window was never consulted while a lower priority was queued
+    assert mock_sleep.call_args_list[0].args[0] <= token_module.TOKEN_WAIT_TIME * 1.5
+    assert await redis.zcard(REQUEST_KEY) == 1
 
 
 async def test_pre_function_waits_for_tokens(redis, token_retrier: TokenRetrier):
@@ -224,6 +657,30 @@ async def test_post_function_adjusts_tokens(redis, token_retrier: TokenRetrier):
     assert remaining == 1100
 
 
+async def test_full_execute_flow_rpm_only(redis):
+    """RPM-only execute flow never deducts, refills, or reads a token bucket."""
+    retrier = _make_retrier(
+        estimate_input_tokens=0,
+        estimate_output_tokens=0,
+        manages_tokens=False,
+    )
+    await redis.hset(CONFIG_KEY, "requests_per_minute", 5)
+
+    mock_qr = MagicMock()
+    mock_qr.metadata.total_input_tokens = 100
+    mock_qr.metadata.total_output_tokens = 50
+    mock_qr.metadata.cache_read_tokens = 0
+    mock_qr.metadata.extra = {}
+
+    work_func = AsyncMock(return_value=(mock_qr, 0.5))
+
+    result = await retrier.execute(work_func, "arg1")
+
+    assert result == (mock_qr, 0.5)
+    work_func.assert_called_once_with("arg1")
+    assert await redis.exists(TOKEN_KEY) == 0
+
+
 async def test_on_retry_increases_priority(token_retrier: TokenRetrier):
     """Test that each retry attempt lowers the priority (higher numerical value)."""
     assert token_retrier.priority == 0
@@ -235,6 +692,83 @@ async def test_on_retry_increases_priority(token_retrier: TokenRetrier):
     for _ in range(10):
         await token_retrier._on_retry(Exception("fail"), 1.0, 1.0)  # pyright: ignore[reportPrivateUsage]
     assert token_retrier.priority == 5
+
+
+async def test_token_retry_logs_attempt_and_recovery_at_info(
+    redis,
+    token_retrier: TokenRetrier,
+):
+    await _init_tokens(redis, value=1000)
+
+    logger = MagicMock()
+    token_retrier.logger = logger
+    work_func = AsyncMock(side_effect=[RetryException("retry"), "success"])
+    retry_times = iter([100.0, 101.0])
+
+    def retry_time() -> float:
+        return next(retry_times, 103.0)
+
+    with (
+        patch(
+            "model_library.retriers.base.time.time",
+            side_effect=retry_time,
+        ),
+        patch.object(token_retrier, "validate", new_callable=AsyncMock),
+        patch.object(token_retrier, "_pre_function", new_callable=AsyncMock),
+        patch.object(token_retrier, "_post_function", new_callable=AsyncMock),
+        patch.object(
+            token_retrier,
+            "_calculate_wait_time",
+            new_callable=AsyncMock,
+            return_value=0.0,
+        ),
+        patch.object(
+            token_module.telemetry,
+            "log_sentry_info",
+        ) as log_sentry_info,
+    ):
+        result = await token_retrier.execute(work_func)
+
+    assert result == "success"
+    assert work_func.await_count == 2
+    assert token_retrier.priority == 1
+    logger.warning.assert_not_called()
+    assert logger.info.call_args_list == [
+        call(
+            "[Token Retry] | Attempt: 1/10 | Elapsed: 1.0s | "
+            "Next wait: 0.0s | Priority: 1 (-5-5) | "
+            "Exception: RetryException: retry"
+        ),
+        call("[Retry Recovered] | token | Attempts: 1 | Elapsed: 3.0s"),
+    ]
+    assert log_sentry_info.call_args_list == [
+        call(
+            "[Token Retry] | Attempt: 1/10 | Elapsed: 1.0s | "
+            "Next wait: 0.0s | Priority: 1 (-5-5) | "
+            "Exception: RetryException: retry",
+            {
+                "retry.strategy": "token",
+                "run_id": "test-instance",
+                "question_id": "test-qid",
+                "retry_queue.question_ref": "test-instance:test-qid",
+                "retry_queue.attempt": 1,
+                "retry_queue.max_tries": 10,
+                "retry_queue.elapsed_seconds": 1.0,
+                "retry_queue.next_wait_seconds": 0.0,
+                "retry_queue.priority": 1,
+                "exception.type": "RetryException",
+            },
+        ),
+        call(
+            "[Retry Recovered] | token | Attempts: 1 | Elapsed: 3.0s",
+            {
+                "retry.strategy": "token",
+                "retry.attempts": 1,
+                "retry.max_tries": 10,
+                "retry.elapsed_seconds": 3.0,
+            },
+        ),
+    ]
 
 
 async def test_full_execute_flow(redis, token_retrier: TokenRetrier):
@@ -277,31 +811,6 @@ async def test_post_function_handles_missing_cache_metadata(
     # Estimate 150, Actual 150. Adjustment = 0. 1000 + 0 = 1000
     remaining = int(await redis.get(TOKEN_KEY))
     assert remaining == 1000
-
-
-async def test_header_correction_fallback_logic():
-    """
-    Verifies that if token_remaining is None, it sums input and output headers.
-    """
-    from model_library.base.base import RateLimit
-
-    rate_limit = MagicMock(spec=RateLimit)
-    rate_limit.token_remaining = None
-    rate_limit.token_remaining_input = 400
-    rate_limit.token_remaining_output = 100
-    rate_limit.unix_timestamp = 0
-
-    tokens_remaining = rate_limit.token_remaining
-    if tokens_remaining is None:
-        if (
-            rate_limit.token_remaining_input is not None
-            and rate_limit.token_remaining_output is not None
-        ):
-            tokens_remaining = (
-                rate_limit.token_remaining_input + rate_limit.token_remaining_output
-            )
-
-    assert tokens_remaining == 500
 
 
 async def test_pre_function_token_debt_and_recovery(redis, token_retrier: TokenRetrier):
@@ -1085,11 +1594,11 @@ async def test_completed_background_loop_removes_task_and_lock(redis):
     assert key not in token_module._BACKGROUND_LOOP_LOCKS
 
 
-async def test_init_with_same_config_reuses_existing_background_loop(redis):
-    """When config is unchanged between init calls, reuse the in-process background loop."""
+async def test_init_with_rpm_only_change_reuses_existing_background_loop(redis):
+    """RPM changes do not restart the token-refill background loop."""
     key_tuple = ("p", "m")
     key = f"{KEY_PREFIX}:p:m:tokens"
-    fake_task = _FakeTask()
+    fake_tasks = [_FakeTask(), _FakeTask()]
 
     with (
         patch(
@@ -1097,36 +1606,40 @@ async def test_init_with_same_config_reuses_existing_background_loop(redis):
             new_callable=AsyncMock,
         ) as mock_bg,
         patch(
-            "asyncio.create_task", side_effect=_fake_create_task_factory([fake_task])
+            "asyncio.create_task", side_effect=_fake_create_task_factory(fake_tasks)
         ) as mock_create_task,
     ):
-        # first init
         await TokenRetrier.init_remaining_tokens(
             client_registry_key=key_tuple,
             limit=3000,
             limit_refresh_seconds=60,
+            requests_per_minute=100,
             logger=logging.getLogger("test"),
             get_rate_limit_func=AsyncMock(),
         )
 
-        # simulate an active loop with the SAME config
         await redis.set(f"{key}:task:active", "some-task-id")
         await redis.hset(
             f"{key}:config",
-            mapping={"limit": "3000", "tokens_per_second": "50", "burst_limit": "2400"},
+            mapping={
+                "limit": "3000",
+                "tokens_per_second": "50",
+                "requests_per_minute": "100",
+            },
         )
 
-        # second init with SAME limit
         await TokenRetrier.init_remaining_tokens(
             client_registry_key=key_tuple,
             limit=3000,
             limit_refresh_seconds=60,
+            requests_per_minute=200,
             logger=logging.getLogger("test"),
             get_rate_limit_func=AsyncMock(),
         )
 
     assert mock_create_task.call_count == 1
     assert mock_bg.call_count == 1
+    assert await redis.hget(f"{key}:config", "requests_per_minute") == "200"
 
 
 async def test_init_starts_new_background_loop_after_existing_task_finishes(redis):
@@ -1165,50 +1678,43 @@ async def test_init_starts_new_background_loop_after_existing_task_finishes(redi
     assert mock_bg.call_count == 2
 
 
-BURST_KEY = f"{TOKEN_KEY}:burst"
-CONFIG_KEY = f"{TOKEN_KEY}:config"
-
 
 # ── Burst limit ─────────────────────────────────────────────────────
 
 
 async def test_burst_blocks_when_exceeded(redis):
     """Deduction fails when per-second burst usage + required > burst_limit."""
-    from model_library.retriers.token.token import DEDUCT_TOKENS_LUA
-
     await _init_tokens(redis, value=1000, limit=1000)
     burst_limit = 200
 
     # first deduction: 150 tokens, within limit
-    result = await redis.eval(
-        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit
-    )  # noqa: S307
-    assert result == 1
+    result = await _combined_admission(
+        redis, member="first", required_tokens=150, burst_limit=burst_limit
+    )
+    assert result[0] == 1
     assert int(await redis.get(TOKEN_KEY)) == 850
 
     # second deduction: 150 more would put burst at 300 > 200
-    result = await redis.eval(
-        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit
-    )  # noqa: S307
-    assert result == 0
+    result = await _combined_admission(
+        redis, member="second", required_tokens=150, burst_limit=burst_limit
+    )
+    assert result[:2] == [0, 1]
     assert int(await redis.get(TOKEN_KEY)) == 850  # unchanged
 
 
 async def test_burst_allows_within_cap(redis):
     """Deduction succeeds when per-second burst usage + required <= burst_limit."""
-    from model_library.retriers.token.token import DEDUCT_TOKENS_LUA
-
     await _init_tokens(redis, value=1000, limit=1000)
     burst_limit = 200
 
-    result = await redis.eval(
-        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit
-    )  # noqa: S307
-    assert result == 1
-    result = await redis.eval(
-        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit
-    )  # noqa: S307
-    assert result == 1
+    result = await _combined_admission(
+        redis, member="first", required_tokens=100, burst_limit=burst_limit
+    )
+    assert result[0] == 1
+    result = await _combined_admission(
+        redis, member="second", required_tokens=100, burst_limit=burst_limit
+    )
+    assert result[0] == 1
 
     assert int(await redis.get(TOKEN_KEY)) == 800
     assert int(await redis.get(BURST_KEY)) == 200
@@ -1216,13 +1722,13 @@ async def test_burst_allows_within_cap(redis):
 
 async def test_burst_resets_after_ttl(redis):
     """Burst counter resets after 1-second TTL expires."""
-    from model_library.retriers.token.token import DEDUCT_TOKENS_LUA
-
     await _init_tokens(redis, value=1000, limit=1000)
     burst_limit = 200
 
     # fill burst
-    await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 200, burst_limit)  # noqa: S307
+    await _combined_admission(
+        redis, member="fill", required_tokens=200, burst_limit=burst_limit
+    )
     assert int(await redis.get(BURST_KEY)) == 200
 
     # verify TTL was set
@@ -1233,26 +1739,30 @@ async def test_burst_resets_after_ttl(redis):
     await redis.delete(BURST_KEY)
 
     # fresh window — should pass
-    result = await redis.eval(
-        DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 150, burst_limit
-    )  # noqa: S307
-    assert result == 1
+    result = await _combined_admission(
+        redis, member="fresh", required_tokens=150, burst_limit=burst_limit
+    )
+    assert result[0] == 1
     assert int(await redis.get(BURST_KEY)) == 150
 
 
 async def test_burst_ttl_not_extended(redis):
     """Subsequent deductions don't extend the burst window TTL."""
-    from model_library.retriers.token.token import DEDUCT_TOKENS_LUA
-
     await _init_tokens(redis, value=1000, limit=1000)
     burst_limit = 500
 
     # first deduction sets TTL
-    await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit)  # noqa: S307
+    await _combined_admission(
+        redis, member=f"ttl-{await redis.incr('ttl-seq')}", required_tokens=100,
+        burst_limit=burst_limit
+    )
     ttl1 = await redis.pttl(BURST_KEY)
 
     # second deduction should not reset TTL (TTL > 0, not -1)
-    await redis.eval(DEDUCT_TOKENS_LUA, 2, TOKEN_KEY, BURST_KEY, 100, burst_limit)  # noqa: S307
+    await _combined_admission(
+        redis, member=f"ttl-{await redis.incr('ttl-seq')}", required_tokens=100,
+        burst_limit=burst_limit
+    )
     ttl2 = await redis.pttl(BURST_KEY)
 
     assert ttl2 <= ttl1  # TTL only decreases, never extended
@@ -1292,7 +1802,7 @@ async def test_dispatched_removed_on_reentry(redis):
 
     async def capture_mid_pre(script, numkeys, *args):
         nonlocal removed_before_deduct
-        if numkeys == 3 and removed_before_deduct is None:
+        if numkeys == 5 and removed_before_deduct is None:
             removed_before_deduct = not await redis.sismember(
                 dispatched_key, "run-cycle:q-agent"
             )
@@ -1321,7 +1831,7 @@ async def test_dispatched_cycling_across_turns(redis):
 
         async def capture_mid_pre(script, numkeys, *args, _orig=original_eval):
             nonlocal removed_during_turn
-            if numkeys == 3 and removed_during_turn is None:
+            if numkeys == 5 and removed_during_turn is None:
                 removed_during_turn = not await redis.sismember(
                     dispatched_key, "q-agentic"
                 )

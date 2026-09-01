@@ -1,5 +1,6 @@
 base-config:
   company: MiniMax
+  country: China
   documentation_url: https://platform.minimax.io/docs
   open_source: true
   supports:
@@ -43,7 +44,7 @@ m2-models:
     properties:
       reasoning_model: true
       context_window: 196_608
-      max_tokens: 196_608
+      max_tokens: 80_000 # provider rejects requests whose prompt + max_tokens exceeds the window
     costs_per_million_token:
       input: 0.30
       output: 1.20

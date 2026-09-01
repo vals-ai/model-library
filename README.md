@@ -79,7 +79,7 @@ from model_library import model
 
 
 async def main():
-    llm = model("anthropic/claude-opus-4-1-20250805-thinking")
+    llm = model("anthropic/claude-opus-4-6-thinking")
 
     result = await llm.query(
         "What is QSBS? Explain your thinking in detail and make it concise."

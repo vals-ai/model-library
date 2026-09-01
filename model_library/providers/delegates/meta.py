@@ -1,7 +1,6 @@
 import io
 from typing import Literal
 
-import httpx
 from pydantic import SecretStr
 from typing_extensions import override
 
@@ -15,7 +14,6 @@ from model_library.base import (
 from model_library.base.query_ids import PromptCacheKeyMode
 from model_library.providers.openai import OpenAIConfig
 from model_library.register_models import register_provider
-from model_library.utils import default_httpx_client
 
 
 class MetaConfig(ProviderConfig):
@@ -36,7 +34,7 @@ class MetaModel(DelegateOnly):
     ):
         super().__init__(model_name, provider, config=config)
 
-        base_url = "https://api.llama.com/v1"
+        base_url = "https://api.meta.ai/v1"
         # https://docs.llama.com
         config = config or LLMConfig()
         delegate_config = config.model_copy(
@@ -64,38 +62,17 @@ class MetaModel(DelegateOnly):
         bytes: io.BytesIO,
         type: Literal["image", "file"] = "file",
     ) -> FileWithId:
-        client = default_httpx_client()
-        client.base_url = httpx.URL("https://api.llama.com/v1")
-        client.headers["Authorization"] = (
-            f"Bearer {model_library_settings.META_API_KEY}"
+        assert self.delegate
+        # Meta only accepts the "user_data" purpose, so the delegate's own
+        # upload_file ("assistants") cannot be reused.
+        response = await self.delegate.get_client().files.create(
+            file=(name, bytes, mime),
+            purpose="user_data",
         )
-
-        file_bytes = bytes.getvalue()
-
-        # step 1: create upload
-        upload_resp = await client.post(
-            "/uploads",
-            json={
-                "bytes": len(file_bytes),
-                "filename": name,
-                "mime_type": mime,
-                "purpose": "ephemeral_attachment",
-            },
-        )
-        upload_resp.raise_for_status()
-        upload_id: str = upload_resp.json()["id"]
-
-        # step 2: upload file data
-        file_resp = await client.post(
-            f"/uploads/{upload_id}",
-            files={"data": (name, file_bytes, mime)},
-        )
-        file_resp.raise_for_status()
-        file_id: str = file_resp.json()["file_id"]
 
         return FileWithId(
             type=type,
-            name=name,
+            name=response.filename,
             mime=mime,
-            file_id=file_id,
+            file_id=response.id,
         )

@@ -1,6 +1,6 @@
 # Migrating agents and providers to Model Gateway
 
-This guide is for agents/providers that already use `model-library` model objects and want to route requests through a Model Gateway instead of calling providers directly.
+This guide is for agents and providers that already use `model-library` model objects and want to route requests through Model Gateway instead of calling providers directly.
 
 ## Short version
 
@@ -16,7 +16,7 @@ This guide is for agents/providers that already use `model-library` model object
 4. Keep calling `await model.query(...)` normally.
 5. Move provider/request overrides into `LLMConfig`; do not pass provider-specific kwargs to `query()`.
 
-When `MODEL_GATEWAY_URL` is set, `get_registry_model()` loads the Gateway-backed client registry and returns a fully configured `GatewayLLM`. Metadata and capability fields are available immediately. The same agent code can run direct-provider locally when the env var is unset, and through the Gateway when it is set.
+When `MODEL_GATEWAY_URL` is set, `get_registry_model()` loads the gateway registry and returns a configured `GatewayLLM`. Metadata and capabilities are available immediately. The same code calls providers directly when the variable is unset and uses Model Gateway when it is set.
 
 ## Minimal model code
 
@@ -40,7 +40,7 @@ Do not instantiate provider classes or use `get_raw_model()` for gateway-routed 
 
 ## Overrides
 
-Gateway requests send the model key plus the explicit `LLMConfig` override. The gateway server merges that override with its server-side registry entry before constructing the provider model.
+Gateway requests send the model key and explicit `LLMConfig` override. The server merges the override with its registry entry before constructing the provider model.
 
 | Need | Put it in | Constraint |
 | --- | --- | --- |
@@ -90,8 +90,6 @@ model = get_registry_model(
     ),
 )
 ```
-
-`custom_endpoint` requires `custom_api_key`. The gateway must not send server-held provider keys to caller-selected endpoints.
 
 ## Query kwargs
 
@@ -211,14 +209,14 @@ model = get_registry_model(args.model, override_config=config)
 - [ ] BYOK/custom-endpoint migrations explicitly account for `custom_api_key` and `custom_endpoint` as caller-supplied provider credentials.
 - [ ] `query()` calls do not pass provider-specific kwargs.
 - [ ] Code that reads metadata constructs the model with `get_registry_model()` first.
-- [ ] Code does not rely on gateway-unsupported `get_rate_limit()`, batch, or custom retrier paths.
+- [ ] Code does not use client-side batch or custom retrier paths.
 
-## Unsupported or special paths
+## Gateway feature support
 
-| Path | Migration decision |
+| Feature | Gateway behavior |
 | --- | --- |
-| Client-side custom retriers | Unsupported in gateway mode; retries run server-side. |
-| Client-side batch calls | Raise until gateway batch endpoints exist. |
-| `/tokens/count` | Supported through the gateway-side model implementation. |
-| `/rate-limit` or direct `get_rate_limit()` | `/rate-limit` remains reserved today; validate agents that call `get_rate_limit()` directly before migration. |
-| Raw provider responses/history | HMAC-signed by the gateway and echoed by the client; do not deserialize or mutate raw blobs client-side. |
+| Custom retriers | Do not migrate client-side retriers. The gateway applies retries server-side. |
+| Batch calls | Not supported. They raise until gateway batch endpoints exist. |
+| `/tokens/count` | Supported through the gateway model. |
+| `/rate-limit` / `get_rate_limit()` | Supported. `get_rate_limit()` returns `None` when the provider has no data. |
+| Raw provider responses/history | The gateway signs them and the client returns them unchanged. Treat them as opaque. |

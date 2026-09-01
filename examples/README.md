@@ -6,7 +6,7 @@ Examples are runnable demos for `model_library`. They make real provider calls u
 
 > **Warning:** Use sandbox or least-privilege API keys, expect billing/rate limits, and do not send sensitive prompts unless intentional.
 
-> **Note:** Examples load environment variables from the repo root `.env`. In internal checkouts, a missing `.env` may trigger the internal AWS Secrets Manager bootstrap and write a local `.env`. Public users should create `.env` themselves or export provider API keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`.
+> **Note:** Examples load environment variables from the repo root `.env`. Create `.env` yourself or export provider API keys such as `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, or `GOOGLE_API_KEY`.
 
 ## Core examples
 
@@ -21,7 +21,7 @@ uv run python examples/tools.py <model> [--mode agent|direct|both]
 
 If you already activated `.venv`, bare `python examples/...` commands work too.
 
-The validator is the broad model smoke check. It exercises core text, declared image/file transports, bounded agent tool use, reasoning evidence for reasoning models, prompt-cache read/write metadata, configured and live rate limits, and configured pricing. Human output groups results by section; one-row sections render as `Caching pass` or `Pricing warn - no configured pricing`, with details indented below. `--json` emits the full validation report, including aggregated usage and configured pricing under `usage.price_per_million_tokens`.
+The validator is the broad model smoke check. It exercises core text, declared image/file transports, bounded agent tool use, reasoning evidence for reasoning models, prompt-cache read/write metadata, configured and live rate limits, and configured pricing. A missing configured rate limit fails the run. Human output groups results by section; one-row sections render as `Caching pass` or `Pricing warn - no configured pricing`, with details indented below. `--json` emits the full validation report, including aggregated usage and configured pricing under `usage.price_per_million_tokens`.
 
 Pass a model string after a command to override its default model:
 

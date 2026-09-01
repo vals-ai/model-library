@@ -1,5 +1,6 @@
 base-config:
   company: Arcee AI
+  country: United States
   documentation_url: https://docs.arcee.ai/api-reference/your-first-api-call
   open_source: true
   supports:

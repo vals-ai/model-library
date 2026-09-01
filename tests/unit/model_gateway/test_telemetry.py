@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import model_library.telemetry as telemetry
+from model_library import model_library_settings
 
 
 def _load_json_object(value: object) -> dict[str, object]:
@@ -31,10 +32,13 @@ class RecordingSpan:
 def reset_telemetry_state(monkeypatch):
     monkeypatch.delenv("GATEWAY_OTEL_ENABLED", raising=False)
     monkeypatch.delenv("SENTRY_DSN", raising=False)
+    monkeypatch.delenv("SENTRY_RELEASE", raising=False)
+    model_library_settings.reset()
     telemetry.shutdown_telemetry()
     telemetry._seen_config_hashes.clear()  # pyright: ignore[reportPrivateUsage]
     monkeypatch.setattr(telemetry, "_httpx_instrumented", False)
     yield
+    model_library_settings.reset()
     telemetry.shutdown_telemetry()
     telemetry._seen_config_hashes.clear()  # pyright: ignore[reportPrivateUsage]
     monkeypatch.setattr(telemetry, "_httpx_instrumented", False)
@@ -51,11 +55,27 @@ def test_telemetry_is_disabled_by_default():
             pytest.fail("Disabled telemetry unexpectedly created a span")
 
 
-def test_configure_telemetry_missing_sentry_dsn_does_not_raise(monkeypatch):
-    monkeypatch.setenv("GATEWAY_OTEL_ENABLED", "true")
+def test_configure_telemetry_missing_sentry_dsn_does_not_raise():
+    model_library_settings.set(GATEWAY_OTEL_ENABLED=True)
 
     assert not telemetry.configure_telemetry()
     assert not telemetry.is_enabled()
+
+
+def test_telemetry_delivery_logger_classifier_is_narrow():
+    assert telemetry.is_telemetry_delivery_logger("opentelemetry.exporter")
+    assert telemetry.is_telemetry_delivery_logger(
+        "opentelemetry.exporter.otlp.proto.http.trace_exporter"
+    )
+    assert telemetry.is_telemetry_delivery_logger("opentelemetry.sdk.trace.export")
+    assert telemetry.is_telemetry_delivery_logger(
+        "opentelemetry.sdk.trace.export.batch"
+    )
+    assert not telemetry.is_telemetry_delivery_logger("opentelemetry.sdk.trace")
+    assert not telemetry.is_telemetry_delivery_logger(
+        "mistralai.extra.observability.otel"
+    )
+    assert not telemetry.is_telemetry_delivery_logger("model_proxy_server")
 
 
 def test_start_span_sets_sentry_operation_attributes(monkeypatch):
@@ -112,8 +132,12 @@ def test_start_span_sets_sentry_operation_attributes(monkeypatch):
     assert attributes["sentry.origin"] == "manual.model_library"
 
 
-def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
+@pytest.mark.parametrize("release", [None, "", "commit-123"])
+def test_configure_telemetry_initializes_sentry_otlp_exporter(
+    monkeypatch, release: str | None
+):
     sentry_init_kwargs: dict[str, object] = {}
+    ignored_sentry_loggers: list[str] = []
     tracer_provider: object | None = None
     instrumented_kwargs: dict[str, object] = {}
 
@@ -130,12 +154,22 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
         def shutdown(self) -> None:
             self.shutdown_called = True
 
+    class FakeSpan:
+        def __init__(self) -> None:
+            self.attributes: dict[str, object] = {}
+
+        def set_attribute(self, key: str, value: object) -> None:
+            self.attributes[key] = value
+
     class FakeHTTPXClientInstrumentor:
         def instrument(self, **kwargs: object) -> None:
             instrumented_kwargs.update(kwargs)
 
     def fake_sentry_init(**kwargs: object) -> None:
         sentry_init_kwargs.update(kwargs)
+
+    def fake_ratio_sampler(ratio: float) -> tuple[str, float]:
+        return ("ratio-sampler", ratio)
 
     def fake_import_module(name: str) -> object:
         modules = {
@@ -148,7 +182,9 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
             "opentelemetry.sdk.trace": SimpleNamespace(
                 TracerProvider=FakeTracerProvider,
                 sampling=SimpleNamespace(
-                    _KNOWN_SAMPLERS={"parentbased_always_on": "always-on-sampler"}
+                    _KNOWN_SAMPLERS={
+                        "parentbased_traceidratio": fake_ratio_sampler,
+                    }
                 ),
             ),
             "sentry_sdk": SimpleNamespace(init=fake_sentry_init),
@@ -157,6 +193,7 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
             ),
             "sentry_sdk.integrations.logging": SimpleNamespace(
                 LoggingIntegration=lambda **kwargs: ("logging", kwargs),
+                ignore_logger_for_sentry_logs=ignored_sentry_loggers.append,
             ),
             "sentry_sdk.integrations.otlp": SimpleNamespace(
                 OTLPIntegration=lambda **kwargs: ("otlp", kwargs),
@@ -168,14 +205,22 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
         nonlocal tracer_provider
         tracer_provider = provider
 
-    monkeypatch.setenv("GATEWAY_OTEL_ENABLED", "true")
-    monkeypatch.setenv("SENTRY_DSN", "https://public@example.com/1")
-    monkeypatch.setenv("OTEL_SERVICE_NAME", "gateway-test")
-    monkeypatch.setenv("GATEWAY_STAGE", "dev")
-    monkeypatch.setenv(
-        "OTEL_RESOURCE_ATTRIBUTES",
-        "service.namespace=vals,deployment.environment=dev,service.name=ignored",
+    model_library_settings.set(
+        GATEWAY_OTEL_ENABLED=True,
+        SENTRY_DSN="https://public@example.com/1",
+        OTEL_SERVICE_NAME="gateway-test",
+        GATEWAY_STAGE="dev",
+        SENTRY_ENVIRONMENT="fallback",
+        SENTRY_OTLP_COLLECTOR_URL="https://collector.example.com/v1/traces",
+        OTEL_RESOURCE_ATTRIBUTES=(
+            "service.namespace=vals,deployment.environment=dev,service.name=ignored"
+        ),
+        OTEL_TRACES_SAMPLER="parentbased_traceidratio",
+        OTEL_TRACES_SAMPLER_ARG="0.25",
     )
+    if release is not None:
+        monkeypatch.setenv("SENTRY_RELEASE", "environment-release")
+        model_library_settings.set(SENTRY_RELEASE=release)
     monkeypatch.setattr(telemetry, "import_module", fake_import_module)
     monkeypatch.setattr(telemetry, "_load_trace_api", lambda: True)
     monkeypatch.setattr(
@@ -189,6 +234,7 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
     assert sentry_init_kwargs["dsn"] == "https://public@example.com/1"
     assert sentry_init_kwargs["server_name"] == "gateway-test"
     assert sentry_init_kwargs["environment"] == "dev"
+    assert sentry_init_kwargs["release"] == (release or "")
     assert sentry_init_kwargs["instrumenter"] == "otel"
     assert sentry_init_kwargs["enable_logs"]
     assert sentry_init_kwargs["send_default_pii"]
@@ -207,7 +253,7 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
         "otlp",
         {
             "setup_otlp_traces_exporter": True,
-            "collector_url": None,
+            "collector_url": "https://collector.example.com/v1/traces",
             "setup_propagator": True,
             "capture_exceptions": False,
         },
@@ -220,17 +266,35 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(monkeypatch):
         "service.namespace": "vals",
         "deployment.environment": "dev",
     }
-    assert tracer_provider.sampler == "always-on-sampler"
-    assert tracer_provider.processors == []
+    assert tracer_provider.sampler == ("ratio-sampler", 0.25)
+    if release:
+        assert len(tracer_provider.processors) == 1
+        span = FakeSpan()
+        processor = tracer_provider.processors[0]
+        getattr(processor, "on_start")(span, parent_context=object())
+        assert span.attributes == {"sentry.release": release}
+        getattr(processor, "on_end")(span)
+        assert getattr(processor, "force_flush")()
+        getattr(processor, "shutdown")()
+    else:
+        assert tracer_provider.processors == []
     assert instrumented_kwargs == {
         "request_hook": telemetry._httpx_request_hook,  # pyright: ignore[reportPrivateUsage]
         "async_request_hook": telemetry._httpx_async_request_hook,  # pyright: ignore[reportPrivateUsage]
     }
+    assert ignored_sentry_loggers == [
+        "opentelemetry.exporter",
+        "opentelemetry.exporter.*",
+        "opentelemetry.sdk.trace.export",
+        "opentelemetry.sdk.trace.export.*",
+    ]
     assert telemetry.is_enabled()
 
 
 def test_should_trace_http_route_only_allows_gateway_routes():
     assert telemetry.should_trace_http_route("/query")
+    assert telemetry.should_trace_http_route("/rate-limit-monitor")
+    assert telemetry.should_trace_http_route("/rate-limit-monitor/activate")
     assert not telemetry.should_trace_http_route("/health/live")
     assert not telemetry.should_trace_http_route("/.env")
 
@@ -261,6 +325,35 @@ def test_httpx_request_hook_renames_generic_method_span():
         "http.route": "/query",
         "url.path": "/query",
     }
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        pytest.param("fast", "fast", id="string"),
+        pytest.param("", "", id="empty-string"),
+        pytest.param(True, True, id="true"),
+        pytest.param(False, False, id="false"),
+        pytest.param(-(2**63), -(2**63), id="int64-min"),
+        pytest.param(0, 0, id="zero-int"),
+        pytest.param(2**63 - 1, 2**63 - 1, id="int64-max"),
+        pytest.param(0.0, 0.0, id="zero-float"),
+        pytest.param(0.5, 0.5, id="finite-float"),
+        pytest.param(None, None, id="none"),
+        pytest.param(-(2**63) - 1, None, id="below-int64"),
+        pytest.param(2**63, None, id="above-int64"),
+        pytest.param(float("inf"), None, id="positive-infinity"),
+        pytest.param(float("-inf"), None, id="negative-infinity"),
+        pytest.param(float("nan"), None, id="nan"),
+        pytest.param({"nested": "value"}, None, id="mapping"),
+        pytest.param(["value"], None, id="list"),
+    ],
+)
+def test_otel_scalar_attribute(value: object, expected: object | None):
+    actual = telemetry.otel_scalar_attribute(value)
+
+    assert actual == expected
+    assert type(actual) is type(expected)
 
 
 def test_sanitize_attributes_keeps_ids_and_content_but_drops_credentials():
@@ -343,6 +436,47 @@ def test_run_attributes_serializes_identity_object_as_json_attribute():
         attrs["identity"]
         == '{"agent_name":"swe-agent","benchmark_name":"swebench","email":"user@example.com"}'
     )
+
+
+def test_identity_dimensions_and_api_key_name_reach_sentry_tags():
+    attrs = telemetry.run_attributes(
+        {
+            "identity": {
+                "email": "user@example.com",
+                "benchmark_name": "swebench",
+                "agent_name": "swe-agent",
+            }
+        }
+    )
+    sanitized = telemetry.sanitize_attributes(
+        {
+            **attrs,
+            "gateway.api_key_name": "security-testing",
+            "gateway.api_key": "raw-bearer-key-must-not-leak",
+        }
+    )
+    tags = telemetry._sentry_search_attributes(  # pyright: ignore[reportPrivateUsage]
+        sanitized
+    )
+
+    assert "gateway.api_key" not in sanitized
+    assert tags == {
+        "identity.benchmark_name": "swebench",
+        "identity.agent_name": "swe-agent",
+        "identity.email": "user@example.com",
+        "gateway.api_key_name": "security-testing",
+        "llm.in_agent.mode": "disabled",
+    }
+
+
+def test_identity_dimensions_skip_blank_and_non_string_values():
+    attrs = telemetry.run_attributes(
+        {"identity": {"email": "   ", "benchmark_name": 7, "agent_name": " swe-agent "}}
+    )
+
+    assert attrs["identity.agent_name"] == "swe-agent"
+    assert "identity.email" not in attrs
+    assert "identity.benchmark_name" not in attrs
 
 
 def test_sentry_search_attributes_keeps_any_provider_config_scalar_label():
@@ -730,7 +864,8 @@ def test_before_send_adds_search_context_as_event_tags(monkeypatch):
             default={
                 "run_id": "run-a",
                 "question_id": "q1",
-                "api_key": "not included",
+                "gateway.api_key_name": "security-testing",
+                "api_key": "raw-bearer-key-must-not-leak",
             },
         ),
     )
@@ -738,7 +873,12 @@ def test_before_send_adds_search_context_as_event_tags(monkeypatch):
     event = telemetry._before_send({"tags": {"existing": "tag"}}, {})  # pyright: ignore[reportPrivateUsage]
 
     assert event == {
-        "tags": {"existing": "tag", "run_id": "run-a", "question_id": "q1"}
+        "tags": {
+            "existing": "tag",
+            "run_id": "run-a",
+            "question_id": "q1",
+            "gateway.api_key_name": "security-testing",
+        }
     }
 
 
@@ -811,7 +951,7 @@ def test_before_send_transaction_only_attaches_search_tags(monkeypatch):
     assert "fingerprint" not in event
 
 
-def test_before_send_log_adds_trace_and_search_context(monkeypatch):
+def test_before_send_log_adds_search_context_to_attributes(monkeypatch):
     trace_id = "019e04c6fbf0397e32a8d9601f98e45c"
     span_id = "a1f0f4fc15b83e82"
     span_context = SimpleNamespace(
@@ -831,16 +971,29 @@ def test_before_send_log_adds_trace_and_search_context(monkeypatch):
         "_sentry_context",
         telemetry.ContextVar(
             "test_sentry_log_context",
-            default={"run_id": "run-a", "model.provider": "openai"},
+            default={
+                "run_id": "run-a",
+                "model.provider": "openai",
+                "llm.config.max_tokens": 100,
+                "llm.config.provider_config.custom_label": "provider-content",
+            },
         ),
     )
 
-    log = telemetry._before_send_log({"body": "failed"}, {})  # pyright: ignore[reportPrivateUsage]
+    log = telemetry._before_send_log(  # pyright: ignore[reportPrivateUsage]
+        {"body": "failed", "attributes": {"existing": "value"}},
+        {},
+    )
 
     assert log == {
         "body": "failed",
-        "run_id": "run-a",
-        "model.provider": "openai",
+        "attributes": {
+            "existing": "value",
+            "run_id": "run-a",
+            "model.provider": "openai",
+            "llm.config.max_tokens": 100,
+            "llm.config.provider_config.custom_label": "provider-content",
+        },
         "trace_id": trace_id,
         "span_id": span_id,
     }
@@ -883,3 +1036,66 @@ def test_record_exception_records_sentry_issue_without_exception_message_on_span
         },
     )
     assert span.events == [expected_event]
+
+
+def test_log_sentry_info_forwards_sanitized_attributes_when_enabled(monkeypatch):
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    captured: list[tuple[str, dict[str, object]]] = []
+    sentry_logger = SimpleNamespace(
+        info=lambda message, *, attributes: captured.append((message, attributes))
+    )
+
+    def fake_import_module(name: str) -> object:
+        assert name == "sentry_sdk.logger"
+        return sentry_logger
+
+    monkeypatch.setattr(telemetry, "import_module", fake_import_module)
+
+    telemetry.log_sentry_info(
+        "retry scheduled",
+        {
+            "retry.attempt": 2,
+            "retry.strategy": "backoff",
+            "authorization": "secret",
+            "retry.wait": None,
+        },
+    )
+
+    assert captured == [
+        (
+            "retry scheduled",
+            {"retry.attempt": 2, "retry.strategy": "backoff"},
+        )
+    ]
+
+
+def test_log_sentry_info_does_not_import_sentry_when_disabled(monkeypatch):
+    imported: list[str] = []
+
+    def fake_import_module(name: str) -> object:
+        imported.append(name)
+        return SimpleNamespace()
+
+    monkeypatch.setattr(telemetry, "import_module", fake_import_module)
+
+    telemetry.log_sentry_info("retry scheduled", {"retry.attempt": 1})
+
+    assert imported == []
+
+
+def test_log_sentry_info_does_not_raise_when_sentry_logging_fails(monkeypatch):
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    attempted: list[str] = []
+
+    def fail_info(message: str, *, attributes: object) -> None:
+        attempted.append(message)
+        raise RuntimeError("Sentry unavailable")
+
+    monkeypatch.setattr(
+        telemetry,
+        "import_module",
+        lambda name: SimpleNamespace(info=fail_info),
+    )
+    telemetry.log_sentry_info("retry scheduled", {"retry.attempt": 1})
+
+    assert attempted == ["retry scheduled"]

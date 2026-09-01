@@ -11,7 +11,6 @@ import hashlib
 import json
 import logging
 import math
-import os
 import time
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
@@ -19,14 +18,22 @@ from contextvars import ContextVar
 from importlib import import_module
 from typing import Any, cast
 
+from model_library import model_library_settings
+
 logger = logging.getLogger(__name__)
 
 MAX_ATTRIBUTE_LENGTH = 4096
 MAX_CONFIG_JSON_LENGTH = 8192
 MAX_IDENTITY_JSON_LENGTH = 4096
 MAX_IDENTITY_DEPTH = 8
+_OTEL_INT64_MIN = -(2**63)
+_OTEL_INT64_MAX = 2**63 - 1
 DEFAULT_SERVICE_NAME = "model-proxy-gateway"
 TRACER_NAME = "model_library.gateway"
+TELEMETRY_DELIVERY_LOGGER_ROOTS = (
+    "opentelemetry.exporter",
+    "opentelemetry.sdk.trace.export",
+)
 HTTP_TRACE_EXCLUDED_ROUTES = frozenset({"/health/live", "/health/ready"})
 HTTP_TRACE_ALLOWED_ROUTES = frozenset(
     {
@@ -34,12 +41,15 @@ HTTP_TRACE_ALLOWED_ROUTES = frozenset(
         "/benchmark-runs/release",
         "/benchmark-runs/renew",
         "/benchmark-runs/wait",
+        "/audio/transcriptions",
         "/embeddings",
         "/files/upload",
         "/models",
         "/moderation",
         "/query",
         "/rate-limit",
+        "/rate-limit-monitor",
+        "/rate-limit-monitor/activate",
         "/registry",
         "/token-retry/status",
         "/tokens/count",
@@ -61,8 +71,10 @@ SENSITIVE_ATTRIBUTE_PARTS = frozenset(
 CONFIG_FINGERPRINT_EXCLUDED_PARAM_KEYS = frozenset(
     {"identity", "in_agent", "query_id", "question_id", "run_id"}
 )
+IDENTITY_DIMENSION_KEYS = ("benchmark_name", "agent_name", "email")
 CONTENT_SAFE_ATTRIBUTE_KEYS = frozenset(
     {
+        "gateway.api_key_name",
         "prompt_cache_retention",
         "reasoning_context",
         "request_limit",
@@ -104,7 +116,11 @@ SENTRY_TAG_ATTRIBUTE_KEYS = frozenset(
         "question_id",
         "query_id",
         "in_agent",
+        "identity.benchmark_name",
+        "identity.agent_name",
+        "identity.email",
         "gateway.route",
+        "gateway.api_key_name",
         "gateway.operation",
         "gateway.status_code",
         "gateway.usage_event_id",
@@ -159,6 +175,25 @@ class IdentityValidationError(ValueError):
     """Raised when identity is not a bounded JSON object."""
 
 
+class _SentryReleaseSpanProcessor:
+    """Attach the configured Sentry release to every OpenTelemetry span."""
+
+    def __init__(self, release: str) -> None:
+        self._release = release
+
+    def on_start(self, span: Any, parent_context: object | None = None) -> None:
+        span.set_attribute("sentry.release", self._release)
+
+    def on_end(self, span: object) -> None:
+        pass
+
+    def shutdown(self) -> None:
+        pass
+
+    def force_flush(self, timeout_millis: int = 30000) -> bool:
+        return True
+
+
 _enabled = False
 _configured = False
 _httpx_instrumented = False
@@ -177,7 +212,7 @@ _seen_config_hashes: dict[str, float] = {}
 
 
 def _env_enabled() -> bool:
-    return os.environ.get("GATEWAY_OTEL_ENABLED", "").lower() in {
+    return model_library_settings.get("GATEWAY_OTEL_ENABLED", "").lower() in {
         "1",
         "true",
         "yes",
@@ -188,6 +223,14 @@ def _env_enabled() -> bool:
 def is_enabled() -> bool:
     """Return whether OpenTelemetry helpers should emit spans/events."""
     return _enabled
+
+
+def is_telemetry_delivery_logger(name: str) -> bool:
+    """Return whether a logger belongs to trace-export infrastructure."""
+    return any(
+        name == root or name.startswith(f"{root}.")
+        for root in TELEMETRY_DELIVERY_LOGGER_ROOTS
+    )
 
 
 def _load_trace_api() -> bool:
@@ -241,6 +284,7 @@ def configure_telemetry(app: object | None = None) -> bool:
     TracerProvider = sdk_trace_module.TracerProvider
     INSTRUMENTER = sentry_consts_module.INSTRUMENTER
     LoggingIntegration = sentry_logging_module.LoggingIntegration
+    ignore_logger_for_sentry_logs = sentry_logging_module.ignore_logger_for_sentry_logs
     OTLPIntegration = sentry_otlp_module.OTLPIntegration
 
     if not _load_trace_api():
@@ -250,28 +294,36 @@ def configure_telemetry(app: object | None = None) -> bool:
     trace_api = _trace_api
     assert trace_api is not None
 
-    dsn = os.environ.get("SENTRY_DSN", "")
+    dsn = model_library_settings.get("SENTRY_DSN", "")
     if not dsn:
         logger.warning("Sentry tracing requested but SENTRY_DSN is not set")
         _enabled = False
         return False
 
-    service_name = os.environ.get("OTEL_SERVICE_NAME") or DEFAULT_SERVICE_NAME
-    environment = os.environ.get("GATEWAY_STAGE") or os.environ.get(
-        "SENTRY_ENVIRONMENT"
+    service_name = (
+        model_library_settings.get("OTEL_SERVICE_NAME") or DEFAULT_SERVICE_NAME
     )
+    environment = model_library_settings.get(
+        "GATEWAY_STAGE"
+    ) or model_library_settings.get("SENTRY_ENVIRONMENT")
+    release = model_library_settings.get("SENTRY_RELEASE", "")
     try:
         resource = Resource.create(_resource_attributes(service_name))
         provider = TracerProvider(
             resource=resource,
             sampler=_otel_sampler(sdk_trace_module.sampling),
         )
+        if release:
+            provider.add_span_processor(_SentryReleaseSpanProcessor(release))
         trace_api.set_tracer_provider(provider)
         _provider = provider
+        for logger_root in TELEMETRY_DELIVERY_LOGGER_ROOTS:
+            ignore_logger_for_sentry_logs(logger_root)
+            ignore_logger_for_sentry_logs(f"{logger_root}.*")
         sentry_module.init(
             dsn=dsn,
             environment=environment,
-            release=os.environ.get("SENTRY_RELEASE", ""),
+            release=release,
             server_name=service_name,
             instrumenter=INSTRUMENTER.OTEL,
             enable_logs=True,
@@ -287,7 +339,10 @@ def configure_telemetry(app: object | None = None) -> bool:
                 ),
                 OTLPIntegration(
                     setup_otlp_traces_exporter=True,
-                    collector_url=os.environ.get("SENTRY_OTLP_COLLECTOR_URL") or None,
+                    collector_url=model_library_settings.get(
+                        "SENTRY_OTLP_COLLECTOR_URL"
+                    )
+                    or None,
                     setup_propagator=True,
                     capture_exceptions=False,
                 ),
@@ -318,7 +373,7 @@ def configure_telemetry(app: object | None = None) -> bool:
 
 def _resource_attributes(service_name: str) -> dict[str, str]:
     attributes = {"service.name": service_name}
-    raw_attributes = os.environ.get("OTEL_RESOURCE_ATTRIBUTES", "")
+    raw_attributes = model_library_settings.get("OTEL_RESOURCE_ATTRIBUTES", "")
     for raw_pair in raw_attributes.split(","):
         key, separator, value = raw_pair.partition("=")
         if separator and key.strip() and value.strip():
@@ -328,8 +383,10 @@ def _resource_attributes(service_name: str) -> dict[str, str]:
 
 
 def _otel_sampler(sampling_module: Any) -> Any:
-    sampler_name = os.environ.get("OTEL_TRACES_SAMPLER", "parentbased_always_on")
-    sampler_arg = os.environ.get("OTEL_TRACES_SAMPLER_ARG")
+    sampler_name = model_library_settings.get(
+        "OTEL_TRACES_SAMPLER", "parentbased_always_on"
+    )
+    sampler_arg = model_library_settings.get("OTEL_TRACES_SAMPLER_ARG")
     known_samplers = sampling_module._KNOWN_SAMPLERS
     if sampler_name not in known_samplers:
         raise ValueError(f"Unsupported OTEL_TRACES_SAMPLER={sampler_name!r}")
@@ -462,7 +519,7 @@ def _before_send_transaction(
 
 def _before_send_log(log: dict[str, Any], _hint: object) -> dict[str, Any] | None:
     """Attach active OTel trace identifiers and gateway fields to Sentry logs."""
-    log.update(_sentry_search_context())
+    log["attributes"].update(_sentry_search_context())
     if not _load_trace_api():
         return log
     trace_api = _trace_api
@@ -585,6 +642,17 @@ def json_attribute(value: object, *, max_length: int = MAX_ATTRIBUTE_LENGTH) -> 
     except Exception:
         payload = str(value)
     return payload[:max_length]
+
+
+def otel_scalar_attribute(value: object) -> AttributeValue | None:
+    """Return an OpenTelemetry-compatible scalar value when supported."""
+    if isinstance(value, str | bool):
+        return value
+    if isinstance(value, int) and _OTEL_INT64_MIN <= value <= _OTEL_INT64_MAX:
+        return value
+    if isinstance(value, float) and math.isfinite(value):
+        return value
+    return None
 
 
 def normalize_identity(identity: object) -> dict[str, JsonValue]:
@@ -948,6 +1016,21 @@ def record_exception(
             logger.debug("Sentry capture_exception failed: %s", sentry_exc)
 
 
+def log_sentry_info(
+    message: str,
+    attributes: Mapping[str, object | None] | None = None,
+) -> None:
+    """Send one targeted INFO log when Sentry telemetry is enabled."""
+    if not is_enabled():
+        return
+
+    try:
+        sentry_logger = import_module("sentry_sdk.logger")
+        sentry_logger.info(message, attributes=sanitize_attributes(attributes))
+    except Exception as sentry_exc:
+        logger.debug("Sentry INFO log failed: %s", sentry_exc)
+
+
 def set_status_ok() -> None:
     """Mark the current span as successful."""
     span = _current_recording_span()
@@ -986,11 +1069,13 @@ def mode_attribute(enabled: bool) -> str:
 def run_attributes(request_context: Mapping[str, object]) -> dict[str, object | None]:
     """Return run/question identifiers from gateway or LLM request context."""
     in_agent = request_context.get("in_agent")
-    identity = request_context.get("identity")
+    identity: object = request_context.get("identity")
     identity_attribute: str | None = None
+    identity_dimensions: dict[str, str] = {}
     if isinstance(identity, Mapping):
+        identity_mapping = cast(Mapping[object, object], identity)
+        identity_dimensions = _identity_dimension_attributes(identity_mapping)
         try:
-            identity_mapping = cast(Mapping[object, object], identity)
             identity_attribute = json.dumps(
                 normalize_identity(identity_mapping),
                 sort_keys=True,
@@ -1004,9 +1089,20 @@ def run_attributes(request_context: Mapping[str, object]) -> dict[str, object | 
         "question_id": request_context.get("question_id"),
         "query_id": request_context.get("query_id"),
         "identity": identity_attribute,
+        **identity_dimensions,
         "in_agent": in_agent,
         "llm.in_agent.mode": mode_attribute(bool(in_agent)),
     }
+
+
+def _identity_dimension_attributes(identity: Mapping[object, object]) -> dict[str, str]:
+    attributes: dict[str, str] = {}
+    for key in IDENTITY_DIMENSION_KEYS:
+        value = identity.get(key)
+        if not isinstance(value, str) or not value.strip():
+            continue
+        attributes[f"identity.{key}"] = value.strip()[:MAX_ATTRIBUTE_LENGTH]
+    return attributes
 
 
 def is_recording() -> bool:

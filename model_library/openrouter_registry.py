@@ -63,14 +63,12 @@ def _build_model_config(openrouter_id: str, api_data: dict[str, Any]) -> ModelCo
     input_cost = float(pricing.get("prompt", "0")) * MILLION
     output_cost = float(pricing.get("completion", "0")) * MILLION
 
-    cache: CacheCost | None = None
     cache_read_str = pricing.get("input_cache_read")
     cache_write_str = pricing.get("input_cache_write")
-    if cache_read_str or cache_write_str:
-        cache = CacheCost(
-            read=float(cache_read_str) * MILLION if cache_read_str else None,
-            write=float(cache_write_str) * MILLION if cache_write_str else None,
-        )
+    cache = CacheCost(
+        read=float(cache_read_str) * MILLION if cache_read_str else None,
+        write=float(cache_write_str) * MILLION if cache_write_str else None,
+    )
 
     context_window: int = api_data["context_length"]
 
@@ -88,6 +86,8 @@ def _build_model_config(openrouter_id: str, api_data: dict[str, Any]) -> ModelCo
         ),
         supports=Supports(
             images="image" in input_modalities,
+            audio="audio" in input_modalities,
+            transcription=False,
             videos="video" in input_modalities,
             files="file" in input_modalities,
             batch=False,

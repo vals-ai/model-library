@@ -1,5 +1,6 @@
 base-config:
   company: Fireworks
+  country: United States
   documentation_url: https://fireworks.ai/models
   open_source: false
   supports:
@@ -21,8 +22,99 @@ deprecated:
     metadata:
       deprecated: true
 
+  fireworks/gpt-oss-20b:
+    company: OpenAI
+    country: United States
+    label: GPT OSS 20B
+    release_date: 2025-08-05
+    open_source: true
+    documentation_url: https://fireworks.ai/models
+    properties:
+      context_window: 128000
+      max_tokens: 32768
+      reasoning_model: true
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.07
+      output: 0.3
+      cache:
+        read: null
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+      batch:
+        input: null
+        output: null
+        input_discount: 0.5
+        output_discount: 0.5
+      context: null
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: gpt-oss-20b
+
+  fireworks/deepseek-v4-flash:
+    company: DeepSeek
+    country: China
+    label: DeepSeek V4 Flash
+    release_date: 2026-04-24
+    open_source: true
+    documentation_url: https://fireworks.ai/models
+    properties:
+      context_window: 1000000
+      max_tokens: 131072
+      reasoning_model: true
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 0.14
+      output: 0.28
+      cache:
+        read: 0.028
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+      batch:
+        input: null
+        output: null
+        input_discount: 0.5
+        output_discount: 0.5
+      context: null
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    provider_endpoint: deepseek-v4-flash
+
   fireworks/deepseek-v3p2:
     company: DeepSeek
+    country: China
     label: DeepSeek V3.2 (Nonthinking)
     release_date: 2025-12-01
     open_source: true
@@ -68,6 +160,7 @@ deprecated:
 
   fireworks/deepseek-v3p1:
     company: DeepSeek
+    country: China
     label: DeepSeek V3.1
     release_date: 2025-08-21
     open_source: true
@@ -105,6 +198,7 @@ deprecated:
 
   fireworks/kimi-k2-instruct-0905:
     company: Moonshot AI
+    country: China
     label: Kimi K2 Instruct 0905
     release_date: 2025-09-04
     open_source: true
@@ -142,6 +236,7 @@ deprecated:
   fireworks/qwen3-235b-a22b:
     label: Qwen 3 (235B)
     company: Alibaba
+    country: China
     release_date: 2025-04-28
     supports:
       images: false
@@ -160,6 +255,7 @@ deprecated:
   fireworks/llama4-maverick-instruct-basic:
     label: Llama 4 Maverick
     company: Meta
+    country: United States
     release_date: 2025-04-05
     supports:
       images: true
@@ -174,6 +270,7 @@ deprecated:
   fireworks/llama4-scout-instruct-basic:
     label: Llama 4 Scout
     company: Meta
+    country: United States
     release_date: 2025-04-05
     supports:
       images: true
@@ -188,6 +285,7 @@ deprecated:
   fireworks/deepseek-r1:
     label: DeepSeek R1
     company: DeepSeek
+    country: China
     release_date: 2025-01-20
     supports:
       images: false
@@ -206,6 +304,7 @@ deprecated:
   fireworks/deepseek-v3-0324:
     label: DeepSeek V3 (03/24/2025)
     company: DeepSeek
+    country: China
     release_date: 2025-03-24
     supports:
       images: false
@@ -222,6 +321,7 @@ deprecated:
   fireworks/deepseek-v3:
     label: DeepSeek V3
     company: DeepSeek
+    country: China
     release_date: 2024-12-26
     supports:
       images: false
@@ -238,6 +338,7 @@ deprecated:
   fireworks/minimax-m2:
     label: MiniMax-M2
     company: MiniMax AI
+    country: China
     documentation_url: https://platform.minimax.io/docs
     release_date: 2025-10-26
     supports:

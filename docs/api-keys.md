@@ -18,7 +18,8 @@ and never sends server-held provider keys to arbitrary endpoints.
 | Model prefix | Provider | Settings |
 | --- | --- | --- |
 | `ai21labs/*` | AI21 Labs | `AI21LABS_API_KEY` |
-| `alibaba/*` | Alibaba DashScope | `DASHSCOPE_API_KEY` |
+| `alibaba/*` | Alibaba DashScope (international) | `DASHSCOPE_API_KEY` |
+| `alibaba/*-cn` | Alibaba DashScope (mainland China) | `DASHSCOPE_CN_API_KEY` |
 | `amazon/*`, `bedrock/*` | Amazon Bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`; optional `AWS_SESSION_TOKEN` |
 | `anthropic/*` | Anthropic | `ANTHROPIC_API_KEY` |
 | `arcee-ai/*` | Arcee AI | `ARCEE_API_KEY` |
@@ -27,7 +28,7 @@ and never sends server-held provider keys to arbitrary endpoints.
 | `cohere/*` | Cohere | `COHERE_API_KEY` |
 | `deepseek/*` | DeepSeek | `DEEPSEEK_API_KEY` |
 | `fireworks/*` | Fireworks | `FIREWORKS_API_KEY` |
-| `google/*` | Google Gemini | `GOOGLE_API_KEY`; Vertex configs use `GCP_REGION`, `GCP_PROJECT_ID`, `GCP_CREDS` |
+| `google/*` | Google Gemini | `GOOGLE_API_KEY`; requests with `config.provider_config.use_vertex=true` use `GCP_REGION`, `GCP_PROJECT_ID`, `GCP_CREDS` |
 | `grok/*` | xAI | `XAI_API_KEY` |
 | `inception/*` | Inception Mercury | `MERCURY_API_KEY` |
 | `kimi/*` | Moonshot AI Kimi | `KIMI_API_KEY` |

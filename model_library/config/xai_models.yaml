@@ -1,5 +1,7 @@
 base-config:
+  supports_rate_limit_monitoring: true
   company: xAI
+  country: United States
   documentation_url: https://docs.x.ai/docs#models
   open_source: false
   supports:
@@ -8,6 +10,39 @@ base-config:
     tools: true
   properties:
     reasoning_model: false
+grok-4.6-models:
+  base-config:
+    documentation_url: https://docs.x.ai/developers/models/grok-4.6
+    supports:
+      images: true
+      files: true
+      tools: true
+      temperature: true
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+    properties:
+      context_window: 500_000
+      max_tokens: 500_000
+      training_cutoff: null
+      reasoning_model: true
+    default_parameters:
+      max_tokens: null
+      reasoning_effort: "high"
+      temperature: 0.7
+      top_p: 0.95
+    costs_per_million_token:
+      input: 2.00
+      output: 6.00
+      cache:
+        read: 0.50
+      context: null
+
+  grok/grok-4.6:
+    label: Grok 4.6
+    release_date: 2026-08-12
+    provider_endpoint: grok-4.6
+
 grok-4.5-models:
   base-config:
     documentation_url: https://docs.x.ai/developers/models/grok-4.5
@@ -48,7 +83,6 @@ grok-4.5-models:
     alternative_keys:
       - grok/grok-4.5-latest
       - grok/grok-build-latest
-
 grok-4.3-models:
   base-config:
     supports:
@@ -119,8 +153,9 @@ grok-4.20-models:
         output: 12.00
         cache:
           read: 0.40
-
   grok/grok-4.20-multi-agent-0309:
+
+    supports_rate_limit_monitoring: false
     label: Grok 4.20 (Multi-Agent)
     release_date: 2026-03-09
     properties:
@@ -151,7 +186,6 @@ grok-4-models:
     default_parameters:
       temperature: 0.7
       top_p: 0.95
-
   grok/grok-4-0709:
     label: Grok 4
     release_date: 2025-07-09
@@ -316,7 +350,6 @@ grok-build-models:
         output: 4.00
         cache:
           read: 0.40
-
 grok-3-models:
   base-config:
     supports:

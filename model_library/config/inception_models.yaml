@@ -1,5 +1,6 @@
 base-config:
   company: Inception
+  country: United States
   documentation_url: https://docs.inceptionlabs.ai/get-started/models
   open_source: false
   supports:

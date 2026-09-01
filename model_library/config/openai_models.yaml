@@ -1,5 +1,7 @@
 base-config:
+  supports_rate_limit_monitoring: true
   company: OpenAI
+  country: United States
   open_source: false
   supports:
     images: false
@@ -53,13 +55,13 @@ gpt-5.6-models:
     label: GPT-5.6 Terra
     release_date: 2026-07-09
     costs_per_million_token:
-      input: 2.5
-      output: 15
+      input: 2
+      output: 12
       cache:
         read_discount: 0.1
         write_markup: 1.25
     default_parameters:
-      reasoning_effort: "xhigh"
+      reasoning_effort: "max"
     provider_properties:
       reasoning_context: all_turns
     alternative_keys:
@@ -72,8 +74,8 @@ gpt-5.6-models:
     label: GPT-5.6 Luna
     release_date: 2026-07-09
     costs_per_million_token:
-      input: 1
-      output: 6
+      input: 0.2
+      output: 1.2
       cache:
         read_discount: 0.1
         write_markup: 1.25
@@ -84,6 +86,50 @@ gpt-5.6-models:
     alternative_keys:
       - openai/gpt-5.6-luna-high:
           label: GPT-5.6 Luna (High)
+          default_parameters:
+            reasoning_effort: "high"
+
+daybreak-models:
+  base-config:
+    documentation_url: "https://developers.openai.com/api/docs/models/daybreak-blue-latest"
+    supports:
+      images: true
+      files: true
+      temperature: false
+    metadata:
+      available_for_everyone: false
+    properties:
+      context_window: 1_050_000
+      max_tokens: 128_000
+      training_cutoff: "2026-02"
+      reasoning_model: true
+    provider_properties:
+      verbosity: "medium"
+
+  openai/gpt-daybreak-blue:
+    label: Daybreak Blue
+    release_date: 2026-08-10
+    provider_endpoint: gpt-daybreak-blue-latest
+    costs_per_million_token:
+      input: 5
+      output: 30
+      cache:
+        read_discount: 0.1
+        write_markup: 1.25
+      context:
+        threshold: 272_000
+        input: 10
+        output: 45
+        cache:
+          read_discount: 0.1
+          write_markup: 1.25
+    default_parameters:
+      reasoning_effort: "max"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-daybreak-blue-high:
+          label: Daybreak Blue (High)
           default_parameters:
             reasoning_effort: "high"
 
@@ -121,6 +167,7 @@ gpt-5-models:
       reasoning_effort: "xhigh"
 
   openai/gpt-5.5:
+
     label: GPT 5.5
     release_date: 2026-04-23
     properties:
@@ -136,6 +183,7 @@ gpt-5-models:
         output: 45
         cache:
           read: 1
+    supports_rate_limit_monitoring: false
     provider_properties:
       verbosity: "medium"
       prompt_cache_retention: "24h"
@@ -145,6 +193,10 @@ gpt-5-models:
       - openai/gpt-5.5-high:
           default_parameters:
             reasoning_effort: "high"
+      - openai/gpt-5.5-medium:
+          label: GPT 5.5 (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
 
   openai/gpt-5.4-nano-2026-03-17:
     label: GPT 5.4 Nano
@@ -225,6 +277,10 @@ gpt-5-models:
       - openai/gpt-5.4-2026-03-05-high:
           default_parameters:
             reasoning_effort: "high"
+      - openai/gpt-5.4-2026-03-05-medium:
+          label: GPT 5.4 (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
       - openai/gpt-5.4-2026-03-05-low:
           default_parameters:
             reasoning_effort: "low"
@@ -300,15 +356,17 @@ gpt-5-models:
       output: 10
       cache:
         read: 0.125
+    supports_rate_limit_monitoring: false
     properties:
       context_window: 400_000
       training_cutoff: "2025-07"
     metadata:
       available_as_evaluator: true
     alternative_keys:
-      - azure/gpt-5-2025-08-07
-
+      - azure/gpt-5-2025-08-07:
+          supports_rate_limit_monitoring: true
   openai/gpt-5-mini-2025-08-07:
+
     label: GPT 5 Mini
     documentation_url: https://platform.openai.com/docs/models/gpt-5-mini
     release_date: 2025-08-07
@@ -317,13 +375,15 @@ gpt-5-models:
       output: 2
       cache:
         read: 0.025
+    supports_rate_limit_monitoring: false
     properties:
       context_window: 400_000
       training_cutoff: "2024-05"
     alternative_keys:
-      - azure/gpt-5-mini-2025-08-07
-
+      - azure/gpt-5-mini-2025-08-07:
+          supports_rate_limit_monitoring: true
   openai/gpt-5-nano-2025-08-07:
+
     label: GPT 5 Nano
     documentation_url: https://platform.openai.com/docs/models/gpt-5-nano
     release_date: 2025-08-07
@@ -335,9 +395,10 @@ gpt-5-models:
       output: 0.4
       cache:
         read: 0.005
+    supports_rate_limit_monitoring: false
     alternative_keys:
-      - azure/gpt-5-nano-2025-08-07
-
+      - azure/gpt-5-nano-2025-08-07:
+          supports_rate_limit_monitoring: true
 gpt-4.1-models:
   base-config:
     documentation_url: https://platform.openai.com/docs/models/gpt-4.1
@@ -361,7 +422,6 @@ gpt-4.1-models:
         read: 0.5
     alternative_keys:
       - azure/gpt-4.1-2025-04-14
-
   openai/gpt-4.1-mini-2025-04-14:
     label: GPT 4.1 Mini
     costs_per_million_token:
@@ -372,7 +432,6 @@ gpt-4.1-models:
     documentation_url: https://platform.openai.com/docs/models/gpt-4.1-mini
     alternative_keys:
       - azure/gpt-4.1-mini-2025-04-14
-
   openai/gpt-4.1-nano-2025-04-14:
     label: GPT 4.1 Nano
     costs_per_million_token:
@@ -383,7 +442,6 @@ gpt-4.1-models:
     documentation_url: https://platform.openai.com/docs/models/gpt-4.1-nano
     alternative_keys:
       - azure/gpt-4.1-nano-2025-04-14
-
 deep-research-models:
   base-config:
     documentation_url: https://platform.openai.com/docs/deep-research
@@ -401,6 +459,7 @@ deep-research-models:
       deep_research: true
 
   openai/o3-deep-research-2025-06-26:
+
     label: o3 Deep Research
     release_date: 2025-06-26
     costs_per_million_token:
@@ -408,11 +467,13 @@ deep-research-models:
       output: 40
       cache:
         read: 2.5
+    supports_rate_limit_monitoring: false
     metadata:
       available_for_everyone: true
     documentation_url: https://platform.openai.com/docs/models/o3-deep-research
 
   openai/o3-deep-research:
+
     label: o3 Deep Research
     release_date: 2025-06-26
     costs_per_million_token:
@@ -420,11 +481,13 @@ deep-research-models:
       output: 40
       cache:
         read: 2.5
+    supports_rate_limit_monitoring: false
     metadata:
       available_for_everyone: true
     documentation_url: https://platform.openai.com/docs/models/o3-deep-research
 
   openai/o4-mini-deep-research-2025-06-26:
+
     label: o4 Mini Deep Research
     release_date: 2025-06-26
     costs_per_million_token:
@@ -432,11 +495,13 @@ deep-research-models:
       output: 8
       cache:
         read: 0.5
+    supports_rate_limit_monitoring: false
     metadata:
       available_for_everyone: true
     documentation_url: https://platform.openai.com/docs/models/o4-mini-deep-research
 
   openai/o4-mini-deep-research:
+
     label: o4 Mini Deep Research
     release_date: 2025-06-26
     costs_per_million_token:
@@ -444,6 +509,7 @@ deep-research-models:
       output: 8
       cache:
         read: 0.5
+    supports_rate_limit_monitoring: false
     metadata:
       available_for_everyone: true
     documentation_url: https://platform.openai.com/docs/models/o4-mini-deep-research
@@ -474,7 +540,6 @@ o-series-models:
         read: 0.275
     alternative_keys:
       - azure/o4-mini-2025-04-16
-
   openai/o3-2025-04-16:
     label: o3
     documentation_url: https://platform.openai.com/docs/models/o3
@@ -493,7 +558,6 @@ o-series-models:
         read: 0.5
     alternative_keys:
       - azure/o3-2025-04-16
-
   openai/o3-pro-2025-06-10:
     label: o3 Pro
     release_date: 2025-06-10
@@ -548,7 +612,6 @@ o-series-models:
     documentation_url: https://platform.openai.com/docs/models/o3-mini
     alternative_keys:
       - azure/o3-mini-2025-01-31
-
   openai/o1-2024-12-17:
     label: o1
     release_date: 2024-12-17
@@ -570,7 +633,33 @@ o-series-models:
     alternative_keys:
       - openai/o1
       - azure/o1-2024-12-17
+transcription-models:
+  base-config:
+    documentation_url: https://platform.openai.com/docs/models/gpt-4o-transcribe
+    supports:
+      batch: false
+      files: false
+      temperature: false
+      tools: false
+      output_schema: false
+      transcription: true
+    properties:
+      context_window: 16_000
+      max_tokens: 2_000
+      reasoning_model: false
+    default_parameters:
+      reasoning_effort: false
 
+  openai/gpt-4o-transcribe:
+
+    label: GPT 4o Transcribe
+    release_date: 2025-03-20
+    costs_per_million_token:
+      input: 2.5
+      output: 10.0
+      batch: null
+
+    supports_rate_limit_monitoring: false
 gpt-4o-models:
   base-config:
     documentation_url: https://platform.openai.com/docs/models#gpt-4o
@@ -582,7 +671,6 @@ gpt-4o-models:
       training_cutoff: "2023-10"
     default_parameters:
       temperature: 1
-
   openai/gpt-4o:
     label: GPT 4o
     release_date: 2024-08-06
@@ -613,7 +701,6 @@ gpt-4o-models:
     documentation_url: https://platform.openai.com/docs/models/gpt-4o
     alternative_keys:
       - azure/gpt-4o-2024-11-20
-
   openai/gpt-4o-2024-08-06:
     label: GPT 4o (2024-08-06)
     release_date: 2024-08-06

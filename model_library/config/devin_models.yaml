@@ -1,5 +1,6 @@
 base-config:
   company: Devin
+  country: United States
   open_source: false
   documentation_url: https://cli.devin.ai/docs/models
   supports:
@@ -25,3 +26,24 @@ swe-models:
   devin/swe-1-6-fast:
     label: SWE-1.6 Fast
     release_date: 2026-05-22
+
+router-models:
+  # Adaptive is Cognition's model router: `devin --model adaptive` picks a
+  # pinned family per task. Devin bills ACUs, not tokens, so no real per-token
+  # price exists. The rates below are nominal Sonnet-tier placeholders that let
+  # the model pass ValSmith catalog admission and land in the right credit
+  # bucket. `ignored_for_cost` keeps them out of dollar accounting.
+  devin/adaptive:
+    label: Devin Adaptive
+    release_date: 2026-05-22
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: true
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache:
+        read: 0.3
+        write: 3.75

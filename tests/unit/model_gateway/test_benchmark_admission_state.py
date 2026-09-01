@@ -47,7 +47,7 @@ async def _acquire(
     run_id: str,
     *,
     model_registry_key: tuple[str, str] = MODEL_KEY,
-    effective_token_limit: int = 10_000,
+    effective_token_limit: int | None = 10_000,
     total_requests: int | None = None,
     early_release: bool = True,
     immediate_queue_release: bool = False,
@@ -157,6 +157,24 @@ async def test_live_acquire_rejects_incompatible_effective_limit(store):
 
     with pytest.raises(BenchmarkAdmissionConflict):
         await _acquire(store, "run-1", effective_token_limit=20_000)
+
+
+async def test_acquire_supports_rpm_only_effective_token_limit(store):
+    """RPM-only benchmark runs (no TPM) round-trip a None limit rather than
+    a fake zero, and idempotent re-acquire still matches on it."""
+    first = await _acquire(store, "run-1", effective_token_limit=None)
+    second = await _acquire(store, "run-1", effective_token_limit=None)
+
+    assert first.effective_token_limit is None
+    assert second.state == "acquired"
+    assert second.effective_token_limit is None
+
+
+async def test_live_acquire_rejects_switching_between_tpm_and_rpm_only(store):
+    await _acquire(store, "run-1", effective_token_limit=None)
+
+    with pytest.raises(BenchmarkAdmissionConflict):
+        await _acquire(store, "run-1", effective_token_limit=10_000)
 
 
 async def test_terminal_run_id_restarts_at_queue_tail(store, redis):

@@ -1,5 +1,6 @@
 base-config:
   company: Perplexity
+  country: United States
   documentation_url: https://docs.perplexity.ai
   open_source: false
   supports:
@@ -19,6 +20,146 @@ deprecated:
   base-config:
     metadata:
       deprecated: true
+
+  perplexity/sonar-deep-research:
+    company: Perplexity
+    country: United States
+    label: Sonar Deep Research
+    open_source: false
+    documentation_url: https://docs.perplexity.ai/models/models/sonar-deep-research
+    properties:
+      context_window: 128000
+      max_tokens: 0
+      reasoning_model: true
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: false
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 2.0
+      output: 8.0
+      cache: null
+      batch: null
+      context: null
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: sonar-deep-research
+
+  perplexity/sonar-reasoning-pro:
+    company: Perplexity
+    country: United States
+    label: Sonar Reasoning Pro
+    open_source: false
+    documentation_url: https://docs.perplexity.ai/models/models/sonar-reasoning-pro
+    properties:
+      context_window: 128000
+      max_tokens: 0
+      reasoning_model: true
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: false
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 2.0
+      output: 8.0
+      cache: null
+      batch: null
+      context: null
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: sonar-reasoning-pro
+
+  perplexity/sonar-pro:
+    company: Perplexity
+    country: United States
+    label: Sonar Pro
+    open_source: false
+    documentation_url: https://docs.perplexity.ai/models/models/sonar-pro
+    properties:
+      context_window: 200000
+      max_tokens: 0
+      reasoning_model: false
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: false
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache: null
+      batch: null
+      context: null
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: sonar-pro
+
+  perplexity/sonar:
+    company: Perplexity
+    country: United States
+    label: Sonar
+    open_source: false
+    documentation_url: https://docs.perplexity.ai/models/models/sonar
+    properties:
+      context_window: 128000
+      max_tokens: 0
+      reasoning_model: false
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: false
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    costs_per_million_token:
+      input: 1.0
+      output: 1.0
+      cache: null
+      batch: null
+      context: null
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: sonar
 
   perplexity/sonar-reasoning:
     label: Sonar Reasoning

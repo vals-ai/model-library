@@ -1,6 +1,7 @@
 vals-models:
   base-config:
     company: Vals AI
+    country: United States
     documentation_url: ""
     supports:
       batch: true

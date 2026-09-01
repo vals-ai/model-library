@@ -33,13 +33,13 @@ from examples.setup import setup
 from model_library.agent import AgentResult
 from model_library.base import LLM, SystemInput, TextInput
 from model_library.base.delegate_only import DelegateOnlyException
-from model_library.base.output import QueryResult, QueryResultMetadata, RateLimit
-
+from model_library.base.output import QueryResult, QueryResultMetadata
 from model_library.exceptions import (
     BadInputError,
     GatewayMethodNotSupported,
     ToolCallingNotSupportedError,
 )
+from model_library.rate_limits import RateLimit
 from model_library.registry_utils import get_registry_model
 
 Status = Literal["pass", "fail", "warn", "skip"]
@@ -198,42 +198,29 @@ def _agent_tool_use_valid(result: ProbeValue) -> tuple[bool, str | None]:
     return not errors, _detail(errors)
 
 
-def _format_rate_limit(rate_limit: RateLimit) -> str:
-    return (
-        f"RPM={rate_limit.request_remaining}/{rate_limit.request_limit}; "
-        f"TPM={rate_limit.token_remaining_total}/{rate_limit.token_limit_total}"
-    )
-
-
-def _format_configured_rate_limit(rate_limit: RateLimit) -> str:
-    return f"RPM={rate_limit.request_limit}; TPM={rate_limit.token_limit_total}"
-
-
 def _format_pricing(pricing: dict[str, object]) -> str:
     return json.dumps(pricing, indent=2)
-
-
-def _configured_rate_limit(model: LLM) -> RateLimit | None:
-    return None
 
 
 def _rate_limit_valid(result: ProbeValue) -> tuple[bool, str | None]:
     if not isinstance(result, RateLimit):
         return False, "no live rate limit returned"
     rate_limit = cast(RateLimit, result)  # pyright: ignore[reportUnnecessaryCast]
-    detail = _format_rate_limit(rate_limit)
-    if rate_limit.request_limit is None and rate_limit.token_limit_total <= 0:
+    requests = ", ".join(
+        f"{request.mode}={request.remaining}/{request.limit}"
+        for request in rate_limit.requests
+    )
+    tokens = rate_limit.tokens
+    detail = (
+        f"requests={requests}; "
+        f"TPM=token_bucket={tokens.remaining_total if tokens else None}/"
+        f"{tokens.limit_total if tokens else None}"
+    )
+    token_limit_total = rate_limit.token_limit_total
+    if not rate_limit.requests and (
+        token_limit_total is None or token_limit_total <= 0
+    ):
         return False, f"rate limit returned but no limits were set; {detail}"
-    return True, detail
-
-
-def _configured_rate_limit_valid(result: ProbeValue) -> tuple[bool, str | None]:
-    if not isinstance(result, RateLimit):
-        return False, "no configured rate limit"
-    rate_limit = cast(RateLimit, result)  # pyright: ignore[reportUnnecessaryCast]
-    detail = _format_configured_rate_limit(rate_limit)
-    if rate_limit.request_limit is None and rate_limit.token_limit_total <= 0:
-        return False, f"configured rate limit exists but no limits were set; {detail}"
     return True, detail
 
 
@@ -608,9 +595,6 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
     async def rate_limit_probe() -> RateLimit | None:
         return await model.get_rate_limit()
 
-    async def configured_rate_limit_probe() -> RateLimit | None:
-        return _configured_rate_limit(model)
-
     async def pricing_probe() -> PricingProbeResult:
         return PricingProbeResult(pricing=_pricing_summary(model))
 
@@ -754,24 +738,21 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
         ),
     ]
 
-    cases.append(
-        ValidationCase(
-            section="Reasoning",
-            name="evidence" if model.reasoning else "undeclared reasoning",
-            expected="required",
-            severity="fail",
-            runner=reasoning_probe,
-            predicate=(
-                _reasoning_evidence_seen
-                if model.reasoning
-                else _no_undeclared_reasoning
-            ),
-            declared=model.reasoning,
-        )
-    )
-
     cases.extend(
         [
+            ValidationCase(
+                section="Reasoning",
+                name="evidence" if model.reasoning else "undeclared reasoning",
+                expected="required",
+                severity="fail",
+                runner=reasoning_probe,
+                predicate=(
+                    _reasoning_evidence_seen
+                    if model.reasoning
+                    else _no_undeclared_reasoning
+                ),
+                declared=model.reasoning,
+            ),
             ValidationCase(
                 section="Caching",
                 name="prompt cache read",
@@ -779,14 +760,6 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
                 severity="warn",
                 runner=caching_probe,
                 predicate=_cache_read_seen,
-            ),
-            ValidationCase(
-                section="Rate Limit",
-                name="configured limit",
-                expected="diagnostic",
-                severity="warn",
-                runner=configured_rate_limit_probe,
-                predicate=_configured_rate_limit_valid,
             ),
             ValidationCase(
                 section="Rate Limit",

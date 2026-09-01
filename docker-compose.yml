@@ -1,0 +1,31 @@
+services:
+  gateway:
+    build: .
+    command: uvicorn model_gateway.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "127.0.0.1:8001:8000"
+    volumes:
+      - ./model_gateway:/app/model_gateway
+      - ./model_library:/app/model_library
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  redis:
+    image: redis:7
+    command: redis-server --appendonly yes --appendfsync everysec
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "127.0.0.1:6380:6379"
+    volumes:
+      - model_gateway_redis_data:/data
+
+volumes:
+  model_gateway_redis_data:

@@ -1,3 +1,4 @@
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from inspect import signature
@@ -6,10 +7,16 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 import model_library
 import model_library.register_models as register_models
-from model_library.register_models import ModelRegistry, get_model_registry
+from model_library.register_models import ModelConfig, ModelRegistry, get_model_registry
+from model_library.registry_utils import (
+    get_model_cost,
+    get_model_input_context_window,
+    get_model_names,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +29,34 @@ def reset_model_registry_state(monkeypatch: pytest.MonkeyPatch):
 
 def _registry() -> dict[str, object]:
     return {}
+
+
+def _model_config(
+    template: ModelConfig,
+    full_key: str,
+    *,
+    input_cost: float = 1.0,
+    context_window: int = 1_000,
+    alternative_keys: list[str] | None = None,
+) -> ModelConfig:
+    provider, model_name = full_key.split("/", 1)
+    assert template.costs_per_million_token is not None
+    return template.model_copy(
+        deep=True,
+        update={
+            "provider_endpoint": model_name,
+            "provider_name": provider,
+            "full_key": full_key,
+            "slug": full_key.replace("/", "_"),
+            "alternative_keys": alternative_keys or [],
+            "costs_per_million_token": template.costs_per_million_token.model_copy(
+                update={"input": input_cost}
+            ),
+            "properties": template.properties.model_copy(
+                update={"context_window": context_window, "max_tokens": 100}
+            ),
+        },
+    )
 
 
 class LocalSettings:
@@ -160,6 +195,34 @@ def test_gateway_model_hydration_preserves_raw_provider_properties(
     dynamic_properties.assert_not_called()
 
 
+def test_gateway_model_hydration_ignores_unknown_payload_fields(
+    caplog: pytest.LogCaptureFixture,
+):
+    with patch.object(model_library, "model_library_settings", LocalSettings()):
+        payload = get_model_registry()["openai/gpt-4o"].model_dump(mode="json")
+    payload["future_top_level_field"] = "value"
+    payload["supports"]["future_capability"] = True
+    payload["costs_per_million_token"]["future_cost"] = 1.5
+
+    with caplog.at_level(logging.WARNING):
+        model = register_models.model_config_from_json(payload)
+
+    assert model.full_key == "openai/gpt-4o"
+    assert not hasattr(model, "future_top_level_field")
+    assert "future_top_level_field" in caplog.text
+    assert "supports.future_capability" in caplog.text
+    assert "costs_per_million_token.future_cost" in caplog.text
+
+
+def test_gateway_model_hydration_raises_on_real_validation_error():
+    with patch.object(model_library, "model_library_settings", LocalSettings()):
+        payload = get_model_registry()["openai/gpt-4o"].model_dump(mode="json")
+    payload["properties"]["context_window"] = "not an int"
+
+    with pytest.raises(ValidationError):
+        register_models.model_config_from_json(payload)
+
+
 def test_gateway_wrapper_replaces_legacy_initialized_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -174,6 +237,67 @@ def test_gateway_wrapper_replaces_legacy_initialized_snapshot(
         assert get_model_registry() is refreshed_registry
 
     assert mock_fetch.call_count == 2
+
+
+def test_metadata_helpers_follow_refreshed_gateway_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    with patch.object(model_library, "model_library_settings", LocalSettings()):
+        template = get_model_registry()["openai/gpt-4o"]
+
+    first_model = _model_config(
+        template,
+        "openai/first-model",
+        input_cost=1.0,
+        context_window=1_000,
+    )
+    second_model = _model_config(
+        template,
+        "openai/second-model",
+        input_cost=2.0,
+        context_window=2_000,
+    )
+    first_registry = {first_model.full_key: first_model}
+    second_registry = {second_model.full_key: second_model}
+    mock_fetch = MagicMock(side_effect=[first_registry, second_registry])
+    patch_gateway_fetch(monkeypatch, mock_fetch)
+
+    with patch.object(model_library, "model_library_settings", GatewaySettings()):
+        _refresh_and_get(refresh_ttl=timedelta(0))
+        assert get_model_cost(first_model.full_key) == first_model.costs_per_million_token
+        assert get_model_input_context_window(first_model.full_key) == 900
+        assert get_model_names() == [first_model.full_key]
+
+        _refresh_and_get(refresh_ttl=timedelta(0))
+        assert get_model_cost(second_model.full_key) == second_model.costs_per_million_token
+        assert get_model_input_context_window(second_model.full_key) == 1_900
+        assert get_model_names() == [second_model.full_key]
+
+    assert mock_fetch.call_count == 2
+
+
+def test_model_names_uses_one_registry_snapshot(monkeypatch: pytest.MonkeyPatch):
+    with patch.object(model_library, "model_library_settings", LocalSettings()):
+        template = get_model_registry()["openai/gpt-4o"]
+
+    first_model = _model_config(
+        template,
+        "openai/old-model",
+        alternative_keys=["openai/new-model"],
+    )
+    second_model = _model_config(template, "openai/new-model")
+    get_registry = MagicMock(
+        side_effect=[
+            {first_model.full_key: first_model},
+            {second_model.full_key: second_model},
+        ]
+    )
+    monkeypatch.setattr(
+        "model_library.registry_utils.get_model_registry", get_registry
+    )
+
+    assert get_model_names(include_alt_keys=False) == [first_model.full_key]
+    get_registry.assert_called_once_with()
 
 
 def test_refresh_ttl_replaces_expired_gateway_registry_atomically(

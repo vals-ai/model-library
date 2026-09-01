@@ -1,5 +1,7 @@
 base-config:
+  supports_rate_limit_monitoring: true
   company: Moonshot AI
+  country: China
   documentation_url: https://platform.moonshot.ai/docs
   open_source: true
   supports:
@@ -10,12 +12,14 @@ base-config:
 kimi-models:
 
   kimi/kimi-k3:
+
     label: Kimi K3
     release_date: 2026-07-16
     documentation_url: https://platform.kimi.ai/docs/api/chat
     provider_endpoint: kimi-k3
     supports:
       images: true
+      videos: true
       temperature: false
     properties:
       reasoning_model: true
@@ -31,6 +35,7 @@ kimi-models:
       output: 15.0
       cache:
         read: 0.3
+    supports_rate_limit_monitoring: false
     alternative_keys:
       - kimi/kimi-k3-public
   kimi/kimi-k2.7-code:
@@ -55,11 +60,13 @@ kimi-models:
       cache:
         read: 0.19
 
+    supports_rate_limit_monitoring: false
   kimi/kimi-k2.6:
     label: Kimi K2.6
     release_date: 2026-04-20
     supports:
       images: true
+      videos: true
       temperature: false
     properties:
       reasoning_model: false
@@ -74,33 +81,9 @@ kimi-models:
       output: 4.0
       cache:
         read: 0.16
+    supports_rate_limit_monitoring: false
     alternative_keys:
       - kimi/kimi-k2.6-thinking:
-          properties:
-            reasoning_model: true
-          default_parameters:
-            temperature: 1.0
-
-  kimi/kimi-k2.5:
-    label: Kimi K2.5
-    release_date: 2026-01-26
-    supports:
-      images: true
-      temperature: false
-    properties:
-      reasoning_model: false
-      context_window: 262_144
-      max_tokens: 128_000
-    default_parameters:
-      temperature: 0.6
-      top_p: 0.95
-    costs_per_million_token:
-      input: 0.6
-      output: 3.0
-      cache:
-        read: 0.1
-    alternative_keys:
-      - kimi/kimi-k2.5-thinking:
           properties:
             reasoning_model: true
           default_parameters:

@@ -1,5 +1,7 @@
 base-config:
+  supports_rate_limit_monitoring: true
   company: Meta
+  country: United States
   documentation_url: https://docs.llama.com
   open_source: false
   supports:
@@ -10,3 +12,33 @@ base-config:
   metadata:
     available_for_everyone: false
     internal_only: true
+public-models:
+  base-config:
+    documentation_url: https://dev.meta.ai/docs/models
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+
+  meta/muse_spark_1_2:
+
+    label: Muse Spark 1.2
+    provider_endpoint: muse-spark-1.2
+    supports:
+      videos: true
+    provider_properties:
+      use_responses: true
+      prompt_cache_key: hash
+    release_date: 2026-08-05
+    default_parameters:
+      reasoning_effort: "xhigh"
+      temperature: 1
+    properties:
+      context_window: 1_048_576
+      max_tokens: 131_072
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.25
+      output: 4.25
+      cache:
+        read: 0.15
+    supports_rate_limit_monitoring: false

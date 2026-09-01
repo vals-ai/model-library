@@ -15,6 +15,7 @@ from model_library import telemetry
 from model_library.base import LLMConfig, TokenRetryParams, dump_llm_config
 from model_library.base.input import FileWithId, InputItem, ToolDefinition
 from model_library.base.output import QueryResult
+from model_library.rate_limits import RateLimit
 
 
 class GatewayRequestBase(BaseModel):
@@ -40,9 +41,7 @@ class GatewayRequestBase(BaseModel):
             fields = ", ".join(sorted(unknown_fields))
             raise ValueError(f"Unknown LLM config field(s): {fields}")
 
-        normalized: dict[str, Any] = dict(raw_data)
-        normalized["config"] = raw_config
-        return normalized
+        return raw_data
 
     def config_dict(self) -> dict[str, Any]:
         return dump_llm_config(self.config)
@@ -93,14 +92,11 @@ class QueryRequest(GatewayRequestBase):
 class TokenCountRequest(GatewayRequestBase):
     inputs: list[InputItem]
     tools: list[ToolDefinition] = Field(default_factory=list)
+    token_retry_params: TokenRetryParams | None = None
 
 
 class RateLimitRequest(GatewayRequestBase):
     pass
-
-
-class RateLimitResponse(BaseModel):
-    rate_limit: dict[str, Any] | None = None
 
 
 class ProviderError(BaseModel):
@@ -131,6 +127,19 @@ class TokenCountResponse(GatewayResponse):
     tokens: int | None = None
 
 
+class RateLimitResponse(BaseModel):
+    """Both fields stay unset when the provider exposes no rate-limit data."""
+
+    rate_limit: RateLimit | None = None
+    error: ProviderError | None = None
+
+    @model_validator(mode="after")
+    def _reject_data_with_error(self) -> Self:
+        if self.rate_limit is not None and self.error is not None:
+            raise ValueError("Rate-limit response cannot contain both data and error")
+        return self
+
+
 def query_result_response_body(
     result: QueryResult, *, signed_history: str
 ) -> dict[str, Any]:
@@ -149,6 +158,13 @@ class UploadFileRequest(GatewayRequestBase):
     mime: str
     content_base64: str
     type: Literal["image", "file"] = "file"
+
+
+class TranscriptionRequest(GatewayRequestBase):
+    name: str
+    mime: str
+    content_base64: str
+    language: str | None = None
 
 
 class UploadFileResponse(GatewayResponse):

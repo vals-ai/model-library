@@ -56,7 +56,7 @@ class BenchmarkReleaseRequest(BenchmarkAdmissionRequest):
 
 class BenchmarkAdmissionResponse(BenchmarkAdmissionRequest):
     state: BenchmarkAdmissionState
-    effective_token_limit: StrictInt = Field(gt=0)
+    effective_token_limit: StrictInt | None = Field(default=None, gt=0)
     outcome: BenchmarkAdmissionOutcome | None = None
 
     @model_validator(mode="after")

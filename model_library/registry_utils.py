@@ -11,6 +11,7 @@ from model_library.base import (
     ProviderConfig,
     QueryResultCost,
     QueryResultMetadata,
+    TranscriptionConfig,
 )
 from model_library.register_models import (
     CostProperties,
@@ -22,19 +23,14 @@ from model_library.register_models import (
 logger = logging.getLogger("model_library")
 ALL_MODELS_PATH = Path(__file__).parent / "config" / "all_models.json"
 
+# Providers whose models are only usable through their own CLI, never the gateway.
+CLI_ONLY_PROVIDERS = frozenset({"cursor", "devin", "factory"})
+
 
 def _gateway_url() -> str | None:
     from model_library import model_library_settings
 
     return model_library_settings.get("MODEL_GATEWAY_URL", None)
-
-
-def _raise_gateway_metadata_helper_error(helper_name: str) -> None:
-    raise RuntimeError(
-        f"{helper_name}() is local-registry only when MODEL_GATEWAY_URL is set. "
-        "Use metadata from get_registry_model(), or get_model_registry() for "
-        "explicit bulk discovery snapshots."
-    )
 
 
 def create_config(
@@ -63,6 +59,7 @@ def create_config(
         config["supports_images"] = supports.images
         config["supports_files"] = supports.files
         config["supports_audio"] = supports.audio
+        config["supports_transcription"] = supports.transcription
         config["supports_videos"] = supports.videos
         config["supports_batch"] = supports.batch
         config["supports_temperature"] = supports.temperature
@@ -151,6 +148,12 @@ def get_registry_config(model_str: str) -> ModelConfig | None:
     return None
 
 
+def _get_model_metadata_config(model_str: str) -> ModelConfig | None:
+    if _gateway_url():
+        return get_model_registry().get(model_str)
+    return get_registry_config(model_str)
+
+
 def get_registry_model(
     model_str: str,
     override_config: LLMConfig | None = None,
@@ -171,7 +174,7 @@ def get_registry_model(
     if not registry_config:
         raise Exception(f"Model {model_str} not found in registry")
 
-    if registry_config.provider_name in {"cursor", "devin"}:
+    if registry_config.provider_name in CLI_ONLY_PROVIDERS:
         raise ValueError(
             f"Model {model_str} is only available through {registry_config.company} CLI"
         )
@@ -181,7 +184,7 @@ def get_registry_model(
 
 def get_raw_model(
     model_str: str,
-    config: LLMConfig | None = None,
+    config: LLMConfig | TranscriptionConfig | None = None,
 ) -> LLM:
     """Get a model exluding default config"""
     provider, model_name = model_str.split("/", 1)
@@ -190,15 +193,7 @@ def get_raw_model(
 
 
 def get_model_cost(model_str: str) -> CostProperties | None:
-    if _gateway_url():
-        _raise_gateway_metadata_helper_error("get_model_cost")
-
-    return _get_model_cost_cached(model_str)
-
-
-@cache
-def _get_model_cost_cached(model_str: str) -> CostProperties | None:
-    model_config = get_registry_config(model_str)
+    model_config = _get_model_metadata_config(model_str)
     if not model_config:
         raise Exception(f"Model {model_str} not found in registry")
     return model_config.costs_per_million_token
@@ -206,32 +201,31 @@ def _get_model_cost_cached(model_str: str) -> CostProperties | None:
 
 def get_model_input_context_window(model_name: str) -> int:
     """Return the input context window for the model"""
-    if _gateway_url():
-        _raise_gateway_metadata_helper_error("get_model_input_context_window")
+    model = _get_model_metadata_config(model_name)
+    if not model:
+        raise Exception(f"Model {model_name} not found in registry")
 
-    return _get_model_input_context_window_cached(model_name)
+    return get_input_context_window_from_config(model)
 
 
 def get_input_context_window_from_config(model: ModelConfig) -> int:
     """Return usable input tokens from a registry config.
 
-    OpenAI, Meta, and Baseten configs express a total context window that
-    includes the output budget, so subtract max output tokens for prompt/input
-    capacity.
+    OpenAI, Meta, Baseten, Together, DeepSeek, and Thomson Reuters configs
+    express a total context window that includes the output budget, so subtract
+    max output tokens for prompt/input capacity.
     """
     context_window = model.properties.context_window
-    if model.provider_name in {"openai", "meta", "baseten"}:
+    if model.provider_name in {
+        "openai",
+        "meta",
+        "baseten",
+        "together",
+        "deepseek",
+        "thomsonreuters",
+    }:
         context_window -= model.properties.max_tokens
     return max(context_window, 0)
-
-
-@cache
-def _get_model_input_context_window_cached(model_name: str) -> int:
-    model = get_registry_config(model_name)
-    if not model:
-        raise Exception(f"Model {model_name} not found in registry")
-
-    return get_input_context_window_from_config(model)
 
 
 class TokenDict(TypedDict, total=False):
@@ -353,23 +347,11 @@ def get_model_names(
     include_alt_keys: bool = True,
 ) -> list[str]:
     """
-    Return model names in the local registry.
+    Return model names in the registry.
     - provider: Filter by provider name
     - include_deprecated: Include deprecated models
     - include_alt_keys: Include alternative keys from the same provider
     """
-    if _gateway_url():
-        _raise_gateway_metadata_helper_error("get_model_names")
-
-    return _get_model_names_cached(provider, include_deprecated, include_alt_keys)
-
-
-@cache
-def _get_model_names_cached(
-    provider: str | None = None,
-    include_deprecated: bool = False,
-    include_alt_keys: bool = True,
-) -> list[str]:
     registry = get_model_registry()
     alternative_keys_set: set[str] = set()
 
@@ -385,7 +367,7 @@ def _get_model_names_cached(
     return sorted(
         [
             model.full_key
-            for model in get_model_registry().values()
+            for model in registry.values()
             if (not provider or model.provider_name.lower() == provider.lower())
             and (not model.metadata.deprecated or include_deprecated)
             and model.full_key not in alternative_keys_set

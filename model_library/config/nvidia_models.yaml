@@ -1,5 +1,6 @@
 base-config:
   company: NVIDIA
+  country: United States
   documentation_url: https://docs.api.nvidia.com/nim/
   open_source: true
   supports:

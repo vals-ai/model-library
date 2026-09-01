@@ -30,6 +30,7 @@ from model_gateway.types import (
     ProviderError,
     TokenCountRequest,
     TokenCountResponse,
+    TranscriptionRequest,
     UploadFileRequest,
     UploadFileResponse,
 )
@@ -39,7 +40,6 @@ def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
     @app.post("/tokens/count")
     async def count_tokens(body: TokenCountRequest):
         start = time.perf_counter()
-        config = dump_llm_config(body.config)
         display_config = dump_gateway_config(body.config)
         dimensions = model_dimensions(
             operation="tokens_count",
@@ -66,7 +66,7 @@ def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
         error_phase = "tokens_count"
         try:
             operation.add_event("model_cache_lookup")
-            llm = model_helpers.get_cached_llm(cache, body, config=config)
+            llm = await model_helpers.get_query_llm(cache, body)
 
             secret = getattr(app.state, "hmac_secret", b"")
             model_helpers.require_raw_input_secret(body.inputs, secret=secret or None)
@@ -245,3 +245,57 @@ def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
 
         except Exception as exc:
             return operation.error(exc, phase="moderation")
+
+    @app.post("/audio/transcriptions")
+    async def transcribe_audio(body: TranscriptionRequest):
+        start = time.perf_counter()
+        config = dump_llm_config(body.config)
+        display_config = dump_gateway_config(body.config)
+        dimensions = model_dimensions(
+            operation="audio_transcriptions",
+            model=body.model,
+            config=display_config,
+            params={"language": body.language, "mime": body.mime},
+        )
+        operation = GatewayOperation(
+            operation="audio_transcriptions",
+            dimensions=dimensions,
+            start=start,
+            provider=model_helpers.provider_from_model(body.model),
+        )
+        base_attrs: dict[str, object | None] = {
+            **telemetry.model_attributes(
+                operation="audio_transcriptions", model=body.model
+            ),
+            **dimension_telemetry_attributes(dimensions),
+            "gateway.audio.mime_type": body.mime,
+            "gateway.audio.language": body.language,
+        }
+        operation.start_event(base_attrs)
+        try:
+            try:
+                audio = base64.b64decode(body.content_base64, validate=True)
+            except binascii.Error as exc:
+                raise ValueError("Invalid content_base64") from exc
+            operation.add_event("model_cache_lookup")
+            llm = model_helpers.get_cached_llm(cache, body, config=config)
+            result_or_error = await operation.provider_call(
+                llm.transcribe_audio(
+                    name=body.name,
+                    mime=body.mime,
+                    audio=audio,
+                    language=body.language,
+                ),
+                span_attrs=base_attrs,
+            )
+            if isinstance(result_or_error, ProviderError):
+                return ok_response(
+                    {"error": result_or_error.model_dump(exclude_none=True)}
+                )
+
+            result = result_or_error
+            operation.add_event("provider_call_done")
+            return operation.success(result)
+
+        except Exception as exc:
+            return operation.error(exc, phase="audio_transcriptions")

@@ -11,6 +11,7 @@ from model_library.base import (
     QueryResultCost,
     QueryResultMetadata,
 )
+from model_library.rate_limits import RateLimit, RateLimitCapacity, TokenRateLimit
 from model_library.register_models import register_provider
 
 
@@ -49,6 +50,41 @@ class FireworksModel(DelegateOnly):
             config=config,
             delegate_provider="openai",
             use_completions=True,
+            normalize_null_assistant_history_fields=True,
+        )
+
+    @override
+    async def get_rate_limit(self) -> RateLimit | None:
+        assert self.delegate
+        rate_limit = await self.delegate.get_rate_limit()
+        if rate_limit is None:
+            return None
+
+        tokens = rate_limit.tokens
+        if tokens is None or tokens.input is None or tokens.output is None:
+            return rate_limit
+
+        def per_minute(
+            capacity: RateLimitCapacity | None,
+        ) -> RateLimitCapacity | None:
+            if capacity is None:
+                return None
+            return RateLimitCapacity(
+                limit=capacity.limit * 60,
+                remaining=(
+                    capacity.remaining * 60 if capacity.remaining is not None else None
+                ),
+            )
+
+        return RateLimit(
+            requests=rate_limit.requests,
+            tokens=TokenRateLimit(
+                input=per_minute(tokens.input),
+                uncached_input=per_minute(tokens.uncached_input),
+                output=per_minute(tokens.output),
+            ),
+            scope=rate_limit.scope,
+            unix_timestamp=rate_limit.unix_timestamp,
         )
 
     @override

@@ -7,13 +7,19 @@ from typing import Any, cast
 
 from model_library.base import LLM, TextInput
 from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
-
+from model_library.rate_limits import (
+    RateLimit,
+    RateLimitCapacity,
+    RequestRateLimit,
+    TokenRateLimit,
+)
 from examples.validate_model import (
     ProbeValue,
     ValidationCase,
     ValidationReport,
     _build_cases,
     _print_report,
+    _rate_limit_valid,
     _run_case,
 )
 
@@ -59,7 +65,6 @@ def _fake_model(
         provider="test-provider",
         model_name="test-model",
         model_key="test-provider/test-model",
-        rate_limit=None,
         pricing=None,
     )
 
@@ -77,6 +82,23 @@ def _fake_llm(
             supports_files=supports_files,
             supports_images=supports_images,
         ),
+    )
+
+
+def test_validate_model_rate_limit_detail_names_algorithms() -> None:
+    valid, detail = _rate_limit_valid(
+        RateLimit(
+            unix_timestamp=1_700_000_000,
+            requests=(RequestRateLimit(limit=30_000, remaining=29_999),),
+            tokens=TokenRateLimit(
+                total=RateLimitCapacity(limit=180_000_000, remaining=180_000_000)
+            ),
+        )
+    )
+
+    assert valid
+    assert detail == (
+        "requests=sliding_window=29999/30000; TPM=token_bucket=180000000/180000000"
     )
 
 

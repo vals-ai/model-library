@@ -1,0 +1,22 @@
+base-config:
+  company: Thomson Reuters
+  country: Canada
+  open_source: false
+  supports:
+    # Image and file content parts are not served: the request hangs with no
+    # response and the connection is dropped rather than returning an error.
+    images: false
+    audio: false
+    videos: false
+    files: false
+    batch: false
+    temperature: true
+    tools: true
+    output_schema: true
+  properties:
+    reasoning_model: true
+  metadata:
+    # Vals-only access: this is a pre-release model on Thomson Reuters' own
+    # Mariner deployment, served by our key under a 30-concurrent ceiling.
+    internal_only: true
+    available_for_everyone: false
