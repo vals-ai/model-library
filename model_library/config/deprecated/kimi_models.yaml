@@ -60,7 +60,8 @@ deprecated:
       temperature: 0.6
       top_p: 0.95
     provider_endpoint: kimi-k2.5
-    supports_rate_limit_monitoring: false
+    rate_limit:
+      supports_live_monitoring: false
   kimi/kimi-k2-thinking:
     company: Moonshot AI
     country: China

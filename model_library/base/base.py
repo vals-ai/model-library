@@ -651,6 +651,9 @@ class LLM(ABC):
                     # (potentially provider-calling) token estimate entirely.
                     estimate_input_tokens = 0
                     estimate_output_tokens = 0
+                rate_limit = (
+                    self.metadata.rate_limit if self.metadata is not None else None
+                )
                 retrier = TokenRetrier(
                     logger=query_logger,
                     client_registry_key=self._client_registry_key_model_specific,
@@ -660,6 +663,11 @@ class LLM(ABC):
                     estimate_output_tokens=estimate_output_tokens,
                     use_dynamic_estimate=self._resolved_token_retry_params.use_dynamic_estimate,
                     manages_tokens=manages_tokens,
+                    cache_read_counts_toward_limit=(
+                        rate_limit.cache_read_counts_toward_limit
+                        if rate_limit is not None
+                        else True
+                    ),
                 )
             else:
                 retrier = ExponentialBackoffRetrier(logger=query_logger)

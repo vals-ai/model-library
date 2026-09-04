@@ -255,17 +255,27 @@ class TokenRateLimit(BaseModel):
 
 
 class DefaultRateLimit(BaseModel):
-    """Static token-retry capacity configured for one resolved model."""
+    """Static rate-limit policy and capacity for one resolved model."""
 
     model_config = ConfigDict(extra="forbid", strict=True)
 
+    supports_live_monitoring: bool = False
+    cache_read_counts_toward_limit: bool = True
     requests: list[RequestRateLimit] = Field(default_factory=list)
     tokens: TokenRateLimit | None = None
 
     @model_validator(mode="after")
     def validate_limits(self):
-        if not self.requests and self.tokens is None:
-            raise ValueError("at least one default rate limit is required")
+        has_capacity = bool(self.requests) or self.tokens is not None
+        has_policy = bool(
+            self.model_fields_set
+            & {
+                "supports_live_monitoring",
+                "cache_read_counts_toward_limit",
+            }
+        )
+        if not has_capacity and not has_policy:
+            raise ValueError("at least one rate-limit policy or capacity is required")
         modes = [request.mode for request in self.requests]
         if len(modes) != len(set(modes)):
             raise ValueError("only one request limit per mode is allowed")
@@ -330,7 +340,6 @@ class RawModelConfig(BaseModel):
         default_factory=BaseProviderProperties
     )
     costs_per_million_token: CostProperties | None
-    supports_rate_limit_monitoring: bool = False
     rate_limit: DefaultRateLimit | None = None
     alternative_keys: list[str | dict[str, Any]] = Field(default_factory=list)
     default_parameters: DefaultParameters = Field(default_factory=DefaultParameters)
@@ -408,7 +417,9 @@ def _gateway_registry_request(gateway_url: str) -> tuple[str, dict[str, str]]:
             "MODEL_GATEWAY_API_KEY is required to load registry from gateway"
         )
 
-    registry_url = urljoin(gateway_url.rstrip("/") + "/", "registry")
+    registry_url = urljoin(
+        gateway_url.rstrip("/") + "/", "registry?include_excluded_fields=true"
+    )
     return registry_url, {"Authorization": f"Bearer {api_key}"}
 
 

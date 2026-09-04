@@ -12,7 +12,10 @@ from pydantic import (
 
 from model_library.rate_limits import RateLimit
 
-MonitorSourceName = Literal["default", "pool_1", "pool_2"]
+MonitorSourceName = Annotated[
+    str,
+    StringConstraints(pattern=r"^(default|pool_[1-9][0-9]*)$"),
+]
 MonitorSourceStatus = Literal["starting", "ok", "stale", "unsupported", "error"]
 MonitorErrorCode = Literal["provider_error", "unsupported"]
 _NonBlankModel = Annotated[
@@ -138,15 +141,16 @@ class MonitorSourceFacts(MonitorContract):
 class MonitorFacts(MonitorContract):
     generation: _Generation
     model: _NonBlankModel
-    sources: list[MonitorSourceFacts]
+    sources: list[MonitorSourceFacts] = Field(min_length=1)
 
     @model_validator(mode="after")
     def _require_complete_sources(self) -> Self:
-        if tuple(source.source for source in self.sources) not in {
-            ("default",),
-            ("pool_1", "pool_2"),
-        }:
-            raise ValueError("sources must be default or both managed pools")
+        source_names = tuple(source.source for source in self.sources)
+        expected_managed_sources = tuple(
+            f"pool_{index}" for index in range(1, len(source_names) + 1)
+        )
+        if source_names != ("default",) and source_names != expected_managed_sources:
+            raise ValueError("sources must be default or contiguous managed pools")
         return self
 
 
@@ -156,7 +160,7 @@ class MonitorState(MonitorContract):
     active_until: float = Field(ge=0)
     retention_until: float = Field(ge=0)
     status: MonitorSourceStatus
-    sources: list[MonitorSourceState] = Field(min_length=1, max_length=2)
+    sources: list[MonitorSourceState] = Field(min_length=1)
 
 
 class MonitorListResponse(MonitorContract):

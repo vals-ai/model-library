@@ -25,7 +25,7 @@ from openai.types.create_embedding_response import CreateEmbeddingResponse
 from openai.types.moderation_create_response import ModerationCreateResponse
 from openai.types.responses import (
     ResponseFunctionToolCall,
-    ResponseOutputText,
+    ResponseOutputRefusal,
 )
 from openai.types.responses.response_function_web_search import ActionSearch
 from openai.types.responses.response import Response
@@ -72,6 +72,7 @@ from model_library.base.query_ids import PromptCacheKeyMode, resolve_prompt_cach
 from model_library.rate_limits import RateLimit, rate_limit_from_headers
 from model_library.exceptions import (
     BadInputError,
+    ContentFilterError,
     ImmediateRetryException,
     ModelNoOutputError,
     NoMatchingToolCallError,
@@ -844,6 +845,7 @@ class OpenAIModel(LLM):
         tool_calls_by_stream_index: dict[int, ChatCompletionMessageToolCall] = {}
 
         finish_reason: str | None = None
+        refusal: str | None = None
         metadata: QueryResultMetadata = QueryResultMetadata()
 
         def metadata_from_usage(usage: CompletionUsage) -> QueryResultMetadata:
@@ -927,6 +929,7 @@ class OpenAIModel(LLM):
                 finish_reason = choice.finish_reason
                 message = choice.message
                 result_builder.set_output_text(message.content)
+                refusal = message.refusal
                 if hasattr(message, "reasoning_content"):
                     raw_reasoning_content = getattr(message, "reasoning_content")
                     if raw_reasoning_content is not None:
@@ -956,6 +959,8 @@ class OpenAIModel(LLM):
 
                     if choice.delta and choice.delta.content is not None:
                         result_builder.append_content_delta(choice.delta.content)
+                    if choice.delta and choice.delta.refusal:
+                        refusal = (refusal or "") + choice.delta.refusal
 
                     if choice.delta and hasattr(choice.delta, "reasoning_content"):
                         raw_reasoning_delta = getattr(choice.delta, "reasoning_content")
@@ -1039,6 +1044,9 @@ class OpenAIModel(LLM):
             and not result_builder.has_reasoning
             and not raw_tool_calls
         )
+
+        if refusal:
+            raise ContentFilterError(refusal)
 
         if no_useful_content:
             handle_empty_response(mapped_finish_reason, {"metadata": metadata})
@@ -1379,8 +1387,8 @@ class OpenAIModel(LLM):
         for i, output in enumerate(response.output):
             if output.type == "message":
                 for content in output.content:
-                    if not isinstance(content, ResponseOutputText):
-                        continue
+                    if isinstance(content, ResponseOutputRefusal):
+                        raise ContentFilterError(content.refusal)
                     for citation in content.annotations:
                         citations.append(Citation(**citation.model_dump()))
 

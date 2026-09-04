@@ -1,5 +1,6 @@
 base-config:
-  supports_rate_limit_monitoring: true
+  rate_limit:
+    supports_live_monitoring: true
   company: xAI
   country: United States
   documentation_url: https://docs.x.ai/docs#models
@@ -155,7 +156,8 @@ grok-4.20-models:
           read: 0.40
   grok/grok-4.20-multi-agent-0309:
 
-    supports_rate_limit_monitoring: false
+    rate_limit:
+      supports_live_monitoring: false
     label: Grok 4.20 (Multi-Agent)
     release_date: 2026-03-09
     properties:

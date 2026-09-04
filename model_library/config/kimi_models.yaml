@@ -1,5 +1,6 @@
 base-config:
-  supports_rate_limit_monitoring: true
+  rate_limit:
+    supports_live_monitoring: true
   company: Moonshot AI
   country: China
   documentation_url: https://platform.moonshot.ai/docs
@@ -35,7 +36,6 @@ kimi-models:
       output: 15.0
       cache:
         read: 0.3
-    supports_rate_limit_monitoring: false
     alternative_keys:
       - kimi/kimi-k3-public
   kimi/kimi-k2.7-code:
@@ -60,7 +60,6 @@ kimi-models:
       cache:
         read: 0.19
 
-    supports_rate_limit_monitoring: false
   kimi/kimi-k2.6:
     label: Kimi K2.6
     release_date: 2026-04-20
@@ -81,7 +80,6 @@ kimi-models:
       output: 4.0
       cache:
         read: 0.16
-    supports_rate_limit_monitoring: false
     alternative_keys:
       - kimi/kimi-k2.6-thinking:
           properties:

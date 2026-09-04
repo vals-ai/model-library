@@ -525,7 +525,6 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     assert "transcription" not in models["openai/gpt-4o-transcribe"]["supports"]
     assert "country" not in response_config
     assert "rate_limit" not in response_config
-    assert "supports_rate_limit_monitoring" not in response_config
 
     with patch(
         "model_gateway.routes.models.get_model_registry",
@@ -538,15 +537,13 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
 
     assert full_resp.status_code == 200
     full_models = full_resp.json()["models"]
-    expected_rate_limit = None
+    rate_limit = configs["openai/gpt-4o"].rate_limit
+    assert rate_limit is not None
+    expected_rate_limit = rate_limit.model_dump(mode="json", exclude_unset=True)
     assert full_models["openai/gpt-4o-transcribe"]["supports"]["transcription"] is True
     assert "rate_limit" not in full_models["openai/gpt-4o-transcribe"]
     assert full_models["openai/gpt-4o"]["country"] == configs["openai/gpt-4o"].country
     assert full_models["openai/gpt-4o"].get("rate_limit") == expected_rate_limit
-    assert (
-        full_models["openai/gpt-4o"]["supports_rate_limit_monitoring"]
-        is configs["openai/gpt-4o"].supports_rate_limit_monitoring
-    )
 
 
 def test_registry_snapshot_can_exclude_same_provider_alternative_keys():

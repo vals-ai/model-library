@@ -62,6 +62,40 @@ def test_alternative_key_rate_limit_rejects_explicit_null() -> None:
         )
 
 
+def test_policy_only_rate_limit_requires_an_explicit_policy() -> None:
+    explicit_false = DefaultRateLimit.model_validate(
+        {"supports_live_monitoring": False}
+    )
+    cache_exclusion = DefaultRateLimit.model_validate(
+        {"cache_read_counts_toward_limit": False}
+    )
+
+    assert explicit_false.token_retry_defaults == (None, None)
+    assert cache_exclusion.token_retry_defaults == (None, None)
+    with pytest.raises(ValidationError, match="policy or capacity"):
+        DefaultRateLimit.model_validate({})
+
+
+def test_alternative_key_rate_limit_policy_inherits_only_within_provider() -> None:
+    registry = {}
+    parse_yaml_blocks(
+        _model_blocks(
+            {
+                "rate_limit": {
+                    "supports_live_monitoring": True,
+                    "cache_read_counts_toward_limit": False,
+                    "tokens": {"total": {"limit": 1_000}},
+                },
+                "alternative_keys": ["test/alias", "other/alias"],
+            }
+        ),
+        registry,
+    )
+
+    assert registry["test/alias"].rate_limit == registry["test/model"].rate_limit
+    assert registry["other/alias"].rate_limit is None
+
+
 def test_rate_limit_algorithm_modes_default_and_validate_by_dimension() -> None:
     limit = DefaultRateLimit.model_validate(
         {"requests": [{"limit": 10}], "tokens": {"total": {"limit": 1_000}}}

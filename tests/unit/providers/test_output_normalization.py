@@ -13,11 +13,24 @@ from google.genai.types import (
     GenerateContentResponseUsageMetadata,
     Part,
 )
+from openai.types.chat import ChatCompletion, ChatCompletionMessage
+from openai.types.chat.chat_completion import Choice
+from openai.types.responses import (
+    Response,
+    ResponseOutputMessage,
+    ResponseOutputRefusal,
+    ResponseOutputText,
+)
 
-from model_library.exceptions import MaxOutputTokensExceededError, ModelNoOutputError
+from model_library.exceptions import (
+    ContentFilterError,
+    MaxOutputTokensExceededError,
+    ModelNoOutputError,
+)
 from model_library.providers.google.batch import parse_predictions_jsonl
 from model_library.providers.google.google import GoogleModel
 from model_library.providers.mistral import MistralModel
+from model_library.providers.openai import OpenAIModel
 from tests.unit.provider_response_helpers import (
     _AMAZON_BLOCK_STOP,
     _AMAZON_TOOL_DELTA,
@@ -533,3 +546,76 @@ async def test_xai_tool_only_query_uses_none_for_absent_or_empty_output_text(
     assert result.reasoning is None
     assert result.tool_calls[0].name == "ping"
 
+
+
+def _openai_responses_refusal(refusal: str, text: str | None = None) -> Response:
+    content: list[ResponseOutputRefusal | ResponseOutputText] = [
+        ResponseOutputRefusal(type="refusal", refusal=refusal)
+    ]
+    if text is not None:
+        content.append(ResponseOutputText(annotations=[], text=text, type="output_text"))
+    return Response.model_construct(
+        id="resp_1",
+        created_at=0.0,
+        model="muse-spark-1.2",
+        object="response",
+        output=[
+            ResponseOutputMessage(
+                id="msg_resp_1_refusal",
+                type="message",
+                role="assistant",
+                status="completed",
+                content=content,
+            )
+        ],
+        parallel_tool_calls=False,
+        status="completed",
+        tool_choice="auto",
+        tools=[],
+        incomplete_details=None,
+        usage=None,
+    )
+
+
+async def _query_openai_responses(response: Response):
+    model = OpenAIModel("gpt-5.5")
+    mock_client = MagicMock()
+    mock_client.responses.create = AsyncMock(return_value=response)
+    with patch.object(model, "get_client", return_value=mock_client):
+        return await model._query_impl(  # pyright: ignore[reportPrivateUsage]
+            _INPUT, tools=[], stream=False, query_logger=_LOGGER
+        )
+
+
+@pytest.mark.parametrize("text", [None, "partial answer"])
+async def test_openai_responses_refusal_part_raises_content_filter(text: str | None):
+    refusal = "I'm sorry, but I can't help with that request."
+    with pytest.raises(ContentFilterError, match="can't help with that request"):
+        await _query_openai_responses(_openai_responses_refusal(refusal, text))
+
+
+async def _query_openai_completions(message: ChatCompletionMessage):
+    model = OpenAIModel("gpt-5.5", use_completions=True)
+    model.stream_completions = False
+    completion = ChatCompletion(
+        id="chatcmpl-1",
+        object="chat.completion",
+        created=0,
+        model="muse-spark-1.2",
+        choices=[Choice(index=0, finish_reason="stop", message=message)],
+    )
+    mock_client = MagicMock()
+    mock_client.chat.completions.create = AsyncMock(return_value=completion)
+    with patch.object(model, "get_client", return_value=mock_client):
+        return await model._query_impl(  # pyright: ignore[reportPrivateUsage]
+            _INPUT, tools=[], query_logger=_LOGGER
+        )
+
+
+@pytest.mark.parametrize("content", [None, "partial answer"])
+async def test_openai_completions_refusal_raises_content_filter(content: str | None):
+    message = ChatCompletionMessage(
+        role="assistant", content=content, refusal="I can't help with that."
+    )
+    with pytest.raises(ContentFilterError, match="can't help with that"):
+        await _query_openai_completions(message)

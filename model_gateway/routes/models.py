@@ -31,7 +31,6 @@ def register_model_routes(app: FastAPI) -> None:
                 "supports": {"transcription"},
                 "country": True,
                 "rate_limit": True,
-                "supports_rate_limit_monitoring": True,
             }
 
         def serialize_config(config: ModelConfig) -> dict[str, Any]:
@@ -41,7 +40,7 @@ def register_model_routes(app: FastAPI) -> None:
                     payload.pop("rate_limit")
                 else:
                     payload["rate_limit"] = config.rate_limit.model_dump(
-                        mode="json", exclude_defaults=True
+                        mode="json", exclude_unset=True
                     )
             return payload
 

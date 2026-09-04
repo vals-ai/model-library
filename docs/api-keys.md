@@ -21,7 +21,7 @@ and never sends server-held provider keys to arbitrary endpoints.
 | `alibaba/*` | Alibaba DashScope (international) | `DASHSCOPE_API_KEY` |
 | `alibaba/*-cn` | Alibaba DashScope (mainland China) | `DASHSCOPE_CN_API_KEY` |
 | `amazon/*`, `bedrock/*` | Amazon Bedrock | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_DEFAULT_REGION`; optional `AWS_SESSION_TOKEN` |
-| `anthropic/*` | Anthropic | `ANTHROPIC_API_KEY` |
+| `anthropic/*` | Anthropic | `ANTHROPIC_API_KEY`; managed gateways also use contiguous `ANTHROPIC_API_KEY_2` through `ANTHROPIC_API_KEY_N` pools |
 | `arcee-ai/*` | Arcee AI | `ARCEE_API_KEY` |
 | `azure/*` | Azure OpenAI | `AZURE_API_KEY`, `AZURE_ENDPOINT`; optional `AZURE_API_VERSION` |
 | `baseten/*` | Baseten | `BASETEN_API_KEY`, `BASETEN_API_BASE_URL` (full OpenAI-compatible `/v1` base URL) |

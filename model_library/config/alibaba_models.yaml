@@ -1,5 +1,6 @@
 base-config:
-  supports_rate_limit_monitoring: true
+  rate_limit:
+    supports_live_monitoring: true
   company: Alibaba
   country: China
   open_source: false

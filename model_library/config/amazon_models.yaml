@@ -1,4 +1,6 @@
 base-config:
+  rate_limit:
+    cache_read_counts_toward_limit: false
   company: Amazon
   country: United States
   open_source: false

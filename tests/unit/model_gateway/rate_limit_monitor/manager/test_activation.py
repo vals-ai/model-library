@@ -78,6 +78,8 @@ async def test_activation_accepts_same_and_cross_provider_alternative_keys(
 
 
 async def test_activate_and_list_do_not_probe_inline(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "pool-one-secret")
+    monkeypatch.setenv("ANTHROPIC_API_KEY_2", "pool-two-secret")
     store = FakeStore()
     monitor = _monitor(
         monkeypatch,

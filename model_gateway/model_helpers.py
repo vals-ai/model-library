@@ -2,7 +2,7 @@
 
 import hashlib
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -45,7 +45,7 @@ def get_cached_llm(
 
 @dataclass(frozen=True)
 class ManagedApiKey:
-    source: Literal["pool_1", "pool_2"]
+    source: str
     key_setting: str
 
 

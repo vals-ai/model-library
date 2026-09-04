@@ -143,7 +143,11 @@ class RateLimitMonitor:
 
     async def activate(self, model: str) -> MonitorActivationResponse:
         config = get_registry_config(model)
-        if config is None or not config.supports_rate_limit_monitoring:
+        if (
+            config is None
+            or config.rate_limit is None
+            or not config.rate_limit.supports_live_monitoring
+        ):
             raise MonitorInvalidModel("model is not eligible for monitoring")
         expected_sources: tuple[MonitorSourceName, ...] = tuple(
             spec.source for spec in _source_specs(model)
@@ -206,12 +210,20 @@ class RateLimitMonitor:
         try:
             while True:
                 source_names = await self._store.claim_owner(model, token)
-                if source_names is not None:
+                if source_names is None:
+                    record_rate_limit_monitor_ownership("contended")
+                    await self._sleep(OWNERSHIP_RETRY_SECONDS)
+                    continue
+
+                claimed = True
+                record_rate_limit_monitor_ownership("acquired")
+                local_source_names = tuple(spec.source for spec in _source_specs(model))
+                if source_names == local_source_names:
                     break
-                record_rate_limit_monitor_ownership("contended")
-                await self._sleep(OWNERSHIP_RETRY_SECONDS)
-            claimed = True
-            record_rate_limit_monitor_ownership("acquired")
+
+                record_rate_limit_monitor_ownership("lost")
+                clean_exit = True
+                return
 
             sources = self._build_sources(model, source_names)
             children = [

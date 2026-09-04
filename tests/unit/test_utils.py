@@ -1,5 +1,6 @@
 """Unit tests for model_library/utils.py"""
 
+import asyncio
 import socket
 from collections.abc import Callable
 from pathlib import Path
@@ -182,8 +183,9 @@ def test_make_aiohttp_session_wires_keepalive_socket_factory(
         connector_kwargs.update(kwargs)
         return expected_connector
 
-    def create_session(*, connector: object) -> object:
+    def create_session(*, connector: object, read_bufsize: int) -> object:
         assert connector is expected_connector
+        assert read_bufsize == model_utils.PROVIDER_STREAM_READ_BUFFER_BYTES
         return session
 
     monkeypatch.setattr(model_utils.aiohttp, "TCPConnector", create_connector)
@@ -191,6 +193,38 @@ def test_make_aiohttp_session_wires_keepalive_socket_factory(
 
     assert model_utils.make_aiohttp_session() is session
     assert connector_kwargs["socket_factory"] is model_utils.tcp_keepalive_socket
+
+
+async def test_make_aiohttp_session_reads_large_stream_event():
+    stream_event = b"x" * (256 * 1024) + b"\n"
+
+    async def serve_event(
+        reader: asyncio.StreamReader,
+        writer: asyncio.StreamWriter,
+    ) -> None:
+        await reader.readuntil(b"\r\n\r\n")
+        writer.write(
+            b"HTTP/1.1 200 OK\r\n"
+            + f"Content-Length: {len(stream_event)}\r\n".encode()
+            + b"Content-Type: text/event-stream\r\n"
+            + b"Connection: close\r\n\r\n"
+            + stream_event
+        )
+        await writer.drain()
+        writer.close()
+        await writer.wait_closed()
+
+    server = await asyncio.start_server(serve_event, "127.0.0.1", 0)
+    socket_address = server.sockets[0].getsockname()
+    try:
+        async with model_utils.make_aiohttp_session() as session:
+            async with session.get(
+                f"http://127.0.0.1:{socket_address[1]}"
+            ) as response:
+                assert await response.content.readline() == stream_event
+    finally:
+        server.close()
+        await server.wait_closed()
 
 
 @pytest.mark.parametrize(

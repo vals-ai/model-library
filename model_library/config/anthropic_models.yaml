@@ -1,5 +1,7 @@
 base-config:
-  supports_rate_limit_monitoring: true
+  rate_limit:
+    supports_live_monitoring: true
+    cache_read_counts_toward_limit: false
   company: Anthropic
   country: United States
   open_source: false
@@ -36,7 +38,8 @@ claude-fable-5-models:
       cache:
         read: 1.0
         write: 12.5
-    supports_rate_limit_monitoring: false
+    rate_limit:
+      supports_live_monitoring: false
     provider_properties:
       supports_auto_thinking: true
       supports_compute_effort: true
@@ -52,6 +55,51 @@ claude-fable-5-models:
             compute_effort: "high"
       - anthropic/claude-fable-5-no-fallback:
           label: Claude Fable 5 (No Fallback)
+          provider_properties:
+            fallback_models: []
+
+claude-fable-5-1-models:
+  anthropic/claude-fable-5-1:
+    label: Claude Fable 5.1
+    release_date: 2026-09-01
+    properties:
+      context_window: 1_000_000
+      max_tokens: 128_000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 10.0
+      output: 50.0
+      cache:
+        read: 0.25
+        write: 12.5
+    provider_properties:
+      supports_auto_thinking: true
+      supports_compute_effort: true
+      fallback_models:
+        - claude-opus-5
+        - claude-opus-4-8
+    default_parameters:
+      max_tokens: 128_000
+      compute_effort: "max"
+    alternative_keys:
+      - anthropic/claude-fable-5-1-low:
+          label: Claude Fable 5.1 (Low Effort)
+          default_parameters:
+            compute_effort: "low"
+      - anthropic/claude-fable-5-1-medium:
+          label: Claude Fable 5.1 (Medium Effort)
+          default_parameters:
+            compute_effort: "medium"
+      - anthropic/claude-fable-5-1-high:
+          label: Claude Fable 5.1 (High Effort)
+          default_parameters:
+            compute_effort: "high"
+      - anthropic/claude-fable-5-1-xhigh:
+          label: Claude Fable 5.1 (Extra High Effort)
+          default_parameters:
+            compute_effort: "xhigh"
+      - anthropic/claude-fable-5-1-no-fallback:
+          label: Claude Fable 5.1 (No Fallback)
           provider_properties:
             fallback_models: []
 claude-opus-5-models:

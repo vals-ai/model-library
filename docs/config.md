@@ -72,7 +72,7 @@ Set `country` to the model creator's country, not the hosting provider's country
 
 Set `provider_endpoint` when the registry key differs from the model ID sent to the provider.
 
-See the [field reference](../model_library/config/README.md#fields) for the `rate_limit` YAML shape. This field stores static retry and admission capacity. Live provider observations are separate and never rewrite YAML. Omit `rate_limit` when no static limit exists; public exports remove it.
+See the [field reference](../model_library/config/README.md#fields) for the `rate_limit` YAML shape. This field stores accounting policy and optional static retry/admission capacity. Live provider observations are separate and never rewrite YAML. Omit `rate_limit` when neither policy nor static capacity is known; public exports strip static capacity and retain policy.
 
 Use `supports.files` only for non-image document or file inputs supported by the provider. For image- or video-only APIs, leave it `false` and set `supports.images` or `supports.videos` instead.
 
@@ -134,8 +134,7 @@ When `MODEL_GATEWAY_URL` is set before the registry is initialized:
   `get_registry_model()` construction use that snapshot. No-argument calls
   retain it for the process lifetime.
 - The snapshot omits fields older clients reject as unknown (currently
-  `country`, `rate_limit`, `supports.transcription`, and
-  `supports_rate_limit_monitoring`).
+  `country`, `rate_limit`, and `supports.transcription`).
 - `refresh_model_registry()` provides opt-in lazy refresh without changing the
   `get_model_registry()` singleton contract. It reloads whichever source the
   current settings select: Gateway, local YAML, or custom config. A successful
@@ -223,7 +222,8 @@ provider files are included automatically.
 | `MODEL_LIBRARY_INCLUDE_DEPRECATED` | `False` | Load deprecated model configs from `config/deprecated/`                                       |
 | `MODEL_LIBRARY_CUSTOM_CONFIG`      | —       | Path or URL to additional YAML config to merge into non-gateway registry                      |
 | `OPENAI_API_KEY`                   | —       | OpenAI API key                                                                                |
-| `ANTHROPIC_API_KEY`                | —       | Anthropic API key                                                                             |
+| `ANTHROPIC_API_KEY`                | —       | Anthropic pool 1; runtime discovers contiguous `_2` through `_N` keys (deployed through `_2`) |
+| `META_API_KEY`                     | —       | Meta pool 1; runtime discovers contiguous `_2` through `_N` keys (deployed through `_4`)      |
 | `GOOGLE_API_KEY`                   | —       | Google API key                                                                                |
 | `ARCEE_API_KEY`                    | —       | Arcee AI API key                                                                              |
 | `NVIDIA_API_KEY`                   | —       | NVIDIA API key                                                                                |

@@ -209,7 +209,10 @@ class TestGatewayRegistryLoading:
                     return_value=httpx.Response(
                         200,
                         json=payload,
-                        request=httpx.Request("GET", "https://gateway.test/registry"),
+                        request=httpx.Request(
+                            "GET",
+                            "https://gateway.test/registry?include_excluded_fields=true",
+                        ),
                     ),
                 ) as mock_get,
             ):
@@ -217,7 +220,14 @@ class TestGatewayRegistryLoading:
 
             assert list(registry) == ["openai/gpt-4o"]
             assert registry["openai/gpt-4o"].provider_endpoint == "gpt-4o"
-            assert mock_get.call_args.args[0] == "https://gateway.test/registry"
+            assert (
+                registry["openai/gpt-4o"].rate_limit
+                == source_registry["openai/gpt-4o"].rate_limit
+            )
+            assert (
+                mock_get.call_args.args[0]
+                == "https://gateway.test/registry?include_excluded_fields=true"
+            )
             assert mock_get.call_args.kwargs["headers"] == {
                 "Authorization": "Bearer sk-gateway"
             }

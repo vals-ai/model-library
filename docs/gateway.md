@@ -38,7 +38,7 @@ The gateway server uses server-side auth/signing config. Do not set `MODEL_GATEW
 - `MODEL_GATEWAY_API_KEYS` (**required**): JSON object mapping stable names to valid client API keys. Gateway startup fails if unset or empty.
 - `MODEL_GATEWAY_HMAC_SECRET` (**required**): secret for HMAC-signing pickled fields in history blobs. Gateway startup fails without this so every task can safely return and accept raw history blobs.
 - `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc. (**usually required**): provider API keys for providers served by this gateway. See [Provider API keys](api-keys.md). Per-request `custom_api_key` can supply caller credentials at call time. Per-request `custom_endpoint` is accepted only with `custom_api_key`; the gateway uses that caller-supplied key for the custom URL and never sends server-held provider keys to arbitrary endpoints.
-- `GCP_CREDS`, `GCP_PROJECT_ID`, and `GCP_REGION` (**required for Google Vertex requests**): service-account credentials, project ID, and region loaded from the stage's `ModelGatewayProviderApiKeys` shared secret. Managed secrets set `GCP_REGION` to `global`. `config.provider_config.use_vertex=true` selects Vertex; other Google requests use `GOOGLE_API_KEY`.
+- `GCP_CREDS`, `GCP_PROJECT_ID`, and `GCP_REGION` (**required for Google Vertex requests**): service-account credentials, project ID, and Vertex region. `config.provider_config.use_vertex=true` selects Vertex; other Google requests use `GOOGLE_API_KEY`.
 #### Capacity and timeouts
 
 | Contract | Behavior |
@@ -185,8 +185,8 @@ For deployed environments, keep server and client Secrets Manager entries separa
 
 ### Registry snapshot
 
-`GET /registry` omits `country`, `rate_limit`, `supports.transcription`, and
-`supports_rate_limit_monitoring` by default for compatibility with older
+`GET /registry` omits `country`, `rate_limit`, and `supports.transcription` by
+default for compatibility with older
 model-library clients. Set `include_excluded_fields=true` to include them. Set
 `include_alt_keys=false` to omit same-provider alternative keys.
 

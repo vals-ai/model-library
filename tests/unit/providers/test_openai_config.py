@@ -504,7 +504,7 @@ def _completion_chunk(
         choices=[
             SimpleNamespace(
                 finish_reason=finish_reason,
-                delta=SimpleNamespace(content=None, tool_calls=tool_calls),
+                delta=SimpleNamespace(refusal=None, content=None, tool_calls=tool_calls),
             )
         ],
         usage=None,
@@ -1022,7 +1022,7 @@ async def test_streaming_completions_empty_output_text_raises_no_output():
             choices=[
                 SimpleNamespace(
                     finish_reason="stop",
-                    delta=SimpleNamespace(content="", tool_calls=None),
+                    delta=SimpleNamespace(refusal=None, content="", tool_calls=None),
                 )
             ],
             usage=None,
@@ -1051,7 +1051,7 @@ async def test_streaming_completions_empty_non_success_raises_mapped_error(
             choices=[
                 SimpleNamespace(
                     finish_reason=finish_reason,
-                    delta=SimpleNamespace(content="", tool_calls=None),
+                    delta=SimpleNamespace(refusal=None, content="", tool_calls=None),
                 )
             ],
             usage=None,
@@ -1074,6 +1074,7 @@ async def test_reasoning_delegate_tag_only_output_raises_no_output():
             SimpleNamespace(
                 finish_reason="stop",
                 delta=SimpleNamespace(
+                    refusal=None,
                     content="<think></think>",
                     reasoning_content=None,
                     tool_calls=None,
@@ -1139,6 +1140,7 @@ async def test_streaming_reasoning_delegate_tag_only_non_success_raises_mapped_e
             SimpleNamespace(
                 finish_reason=finish_reason,
                 delta=SimpleNamespace(
+                    refusal=None,
                     content="<think></think>",
                     reasoning_content=None,
                     tool_calls=None,
@@ -1167,6 +1169,7 @@ async def test_completions_stream_reasoning_without_usage_split_preserves_timeli
                 SimpleNamespace(
                     finish_reason=None,
                     delta=SimpleNamespace(
+                        refusal=None,
                         content=None,
                         reasoning_content="why",
                         tool_calls=None,
@@ -1181,6 +1184,7 @@ async def test_completions_stream_reasoning_without_usage_split_preserves_timeli
                 SimpleNamespace(
                     finish_reason="stop",
                     delta=SimpleNamespace(
+                        refusal=None,
                         content="OK",
                         reasoning_content=None,
                         tool_calls=None,
@@ -1221,6 +1225,7 @@ async def test_reasoning_delegate_with_tags_keeps_streamed_content_timing():
             SimpleNamespace(
                 finish_reason="stop",
                 delta=SimpleNamespace(
+                    refusal=None,
                     content="<think>why</think>OK",
                     reasoning_content=None,
                     tool_calls=None,
@@ -1253,6 +1258,7 @@ async def test_reasoning_delegate_with_tags_splits_reasoning_after_query_finaliz
             SimpleNamespace(
                 finish_reason="stop",
                 delta=SimpleNamespace(
+                    refusal=None,
                     content="<think>why</think>OK",
                     reasoning_content=None,
                     tool_calls=None,
@@ -1288,6 +1294,7 @@ async def test_reasoning_delegate_split_thought_tags_replay_visible_history():
                 SimpleNamespace(
                     finish_reason=None,
                     delta=SimpleNamespace(
+                        refusal=None,
                         content="<thought>wh",
                         reasoning_content=None,
                         tool_calls=None,
@@ -1302,6 +1309,7 @@ async def test_reasoning_delegate_split_thought_tags_replay_visible_history():
                 SimpleNamespace(
                     finish_reason="stop",
                     delta=SimpleNamespace(
+                        refusal=None,
                         content="y</thought>OK",
                         reasoning_content=None,
                         tool_calls=None,
@@ -1353,6 +1361,7 @@ async def test_reasoning_delegate_tag_only_tool_call_keeps_tool_only_output_text
                     SimpleNamespace(
                         finish_reason=None,
                         delta=SimpleNamespace(
+                            refusal=None,
                             content="<think></think>",
                             reasoning_content=None,
                             tool_calls=None,
@@ -1367,6 +1376,7 @@ async def test_reasoning_delegate_tag_only_tool_call_keeps_tool_only_output_text
                     SimpleNamespace(
                         finish_reason="tool_calls",
                         delta=SimpleNamespace(
+                            refusal=None,
                             content=None,
                             reasoning_content=None,
                             tool_calls=[
@@ -1432,6 +1442,7 @@ async def test_reasoning_delegate_without_tags_keeps_streamed_content_timing():
             SimpleNamespace(
                 finish_reason="stop",
                 delta=SimpleNamespace(
+                    refusal=None,
                     content="OK",
                     reasoning_content=None,
                     tool_calls=None,

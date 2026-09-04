@@ -1,5 +1,6 @@
 base-config:
-  supports_rate_limit_monitoring: true
+  rate_limit:
+    supports_live_monitoring: true
   company: Mistral
   country: France
   documentation_url: https://docs.mistral.ai/getting-started/models/models_overview/
@@ -25,7 +26,8 @@ magistral-models:
 
   mistralai/magistral-medium-2509:
 
-    supports_rate_limit_monitoring: false
+    rate_limit:
+      supports_live_monitoring: false
     label: Magistral Medium 1.2 (09/2025)
     release_date: 2025-09-18
     supports:
@@ -39,7 +41,8 @@ magistral-models:
 
   mistralai/magistral-small-2509:
 
-    supports_rate_limit_monitoring: false
+    rate_limit:
+      supports_live_monitoring: false
     label: Magistral Small 1.2 (09/2025)
     open_source: true
     release_date: 2025-09-18

@@ -107,15 +107,6 @@ def _invalid_source_set_snapshot() -> str:
         {
             "generation": "a" * 32,
             "model": MODEL,
-            "sources": [
-                {
-                    "source": "pool_1",
-                    "last_attempt_at": None,
-                    "last_attempt_generation": None,
-                    "last_success_at": None,
-                    "rate_limit": None,
-                    "last_error_code": None,
-                }
-            ],
+            "sources": [],
         }
     )

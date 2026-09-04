@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 import fakeredis
 import pytest
 
-from model_library.base.base import LLM, TokenRetryParams
+from model_library.base.base import LLM, ResolvedTokenRetryParams, TokenRetryParams
 from model_library.base.output import QueryResult, QueryResultMetadata
 from model_library.exceptions import (
     ImmediateRetryException,
@@ -129,6 +129,7 @@ def _make_retrier(
     estimate_output_tokens: int = 50,
     use_dynamic_estimate: bool = True,
     manages_tokens: bool = True,
+    cache_read_counts_toward_limit: bool = True,
 ) -> TokenRetrier:
     """Helper to create a TokenRetrier with sensible defaults."""
     return TokenRetrier(
@@ -140,6 +141,7 @@ def _make_retrier(
         estimate_output_tokens=estimate_output_tokens,
         use_dynamic_estimate=use_dynamic_estimate,
         manages_tokens=manages_tokens,
+        cache_read_counts_toward_limit=cache_read_counts_toward_limit,
     )
 
 
@@ -657,6 +659,34 @@ async def test_post_function_adjusts_tokens(redis, token_retrier: TokenRetrier):
     assert remaining == 1100
 
 
+async def test_post_function_counts_cache_reads_by_default(redis):
+    await _init_tokens(redis, value=1000, limit=2000)
+    retrier = _make_retrier()
+
+    mock_qr = MagicMock()
+    mock_qr.metadata.total_input_tokens = 140
+    mock_qr.metadata.cache_read_tokens = 100
+    mock_qr.metadata.total_output_tokens = 10
+
+    await retrier._post_function((mock_qr, 1.0))  # pyright: ignore[reportPrivateUsage]
+
+    assert int(await redis.get(TOKEN_KEY)) == 1000
+
+
+async def test_post_function_excludes_cache_reads_for_false_policy(redis):
+    await _init_tokens(redis, value=1000, limit=2000)
+    retrier = _make_retrier(cache_read_counts_toward_limit=False)
+
+    mock_qr = MagicMock()
+    mock_qr.metadata.total_input_tokens = 140
+    mock_qr.metadata.cache_read_tokens = 100
+    mock_qr.metadata.total_output_tokens = 10
+
+    await retrier._post_function((mock_qr, 1.0))  # pyright: ignore[reportPrivateUsage]
+
+    assert int(await redis.get(TOKEN_KEY)) == 1100
+
+
 async def test_full_execute_flow_rpm_only(redis):
     """RPM-only execute flow never deducts, refills, or reads a token bucket."""
     retrier = _make_retrier(
@@ -856,26 +886,6 @@ async def test_priority_preemption_during_wait(redis, token_retrier: TokenRetrie
     # Priority 2 counter should be back to 0 (registered then deregistered)
     p2_count = await redis.zcard(f"{PRIORITY_KEY_PREFIX}:2")
     assert p2_count == 0
-
-
-async def test_post_function_cache_refund_math(redis, token_retrier: TokenRetrier):
-    """
-    EDGE CASE: Most tokens were CACHED.
-    If we estimated 150 but 140 were cached, we only used 10 tokens.
-    Redis should be refunded 140 tokens.
-    """
-    await _init_tokens(redis, value=1000, limit=2000)
-
-    mock_qr = MagicMock()
-    mock_qr.metadata.total_input_tokens = 100
-    mock_qr.metadata.total_output_tokens = 50
-    mock_qr.metadata.cache_read_tokens = 140  # Only 10 tokens were "real" usage
-
-    # Formula: adj = Estimate(150) - (Actual(150) - Cache(140)) = 140
-    await token_retrier._post_function((mock_qr, 1.0))  # pyright: ignore[reportPrivateUsage]
-
-    remaining = int(await redis.get(TOKEN_KEY))
-    assert remaining == 1140  # 1000 + 140
 
 
 async def test_post_function_underestimation_debt(redis, token_retrier: TokenRetrier):

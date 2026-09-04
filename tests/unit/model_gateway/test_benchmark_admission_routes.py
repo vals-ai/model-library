@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
@@ -23,6 +24,7 @@ from model_library.base import (
 from model_library.register_models import DefaultRateLimit
 from model_library.retriers.token import utils as token_utils
 from model_library.retriers.token.utils import set_redis_client
+from model_library.settings import ModelLibrarySettings
 
 MODEL = "openai/gpt-4o"
 MODEL_KEY = ("openai.gpt-4o", "server-key-hash")

@@ -247,7 +247,9 @@ def _monitor(
     registry = {
         model: SimpleNamespace(
             provider_name=provider,
-            supports_rate_limit_monitoring=model in supported_models,
+            rate_limit=SimpleNamespace(
+                supports_live_monitoring=model in supported_models,
+            ),
             alternative_keys=alternative_keys.get(model, []),
         )
         for model, provider in providers.items()
@@ -261,6 +263,10 @@ def _stub_sources(
     monitor: RateLimitMonitor,
     *sources: _SourceProbe,
 ) -> None:
+    specs = tuple(
+        SimpleNamespace(source=source.source, key_setting=None) for source in sources
+    )
+    monkeypatch.setattr(monitor_module, "_source_specs", lambda model: specs)
     monkeypatch.setattr(
         monitor, "_build_sources", lambda model, expected: list(sources)
     )

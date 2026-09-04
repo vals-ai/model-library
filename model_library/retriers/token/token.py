@@ -347,6 +347,7 @@ class TokenRetrier(BaseRetrier):
         estimate_output_tokens: int,
         use_dynamic_estimate: bool = True,
         manages_tokens: bool = True,
+        cache_read_counts_toward_limit: bool = True,
     ):
         super().__init__(
             strategy="token",
@@ -360,6 +361,7 @@ class TokenRetrier(BaseRetrier):
         # RPM-only policy: there is no TPM bucket to deduct from, refill, or
         # adjust after the fact — only request-rate admission applies.
         self._manages_tokens = manages_tokens
+        self._cache_read_counts_toward_limit = cache_read_counts_toward_limit
 
         self.estimate_input_tokens = estimate_input_tokens
         self.estimate_output_tokens = estimate_output_tokens
@@ -763,9 +765,9 @@ class TokenRetrier(BaseRetrier):
 
         metadata = result[0].metadata
 
-        countable_input_tokens = metadata.total_input_tokens - (
-            metadata.cache_read_tokens or 0
-        )
+        countable_input_tokens = metadata.total_input_tokens
+        if not self._cache_read_counts_toward_limit:
+            countable_input_tokens -= metadata.cache_read_tokens or 0
         countable_output_tokens = metadata.total_output_tokens
         actual_tokens = countable_input_tokens + countable_output_tokens
 

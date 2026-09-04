@@ -35,6 +35,7 @@ class MetaModel(DelegateOnly):
         super().__init__(model_name, provider, config=config)
 
         base_url = "https://api.meta.ai/v1"
+
         # https://docs.llama.com
         config = config or LLMConfig()
         delegate_config = config.model_copy(

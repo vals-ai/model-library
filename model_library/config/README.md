@@ -47,8 +47,7 @@ claude-4-models:                    # model block
 | `costs_per_million_token` | `input`, `output`, optional `cache`, `batch`, `context` pricing. Set to `null` for models without known pricing |
 | `metadata` | `deprecated`, `available_for_everyone`, `available_as_evaluator`, `ignored_for_cost`, `internal_only` |
 | `default_parameters` | `temperature`, `top_p`, `top_k`, `reasoning_effort` |
-| `rate_limit` | Optional static retry and admission capacity. `requests` is a list of `{limit, mode}` entries. `tokens` uses either `total` or `input` plus `output`, with optional `uncached_input`; each capacity is `{limit}`. Request mode defaults to `sliding_window`; token mode defaults to `token_bucket`. Omit unknown limits; `null` is invalid. |
-| `supports_rate_limit_monitoring` | Set to `true` when the provider returns live rate-limit data for the model. Defaults to `false`; define it on the provider base and override exceptions. |
+| `rate_limit` | Optional rate-limit policy and static retry/admission capacity. `supports_live_monitoring` defaults to `false`; `cache_read_counts_toward_limit` defaults to `true`. `requests` is a list of `{limit, mode}` entries. `tokens` uses either `total` or `input` plus `output`, with optional `uncached_input`; each capacity is `{limit}`. Request mode defaults to `sliding_window`; token mode defaults to `token_bucket`. Policy-only blocks are valid when a policy field is explicit; empty blocks and `null` are invalid. Omit unknown capacities. |
 | `provider_properties` | Provider-specific flags (e.g. `supports_auto_thinking`) |
 | `provider_endpoint` | Override the model name sent to the provider API |
 | `alternative_keys` | Alternative model identifiers/aliases |

@@ -187,7 +187,7 @@ async def test_publication_validates_topology_before_snapshot_mutation(
     elif corruption == "order":
         snapshot["sources"].reverse()
     elif corruption == "unsupported-topology":
-        snapshot["sources"] = snapshot["sources"][:1]
+        snapshot["sources"] = snapshot["sources"][1:]
     elif corruption == "selected-source":
         snapshot["sources"][0]["source"] = "default"
     elif corruption == "unselected-source":

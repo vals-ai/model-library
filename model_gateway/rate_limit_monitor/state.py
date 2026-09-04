@@ -128,7 +128,7 @@ if was_active ~= (ARGV[9] == "1") then return {"conflict"} end
 if tonumber(ARGV[6]) <= now or tonumber(ARGV[7]) <= tonumber(ARGV[6]) then
   return {"conflict"}
 end
-if not was_active then redis.call("DEL", KEYS[3]) end
+if not was_active or ARGV[10] == "1" then redis.call("DEL", KEYS[3]) end
 redis.call("ZADD", KEYS[1], ARGV[6], ARGV[1])
 redis.call("ZADD", KEYS[2], ARGV[7], ARGV[1])
 redis.call("SET", KEYS[4], ARGV[5])
@@ -408,12 +408,11 @@ class RateLimitMonitorStore:
             stored = await self._read_snapshot(model)
             previous_facts = stored.facts if stored is not None else None
             now = stored.now if stored is not None else await self._server_time()
-            if (
+            source_set_changed = (
                 previous_facts is not None
                 and tuple(source.source for source in previous_facts.sources)
                 != expected_sources
-            ):
-                raise MonitorStateCorrupt("Redis monitor expected sources are invalid")
+            )
 
             previous_active_until = (
                 _redis_float(stored.active_score) if stored is not None else 0
@@ -421,7 +420,7 @@ class RateLimitMonitorStore:
             was_active = previous_active_until > now
             generation = (
                 previous_facts.generation
-                if was_active and previous_facts is not None
+                if was_active and previous_facts is not None and not source_set_changed
                 else secrets.token_hex(16)
             )
             active_until_milliseconds = math.ceil(
@@ -439,7 +438,7 @@ class RateLimitMonitorStore:
             for index, source_name in enumerate(expected_sources):
                 previous = (
                     previous_facts.sources[index]
-                    if previous_facts is not None
+                    if previous_facts is not None and not source_set_changed
                     else None
                 )
                 if previous is not None and (
@@ -475,6 +474,7 @@ class RateLimitMonitorStore:
                     retention_until,
                     retention_until_milliseconds,
                     "1" if was_active else "0",
+                    "1" if source_set_changed else "0",
                 ),
             )
             if marker == "conflict":

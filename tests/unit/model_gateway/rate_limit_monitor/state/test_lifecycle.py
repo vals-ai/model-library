@@ -111,6 +111,73 @@ async def test_anthropic_activation_persists_both_sources(store):
     ]
 
 
+async def test_activation_accepts_arbitrary_contiguous_managed_sources(store):
+    expected_sources = tuple(f"pool_{index}" for index in range(1, 6))
+
+    response = await store.activate(ANTHROPIC_MODEL, expected_sources)
+
+    assert tuple(source.source for source in response.state.sources) == expected_sources
+    assert all(source.status == "starting" for source in response.state.sources)
+
+
+async def test_active_source_set_change_resets_facts_generation_and_owner(store, redis):
+    first = await store.activate(ANTHROPIC_MODEL, ("pool_1", "pool_2"))
+    first_generation = await _claim_generation(store, ANTHROPIC_MODEL, "old-owner")
+    assert await store.publish_source(
+        ANTHROPIC_MODEL,
+        "old-owner",
+        first_generation,
+        _attempted_at(),
+        _success("pool_1", first.server_time),
+    )
+
+    expected_sources = tuple(f"pool_{index}" for index in range(1, 6))
+    expanded = await store.activate(ANTHROPIC_MODEL, expected_sources)
+
+    assert tuple(source.source for source in expanded.state.sources) == expected_sources
+    assert all(source.status == "starting" for source in expanded.state.sources)
+    assert await redis.get(owner_key(ANTHROPIC_MODEL)) is None
+    assert expanded.state.active_until >= first.state.active_until
+    assert not await store.publish_source(
+        ANTHROPIC_MODEL,
+        "old-owner",
+        first_generation,
+        _attempted_at(),
+        _success("pool_1", expanded.server_time),
+    )
+
+    assert await store.claim_owner(ANTHROPIC_MODEL, "new-owner") == expected_sources
+    renewed = await store.renew_owner(ANTHROPIC_MODEL, "new-owner")
+    assert renewed is not None
+    expanded_generation, _ = renewed
+    assert expanded_generation != first_generation
+
+
+async def test_retained_source_set_change_discards_last_good_facts(store, redis):
+    first = await store.activate(ANTHROPIC_MODEL, ("pool_1", "pool_2"))
+    first_generation = await _claim_generation(store, ANTHROPIC_MODEL, "owner")
+    assert await store.publish_source(
+        ANTHROPIC_MODEL,
+        "owner",
+        first_generation,
+        _attempted_at(),
+        _success("pool_1", first.server_time),
+    )
+    await _expire_activation(redis, ANTHROPIC_MODEL)
+
+    reactivated = await store.activate(
+        ANTHROPIC_MODEL,
+        ("pool_1", "pool_2", "pool_3"),
+    )
+
+    assert [source.status for source in reactivated.state.sources] == [
+        "starting",
+        "starting",
+        "starting",
+    ]
+    assert all(source.rate_limit is None for source in reactivated.state.sources)
+
+
 async def test_active_extension_uses_one_slot_and_refreshes_snapshot_expiry(
     store,
     redis,

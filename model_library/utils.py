@@ -30,6 +30,7 @@ GATEWAY_CLIENT_READ_TIMEOUT_SECONDS = (
 )
 GATEWAY_CLIENT_WRITE_TIMEOUT_SECONDS = 60.0
 GATEWAY_CLIENT_POOL_TIMEOUT_SECONDS = 60.0
+PROVIDER_STREAM_READ_BUFFER_BYTES = 1024 * 1024
 TCP_KEEPALIVE_IDLE_SECONDS = 60
 TCP_KEEPALIVE_INTERVAL_SECONDS = 30
 TCP_KEEPALIVE_PROBES = 5
@@ -263,7 +264,10 @@ def make_aiohttp_session(
         resolver=StaticResolver(dns_resolve) if dns_resolve else None,
         socket_factory=tcp_keepalive_socket,
     )
-    return aiohttp.ClientSession(connector=connector)
+    return aiohttp.ClientSession(
+        connector=connector,
+        read_bufsize=PROVIDER_STREAM_READ_BUFFER_BYTES,
+    )
 
 
 def default_aiohttp_httpx_client(

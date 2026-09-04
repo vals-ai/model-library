@@ -66,6 +66,58 @@ async def test_contended_worker_retries_after_five_seconds_and_acquires(
     assert len(store.release_calls) == 1
 
 
+@pytest.mark.parametrize(
+    "persisted_sources",
+    [
+        pytest.param(
+            tuple(f"pool_{index}" for index in range(1, 7)),
+            id="persisted-sources-larger-than-local",
+        ),
+        pytest.param(
+            ("pool_1", "pool_2"),
+            id="persisted-sources-smaller-than-local",
+        ),
+    ],
+)
+async def test_worker_releases_stale_claim_without_migrating_persisted_sources(
+    monkeypatch, persisted_sources
+):
+    store = FakeStore()
+    store.active = {ANTHROPIC_MODEL}
+    store.leases[ANTHROPIC_MODEL] = persisted_sources
+    monitor = _monitor(monkeypatch, store, {ANTHROPIC_MODEL: "anthropic"})
+    ownership = Mock()
+    monkeypatch.setattr(
+        monitor_module,
+        "record_rate_limit_monitor_ownership",
+        ownership,
+    )
+    local_sources = tuple(f"pool_{index}" for index in range(1, 6))
+    probes = [FakeProbe([_rate_limit()]) for _ in local_sources]
+    _stub_sources(
+        monkeypatch,
+        monitor,
+        *(
+            _SourceProbe(source, "anthropic", probe)
+            for source, probe in zip(local_sources, probes, strict=True)
+        ),
+    )
+
+    async def fail_activate(*args, **kwargs):
+        raise AssertionError("stale claim must not activate sources")
+
+    monkeypatch.setattr(store, "activate", fail_activate)
+
+    await monitor._model_worker(ANTHROPIC_MODEL)
+
+    assert store.activate_calls == []
+    assert len(store.claim_calls) == 1
+    assert len(store.release_calls) == 1
+    assert ownership.call_args_list == [call("acquired"), call("lost")]
+    assert store.publications == []
+    assert all(probe.calls == 0 for probe in probes)
+
+
 async def test_ownership_loss_is_recorded_when_renewal_is_lost(monkeypatch):
     store = FakeStore()
     store.renew_results = [None]

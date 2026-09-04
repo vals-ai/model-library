@@ -74,6 +74,20 @@ gemini-3-models:
       input: 0.25
       output: 1.50
 
+  google/gemini-3.8-flash:
+    label: Gemini 3.8 Flash
+    release_date: 2026-09-02
+    metadata:
+      available_as_evaluator: true
+    properties:
+      context_window: 1048576
+      max_tokens: 65536
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.50
+      output: 7.50
+      cache:
+        read: 0.15
   google/gemini-3.7-flash:
     label: Gemini 3.7 Flash
     release_date: 2026-08-13
