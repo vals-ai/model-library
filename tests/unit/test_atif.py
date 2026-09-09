@@ -37,6 +37,7 @@ from model_library.base.input import (
     ToolResult,
 )
 from model_library.base.output import (
+    FallbackInfo,
     FinishReason,
     FinishReasonInfo,
     QueryResult,
@@ -369,10 +370,12 @@ class TestAgentResultToATIF:
             self._make_turn(
                 "Fallback response",
                 metadata=QueryResultMetadata(
-                    extra={
-                        "anthropic_response_model": "claude-opus-4-8",
-                        "fallback": True,
-                    }
+                    fallback=FallbackInfo(
+                        requested_model="anthropic/claude-fable-5",
+                        served_model="anthropic/claude-opus-4-8",
+                        hops=[],
+                    ),
+                    extra={"anthropic_response_model": "claude-opus-4-8"},
                 ),
             )
         ]

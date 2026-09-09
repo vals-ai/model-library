@@ -31,6 +31,15 @@ gpt-6-models:
       max_tokens: 128_000
       training_cutoff: "2026-04"
       reasoning_model: true
+    costs_per_million_token:
+      cache:
+        read_discount: 0.1
+        write_markup: 1.25
+      context:
+        threshold: 272_000
+        cache:
+          read_discount: 0.1
+          write_markup: 1.25
     provider_properties:
       verbosity: "medium"
 
@@ -40,16 +49,9 @@ gpt-6-models:
     costs_per_million_token:
       input: 10
       output: 50
-      cache:
-        read_discount: 0.1
-        write_markup: 1.25
       context:
-        threshold: 272_000
         input: 20
         output: 75
-        cache:
-          read_discount: 0.1
-          write_markup: 1.25
     default_parameters:
       reasoning_effort: "max"
     provider_properties:
@@ -71,6 +73,15 @@ gpt-5.6-models:
       context_window: 1_000_000
       max_tokens: 128_000
       reasoning_model: true
+    costs_per_million_token:
+      cache:
+        read_discount: 0.1
+        write_markup: 1.25
+      context:
+        threshold: 272_000
+        cache:
+          read_discount: 0.1
+          write_markup: 1.25
     provider_properties:
       verbosity: "medium"
 
@@ -80,16 +91,9 @@ gpt-5.6-models:
     costs_per_million_token:
       input: 4
       output: 20
-      cache:
-        read_discount: 0.1
-        write_markup: 1.25
       context:
-        threshold: 272_000
         input: 8
         output: 30
-        cache:
-          read_discount: 0.1
-          write_markup: 1.25
     default_parameters:
       reasoning_effort: "max"
     provider_properties:
@@ -106,9 +110,9 @@ gpt-5.6-models:
     costs_per_million_token:
       input: 2
       output: 12
-      cache:
-        read_discount: 0.1
-        write_markup: 1.25
+      context:
+        input: 4
+        output: 18
     default_parameters:
       reasoning_effort: "max"
     provider_properties:
@@ -125,9 +129,9 @@ gpt-5.6-models:
     costs_per_million_token:
       input: 0.2
       output: 1.2
-      cache:
-        read_discount: 0.1
-        write_markup: 1.25
+      context:
+        input: 0.4
+        output: 1.8
     default_parameters:
       reasoning_effort: "max"
     provider_properties:
@@ -152,6 +156,15 @@ daybreak-models:
       max_tokens: 128_000
       training_cutoff: "2026-02"
       reasoning_model: true
+    costs_per_million_token:
+      cache:
+        read_discount: 0.1
+        write_markup: 1.25
+      context:
+        threshold: 272_000
+        cache:
+          read_discount: 0.1
+          write_markup: 1.25
     provider_properties:
       verbosity: "medium"
 
@@ -162,16 +175,9 @@ daybreak-models:
     costs_per_million_token:
       input: 5
       output: 30
-      cache:
-        read_discount: 0.1
-        write_markup: 1.25
       context:
-        threshold: 272_000
         input: 10
         output: 45
-        cache:
-          read_discount: 0.1
-          write_markup: 1.25
     default_parameters:
       reasoning_effort: "max"
     provider_properties:
@@ -200,7 +206,7 @@ gpt-5-models:
     release_date: 2026-04-23
     properties:
       context_window: 400_000
-    costs_per_million_token: # TODO: get real pricing
+    costs_per_million_token:
       input: 30
       output: 180
       cache:
@@ -221,7 +227,7 @@ gpt-5-models:
     release_date: 2026-04-23
     properties:
       context_window: 1_050_000
-    costs_per_million_token: # TODO: get real pricing
+    costs_per_million_token:
       input: 5
       output: 30
       cache:

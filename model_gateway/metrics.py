@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast
 
 from fastapi import Request
 import model_library.telemetry as telemetry
+from model_library.failure_capture.core import CaptureStats
 from model_gateway.observability import DEFAULT_SERVICE, DEFAULT_STAGE, worker_id
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
@@ -865,6 +866,35 @@ def emit_model_error(
             ["Stage", "Service", "Operation", "Provider", "Model", "ErrorCode"],
             ["Stage", "Service", "Operation", "Provider", "ErrorCode"],
             ["Stage", "Service", "ErrorCode"],
+            ["Stage", "Service"],
+        ],
+    )
+
+
+def emit_failure_capture_metrics(
+    dimensions: Mapping[str, str], stats: CaptureStats
+) -> None:
+    capture_dimensions = {
+        **dimensions,
+        "Transport": ",".join(stats.transports) or "none",
+    }
+    record_metrics(
+        capture_dimensions,
+        {
+            "FailureCaptureAttempts": (stats.attempts, "Count"),
+            "FailureCaptureRequestBytes": (stats.request_bytes, "Bytes"),
+            "FailureCaptureResponseBytes": (stats.response_bytes, "Bytes"),
+            "FailureCaptureResponseChunks": (stats.response_chunks, "Count"),
+            "FailureCaptureRawBytes": (stats.raw_bytes, "Bytes"),
+            "FailureCaptureCompressedBytes": (stats.compressed_bytes, "Bytes"),
+            "FailureCaptureCompressionLatencyMs": (
+                stats.compression_ms,
+                "Milliseconds",
+            ),
+            "FailureCaptureErrorCount": (stats.errors, "Count"),
+        },
+        dimension_sets=[
+            ["Stage", "Service", "Provider", "Transport"],
             ["Stage", "Service"],
         ],
     )

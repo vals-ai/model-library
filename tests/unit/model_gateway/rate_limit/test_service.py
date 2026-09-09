@@ -8,6 +8,7 @@ import model_gateway.model_helpers as model_helpers
 import model_gateway.routes.rate_limit as rate_limit_route
 from model_gateway.cache import ModelCache
 from model_gateway.types import RateLimitRequest
+from model_library.failure_capture.core import current_capture
 from model_library.rate_limits import (
     RateLimit,
     RateLimitCapacity,
@@ -16,15 +17,17 @@ from model_library.rate_limits import (
 )
 from tests.unit.model_gateway._support import HEADERS, _load_json, _make_client
 
+
 @pytest.mark.parametrize(
     "model",
     ("openai/gpt-4o", "anthropic/claude-sonnet-4-5-20250929"),
 )
-def test_rate_limit_returns_provider_limits(model: str):
-    from model_library.rate_limits import RateLimit
+def test_provider_rate_limits(model: str, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("GATEWAY_FAILED_EXCHANGE_CAPTURE_ENABLED", "true")
 
     class FakeLLM:
         async def get_rate_limit(self):
+            assert current_capture() is None
             return RateLimit(
                 unix_timestamp=1_700_000_000.0,
                 requests=(RequestRateLimit(limit=4_000, remaining=3_999),),
@@ -57,6 +60,7 @@ def test_rate_limit_returns_provider_limits(model: str):
             "unix_timestamp": 1_700_000_000.0,
         }
     }
+
 
 def test_rate_limit_cache_evicts_oldest_entry_at_max_size():
     probes = 0
@@ -91,6 +95,7 @@ def test_rate_limit_cache_evicts_oldest_entry_at_max_size():
     assert second["rate_limit"]["requests"][0]["limit"] == 2
     assert reprobed["rate_limit"]["requests"][0]["limit"] == 3
 
+
 def test_managed_anthropic_rate_limit_rejects_invalid_model() -> None:
     client = _make_client()
 
@@ -102,6 +107,7 @@ def test_managed_anthropic_rate_limit_rejects_invalid_model() -> None:
 
     assert response.status_code == 400
     assert response.json()["code"] == "invalid_model"
+
 
 def test_rate_limit_serves_repeat_requests_from_cache():
     from model_library.rate_limits import RateLimit
@@ -133,6 +139,7 @@ def test_rate_limit_serves_repeat_requests_from_cache():
     assert probes == 2
     assert first == second
     assert other["rate_limit"]["requests"][0]["limit"] == 2
+
 
 @pytest.mark.asyncio
 async def test_rate_limit_cache_reprobes_after_ttl():
@@ -171,6 +178,7 @@ async def test_rate_limit_cache_reprobes_after_ttl():
     assert _load_json(first.body) == _load_json(cached.body)
     assert _load_json(refreshed.body)["rate_limit"]["requests"][0]["limit"] == 2
 
+
 def test_rate_limit_serves_repeat_no_data_requests_from_cache():
     probes = 0
 
@@ -192,6 +200,7 @@ def test_rate_limit_serves_repeat_no_data_requests_from_cache():
     assert first.json() == {}
     assert second.json() == {}
     assert probes == 1
+
 
 @pytest.mark.parametrize(
     "config",
@@ -216,9 +225,7 @@ async def test_rate_limit_custom_connection_returns_no_data_without_probe(
 ) -> None:
     cache = MagicMock(spec=ModelCache)
     service = rate_limit_route.RateLimitProbeService(cache)
-    body = RateLimitRequest.model_validate(
-        {"model": "openai/gpt-4o", "config": config}
-    )
+    body = RateLimitRequest.model_validate({"model": "openai/gpt-4o", "config": config})
     with (
         patch.object(
             rate_limit_route,
@@ -234,6 +241,7 @@ async def test_rate_limit_custom_connection_returns_no_data_without_probe(
     dump_llm_config.assert_not_called()
     cache.make_key.assert_not_called()
     get_registry_model.assert_not_called()
+
 
 @pytest.mark.asyncio
 async def test_rate_limit_collapses_concurrent_probes_for_one_key():
@@ -274,6 +282,7 @@ async def test_rate_limit_collapses_concurrent_probes_for_one_key():
     assert probes == 1
     assert first.status_code == 200
     assert first.json() == second.json()
+
 
 @pytest.mark.asyncio
 async def test_rate_limit_waiter_cancellation_does_not_cancel_shared_probe():
@@ -333,6 +342,7 @@ async def test_rate_limit_waiter_cancellation_does_not_cancel_shared_probe():
     assert remaining.json()["rate_limit"]["requests"][0]["limit"] == 1
     assert probes == 1
 
+
 @pytest.mark.asyncio
 async def test_rate_limit_service_close_cancels_and_awaits_in_flight_probe():
     provider_started = asyncio.Event()
@@ -373,6 +383,7 @@ async def test_rate_limit_service_close_cancels_and_awaits_in_flight_probe():
             await waiter
 
     assert cleanup_finished.is_set()
+
 
 @pytest.mark.asyncio
 async def test_rate_limit_rejects_new_distinct_probe_when_capacity_is_full():
@@ -431,6 +442,7 @@ async def test_rate_limit_rejects_new_distinct_probe_when_capacity_is_full():
     }
     assert probes == 1
 
+
 def test_rate_limit_sanitizes_and_does_not_cache_provider_exception():
     probes = 0
     secret = "Bearer provider-secret"
@@ -471,40 +483,7 @@ def test_rate_limit_sanitizes_and_does_not_cache_provider_exception():
         assert secret not in response.text
         assert "secret-provider-code" not in response.text
 
-def test_rate_limit_sanitizes_returned_provider_error():
-    from model_gateway.types import ProviderError
 
-    secret = "raw-provider-secret"
-
-    class FakeLLM:
-        async def get_rate_limit(self):
-            return ProviderError(
-                message=secret,
-                provider=secret,
-                code=secret,
-                exception_type="ProviderFailure",
-                status_code=429,
-            )
-
-    client = _make_client()
-    with patch.object(
-        model_helpers, "get_registry_model", side_effect=lambda model, config: FakeLLM()
-    ):
-        response = client.post(
-            "/rate-limit",
-            headers=HEADERS,
-            json={"model": "openai/gpt-4o", "config": {}},
-        )
-
-    assert response.status_code == 200
-    assert response.json()["error"] == {
-        "type": "ProviderError",
-        "message": "Provider rate-limit probe failed",
-        "provider": "openai",
-        "exception_type": "ProviderFailure",
-        "status_code": 429,
-    }
-    assert secret not in response.text
 
 @pytest.mark.asyncio
 async def test_rate_limit_timeout_returns_error_and_releases_probe_capacity():

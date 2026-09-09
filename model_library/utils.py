@@ -14,6 +14,12 @@ from openai import AsyncOpenAI
 from pydantic import AfterValidator, BaseModel
 from rich.pretty import pretty_repr
 
+from model_library.failure_capture.aiohttp import (
+    aiohttp_capture_middleware,
+    aiohttp_trace_config,
+)
+from model_library.failure_capture.httpx import CapturingAsyncHTTPTransport
+
 MAX_LLM_LOG_LENGTH = 100
 MAX_LOG_HISTORY = 20  # number of history items to log
 PROVIDER_CONNECT_TIMEOUT_SECONDS = 5.0
@@ -267,6 +273,8 @@ def make_aiohttp_session(
     return aiohttp.ClientSession(
         connector=connector,
         read_bufsize=PROVIDER_STREAM_READ_BUFFER_BYTES,
+        middlewares=(aiohttp_capture_middleware,),
+        trace_configs=[aiohttp_trace_config()],
     )
 
 
@@ -294,9 +302,11 @@ def default_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncCl
     )  # TODO: increase, but make sure prod enough sockets to not hit file descriptor limit
     return httpx.AsyncClient(
         mounts={
-            "all://*": httpx.AsyncHTTPTransport(
-                limits=limits,
-                socket_options=tcp_keepalive_socket_options(),
+            "all://*": CapturingAsyncHTTPTransport(
+                httpx.AsyncHTTPTransport(
+                    limits=limits,
+                    socket_options=tcp_keepalive_socket_options(),
+                )
             )
         },
         timeout=httpx.Timeout(

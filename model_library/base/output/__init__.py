@@ -12,6 +12,8 @@ from model_library.base.output.performance import (
 )
 from model_library.base.output.result import (
     Citation,
+    FallbackHop,
+    FallbackInfo,
     FinishReason,
     FinishReasonInfo,
     ProviderToolEvent,
@@ -38,6 +40,8 @@ __all__ = [
     "FinishReason",
     "FinishReasonInfo",
     "Citation",
+    "FallbackHop",
+    "FallbackInfo",
     "QueryResultExtras",
     "QueryResultCost",
     "RateLimit",

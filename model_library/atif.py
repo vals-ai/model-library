@@ -321,16 +321,15 @@ def _make_step_metrics(metadata: QueryResultMetadata) -> ATIFMetrics:
 def _model_routing(
     metadata: QueryResultMetadata, requested_model: str
 ) -> tuple[str, dict[str, Any] | None]:
-    response_model = metadata.extra.get("anthropic_response_model")
-    if not isinstance(response_model, str) or not response_model:
-        return requested_model, None
+    if metadata.fallback is None:
+        response_model = metadata.extra.get("anthropic_response_model")
+        if not isinstance(response_model, str) or not response_model:
+            return requested_model, None
+        return (
+            response_model if "/" in response_model else f"anthropic/{response_model}"
+        ), None
 
-    resolved_model = (
-        response_model if "/" in response_model else f"anthropic/{response_model}"
-    )
-    if metadata.extra.get("fallback") is not True:
-        return resolved_model, None
-
+    resolved_model = metadata.fallback.served_model
     return resolved_model, {
         "vals": {
             "model_routing": {

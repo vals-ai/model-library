@@ -590,11 +590,15 @@ class TestQueryResultPerformance:
 
         validation_refs = {
             option.get("$ref")
-            for option in validation_schema["properties"]["performance"]["anyOf"]
+            for option in validation_schema["$defs"]["QueryResultMetadata"][
+                "properties"
+            ]["performance"]["anyOf"]
         }
         serialization_refs = {
             option.get("$ref")
-            for option in serialization_schema["properties"]["performance"]["anyOf"]
+            for option in serialization_schema["$defs"]["QueryResultMetadata"][
+                "properties"
+            ]["performance"]["anyOf"]
         }
         assert "#/$defs/QueryResultPerformance" in validation_refs
         assert "#/$defs/CompressedQueryResultPerformance" in validation_refs

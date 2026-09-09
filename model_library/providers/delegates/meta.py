@@ -36,13 +36,14 @@ class MetaModel(DelegateOnly):
 
         base_url = "https://api.meta.ai/v1"
 
+        api_key_setting = "META_API_KEY"
         # https://docs.llama.com
         config = config or LLMConfig()
         delegate_config = config.model_copy(
             update={
                 "custom_endpoint": config.custom_endpoint or base_url,
                 "custom_api_key": config.custom_api_key
-                or SecretStr(model_library_settings.META_API_KEY),
+                or SecretStr(getattr(model_library_settings, api_key_setting)),
                 "provider_config": OpenAIConfig(
                     prompt_cache_key=self.provider_config.prompt_cache_key,
                 ),

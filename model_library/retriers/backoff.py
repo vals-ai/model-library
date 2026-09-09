@@ -60,17 +60,18 @@ class ExponentialBackoffRetrier(BaseRetrier):
         logger_msg = f"[Retry] | {self.strategy} | Attempt: {self.attempts} | Elapsed: {elapsed:.1f}s | Next wait: {wait_time:.1f}s | Exception: {exception_message(exception)} "
 
         self.logger.info(logger_msg)
-        telemetry.log_sentry_info(
-            logger_msg,
-            {
-                "retry.strategy": self.strategy,
-                "retry.attempt": self.attempts,
-                "retry.max_tries": self.max_tries,
-                "retry.elapsed_seconds": elapsed,
-                "retry.next_wait_seconds": wait_time,
-                "exception.type": type(exception).__name__ if exception else None,
-            },
-        )
+        if exception is not None:
+            telemetry.record_scheduled_retry_exception(
+                exception,
+                {
+                    "retry.strategy": self.strategy,
+                    "retry.attempt": self.attempts,
+                    "retry.max_tries": self.max_tries,
+                    "retry.elapsed_seconds": elapsed,
+                    "retry.next_wait_seconds": wait_time,
+                    "exception.type": type(exception).__name__,
+                },
+            )
 
         if self.retry_callback:
             self.retry_callback(self.attempts, exception, elapsed, wait_time)

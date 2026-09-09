@@ -13,6 +13,7 @@ from pydantic import BaseModel
 from typing_extensions import override
 
 from model_library import model_library_settings
+from model_library.failure_capture.botocore import install_botocore_capture
 from model_library.base import (
     LLM,
     FileBase,
@@ -119,6 +120,7 @@ class AmazonModel(LLM):
                     ),
                 ),
             )
+            install_botocore_capture(client)
             self.assign_client(client)
         return super().get_client()
 

@@ -704,7 +704,7 @@ class TokenRetrier(BaseRetrier):
             try:
                 await asyncio.shield(_pre_cleanup())
             except Exception as exc:
-                telemetry.record_exception(
+                telemetry.record_retrier_exception(
                     exc,
                     {
                         **self._telemetry_ids(),
@@ -823,7 +823,7 @@ class TokenRetrier(BaseRetrier):
             try:
                 await asyncio.shield(_exec_cleanup())
             except Exception as exc:
-                telemetry.record_exception(
+                telemetry.record_retrier_exception(
                     exc,
                     {
                         **self._telemetry_ids(),

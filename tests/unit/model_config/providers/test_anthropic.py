@@ -2,16 +2,21 @@
 
 from types import SimpleNamespace
 from typing import cast
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
-from anthropic.types.beta import BetaFallbackBlock
+from anthropic.types.beta import (
+    BetaFallbackBlock,
+    BetaFallbackMessageIterationUsage,
+    BetaMessageIterationUsage,
+)
 from pydantic import ValidationError
 import pytest
 
-from model_library.base import LLMConfig, QueryResult
+from model_library.base import LLMConfig, QueryResult, QueryResultMetadata
+from model_library.base.output import FallbackHop, FallbackInfo
 from model_library.base.input import TextInput
 from model_library.providers.anthropic import AnthropicConfig, AnthropicModel
-from model_library.registry_utils import get_registry_model
+from model_library.registry_utils import get_model_cost, get_registry_model
 
 _INPUT = [TextInput(text="")]
 
@@ -20,14 +25,39 @@ async def _query_anthropic_with_provider_config(
     *,
     model_name: str = "claude-primary-test",
     thinking_tokens: int | None = None,
-    fallback_block: BetaFallbackBlock | None = None,
+    fallback_blocks: list[BetaFallbackBlock] | None = None,
     custom_endpoint: str | None = None,
 ) -> tuple[dict[str, object], QueryResult]:
     captured: dict[str, object] = {}
 
-    class _DummyIteration:
-        type = "fallback_message"
-        model = "claude-fallback-test"
+    # one declined `message` hop per fallback block, then the served `fallback_message` hop
+    declined_models = (
+        [block.from_.model for block in fallback_blocks]
+        if fallback_blocks
+        else [model_name]
+    )
+    served_model = fallback_blocks[-1].to.model if fallback_blocks else "claude-fallback-test"
+    fallback_iterations = [
+        *(
+            BetaMessageIterationUsage(
+                type="message",
+                model=declined,
+                input_tokens=1,
+                output_tokens=0,
+                cache_read_input_tokens=0,
+                cache_creation_input_tokens=0,
+            )
+            for declined in declined_models
+        ),
+        BetaFallbackMessageIterationUsage(
+            type="fallback_message",
+            model=served_model,
+            input_tokens=1,
+            output_tokens=1,
+            cache_read_input_tokens=0,
+            cache_creation_input_tokens=0,
+        ),
+    ]
 
     class _DummyUsage:
         input_tokens = 1
@@ -35,14 +65,14 @@ async def _query_anthropic_with_provider_config(
         output_tokens_details = None
         cache_read_input_tokens = 0
         cache_creation_input_tokens = 0
-        iterations = [_DummyIteration()]
+        iterations = fallback_iterations if provider_config.fallback_models else None
 
     class _DummyMessage:
         id = "msg_test"
         model = "claude-primary-test"
         content = [
             SimpleNamespace(type="text", text="ok"),
-            *([fallback_block] if fallback_block is not None else []),
+            *(fallback_blocks or []),
         ]
         usage = _DummyUsage()
         stop_reason = "end_turn"
@@ -281,36 +311,77 @@ class TestAnthropicConfig:
         ]
         extra_body = cast(dict[str, object], captured["extra_body"])
         assert extra_body == {"fallbacks": [{"model": "claude-fallback-test"}]}
-        assert result.metadata.extra["fallback"] is True
-        assert "anthropic_fallback_blocks" not in result.metadata.extra
-
-    async def test_server_side_fallback_retains_native_boundary_block(self):
-        fallback_block = BetaFallbackBlock.model_validate(
-            {
-                "type": "fallback",
-                "from": {"model": "claude-primary-test"},
-                "to": {"model": "claude-fallback-test"},
-                "trigger": {"type": "refusal", "category": "general_harms"},
-            }
+        assert result.metadata.fallback == FallbackInfo(
+            requested_model="anthropic/claude-primary-test",
+            served_model="anthropic/claude-fallback-test",
+            hops=[
+                FallbackHop(
+                    model="anthropic/claude-primary-test",
+                    served=False,
+                    usage=QueryResultMetadata(
+                        in_tokens=1,
+                        out_tokens=0,
+                        cache_read_tokens=0,
+                        cache_write_tokens=0,
+                    ),
+                ),
+                FallbackHop(
+                    model="anthropic/claude-fallback-test",
+                    served=True,
+                    usage=QueryResultMetadata(
+                        in_tokens=1,
+                        out_tokens=1,
+                        cache_read_tokens=0,
+                        cache_write_tokens=0,
+                    ),
+                ),
+            ],
         )
+        assert result.metadata.extra == {
+            "anthropic_response_model": "claude-primary-test"
+        }
+
+    async def test_no_fallback_leaves_metadata_fallback_unset(self):
+        _, result = await _query_anthropic_with_provider_config(AnthropicConfig())
+
+        assert result.metadata.fallback is None
+
+    async def test_server_side_fallback_records_trigger_per_declined_hop(self):
+        blocks = [
+            BetaFallbackBlock.model_validate(
+                {
+                    "type": "fallback",
+                    "from": {"model": "claude-primary-test"},
+                    "to": {"model": "claude-fallback-test"},
+                    "trigger": {"type": "refusal", "category": "cyber"},
+                }
+            ),
+            BetaFallbackBlock.model_validate(
+                {
+                    "type": "fallback",
+                    "from": {"model": "claude-fallback-test"},
+                    "to": {"model": "claude-backup-test"},
+                    "trigger": {"type": "refusal", "category": "bio"},
+                }
+            ),
+        ]
 
         _, result = await _query_anthropic_with_provider_config(
-            AnthropicConfig(fallback_models=["claude-fallback-test"]),
-            fallback_block=fallback_block,
+            AnthropicConfig(
+                fallback_models=["claude-fallback-test", "claude-backup-test"]
+            ),
+            fallback_blocks=blocks,
         )
 
-        assert result.metadata.extra["fallback"] is True
-        assert result.metadata.extra["anthropic_response_model"] == (
-            "claude-primary-test"
-        )
-        assert "anthropic_usage_iterations" in result.metadata.extra
-        assert result.metadata.extra["anthropic_fallback_blocks"] == [
-            {
-                "type": "fallback",
-                "from": {"model": "claude-primary-test"},
-                "to": {"model": "claude-fallback-test"},
-                "trigger": {"type": "refusal", "category": "general_harms"},
-            }
+        assert result.metadata.fallback is not None
+        assert result.metadata.fallback.served_model == "anthropic/claude-backup-test"
+        assert [
+            (hop.model, hop.served, hop.trigger, hop.category)
+            for hop in result.metadata.fallback.hops
+        ] == [
+            ("anthropic/claude-primary-test", False, "refusal", "cyber"),
+            ("anthropic/claude-fallback-test", False, "refusal", "bio"),
+            ("anthropic/claude-backup-test", True, None, None),
         ]
 
     async def test_stream_thinking_tokens_are_split_and_billed_once(self):
@@ -362,7 +433,61 @@ class TestAnthropicConfig:
                 {"model": "claude-backup-test"},
             ]
         }
-        assert result.metadata.extra["fallback"] is True
+        assert result.metadata.fallback is not None
+
+    async def test_fallback_cost_is_billed_at_serving_model_price(self):
+        requested = "anthropic/claude-fable-5-1"
+        served = "anthropic/claude-sonnet-4-6"
+        model = get_registry_model(requested)
+        requested_costs = get_model_cost(requested)
+        served_costs = get_model_cost(served)
+        assert requested_costs is not None and served_costs is not None
+        assert served_costs.cache is not None
+        assert requested_costs.output != served_costs.output
+
+        metadata = QueryResultMetadata(
+            in_tokens=1_100,
+            out_tokens=180,
+            reasoning_tokens=20,
+            cache_read_tokens=500,
+            cache_write_tokens=0,
+            fallback=FallbackInfo(
+                requested_model=requested,
+                served_model=served,
+                hops=[],
+            ),
+        )
+
+        cost = await model._calculate_cost(metadata)
+
+        million = 1_000_000
+        assert cost is not None
+        assert cost.input == pytest.approx(1_100 * served_costs.input / million)
+        assert cost.cache_read == pytest.approx(500 * served_costs.cache.read / million)
+        assert cost.output == pytest.approx(180 * served_costs.output / million)
+        assert cost.reasoning == pytest.approx(20 * served_costs.output / million)
+
+    async def test_unregistered_fallback_model_yields_cost_none(self):
+        model = get_registry_model("anthropic/claude-opus-5")
+        result = QueryResult(
+            output_text="ok",
+            metadata=QueryResultMetadata(
+                in_tokens=1,
+                out_tokens=1,
+                fallback=FallbackInfo(
+                    requested_model="anthropic/claude-opus-5",
+                    served_model="anthropic/not-in-registry",
+                    hops=[],
+                ),
+            ),
+            history=[],
+        )
+        model._query_impl = AsyncMock(return_value=result)  # type: ignore[method-assign]
+
+        output = await model.query(_INPUT)
+
+        assert output.metadata.cost is None
+        assert output.metadata.fallback is not None
 
     def test_fallback_model_is_not_a_supported_config_field(self):
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):

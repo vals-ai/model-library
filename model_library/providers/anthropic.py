@@ -5,6 +5,12 @@ from typing import Any, Literal, Sequence, cast
 from anthropic import APIConnectionError, AsyncAnthropic, transform_schema
 from anthropic.types.beta import BetaContentBlock
 from anthropic.types.beta.beta_fallback_block import BetaFallbackBlock
+from anthropic.types.beta.beta_fallback_message_iteration_usage import (
+    BetaFallbackMessageIterationUsage,
+)
+from anthropic.types.beta.beta_message_iteration_usage import (
+    BetaMessageIterationUsage,
+)
 from anthropic.types.beta.beta_text_block import BetaTextBlock
 from anthropic.types.beta.beta_tool_use_block import BetaToolUseBlock
 from anthropic.types.beta.beta_web_search_tool_result_block import (
@@ -45,7 +51,11 @@ from model_library.base import (
 )
 from model_library.base.input import normalize_query_input
 from model_library.base.output.builder import QueryResultBuilder
-from model_library.base.output.result import ProviderToolEvent
+from model_library.base.output.result import (
+    FallbackHop,
+    FallbackInfo,
+    ProviderToolEvent,
+)
 from model_library.rate_limits import (
     RateLimit,
     RateLimitCapacity,
@@ -76,27 +86,6 @@ ANTHROPIC_TASK_BUDGET_BETA = "task-budgets-2026-03-13"
 # Anthropic rejects an assistant message whose final block is thinking, so a turn that ran out of
 # tokens mid-thought is replayed with this block appended.
 TRUNCATED_THINKING_MARKER = "[response cut off at the output token limit]"
-
-
-def _json_safe_anthropic_value(value: Any) -> Any:
-    if value is None or isinstance(value, str | int | float | bool):
-        return value
-    if isinstance(value, BaseModel):
-        return value.model_dump(mode="json", exclude_none=True)
-    if hasattr(value, "model_dump"):
-        return _json_safe_anthropic_value(
-            value.model_dump(mode="json", exclude_none=True)
-        )
-    if isinstance(value, dict):
-        dict_value = cast(dict[object, object], value)
-        return {
-            str(key): _json_safe_anthropic_value(nested)
-            for key, nested in dict_value.items()
-        }
-    if isinstance(value, list | tuple):
-        sequence_value = cast(list[object] | tuple[object, ...], value)
-        return [_json_safe_anthropic_value(item) for item in sequence_value]
-    return str(value)
 
 
 def _strip_fallback_blocks(
@@ -888,7 +877,7 @@ class AnthropicModel(LLM):
         reasoning_parts: list[str] = []
         tool_calls: list[ToolCall] = []
         provider_tool_events: list[ProviderToolEvent] = []
-        fallback_blocks: list[dict[str, Any]] = []
+        fallback_blocks: list[BetaFallbackBlock] = []
         web_search_queries: dict[str, str] = {}
         for i, content in enumerate(message.content):
             if content.type == "text":
@@ -905,9 +894,7 @@ class AnthropicModel(LLM):
                     )
                 )
             elif isinstance(content, BetaFallbackBlock):
-                fallback_blocks.append(
-                    content.model_dump(mode="json", by_alias=True, exclude_none=True)
-                )
+                fallback_blocks.append(content)
             if (
                 content.type == "server_tool_use"
                 and cast(Any, content).name == "web_search"
@@ -993,19 +980,41 @@ class AnthropicModel(LLM):
             or getattr(output_token_details, "thinking_tokens", None)
             or None
         )
-        metadata_extra: dict[str, Any] = {
-            "anthropic_response_model": message.model,
-        }
-        if fallback_blocks:
-            metadata_extra["anthropic_fallback_blocks"] = fallback_blocks
-        if usage.iterations is not None:
-            metadata_extra["anthropic_usage_iterations"] = _json_safe_anthropic_value(
-                usage.iterations
-            )
-            if any(
-                iteration.type == "fallback_message" for iteration in usage.iterations
+        # one fallback block per declined hop, in hop order
+        blocks = iter(fallback_blocks)
+        hops: list[FallbackHop] = []
+        for iteration in usage.iterations or []:
+            if not isinstance(
+                iteration,
+                BetaMessageIterationUsage | BetaFallbackMessageIterationUsage,
             ):
-                metadata_extra["fallback"] = True
+                continue
+            served = iteration.type == "fallback_message"
+            block = None if served else next(blocks, None)
+            hops.append(
+                FallbackHop(
+                    model=f"anthropic/{iteration.model}",
+                    served=served,
+                    trigger=block.trigger.type if block else None,
+                    category=block.trigger.category if block else None,
+                    usage=QueryResultMetadata(
+                        in_tokens=iteration.input_tokens,
+                        out_tokens=iteration.output_tokens,
+                        cache_read_tokens=iteration.cache_read_input_tokens,
+                        cache_write_tokens=iteration.cache_creation_input_tokens,
+                    ),
+                )
+            )
+        served_hop = next((hop for hop in hops if hop.served), None)
+        fallback = (
+            FallbackInfo(
+                requested_model=self._registry_key or f"anthropic/{self.model_name}",
+                served_model=served_hop.model,
+                hops=hops,
+            )
+            if served_hop
+            else None
+        )
 
         return result_builder.build(
             finish_reason=mapped_finish_reason,
@@ -1016,7 +1025,8 @@ class AnthropicModel(LLM):
                 reasoning_tokens=reasoning_tokens,
                 cache_read_tokens=usage.cache_read_input_tokens,
                 cache_write_tokens=usage.cache_creation_input_tokens,
-                extra=metadata_extra,
+                fallback=fallback,
+                extra={"anthropic_response_model": message.model},
             ),
             extras=QueryResultExtras(
                 provider_response_id=message.id,
@@ -1156,6 +1166,7 @@ class AnthropicModel(LLM):
         """
         # prompt caching manually enabled
         # assumed that cache tokens are ephemeral_5m_input_tokens
+        # a server-side fallback response is billed at the serving model's price
         return await super()._calculate_cost(
             metadata,
             batch,

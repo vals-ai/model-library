@@ -8,6 +8,7 @@ from starlette.responses import Response
 
 from model_gateway import metrics
 from model_gateway.telemetry_helpers import dimension_telemetry_attributes
+from model_library.failure_capture.core import CaptureStats
 
 
 @pytest.fixture(autouse=True)
@@ -208,6 +209,41 @@ def test_emit_metrics_writes_emf_with_requested_dimensions(capsys):
     assert payload["ModelLatencyMs"] == 123.4
 
 
+def test_failure_capture_metrics_emit_content_free_sizes(capsys) -> None:
+    metrics.emit_failure_capture_metrics(
+        {
+            "Stage": "test",
+            "Service": "gateway",
+            "Provider": "openai",
+            "Model": "openai/test",
+        },
+        CaptureStats(
+            attempts=2,
+            request_bytes=100,
+            response_bytes=200,
+            response_chunks=3,
+            raw_bytes=500,
+            compressed_bytes=250,
+            compression_ms=1.5,
+            errors=1,
+            transports=("httpx",),
+        ),
+    )
+    metrics.flush_metrics()
+
+    payload = _last_emf(capsys)
+    assert payload["Transport"] == "httpx"
+    assert payload["FailureCaptureAttempts"] == 2
+    assert payload["FailureCaptureRequestBytes"] == 100
+    assert payload["FailureCaptureResponseBytes"] == 200
+    assert payload["FailureCaptureResponseChunks"] == 3
+    assert payload["FailureCaptureRawBytes"] == 500
+    assert payload["FailureCaptureCompressedBytes"] == 250
+    assert payload["FailureCaptureCompressionLatencyMs"] == 1.5
+    assert payload["FailureCaptureErrorCount"] == 1
+    assert not any("content" in key.lower() for key in payload)
+
+
 def test_inflight_metrics_use_high_resolution(capsys):
     metrics.emit_metrics(
         {"Stage": "dev", "Service": "gateway"},
@@ -348,6 +384,7 @@ def test_telemetry_delivery_handler_records_bounded_warning_and_error_metrics(
     handler.emit(_log_record("opentelemetry.exporter.otlp", logging.INFO))
     handler.emit(_log_record("mistralai.extra.observability.otel", logging.ERROR))
     handler.emit(_log_record("opentelemetry.exporter.otlp", logging.WARNING))
+    handler.emit(_log_record("sentry_sdk.transport", logging.WARNING))
     handler.emit(_log_record("opentelemetry.sdk.trace.export", logging.ERROR))
     handler.emit(_log_record("opentelemetry.sdk.trace.export.batch", logging.CRITICAL))
 
@@ -355,7 +392,7 @@ def test_telemetry_delivery_handler_records_bounded_warning_and_error_metrics(
     payload = _last_emf(capsys)
     assert payload["Stage"] == "dev"
     assert payload["Service"] == "Gateway-dev-release-control"
-    assert payload["TelemetryDeliveryWarningCount"] == 1
+    assert payload["TelemetryDeliveryWarningCount"] == 2
     assert payload["TelemetryDeliveryErrorCount"] == 2
     aws_meta = payload["_aws"]
     assert isinstance(aws_meta, dict)

@@ -1,5 +1,6 @@
 """Shared route helpers for gateway endpoints."""
 
+import asyncio
 from collections.abc import Awaitable, Mapping
 from dataclasses import dataclass
 import time
@@ -8,11 +9,14 @@ from typing import Any, Protocol, TypeVar, cast
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel as PydanticBaseModel
 
+from model_library import model_library_settings
+from model_library.failure_capture.core import Artifact, capture
 import model_library.telemetry as telemetry
 
 from model_gateway.errors import map_exception_to_error
 from model_gateway.metrics import (
     MetricSpec,
+    emit_failure_capture_metrics,
     emit_model_error,
     emit_model_success,
     record_gateway_phase,
@@ -49,10 +53,6 @@ def ok_response(body: PydanticBaseModel | dict[str, Any]) -> JSONResponse:
         else body
     )
     return JSONResponse(status_code=200, content=content)
-
-
-class ProviderCallTelemetryError(Exception):
-    """Sanitized provider-call failure used for exception telemetry."""
 
 
 def provider_error_from_exception(
@@ -122,16 +122,13 @@ class GatewayOperation:
         err: ProviderError,
         *,
         phase_start: float,
-        capture_exception: bool,
+        exception: Exception,
+        artifact: Artifact | None,
     ) -> None:
         self.record_phase("provider_call", outcome="error", start=phase_start)
         error_attrs = provider_error_telemetry_attributes(err)
         error_code = str(error_attrs["gateway.error.code"])
-        if capture_exception:
-            telemetry.record_exception(
-                ProviderCallTelemetryError("Provider call failed"),
-                error_attrs,
-            )
+        telemetry.record_exception(exception, error_attrs, artifact=artifact)
         telemetry.set_status_error(error_code)
         self.add_event("error", error_attrs)
         emit_model_error(
@@ -148,30 +145,63 @@ class GatewayOperation:
     ) -> T | ProviderError:
         self.add_event("provider_call_start")
         phase_start = time.perf_counter()
-        with telemetry.start_span(
-            f"gateway.{self.operation}.provider_call",
-            span_attrs,
-            kind="client",
-        ):
-            try:
-                result = await awaitable
-            except Exception as exc:
-                err = provider_error_from_exception(exc, provider=self.provider)
-                self._record_provider_error(
-                    err,
-                    phase_start=phase_start,
-                    capture_exception=True,
-                )
-                return err
-            if isinstance(result, ProviderError):
-                self._record_provider_error(
-                    result,
-                    phase_start=phase_start,
-                    capture_exception=False,
-                )
+        capture_enabled = self.operation != "rate_limit" and (
+            model_library_settings.get("GATEWAY_FAILED_EXCHANGE_CAPTURE_ENABLED", "")
+            == "true"
+        )
+        active_capture = None
+        try:
+            with (
+                telemetry.defer_provider_exceptions(),
+                capture(enabled=capture_enabled) as active_capture,
+                telemetry.start_span(
+                    f"gateway.{self.operation}.provider_call",
+                    span_attrs,
+                    kind="client",
+                ),
+            ):
+                if active_capture is not None and self.operation in {
+                    "files_upload",
+                    "audio_transcriptions",
+                }:
+                    active_capture.omit_request_payload()
+                try:
+                    result = await awaitable
+                except asyncio.CancelledError as exc:
+                    artifact = (
+                        active_capture.finalize()
+                        if active_capture is not None
+                        else None
+                    )
+                    if capture_enabled:
+                        telemetry.record_exception(
+                            exc,
+                            {
+                                "gateway.error.code": "cancelled",
+                                "gateway.error.phase": "provider_call",
+                            },
+                            artifact=artifact,
+                        )
+                    raise
+                except Exception as exc:
+                    artifact = (
+                        active_capture.finalize()
+                        if active_capture is not None
+                        else None
+                    )
+                    err = provider_error_from_exception(exc, provider=self.provider)
+                    self._record_provider_error(
+                        err,
+                        phase_start=phase_start,
+                        exception=exc,
+                        artifact=artifact,
+                    )
+                    return err
+                self.record_phase("provider_call", outcome="success", start=phase_start)
                 return result
-            self.record_phase("provider_call", outcome="success", start=phase_start)
-            return result
+        finally:
+            if active_capture is not None:
+                emit_failure_capture_metrics(self.dimensions, active_capture.stats())
 
     def success(
         self,

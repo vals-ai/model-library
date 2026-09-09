@@ -701,8 +701,13 @@ class LLM(ABC):
             },
         )
         output.metadata.duration_seconds = round_to_milliseconds(duration)
-        output.metadata.cost = await self._calculate_cost(output.metadata)
-
+        try:
+            output.metadata.cost = await self._calculate_cost(output.metadata)
+        except Exception as exc:
+            telemetry.record_exception(exc, {"cost_calculation.phase": "calculate"})
+            self.instance_logger.warning(
+                "Cost calculation failed, returning cost=None", exc_info=True
+            )
         if output_schema is not None and output.output_text:
             parser_error_type: str | None = None
             try:
@@ -796,14 +801,17 @@ class LLM(ABC):
         """Calculate cost for a query"""
         from model_library.registry_utils import compute_model_cost
 
-        if not self._registry_key:
+        model = (
+            metadata.fallback.served_model if metadata.fallback else self._registry_key
+        )
+        if not model:
             self.instance_logger.warning(
                 "Model has no registry key, skipping cost calculation"
             )
             return None
 
         return compute_model_cost(
-            self._registry_key,
+            model,
             metadata,
             batch=batch,
             bill_reasoning=bill_reasoning,

@@ -357,6 +357,7 @@ RETRIABLE_EXCEPTION_CODES = [
     "statuscode.unavailable",  # gRPC UNAVAILABLE errors (e.g. broken pipe)
     "statuscode.invalid_argument",  # gRPC INVALID_ARGUMENT (transient under concurrency)
     "currently at capacity",  # provider-side capacity rejection (xAI gRPC RESOURCE_EXHAUSTED)
+    "processing too many requests",  # OpenAI flex capacity rejection, sent as a stream error event with no HTTP status
     "download multimodal file timed out",  # transient DashScope multimodal fetch timeout
     "statuscode.unknown",  # gRPC UNKNOWN errors (e.g. "Stream removed")
     "stream removed",  # gRPC stream dropped by peer

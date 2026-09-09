@@ -13,12 +13,13 @@ import logging
 import math
 import time
 from collections.abc import Generator, Mapping
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from importlib import import_module
 from typing import Any, cast
 
 from model_library import model_library_settings
+from model_library.failure_capture.core import ATTACHMENT_FILENAME, Artifact
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +34,7 @@ TRACER_NAME = "model_library.gateway"
 TELEMETRY_DELIVERY_LOGGER_ROOTS = (
     "opentelemetry.exporter",
     "opentelemetry.sdk.trace.export",
+    "sentry_sdk",
 )
 HTTP_TRACE_EXCLUDED_ROUTES = frozenset({"/health/live", "/health/ready"})
 HTTP_TRACE_ALLOWED_ROUTES = frozenset(
@@ -125,6 +127,8 @@ SENTRY_TAG_ATTRIBUTE_KEYS = frozenset(
         "gateway.status_code",
         "gateway.usage_event_id",
         "gateway.error.code",
+        "gateway.provider_error.exception_type",
+        "gateway.provider_error.status_code",
         "gateway.error.phase",
         "gateway.error.provider",
         "gateway.error_code",
@@ -205,6 +209,10 @@ _status_code: Any | None = None
 _sentry_context: ContextVar[dict[str, AttributeValue]] = ContextVar(
     "gateway_sentry_context",
     default={},
+)
+
+_provider_exception_deferred: ContextVar[bool] = ContextVar(
+    "provider_exception_deferred", default=False
 )
 CONFIG_SEEN_CACHE_MAX_SIZE = 4096
 CONFIG_SEEN_CACHE_TTL_SECONDS = 300.0
@@ -455,12 +463,14 @@ def _attach_sentry_search_tags(event: dict[str, Any]) -> dict[str, object] | Non
         return None
     tags = cast(dict[str, object], raw_tags)
     for key, value in _sentry_search_context().items():
-        tags[key] = str(value)[:200]
+        tags.setdefault(key, str(value)[:200])
     return tags
 
 
 def _before_send(event: dict[str, Any], hint: object) -> dict[str, Any] | None:
-    """Attach current gateway debug fields as Sentry event tags."""
+    """Suppress deferred exceptions and add current Gateway debug tags."""
+    if _provider_exception_deferred.get() and "exception" in event:
+        return None
     tags = _attach_sentry_search_tags(event)
     if tags is not None:
         fingerprint = _sentry_fingerprint(event, hint, tags)
@@ -991,16 +1001,57 @@ def add_event(
     _merge_sentry_context(sanitized_attributes)
 
 
-def record_exception(
+@contextmanager
+def defer_provider_exceptions() -> Generator[None, None, None]:
+    """Let a Gateway operation own terminal provider exception reporting."""
+    token = _provider_exception_deferred.set(True)
+    try:
+        yield
+    finally:
+        _provider_exception_deferred.reset(token)
+
+
+def record_retrier_exception(
     exc: BaseException,
     attributes: Mapping[str, object | None] | None = None,
 ) -> None:
-    """Record a sanitized exception event on the current span.
+    """Record a retrier-owned exception unless Gateway has deferred it."""
+    if not _provider_exception_deferred.get():
+        record_exception(exc, attributes)
 
-    OpenTelemetry's standard ``record_exception`` includes exception messages and
-    stack traces by default. Provider errors can include response/request text, so
-    the gateway records only the exception type plus caller-supplied safe fields.
-    """
+
+def record_scheduled_retry_exception(
+    exc: BaseException,
+    attributes: Mapping[str, object | None],
+) -> None:
+    """Send one warning-level Sentry exception for an accepted retry."""
+    if not is_enabled():
+        return
+
+    retry_context = {"retry.state": "scheduled", **attributes}
+    token = _provider_exception_deferred.set(False)
+    try:
+        sentry_module = import_module("sentry_sdk")
+        with sentry_module.new_scope() as scope:
+            scope.set_level("warning")
+            scope.set_tag("retry.state", "scheduled")
+            scope.set_tag("retry.strategy", attributes["retry.strategy"])
+            scope.set_tag("retry.attempt", attributes["retry.attempt"])
+            scope.set_context("retry", retry_context)
+            sentry_module.capture_exception(exc)
+    except Exception as sentry_exc:
+        logger.debug("Sentry retry capture failed: %s", sentry_exc)
+    finally:
+        _provider_exception_deferred.reset(token)
+
+
+def record_exception(
+    exc: BaseException,
+    attributes: Mapping[str, object | None] | None = None,
+    *,
+    artifact: Artifact | None = None,
+) -> None:
+    """Record one sanitized exception event and optional raw capture artifact."""
     sanitized_attributes = sanitize_attributes(
         {"exception.type": type(exc).__name__, **dict(attributes or {})}
     )
@@ -1008,12 +1059,31 @@ def record_exception(
     span = _current_recording_span()
     if span is not None:
         span.add_event("exception", sanitized_attributes)
-    if is_enabled():
-        try:
-            sentry_module = import_module("sentry_sdk")
+
+    if not is_enabled():
+        return
+
+    token = _provider_exception_deferred.set(False)
+    try:
+        sentry_module = import_module("sentry_sdk")
+        if artifact is not None and artifact.attachable:
+            with ExitStack() as stack:
+                try:
+                    scope = stack.enter_context(sentry_module.new_scope())
+                    scope.add_attachment(
+                        bytes=artifact.path.read_bytes(),
+                        filename=ATTACHMENT_FILENAME,
+                        content_type="application/gzip",
+                    )
+                except Exception as attachment_exc:
+                    logger.debug("Sentry attachment failed: %s", attachment_exc)
+                sentry_module.capture_exception(exc)
+        else:
             sentry_module.capture_exception(exc)
-        except Exception as sentry_exc:
-            logger.debug("Sentry capture_exception failed: %s", sentry_exc)
+    except Exception as sentry_exc:
+        logger.debug("Sentry capture_exception failed: %s", sentry_exc)
+    finally:
+        _provider_exception_deferred.reset(token)
 
 
 def log_sentry_info(

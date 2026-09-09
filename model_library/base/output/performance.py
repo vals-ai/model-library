@@ -71,7 +71,7 @@ def _event_belongs_to_channel(
 
 
 class QueryPerformanceEvent(ValsModel):
-    """Canonical provider-normalized point-in-time performance event."""
+    """Canonical adapter-normalized point-in-time performance event."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -80,7 +80,9 @@ class QueryPerformanceEvent(ValsModel):
     )
     timestamp_ms: int = Field(
         ge=0,
-        description="Monotonic elapsed milliseconds from query start.",
+        description=(
+            "Local monotonic elapsed milliseconds from QueryResultBuilder construction."
+        ),
     )
     channel_text_start_char: int | None = Field(
         default=None,
@@ -136,34 +138,34 @@ def create_query_performance_event(
 
 
 class QueryTimeToFirstToken(ValsModel):
-    """First-token latency rollups in integer milliseconds."""
+    """Historical first-token fields for first observed non-empty delta timing."""
 
     model_config = ConfigDict(extra="forbid")
 
     any: int | None = Field(
         default=None,
         ge=0,
-        description="First generated token/delta across reasoning, content, or tool_call.",
+        description="First observed reasoning, content, or tool-call delta.",
     )
     answer: int | None = Field(
         default=None,
         ge=0,
-        description="First non-reasoning token/delta: min(content, tool_call).",
+        description="First observed non-reasoning delta: min(content, tool_call).",
     )
     reasoning: int | None = Field(
         default=None,
         ge=0,
-        description="First reasoning/thinking token/delta.",
+        description="First observed reasoning/thinking delta.",
     )
     content: int | None = Field(
         default=None,
         ge=0,
-        description="First assistant text token/delta.",
+        description="First observed assistant text delta.",
     )
     tool_call: int | None = Field(
         default=None,
         ge=0,
-        description="First tool-call token/delta.",
+        description="First observed tool-call argument delta.",
     )
 
 
@@ -187,7 +189,7 @@ class QueryPerformanceTimelineEntry(ValsModel):
     first_token_ms: int | None = Field(
         default=None,
         ge=0,
-        description="Derived from events: first *_delta timestamp.",
+        description="Derived from events: first observed *_delta chunk timestamp.",
     )
     ready_ms: int | None = Field(
         default=None,
@@ -207,7 +209,7 @@ class QueryPerformanceTimelineEntry(ValsModel):
     events: list[QueryPerformanceEvent] = Field(
         default_factory=list,
         repr=False,
-        description="Canonical raw timing events used as the source of truth for this segment.",
+        description="Canonical normalized adapter events that define this segment.",
     )
 
     @staticmethod
@@ -357,17 +359,19 @@ class QueryPerformanceTimelineEntry(ValsModel):
 
 
 class QueryResultPerformance(ValsModel):
-    """Structured per-query performance telemetry.
+    """Structured local per-query performance telemetry.
 
-    Token throughput is intentionally not derived per query here. Compute
-    aggregate TPS from tokens, durations, and internal data
+    The timeline contains adapter-normalized chunks, not token-aligned events, so
+    it does not derive token throughput, ITL, TPOT, or model decode rate.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     time_to_first_token_ms: QueryTimeToFirstToken = Field(
         default_factory=QueryTimeToFirstToken,
-        description="First-token latency rollups derived from timeline events.",
+        description=(
+            "Historical first-token fields derived from observed delta events."
+        ),
     )
     timeline: list[QueryPerformanceTimelineEntry] = Field(
         default_factory=list,

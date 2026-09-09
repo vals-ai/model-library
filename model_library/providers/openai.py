@@ -366,6 +366,7 @@ class OpenAIConfig(ProviderConfig):
     prompt_cache_key: PromptCacheKeyMode | None = None
     reasoning_context: Literal["current_turn", "all_turns"] | None = None
     parallel_tool_calls: bool | None = None
+    service_tier: Literal["default", "flex"] | None = None
     # TODO: move to LLMConfig so OpenAI-compatible delegate providers can configure it.
     stream_completions: bool = True
 
@@ -420,6 +421,7 @@ class OpenAIModel(LLM):
         )
         self.reasoning_context = self.provider_config.reasoning_context
         self.parallel_tool_calls = self.provider_config.parallel_tool_calls
+        self.service_tier = self.provider_config.service_tier
         self.stream_completions = self.provider_config.stream_completions
 
         # batch client
@@ -775,6 +777,8 @@ class OpenAIModel(LLM):
 
         if self.prompt_cache_retention is not None:
             body["prompt_cache_retention"] = self.prompt_cache_retention
+        if self.service_tier is not None:
+            body["service_tier"] = self.service_tier
         prompt_cache_key = await resolve_prompt_cache_key(
             mode=self.prompt_cache_key_mode,
             model_name=self.model_name,
@@ -1197,6 +1201,8 @@ class OpenAIModel(LLM):
 
         if self.prompt_cache_retention is not None:
             body["prompt_cache_retention"] = self.prompt_cache_retention
+        if self.service_tier is not None:
+            body["service_tier"] = self.service_tier
         prompt_cache_key = await resolve_prompt_cache_key(
             mode=self.prompt_cache_key_mode,
             model_name=self.model_name,
@@ -1477,12 +1483,18 @@ class OpenAIModel(LLM):
         if response.usage:
             # see _calculate_cost
             cache_read_tokens = response.usage.input_tokens_details.cached_tokens
+            cache_write_tokens = (
+                response.usage.input_tokens_details.cache_write_tokens or 0
+            )
             reasoning_tokens = response.usage.output_tokens_details.reasoning_tokens
             result_metadata = QueryResultMetadata(
-                in_tokens=response.usage.input_tokens - cache_read_tokens,
+                in_tokens=response.usage.input_tokens
+                - cache_read_tokens
+                - cache_write_tokens,
                 out_tokens=response.usage.output_tokens - reasoning_tokens,
                 reasoning_tokens=reasoning_tokens,
                 cache_read_tokens=cache_read_tokens,
+                cache_write_tokens=cache_write_tokens,
             )
 
         result = result_builder.build(
@@ -1687,4 +1699,6 @@ class OpenAIModel(LLM):
 
         # reasoning tokens are included in output tokens
 
-        return await super()._calculate_cost(metadata, batch, bill_reasoning=True)
+        return await super()._calculate_cost(
+            metadata, batch or self.service_tier == "flex", bill_reasoning=True
+        )

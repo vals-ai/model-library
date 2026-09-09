@@ -206,18 +206,51 @@ class QueryResultCost(ValsModel):
         )
 
 
+class FallbackHop(ValsModel):
+    """One model attempt of a provider-side fallback chain."""
+
+    model: str  # registry key, e.g. "anthropic/claude-opus-4-8"
+    served: bool
+    trigger: str | None = None  # why this hop declined, e.g. "refusal"; None if served
+    category: str | None = None  # e.g. "cyber", "bio"
+    usage: "QueryResultMetadata"
+
+
+class FallbackInfo(ValsModel):
+    """A response served by a fallback model after the requested model declined."""
+
+    requested_model: str
+    served_model: str
+    hops: list[FallbackHop]
+
+
 class QueryResultMetadata(ValsModel):
-    """Metadata for a query: token usage, cost, and timing."""
+    """Per-query token usage, cost, successful-attempt duration, and performance."""
 
     cost: QueryResultCost | None = None  # set post query
-    duration_seconds: SecondsMetric | None = None  # set post query; rounded to ms
-    performance: QueryResultPerformance | CompressedQueryResultPerformance | None = None
+    duration_seconds: SecondsMetric | None = Field(
+        default=None,
+        description=(
+            "Successful _query_impl attempt duration, rounded to milliseconds; "
+            "excludes earlier failed attempts and retry waits."
+        ),
+    )
+    performance: QueryResultPerformance | CompressedQueryResultPerformance | None = (
+        Field(
+            default=None,
+            description=(
+                "Locally observed adapter event timeline; discarded when metadata "
+                "values are added."
+            ),
+        )
+    )
     in_tokens: int = 0
 
     out_tokens: int = 0
     reasoning_tokens: int | None = None
     cache_read_tokens: int | None = None
     cache_write_tokens: int | None = None
+    fallback: FallbackInfo | None = None
     extra: dict[str, Any] = Field(default_factory=dict)
 
     @field_serializer(
@@ -256,6 +289,7 @@ class QueryResultMetadata(ValsModel):
     @computed_field
     @property
     def total_output_tokens(self) -> int:
+        """Return non-reasoning output plus separately reported reasoning tokens."""
         return sum(
             filter(
                 None,
@@ -267,6 +301,7 @@ class QueryResultMetadata(ValsModel):
         )
 
     def __add__(self, other: "QueryResultMetadata") -> "QueryResultMetadata":
+        """Sum additive metadata and discard per-query performance timelines."""
         return QueryResultMetadata(
             in_tokens=self.in_tokens + other.in_tokens,
             out_tokens=self.out_tokens + other.out_tokens,
@@ -285,6 +320,9 @@ class QueryResultMetadata(ValsModel):
             + other.default_duration_seconds,
             cost=cast(QueryResultCost | None, add_optional(self.cost, other.cost)),
         )
+
+
+FallbackHop.model_rebuild()
 
 
 class ProviderToolEvent(ValsModel):

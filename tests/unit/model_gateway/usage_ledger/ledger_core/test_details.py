@@ -19,6 +19,8 @@ from model_library.base.input import (
     ToolDefinition,
 )
 from model_library.base.output import (
+    FallbackHop,
+    FallbackInfo,
     ProviderToolEvent,
     QueryResult,
     QueryResultExtras,
@@ -179,27 +181,34 @@ def test_details_preserve_request_and_result_except_explicit_reductions() -> Non
     assert result_data["extras"]["provider_response_id"] == "provider-response-1"
 
 
-def test_details_preserve_anthropic_fallback_metadata() -> None:
-    fallback_metadata = {
-        "fallback": True,
-        "anthropic_response_model": "claude-fallback-test",
-        "anthropic_usage_iterations": [
-            {"type": "fallback_message", "model": "claude-fallback-test"}
+def test_details_preserve_fallback_metadata() -> None:
+    fallback = FallbackInfo(
+        requested_model="anthropic/claude-primary-test",
+        served_model="anthropic/claude-fallback-test",
+        hops=[
+            FallbackHop(
+                model="anthropic/claude-primary-test",
+                served=False,
+                trigger="refusal",
+                category="general_harms",
+                usage=QueryResultMetadata(in_tokens=51, out_tokens=0),
+            ),
+            FallbackHop(
+                model="anthropic/claude-fallback-test",
+                served=True,
+                usage=QueryResultMetadata(in_tokens=51, out_tokens=453),
+            ),
         ],
-        "anthropic_fallback_blocks": [
-            {
-                "type": "fallback",
-                "from": {"model": "claude-primary-test"},
-                "to": {"model": "claude-fallback-test"},
-                "trigger": {"type": "refusal", "category": "general_harms"},
-            }
-        ],
-    }
-    result = _result(metadata=QueryResultMetadata(extra=fallback_metadata))
+    )
+    result = _result(
+        metadata=QueryResultMetadata(in_tokens=51, out_tokens=453, fallback=fallback)
+    )
 
     details = _details(result=result)
 
-    assert details["result"]["metadata"]["extra"] == fallback_metadata
+    stored = details["result"]["metadata"]["fallback"]
+    assert FallbackInfo.model_validate(stored) == fallback
+    assert stored["served_model"] == "anthropic/claude-fallback-test"
 
 
 def test_request_details_delegate_content_sanitization() -> None:

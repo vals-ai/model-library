@@ -21,7 +21,12 @@ from openai.types.completion_usage import (
 from openai.types.responses import Response, ResponseOutputMessage, ResponseOutputText
 from openai.types.responses.response_function_tool_call import ResponseFunctionToolCall
 
-from model_library.base import DelegateOnly, FinishReason, LLMConfig
+from model_library.base import (
+    DelegateOnly,
+    FinishReason,
+    LLMConfig,
+    QueryResultMetadata,
+)
 from model_library.base.input import (
     FileWithBase64,
     RawResponse,
@@ -341,6 +346,46 @@ async def test_completions_prompt_cache_retention_added_to_body():
     body = await model.build_body(_INPUT, tools=[])
 
     assert body["prompt_cache_retention"] == "in_memory"
+
+
+@pytest.mark.parametrize("use_completions", [False, True])
+async def test_service_tier_added_to_body(use_completions: bool):
+    model = OpenAIModel(
+        "gpt-4o",
+        config=LLMConfig(provider_config=OpenAIConfig(service_tier="flex")),
+        use_completions=use_completions,
+    )
+
+    body = await model.build_body(_INPUT, tools=[])
+
+    assert body["service_tier"] == "flex"
+
+
+async def test_service_tier_omitted_from_body_by_default():
+    model = OpenAIModel("gpt-4o", config=LLMConfig())
+
+    body = await model.build_body(_INPUT, tools=[])
+
+    assert "service_tier" not in body
+
+
+async def test_flex_service_tier_billed_at_batch_rate():
+    metadata = QueryResultMetadata(in_tokens=1_000_000, out_tokens=1_000_000)
+    flex = OpenAIModel(
+        "gpt-5.5",
+        config=LLMConfig(
+            registry_key="openai/gpt-5.5",
+            provider_config=OpenAIConfig(service_tier="flex"),
+        ),
+    )
+    standard = OpenAIModel("gpt-5.5", config=LLMConfig(registry_key="openai/gpt-5.5"))
+
+    flex_cost = await flex._calculate_cost(metadata)
+    standard_cost = await standard._calculate_cost(metadata)
+
+    assert flex_cost is not None and standard_cost is not None
+    assert flex_cost.input == pytest.approx(standard_cost.input / 2)
+    assert flex_cost.output == pytest.approx(standard_cost.output / 2)
 
 
 async def test_prompt_cache_key_hash_is_stable_across_turns_completions():
@@ -1694,7 +1739,9 @@ async def test_non_streaming_responses_usage_populates_normalized_metadata():
         usage=SimpleNamespace(
             input_tokens=10,
             output_tokens=5,
-            input_tokens_details=SimpleNamespace(cached_tokens=2),
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=2, cache_write_tokens=3
+            ),
             output_tokens_details=SimpleNamespace(reasoning_tokens=1),
         ),
         request_id="openai-request-usage",
@@ -1711,13 +1758,44 @@ async def test_non_streaming_responses_usage_populates_normalized_metadata():
             query_logger=MagicMock(),
         )
 
-    assert result.metadata.in_tokens == 8
+    assert result.metadata.in_tokens == 5
     assert result.metadata.out_tokens == 4
     assert result.metadata.reasoning_tokens == 1
     assert result.metadata.cache_read_tokens == 2
+    assert result.metadata.cache_write_tokens == 3
     assert result.extras.response_id == "resp_usage"
     assert result.extras.provider_response_id == "resp_usage"
     assert result.extras.provider_request_id == "openai-request-usage"
+
+
+async def test_non_streaming_responses_usage_without_cache_write_tokens():
+    response = _responses_response(
+        response_id="resp_usage_no_cache_write",
+        text_block_text="assistant text",
+        usage=SimpleNamespace(
+            input_tokens=10,
+            output_tokens=5,
+            input_tokens_details=SimpleNamespace(
+                cached_tokens=2, cache_write_tokens=None
+            ),
+            output_tokens_details=SimpleNamespace(reasoning_tokens=1),
+        ),
+    )
+    model = OpenAIModel("public-test-responses-model")
+    mock_client = MagicMock()
+    mock_client.responses.create = AsyncMock(return_value=response)
+
+    with patch.object(model, "get_client", return_value=mock_client):
+        result = await model._query_impl(  # pyright: ignore[reportPrivateUsage]
+            [TextInput(text="compute")],
+            tools=[],
+            stream=False,
+            query_logger=MagicMock(),
+        )
+
+    assert result.metadata.in_tokens == 8
+    assert result.metadata.cache_read_tokens == 2
+    assert result.metadata.cache_write_tokens == 0
 
 
 async def test_non_streaming_responses_empty_output_text_raises_no_output():

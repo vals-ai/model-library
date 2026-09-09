@@ -103,5 +103,7 @@ class FireworksModel(DelegateOnly):
         # prompt caching does not affect billing for serverless models
 
         return await super()._calculate_cost(
-            metadata, batch, bill_reasoning=bill_reasoning
+            metadata,
+            batch,
+            bill_reasoning=bill_reasoning,
         )

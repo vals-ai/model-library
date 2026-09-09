@@ -87,8 +87,8 @@ class BaseRetrier(ABC):
                     f"Exception {exception_message(e)}"
                 )
                 logger.info(logger_msg)
-                telemetry.log_sentry_info(
-                    logger_msg,
+                telemetry.record_scheduled_retry_exception(
+                    e,
                     {"retry.strategy": "immediate", **retry_attributes},
                 )
 
@@ -178,7 +178,7 @@ class BaseRetrier(ABC):
                 "exception.type": type(exception).__name__,
             },
         )
-        telemetry.record_exception(
+        telemetry.record_retrier_exception(
             exception,
             {"retry.strategy": self.strategy, "retry.reason": reason},
         )

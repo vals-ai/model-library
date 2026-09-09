@@ -150,15 +150,6 @@ claude-opus-5-models:
           label: Claude Opus 5 (No Fallback)
           provider_properties:
             fallback_models: []
-      - anthropic/claude-opus-5-resumable:
-          label: Claude Opus 5 (Max Effort, Resumable Turns)
-          provider_properties:
-            returns_thinking_truncated_turns: true
-      - anthropic/claude-opus-5-task-budget:
-          label: Claude Opus 5 (Max Effort, Task Budget)
-          provider_properties:
-            task_budget_tokens: 500_000
-            returns_thinking_truncated_turns: true
 
 claude-opus-4-8-models:
   anthropic/claude-opus-4-8:
@@ -189,15 +180,6 @@ claude-opus-4-8-models:
           label: Claude Opus 4.8 (Medium Effort)
           default_parameters:
             compute_effort: "medium"
-      - anthropic/claude-opus-4-8-resumable:
-          label: Claude Opus 4.8 (Max Effort, Resumable Turns)
-          provider_properties:
-            returns_thinking_truncated_turns: true
-      - anthropic/claude-opus-4-8-task-budget:
-          label: Claude Opus 4.8 (Max Effort, Task Budget)
-          provider_properties:
-            task_budget_tokens: 500_000
-            returns_thinking_truncated_turns: true
 
 claude-opus-4-7-models:
   anthropic/claude-opus-4-7:
@@ -316,10 +298,6 @@ claude-sonnet-models:
           label: Claude Sonnet 5 (Extra High Effort)
           default_parameters:
             compute_effort: "xhigh"
-      - anthropic/claude-sonnet-5-resumable:
-          label: Claude Sonnet 5 (Max Effort, Resumable Turns)
-          provider_properties:
-            returns_thinking_truncated_turns: true
 
   anthropic/claude-sonnet-4-6:
     label: Claude Sonnet 4.6

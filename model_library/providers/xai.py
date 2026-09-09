@@ -15,6 +15,7 @@ from xai_sdk.proto.v6.chat_pb2 import Message, Tool
 from xai_sdk.tools import get_tool_call_type, web_search
 
 from model_library import model_library_settings
+from model_library.failure_capture.core import current_capture
 from model_library.base import (
     LLM,
     FileBase,
@@ -383,13 +384,38 @@ class XAIModel(LLM):
             input, tools=tools, output_schema=output_schema, **kwargs
         )
 
-        chat: Chat = self.get_client().chat.create(**body)
-
+        active_capture = current_capture()
+        attempt = active_capture.attempt("xai") if active_capture is not None else None
         latest_response: Response | None = None
         result_builder = QueryResultBuilder()
         try:
+            chat: Chat = self.get_client().chat.create(**body)
+            if active_capture is not None:
+                try:
+                    request = chat._make_request(1)  # pyright: ignore[reportPrivateUsage]
+                    request_payload = request.SerializeToString()
+                except Exception:
+                    active_capture.record_error()
+                else:
+                    assert attempt is not None
+                    attempt.request_bytes(
+                        request_payload,
+                        representation="xai_request_protobuf_message",
+                    )
+
             async for response, chunk in chat.stream():
                 latest_response = response
+                if active_capture is not None:
+                    try:
+                        response_payload = chunk.proto.SerializeToString()
+                    except Exception:
+                        active_capture.record_error()
+                    else:
+                        assert attempt is not None
+                        attempt.response_bytes(
+                            response_payload,
+                            representation="xai_response_protobuf_message",
+                        )
                 chunk_reasoning = cast(
                     str | None, getattr(chunk, "reasoning_content", None)
                 )
@@ -398,12 +424,19 @@ class XAIModel(LLM):
                 result_builder.append_content_delta(chunk_content)
                 for index, _tool_call in enumerate(chunk.tool_calls):
                     result_builder.record_tool_call_delta(index)
-        except OSError as e:
+            if not latest_response:
+                raise ModelNoOutputError("Model failed to produce a response")
+        except OSError as exc:
+            if attempt is not None:
+                attempt.fail(exc)
             # Transient gRPC C-core OSError (e.g. [Errno 2]) not caught by retry logic.
-            raise ImmediateRetryException(str(e)) from e
-
-        if not latest_response:
-            raise ModelNoOutputError("Model failed to produce a response")
+            raise ImmediateRetryException(str(exc)) from exc
+        except BaseException as exc:
+            if attempt is not None:
+                attempt.fail(exc)
+            raise
+        if attempt is not None:
+            attempt.finish()
 
         tool_calls: list[ToolCall] = []
         provider_tool_events: list[ProviderToolEvent] = []

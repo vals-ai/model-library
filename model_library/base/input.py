@@ -292,4 +292,16 @@ def normalize_query_input(
 
     all_input = [*list(history), *input_items]
     validate_query_input(all_input)
+
+    # Imported here because input.py is loaded while failure_capture transports
+    # import the shared model utilities.
+    from model_library.failure_capture.core import current_capture
+
+    active_capture = current_capture()
+    if active_capture is not None:
+        for item in all_input:
+            if isinstance(item, FileWithBase64):
+                active_capture.register_request_payload(item.base64, item.type)
+            elif isinstance(item, FileWithBytes):
+                active_capture.register_request_payload(item.data, item.type)
     return all_input

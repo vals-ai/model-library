@@ -374,7 +374,9 @@ class TestOpenAIResponsesStreamingPerformance:
             usage=SimpleNamespace(
                 input_tokens=10,
                 output_tokens=5,
-                input_tokens_details=SimpleNamespace(cached_tokens=2),
+                input_tokens_details=SimpleNamespace(
+                    cached_tokens=2, cache_write_tokens=0
+                ),
                 output_tokens_details=SimpleNamespace(reasoning_tokens=1),
             ),
         )
@@ -412,7 +414,9 @@ class TestOpenAIResponsesStreamingPerformance:
             usage=SimpleNamespace(
                 input_tokens=10,
                 output_tokens=5,
-                input_tokens_details=SimpleNamespace(cached_tokens=0),
+                input_tokens_details=SimpleNamespace(
+                    cached_tokens=0, cache_write_tokens=0
+                ),
                 output_tokens_details=SimpleNamespace(reasoning_tokens=0),
             ),
         )

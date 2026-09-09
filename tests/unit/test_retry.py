@@ -291,8 +291,8 @@ async def test_max_retries_giveup():
 
     with (
         patch(
-            "model_library.retriers.base.telemetry.log_sentry_info"
-        ) as log_sentry_info,
+            "model_library.retriers.backoff.telemetry.record_scheduled_retry_exception"
+        ) as record_retry_exception,
         pytest.raises(RetryException) as exc_info,
     ):
         await func()
@@ -306,10 +306,10 @@ async def test_max_retries_giveup():
         "Retry Recovered" not in call.args[0]
         for call in logger.info.call_args_list
     )
-    assert log_sentry_info.call_count == 2
+    assert record_retry_exception.call_count == 2
     assert all(
-        "Retry Recovered" not in call.args[0]
-        for call in log_sentry_info.call_args_list
+        retry_call.args[0] is error
+        for retry_call in record_retry_exception.call_args_list
     )
 
 
@@ -508,13 +508,11 @@ async def test_core_errors(
         assert query_impl_mock.call_count == 1
 
 
-async def test_immediate_retry_logs_attempts_and_recovery_at_info():
+async def test_immediate_retry_records_attempts_as_warning_exceptions():
+    first_error = ImmediateRetryException("Immediate retry")
+    second_error = ImmediateRetryException("Immediate retry")
     succeeds_after_retries = AsyncMock(
-        side_effect=[
-            ImmediateRetryException("Immediate retry"),
-            ImmediateRetryException("Immediate retry"),
-            "success",
-        ]
+        side_effect=[first_error, second_error, "success"]
     )
     logger = MagicMock()
 
@@ -524,6 +522,9 @@ async def test_immediate_retry_logs_attempts_and_recovery_at_info():
             side_effect=[100.0, 103.0],
         ),
         patch("model_library.retriers.base.telemetry.set_attributes") as set_attrs,
+        patch(
+            "model_library.retriers.base.telemetry.record_scheduled_retry_exception"
+        ) as record_retry_exception,
         patch(
             "model_library.retriers.base.telemetry.log_sentry_info"
         ) as log_sentry_info,
@@ -547,10 +548,9 @@ async def test_immediate_retry_logs_attempts_and_recovery_at_info():
         ),
         call("[Immediate Retry Recovered] | Retries: 2/10 | Elapsed: 3.0s"),
     ]
-    assert log_sentry_info.call_args_list == [
+    assert record_retry_exception.call_args_list == [
         call(
-            "[Immediate Retry] | 1/10 | Exception "
-            "ImmediateRetryException: Immediate retry",
+            first_error,
             {
                 "retry.strategy": "immediate",
                 "retry.attempt": 1,
@@ -559,8 +559,7 @@ async def test_immediate_retry_logs_attempts_and_recovery_at_info():
             },
         ),
         call(
-            "[Immediate Retry] | 2/10 | Exception "
-            "ImmediateRetryException: Immediate retry",
+            second_error,
             {
                 "retry.strategy": "immediate",
                 "retry.attempt": 2,
@@ -568,24 +567,29 @@ async def test_immediate_retry_logs_attempts_and_recovery_at_info():
                 "exception.type": "ImmediateRetryException",
             },
         ),
-        call(
-            "[Immediate Retry Recovered] | Retries: 2/10 | Elapsed: 3.0s",
-            {
-                "retry.strategy": "immediate",
-                "retry.immediate_attempts": 2,
-                "retry.max_tries": 10,
-                "retry.elapsed_seconds": 3.0,
-            },
-        ),
     ]
+    log_sentry_info.assert_called_once_with(
+        "[Immediate Retry Recovered] | Retries: 2/10 | Elapsed: 3.0s",
+        {
+            "retry.strategy": "immediate",
+            "retry.immediate_attempts": 2,
+            "retry.max_tries": 10,
+            "retry.elapsed_seconds": 3.0,
+        },
+    )
 
 
 async def test_immediate_retry_without_failure_has_no_retry_logs():
     logger = MagicMock()
 
-    with patch(
-        "model_library.retriers.base.telemetry.log_sentry_info"
-    ) as log_sentry_info:
+    with (
+        patch(
+            "model_library.retriers.base.telemetry.record_scheduled_retry_exception"
+        ) as record_retry_exception,
+        patch(
+            "model_library.retriers.base.telemetry.log_sentry_info"
+        ) as log_sentry_info,
+    ):
         result = await BaseRetrier.immediate_retry_wrapper(
             AsyncMock(return_value="success"),
             logger,
@@ -593,11 +597,13 @@ async def test_immediate_retry_without_failure_has_no_retry_logs():
 
     assert result == "success"
     logger.info.assert_not_called()
+    record_retry_exception.assert_not_called()
     log_sentry_info.assert_not_called()
 
 
-async def test_backoff_retry_logs_attempt_and_recovery_at_info():
-    succeeds_after_retry = AsyncMock(side_effect=[RetryException("retry"), "success"])
+async def test_backoff_retry_records_attempt_as_warning_exception():
+    retry_error = RetryException("retry")
+    succeeds_after_retry = AsyncMock(side_effect=[retry_error, "success"])
     logger = MagicMock()
     retrier = ExponentialBackoffRetrier(
         logger,
@@ -611,6 +617,9 @@ async def test_backoff_retry_logs_attempt_and_recovery_at_info():
             side_effect=[100.0, 101.0, 103.0],
         ),
         patch("model_library.retriers.base.telemetry.set_attributes") as set_attrs,
+        patch(
+            "model_library.retriers.backoff.telemetry.record_scheduled_retry_exception"
+        ) as record_retry_exception,
         patch(
             "model_library.retriers.base.telemetry.log_sentry_info"
         ) as log_sentry_info,
@@ -627,42 +636,45 @@ async def test_backoff_retry_logs_attempt_and_recovery_at_info():
         ),
         call("[Retry Recovered] | backoff | Attempts: 1 | Elapsed: 3.0s"),
     ]
-    assert log_sentry_info.call_args_list == [
-        call(
-            "[Retry] | backoff | Attempt: 1 | Elapsed: 1.0s | "
-            "Next wait: 0.0s | Exception: RetryException: retry ",
-            {
-                "retry.strategy": "backoff",
-                "retry.attempt": 1,
-                "retry.max_tries": 3,
-                "retry.elapsed_seconds": 1.0,
-                "retry.next_wait_seconds": 0.0,
-                "exception.type": "RetryException",
-            },
-        ),
-        call(
-            "[Retry Recovered] | backoff | Attempts: 1 | Elapsed: 3.0s",
-            {
-                "retry.strategy": "backoff",
-                "retry.attempts": 1,
-                "retry.max_tries": 3,
-                "retry.elapsed_seconds": 3.0,
-            },
-        ),
-    ]
+    record_retry_exception.assert_called_once_with(
+        retry_error,
+        {
+            "retry.strategy": "backoff",
+            "retry.attempt": 1,
+            "retry.max_tries": 3,
+            "retry.elapsed_seconds": 1.0,
+            "retry.next_wait_seconds": 0.0,
+            "exception.type": "RetryException",
+        },
+    )
+    log_sentry_info.assert_called_once_with(
+        "[Retry Recovered] | backoff | Attempts: 1 | Elapsed: 3.0s",
+        {
+            "retry.strategy": "backoff",
+            "retry.attempts": 1,
+            "retry.max_tries": 3,
+            "retry.elapsed_seconds": 3.0,
+        },
+    )
 
 
 async def test_backoff_without_failure_has_no_retry_logs():
     logger = MagicMock()
     retrier = ExponentialBackoffRetrier(logger, max_tries=3)
 
-    with patch(
-        "model_library.retriers.base.telemetry.log_sentry_info"
-    ) as log_sentry_info:
+    with (
+        patch(
+            "model_library.retriers.backoff.telemetry.record_scheduled_retry_exception"
+        ) as record_retry_exception,
+        patch(
+            "model_library.retriers.base.telemetry.log_sentry_info"
+        ) as log_sentry_info,
+    ):
         result = await retrier.execute(AsyncMock(return_value="success"))
 
     assert result == "success"
     logger.info.assert_not_called()
+    record_retry_exception.assert_not_called()
     log_sentry_info.assert_not_called()
 
 
@@ -827,6 +839,10 @@ async def test_immediate_retry_exhausted_is_not_retriable():
         ),
         (
             "The model is currently at capacity due to high demand.",
+            True,
+        ),
+        (
+            "We're currently processing too many requests — please try again later.",
             True,
         ),
     ],

@@ -2,6 +2,9 @@ import json
 from types import SimpleNamespace
 
 import pytest
+import sentry_sdk
+from sentry_sdk.transport import Transport
+from sentry_sdk.utils import event_from_exception
 
 import model_library.telemetry as telemetry
 from model_library import model_library_settings
@@ -71,6 +74,7 @@ def test_telemetry_delivery_logger_classifier_is_narrow():
     assert telemetry.is_telemetry_delivery_logger(
         "opentelemetry.sdk.trace.export.batch"
     )
+    assert telemetry.is_telemetry_delivery_logger("sentry_sdk.transport")
     assert not telemetry.is_telemetry_delivery_logger("opentelemetry.sdk.trace")
     assert not telemetry.is_telemetry_delivery_logger(
         "mistralai.extra.observability.otel"
@@ -282,11 +286,14 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(
         "request_hook": telemetry._httpx_request_hook,  # pyright: ignore[reportPrivateUsage]
         "async_request_hook": telemetry._httpx_async_request_hook,  # pyright: ignore[reportPrivateUsage]
     }
+    # Delivery failures must not be sent back through the failing exporter.
     assert ignored_sentry_loggers == [
         "opentelemetry.exporter",
         "opentelemetry.exporter.*",
         "opentelemetry.sdk.trace.export",
         "opentelemetry.sdk.trace.export.*",
+        "sentry_sdk",
+        "sentry_sdk.*",
     ]
     assert telemetry.is_enabled()
 
@@ -855,7 +862,124 @@ def test_nested_span_search_context_survives_for_parent_exception(monkeypatch):
     assert telemetry._sentry_search_context() == {}  # pyright: ignore[reportPrivateUsage]
 
 
-def test_before_send_adds_search_context_as_event_tags(monkeypatch):
+def test_before_send_drops_any_deferred_exception():
+    event = {"exception": {"values": [{"mechanism": {"type": "provider_sdk"}}]}}
+
+    with telemetry.defer_provider_exceptions():
+        assert telemetry._before_send(event, {}) is None  # pyright: ignore[reportPrivateUsage]
+
+
+def test_before_send_retains_exception_outside_deferral():
+    event = {"exception": {"values": [{"mechanism": {"type": "provider_sdk"}}]}}
+
+    assert telemetry._before_send(event, {}) is event  # pyright: ignore[reportPrivateUsage]
+
+
+def test_before_send_retains_non_exception_event_during_deferral():
+    event = {"message": "provider log"}
+
+    with telemetry.defer_provider_exceptions():
+        assert telemetry._before_send(event, {}) is event  # pyright: ignore[reportPrivateUsage]
+
+
+def test_deferred_exception_is_dropped_before_canonical_capture(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class RecordingTransport(Transport):
+        def __init__(self, options: dict[str, object] | None = None):
+            super().__init__(options)
+            self.envelopes: list[object] = []
+
+        def capture_envelope(self, envelope: object) -> None:
+            self.envelopes.append(envelope)
+
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    exception = RuntimeError("provider failure")
+    client = sentry_sdk.Client(
+        dsn="https://public@example.com/1",
+        transport=RecordingTransport,
+        before_send=telemetry._before_send,  # pyright: ignore[reportPrivateUsage, reportArgumentType]
+    )
+    transport = client.transport
+    assert isinstance(transport, RecordingTransport)
+    try:
+        with sentry_sdk.isolation_scope() as scope:
+            scope.set_client(client)
+            event, _hint = event_from_exception(
+                exception, mechanism={"type": "openai", "handled": False}
+            )
+            with telemetry.defer_provider_exceptions():
+                sentry_sdk.capture_event(event)
+                scope.add_attachment(
+                    bytes=b"artifact",
+                    filename="artifact.txt",
+                    content_type="text/plain",
+                )
+                telemetry.record_exception(exception)
+        client.flush()
+    finally:
+        client.close()
+
+    assert len(transport.envelopes) == 1
+    envelope = transport.envelopes[0]
+    items = list(envelope.items)  # type: ignore[attr-defined]
+    assert [item.headers.get("type") for item in items] == ["event", "attachment"]
+    assert items[0].get_event().get("exception") is not None
+
+
+def test_scheduled_retry_exception_is_warning_during_gateway_deferral(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class RecordingTransport(Transport):
+        def __init__(self, options: dict[str, object] | None = None):
+            super().__init__(options)
+            self.envelopes: list[object] = []
+
+        def capture_envelope(self, envelope: object) -> None:
+            self.envelopes.append(envelope)
+
+    monkeypatch.setattr(
+        telemetry,
+        "_sentry_context",
+        telemetry.ContextVar(
+            "test_scheduled_retry_context",
+            default={"retry.strategy": "backoff", "retry.attempt": 0},
+        ),
+    )
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    client = sentry_sdk.Client(
+        dsn="https://public@example.com/1",
+        transport=RecordingTransport,
+        before_send=telemetry._before_send,  # pyright: ignore[reportPrivateUsage, reportArgumentType]
+    )
+    transport = client.transport
+    assert isinstance(transport, RecordingTransport)
+    try:
+        with sentry_sdk.isolation_scope() as scope:
+            scope.set_client(client)
+            with telemetry.defer_provider_exceptions():
+                telemetry.record_scheduled_retry_exception(
+                    RuntimeError("retry"),
+                    {"retry.strategy": "immediate", "retry.attempt": 1},
+                )
+        client.flush()
+    finally:
+        client.close()
+
+    assert len(transport.envelopes) == 1
+    event = list(transport.envelopes[0].items)[0].get_event()  # type: ignore[attr-defined]
+    assert event is not None
+    assert event["level"] == "warning"
+    assert event["tags"]["retry.strategy"] == "immediate"
+    assert event["tags"]["retry.state"] == "scheduled"
+    assert event["tags"]["retry.attempt"] == 1
+    assert event["contexts"]["retry"] == {
+        "retry.attempt": 1,
+        "retry.state": "scheduled",
+        "retry.strategy": "immediate",
+    }
+
+def test_before_send_adds_search_context_without_overwriting_event_tags(monkeypatch):
     monkeypatch.setattr(
         telemetry,
         "_sentry_context",
@@ -865,19 +989,25 @@ def test_before_send_adds_search_context_as_event_tags(monkeypatch):
                 "run_id": "run-a",
                 "question_id": "q1",
                 "gateway.api_key_name": "security-testing",
+                "gateway.provider_error.exception_type": "RateLimitError",
+                "gateway.provider_error.status_code": 429,
                 "api_key": "raw-bearer-key-must-not-leak",
             },
         ),
     )
 
-    event = telemetry._before_send({"tags": {"existing": "tag"}}, {})  # pyright: ignore[reportPrivateUsage]
+    event = telemetry._before_send(
+        {"tags": {"existing": "tag", "run_id": "event-run"}}, {}
+    )  # pyright: ignore[reportPrivateUsage]
 
     assert event == {
         "tags": {
             "existing": "tag",
-            "run_id": "run-a",
+            "run_id": "event-run",
             "question_id": "q1",
             "gateway.api_key_name": "security-testing",
+            "gateway.provider_error.exception_type": "RateLimitError",
+            "gateway.provider_error.status_code": "429",
         }
     }
 

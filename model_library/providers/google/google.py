@@ -24,6 +24,7 @@ from google.genai.types import (
     HttpOptions,
     Part,
     SafetySetting,
+    ServiceTier,
     ThinkingConfig,
     ThinkingLevel,
     Tool,
@@ -127,6 +128,7 @@ def generate_tool_call_id(tool_name: str) -> str:
 class GoogleConfig(ProviderConfig):
     use_vertex: bool = False
     use_interactions: bool = False
+    service_tier: Literal["standard", "flex"] | None = None
 
 
 @register_provider("google")
@@ -225,6 +227,8 @@ class GoogleModel(LLM):
         if self.native:
             self.delegate = None
         else:
+            if self.provider_config.service_tier is not None:
+                raise ValueError("service_tier requires the native Gemini API")
             config = config or LLMConfig()
             config.custom_endpoint = (
                 config.custom_endpoint
@@ -422,6 +426,11 @@ class GoogleModel(LLM):
                 generation_config.top_k = self.top_k
 
         generation_config.safety_settings = self.SAFETY_CONFIG
+
+        if self.provider_config.service_tier is not None:
+            generation_config.service_tier = ServiceTier(
+                self.provider_config.service_tier
+            )
 
         if isinstance(input[0], SystemInput):
             generation_config.system_instruction = input[0].text
@@ -685,7 +694,11 @@ class GoogleModel(LLM):
 
         # google cache tokens increse in price with long context
 
-        return await super()._calculate_cost(metadata, batch, bill_reasoning=True)
+        return await super()._calculate_cost(
+            metadata,
+            batch or self.provider_config.service_tier == "flex",
+            bill_reasoning=True,
+        )
 
     @deprecated("Use query(output_schema=...) instead")
     @override

@@ -183,7 +183,9 @@ def test_make_aiohttp_session_wires_keepalive_socket_factory(
         connector_kwargs.update(kwargs)
         return expected_connector
 
-    def create_session(*, connector: object, read_bufsize: int) -> object:
+    def create_session(
+        *, connector: object, read_bufsize: int, **_kwargs: object
+    ) -> object:
         assert connector is expected_connector
         assert read_bufsize == model_utils.PROVIDER_STREAM_READ_BUFFER_BYTES
         return session
@@ -218,9 +220,7 @@ async def test_make_aiohttp_session_reads_large_stream_event():
     socket_address = server.sockets[0].getsockname()
     try:
         async with model_utils.make_aiohttp_session() as session:
-            async with session.get(
-                f"http://127.0.0.1:{socket_address[1]}"
-            ) as response:
+            async with session.get(f"http://127.0.0.1:{socket_address[1]}") as response:
                 assert await response.content.readline() == stream_event
     finally:
         server.close()
@@ -251,7 +251,13 @@ async def test_plain_httpx_clients_mount_keepalive_transport_for_direct_requests
         transport_kwargs.update(kwargs)
         return keepalive_transport
 
+    def preserve_transport(
+        transport: httpx.AsyncBaseTransport,
+    ) -> httpx.AsyncBaseTransport:
+        return transport
+
     monkeypatch.setattr(model_utils.httpx, "AsyncHTTPTransport", create_transport)
+    monkeypatch.setattr(model_utils, "CapturingAsyncHTTPTransport", preserve_transport)
 
     client = client_factory()
     try:

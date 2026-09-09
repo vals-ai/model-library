@@ -56,11 +56,12 @@ Result: `claude-sonnet-4-6` gets `company: Anthropic`, `country: United States`,
 
 Provider-specific `provider_properties` are validated by each provider:
 
-- **Anthropic**: Set `fallback_models` to an ordered list of up to three server-side fallback models for the Messages API. Fallback-served responses set `QueryResult.metadata.extra["fallback"]` to `true`, and their assistant turns are replayed verbatim, including the `fallback` boundary block.
+- **Anthropic**: Set `fallback_models` to an ordered list of up to three server-side fallback models for the Messages API. Fallback-served responses set `QueryResult.metadata.fallback` (`FallbackInfo`: requested/served model plus per-hop model, usage, and decline trigger/category), are billed at the fallback model's price, and their assistant turns are replayed verbatim, including the `fallback` boundary block.
 - **Anthropic**: Set `task_budget_tokens` to send `output_config.task_budget` with the task-budgets beta, an advisory token budget the model paces its agentic loop against. It is not enforced; `max_tokens` remains the hard ceiling.
 - **Anthropic**: Set `returns_thinking_truncated_turns: true` to return a turn that ran out of tokens inside a thinking block as a `max_tokens` result with its reasoning, instead of raising, so the client can continue the turn. On these keys only, replaying such a turn appends a short text block, since Anthropic rejects an assistant message whose final block is thinking.
 - **OpenAI-compatible completions**: Set `stream_completions: false` to use non-streaming chat completions. The default is `true`.
 - **OpenAI Responses**: Set `code_mode: true` to add the hosted Code Mode tool. When enabled, function tools without explicit `allowed_callers` are sent with `allowed_callers: ["code_mode", "direct"]`.
+- **OpenAI / Google**: Set `service_tier: flex` to request Flex processing (sent as `service_tier`); responses are billed at the model's `batch` discount.
 - **Meta**: Set `use_responses: true` on selected models to route the OpenAI-compatible delegate through the Responses API instead of Chat Completions.
 - **OpenAI-compatible providers**: Set `prompt_cache_key: id` to derive an OpenAI prompt-cache key from the resolved `run_id` and `question_id`, or `prompt_cache_key: hash` to derive it from the stable prompt prefix, for Responses and Chat Completions.
 - **Alibaba Qwen reasoning models**: Set `preserve_thinking: true` to preserve reasoning context across turns.
