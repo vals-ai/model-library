@@ -40,11 +40,16 @@ class DeepSeekModel(DelegateOnly):
             config=config,
             delegate_provider="openai",
             use_completions=True,
+            normalize_null_assistant_history_fields=True,
         )
 
     @override
     def _get_extra_body(self) -> dict[str, Any]:
-        if self.model_name in ("deepseek-v4-pro", "deepseek-v4-flash"):
+        if self.model_name in (
+            "deepseek-v4-pro",
+            "deepseek-v4-flash",
+            "deepseek-flash",
+        ):
             mode = "enabled" if self.reasoning else "disabled"
             return {"thinking": {"type": mode}}
         return {}

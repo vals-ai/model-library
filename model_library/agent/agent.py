@@ -1,12 +1,15 @@
+import asyncio
 import dataclasses
 import json
 import logging
 import time
 import uuid
-from collections.abc import Generator, Sequence
+from collections.abc import Awaitable, Callable, Generator, Sequence
 from datetime import datetime, timezone
 from enum import StrEnum
+from itertools import count, takewhile
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from pydantic import Field, computed_field  # pyright: ignore[reportMissingImports]
@@ -34,6 +37,19 @@ from model_library.base.input import (
 from model_library.base.output import QueryResultMetadata
 from model_library.exceptions import MaxContextWindowExceededError
 from model_library.utils import SecondsMetric, ValsModel, run_logging
+
+
+def _write_json_atomic(path: Path, data: Any) -> None:
+    """Replace a JSON file only after its complete contents have been written."""
+    temporary_path: Path | None = None
+    try:
+        with NamedTemporaryFile(mode="w", dir=path.parent, delete=False) as temporary:
+            temporary_path = Path(temporary.name)
+            temporary.write(json.dumps(data, indent=2, default=str))
+        temporary_path.replace(path)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 class AgentStopReason(StrEnum):
@@ -328,8 +344,8 @@ class Agent:
     ) -> None:
         """Write init/ directory with config, initial state, and input."""
         init_dir = output_dir / "turns" / "init"
-        init_dir.mkdir(parents=True, exist_ok=True)
         try:
+            init_dir.mkdir(parents=True, exist_ok=True)
             (init_dir / "config.json").write_text(
                 json.dumps(
                     {
@@ -359,15 +375,13 @@ class Agent:
         history: list[InputItem],
         logger: logging.Logger,
     ) -> None:
-        """Write turn directory with raw result, state snapshot, and history."""
+        """Write native turn progress, state snapshot, and history."""
         turn_dir = output_dir / "turns" / f"turn_{turn_number:03d}"
-        turn_dir.mkdir(parents=True, exist_ok=True)
         try:
+            turn_dir.mkdir(parents=True, exist_ok=True)
             # Exclude history from result JSON — history is saved separately.
             turn_data = turn.model_dump(exclude={"query_result": {"history"}})
-            (turn_dir / "result.json").write_text(
-                json.dumps(turn_data, indent=2, default=str)
-            )
+            _write_json_atomic(turn_dir / "result.json", turn_data)
             (turn_dir / "state.json").write_text(
                 json.dumps(state, indent=2, default=str)
             )
@@ -376,6 +390,47 @@ class Agent:
             )
         except Exception:
             logger.exception(f"Failed to write turn {turn_number} directory")
+
+    def _write_helper_query(
+        self,
+        output_dir: Path,
+        turn_number: int,
+        tool_index: int,
+        record: ToolCallRecord,
+        logger: logging.Logger,
+    ) -> None:
+        """Save a tool's helper response and separate history before hooks."""
+        helper_result = record.tool_output.native_query_result
+        if helper_result is None:
+            return
+        try:
+            helper_dir = (
+                output_dir
+                / "turns"
+                / f"turn_{turn_number:03d}"
+                / "helper_queries"
+                / f"tool_{tool_index:03d}"
+            )
+            helper_dir.mkdir(parents=True, exist_ok=True)
+            _write_json_atomic(
+                helper_dir / "result.json",
+                {
+                    "turn_number": turn_number,
+                    "tool_index": tool_index,
+                    "tool_call": record.tool_call.model_dump(),
+                    "query_result": helper_result.model_dump(exclude={"history"}),
+                },
+            )
+            (helper_dir / "history.json").write_text(
+                LLM.serialize_input(helper_result.history, secret=self._history_secret)
+            )
+        except Exception:
+            logger.exception(
+                f"Failed to write helper query for turn {turn_number}, tool {tool_index}"
+            )
+        finally:
+            # Release capture-only history even when persistence fails.
+            record.tool_output.native_query_result = None
 
     def _write_error_turn_dir(
         self,
@@ -386,8 +441,8 @@ class Agent:
     ) -> None:
         """Write error turn directory with just the error."""
         turn_dir = output_dir / "turns" / f"turn_{turn_number:03d}"
-        turn_dir.mkdir(parents=True, exist_ok=True)
         try:
+            turn_dir.mkdir(parents=True, exist_ok=True)
             (turn_dir / "error.json").write_text(error_turn.model_dump_json(indent=2))
         except Exception:
             logger.exception(f"Failed to write error turn {turn_number} directory")
@@ -434,9 +489,11 @@ class Agent:
         retry_overhead = 0.0
 
         try:
-            while turn_limit is None or turn_number < turn_limit.max_turns:
+            for turn_number in takewhile(
+                lambda number: turn_limit is None or number <= turn_limit.max_turns,
+                count(1),
+            ):
                 turn_start = time.monotonic()
-                turn_number += 1
 
                 logger.info(
                     f"Turn {turn_number}/{turn_limit.max_turns if turn_limit else '?'} starting"
@@ -604,9 +661,58 @@ class Agent:
 
                 history = list(response.history)
 
+                # Detach native evidence from the live response and hook-owned records.
+                # Opaque provider history is saved separately, never deep-copied.
+                native_turn: AgentTurn | None = None
+                try:
+                    native_turn = AgentTurn(
+                        query_result=response.model_copy(
+                            update={"history": []}
+                        ).model_copy(deep=True),
+                        duration_seconds=time.monotonic() - turn_start,
+                        retry_overhead_seconds=turn_retry_overhead,
+                    )
+                    self._write_turn_dir(
+                        output_dir, turn_number, native_turn, state, history, logger
+                    )
+                except Exception:
+                    logger.exception(f"Failed to capture turn {turn_number} response")
+
+                async def capture_tool_record(record: ToolCallRecord) -> None:
+                    if native_turn is None:
+                        return
+                    native_turn.tool_call_records.append(record.model_copy(deep=True))
+                    native_turn.duration_seconds = time.monotonic() - turn_start
+                    write_task = asyncio.create_task(
+                        asyncio.to_thread(
+                            self._write_turn_dir,
+                            output_dir,
+                            turn_number,
+                            native_turn,
+                            state,
+                            history,
+                            logger,
+                        )
+                    )
+                    cancelled = False
+                    while not write_task.done():
+                        try:
+                            await asyncio.shield(write_task)
+                        except asyncio.CancelledError:
+                            cancelled = True
+                    await write_task
+                    if cancelled:
+                        raise asyncio.CancelledError()
+
                 # process tool calls
                 tool_call_records = await self._execute_tool_calls(
-                    response.tool_calls, state, history, logger
+                    response.tool_calls,
+                    state,
+                    history,
+                    logger,
+                    output_dir=output_dir,
+                    turn_number=turn_number,
+                    capture_tool_record=capture_tool_record,
                 )
 
                 turn_duration = time.monotonic() - turn_start
@@ -650,10 +756,13 @@ class Agent:
                     retry_overhead_seconds=turn_retry_overhead,
                 )
 
-                # Write full raw turn to disk, then convert to summary
-                self._write_turn_dir(
-                    output_dir, turn_number, turn, state, history, logger
-                )
+                # Write full raw turn to disk, then convert to summary.
+                # Keep native pre-hook values; summaries/hooks still use the live turn.
+                if native_turn is not None:
+                    native_turn.duration_seconds = turn_duration
+                    self._write_turn_dir(
+                        output_dir, turn_number, native_turn, state, history, logger
+                    )
                 turns.append(turn.to_summary())
                 raw_turns.append(turn)
 
@@ -794,32 +903,51 @@ class Agent:
         state: dict[str, Any],
         history: list[InputItem],
         logger: logging.Logger,
+        *,
+        output_dir: Path | None = None,
+        turn_number: int | None = None,
+        capture_tool_record: Callable[[ToolCallRecord], Awaitable[None]] | None = None,
     ) -> list[ToolCallRecord]:
         """Execute tool calls, appending results to history
 
         Short-circuits on done — remaining tool calls in the batch are skipped.
         If max_tool_calls_per_turn is set, calls beyond the limit are not executed
         but still get a ToolResult appended (providers require results for all calls).
+        Pass output_dir and turn_number together to capture helper queries.
+        capture_tool_record is awaited for each completed record before on_tool_result.
         """
+        if (output_dir is None) != (turn_number is None):
+            raise ValueError("output_dir and turn_number must be provided together")
+
         cap = self._config.max_tool_calls_per_turn
         records: list[ToolCallRecord] = []
         for i, tool_call in enumerate(tool_calls):
-            if cap is not None and i >= cap:
-                output = ToolOutput(output="Skipped: tool call limit exceeded")
-                records.append(
-                    ToolCallRecord(
-                        tool_call=tool_call, tool_output=output, duration_seconds=0.0
-                    )
+            skipped = cap is not None and i >= cap
+            if skipped:
+                record = ToolCallRecord(
+                    tool_call=tool_call,
+                    tool_output=ToolOutput(output="Skipped: tool call limit exceeded"),
+                    duration_seconds=0.0,
                 )
-                history.append(ToolResult(tool_call=tool_call, result=output.output))
-                continue
-
-            record = await self._execute_tool(tool_call, state, logger)
+            else:
+                record = await self._execute_tool(tool_call, state, logger)
             records.append(record)
             history.append(
                 ToolResult(tool_call=record.tool_call, result=record.tool_output.output)
             )
 
+            if output_dir is not None and turn_number is not None:
+                self._write_helper_query(output_dir, turn_number, i, record, logger)
+            else:
+                record.tool_output.native_query_result = None
+            if capture_tool_record is not None:
+                try:
+                    await capture_tool_record(record)
+                except Exception:
+                    logger.exception("Failed to capture tool record")
+
+            if skipped:
+                continue
             self._hooks.on_tool_result(record, state)
 
             if record.tool_output.done:

@@ -3,7 +3,8 @@ base-config:
     supports_live_monitoring: true
   company: Mistral
   country: France
-  documentation_url: https://docs.mistral.ai/getting-started/models/models_overview/
+  documentation_url: "https://docs.mistral.ai/getting-started/models/\
+    models_overview/"
   open_source: false
   supports:
     images: false
@@ -97,7 +98,8 @@ mistral-models:
     label: Mistral Medium 3.5
     open_source: true
     release_date: 2026-04-29
-    documentation_url: https://docs.mistral.ai/models/model-cards/mistral-medium-3-5-26-04
+    documentation_url: "https://docs.mistral.ai/models/model-cards/\
+      mistral-medium-3-5-26-04"
     supports:
       images: true
     properties:
@@ -166,3 +168,35 @@ devstral-models:
     costs_per_million_token:
       input: 0.1
       output: 0.3
+transcription-models:
+  base-config:
+    rate_limit:
+      supports_live_monitoring: false
+    properties: null
+    release_date: 2026-02-04
+    supports:
+      transcription: true
+      temperature: false
+      tools: false
+    costs_per_million_token: null
+    transcription_language:
+      format: iso-639-1
+      default: en
+
+  mistral/voxtral-mini-transcribe-realtime-2602:
+    label: Voxtral Mini Transcribe Realtime 2602
+    transcription_streaming: true
+    documentation_url: "https://docs.mistral.ai/studio-api/audio/\
+      speech_to_text/realtime_transcription"
+    transcription_cost:
+      usd_per_minute: 0.006
+      billing_basis: audio
+
+  mistral/voxtral-mini-2602:
+    label: Voxtral Mini Transcribe 2
+    transcription_streaming: false
+    documentation_url: "https://docs.mistral.ai/studio-api/audio/\
+      speech_to_text/offline_transcription"
+    transcription_cost:
+      usd_per_minute: 0.003
+      billing_basis: audio

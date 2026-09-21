@@ -43,7 +43,7 @@ class TestCustomEndpoint:
         OpenAIModel.get_client = _original_get_client  # type: ignore[method-assign]
         try:
             with patch(
-                "model_library.providers.openai.create_openai_client_with_defaults"
+                "model_library.providers.openai.openai.create_openai_client_with_defaults"
             ) as mock_create:
                 mock_create.return_value = MagicMock()
 
@@ -77,7 +77,7 @@ class TestCustomEndpoint:
         OpenAIModel.get_client = _original_get_client  # type: ignore[method-assign]
         try:
             with patch(
-                "model_library.providers.openai.create_openai_client_with_defaults"
+                "model_library.providers.openai.openai.create_openai_client_with_defaults"
             ) as mock_create:
                 mock_create.return_value = MagicMock()
 
@@ -97,7 +97,7 @@ class TestCustomEndpoint:
         OpenAIModel.get_client = _original_get_client  # type: ignore[method-assign]
         try:
             with patch(
-                "model_library.providers.openai.create_openai_client_with_defaults"
+                "model_library.providers.openai.openai.create_openai_client_with_defaults"
             ) as mock_create:
                 mock_create.return_value = MagicMock()
 

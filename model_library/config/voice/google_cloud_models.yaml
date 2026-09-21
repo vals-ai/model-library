@@ -1,0 +1,23 @@
+base-config:
+  company: Google Cloud
+  country: United States
+  documentation_url: https://cloud.google.com/speech-to-text/docs
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_streaming: true
+  costs_per_million_token: null
+  transcription_language:
+    format: bcp-47
+    default: en-US
+
+transcription-models:
+  google_cloud/chirp_3:
+    label: Google Cloud Chirp 3
+    release_date: 2025-08-29
+    documentation_url: https://cloud.google.com/speech-to-text/docs/chirp-models
+    transcription_cost:
+      usd_per_minute: 0.016
+      billing_basis: audio
+      increment_seconds: 1.0

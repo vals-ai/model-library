@@ -10,9 +10,12 @@ from model_library.base import (
     FileWithId,
     LLMConfig,
     ProviderConfig,
+    TranscriptionResult,
 )
 from model_library.base.query_ids import PromptCacheKeyMode
+from model_library.base.transcription import TranscriptionRequest
 from model_library.providers.openai import OpenAIConfig
+from model_library.providers.voice.meta import transcribe_realtime
 from model_library.register_models import register_provider
 
 
@@ -36,14 +39,15 @@ class MetaModel(DelegateOnly):
 
         base_url = "https://api.meta.ai/v1"
 
-        api_key_setting = "META_API_KEY"
         # https://docs.llama.com
         config = config or LLMConfig()
+        self._api_key = config.custom_api_key or SecretStr(
+            model_library_settings.META_API_KEY
+        )
         delegate_config = config.model_copy(
             update={
                 "custom_endpoint": config.custom_endpoint or base_url,
-                "custom_api_key": config.custom_api_key
-                or SecretStr(getattr(model_library_settings, api_key_setting)),
+                "custom_api_key": self._api_key,
                 "provider_config": OpenAIConfig(
                     prompt_cache_key=self.provider_config.prompt_cache_key,
                 ),
@@ -54,6 +58,18 @@ class MetaModel(DelegateOnly):
             config=delegate_config,
             delegate_provider="openai",
             use_completions=not self.provider_config.use_responses,
+        )
+
+    @override
+    async def _transcribe_audio(
+        self, request: TranscriptionRequest
+    ) -> TranscriptionResult:
+        if self.custom_endpoint is not None:
+            raise ValueError("custom_endpoint is not supported for Meta transcription")
+        return await transcribe_realtime(
+            api_key=self._api_key.get_secret_value(),
+            model_name=self.model_name,
+            request=request,
         )
 
     @override

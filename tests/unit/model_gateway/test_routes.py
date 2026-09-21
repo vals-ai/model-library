@@ -11,9 +11,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx  # pyright: ignore[reportMissingImports]
 import pytest
-from pydantic import SecretStr, ValidationError
-from redis.exceptions import TimeoutError as RedisTimeoutError
-from starlette.testclient import TestClient
+from pydantic import SecretStr, ValidationError  # pyright: ignore[reportMissingImports]
+from redis.exceptions import (  # pyright: ignore[reportMissingImports]
+    TimeoutError as RedisTimeoutError,
+)
+from starlette.testclient import TestClient  # pyright: ignore[reportMissingImports]
 
 import model_gateway.app as gateway_app
 import model_gateway.model_helpers as model_helpers
@@ -29,7 +31,11 @@ from model_library.base import (
     TranscriptionResult,
     dump_gateway_config,
 )
-from model_library.register_models import get_model_registry
+from model_library.register_models import (
+    get_model_registry,
+    get_transcription_registry,
+    model_config_from_json,
+)
 from tests.unit.model_gateway._support import HEADERS, _load_json, _make_client
 
 
@@ -502,16 +508,25 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     client = _make_client()
     assert client.get("/registry").status_code == 401
 
-    registry = get_model_registry()
-    transcribe = registry["openai/gpt-4o-transcribe"].model_copy(deep=True)
+    transcribe = get_transcription_registry()["openai/gpt-4o-transcribe"].model_copy(
+        deep=True
+    )
     transcribe.rate_limit = None
+    chat = get_model_registry()["openai/gpt-4o"].model_copy(deep=True)
+    chat.supports.transcription = True
+    chat.transcription_cost = transcribe.transcription_cost
+    chat.transcription_language = transcribe.transcription_language
+    chat.transcription_streaming = transcribe.transcription_streaming
     configs = {
-        "openai/gpt-4o": registry["openai/gpt-4o"],
+        "openai/gpt-4o": chat,
         "openai/gpt-4o-transcribe": transcribe,
     }
     with patch(
-        "model_gateway.routes.models.get_model_registry",
-        return_value=configs,
+        "model_gateway.routes.models.get_registries",
+        return_value=(
+            {"openai/gpt-4o": chat},
+            {"openai/gpt-4o-transcribe": transcribe},
+        ),
     ):
         resp = client.get("/registry", headers=HEADERS)
 
@@ -522,16 +537,57 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     assert response_config["provider_properties"] == configs[
         "openai/gpt-4o"
     ].provider_properties.model_dump(mode="json")
-    assert "transcription" not in models["openai/gpt-4o-transcribe"]["supports"]
-    assert "country" not in response_config
-    assert "rate_limit" not in response_config
+    assert "openai/gpt-4o-transcribe" not in models
+    legacy_config = model_config_from_json(response_config)
+    assert not legacy_config.supports.transcription
+    assert set(response_config) == {
+        "alternative_keys",
+        "company",
+        "costs_per_million_token",
+        "default_parameters",
+        "documentation_url",
+        "full_key",
+        "label",
+        "metadata",
+        "open_source",
+        "properties",
+        "provider_endpoint",
+        "provider_name",
+        "provider_properties",
+        "release_date",
+        "slug",
+        "supports",
+    }
+    assert set(response_config["supports"]) == {
+        "audio",
+        "batch",
+        "files",
+        "images",
+        "output_schema",
+        "temperature",
+        "tools",
+        "videos",
+    }
 
     with patch(
-        "model_gateway.routes.models.get_model_registry",
-        return_value=configs,
+        "model_gateway.routes.models.get_registries",
+        return_value=(
+            {"openai/gpt-4o": chat},
+            {"openai/gpt-4o-transcribe": transcribe},
+        ),
     ):
+        for query in ("include_excluded_fields=true", "include_transcription=true"):
+            legacy_resp = client.get(f"/registry?{query}", headers=HEADERS)
+            assert legacy_resp.status_code == 200
+            assert set(legacy_resp.json()["models"]) == {"openai/gpt-4o"}
+            assert legacy_resp.json()["models"]["openai/gpt-4o"]["properties"]
+            assert {
+                "transcription_cost",
+                "transcription_language",
+                "transcription_streaming",
+            }.isdisjoint(legacy_resp.json()["models"]["openai/gpt-4o"])
         full_resp = client.get(
-            "/registry?include_excluded_fields=true",
+            "/registry?include_excluded_fields=true&include_transcription=true",
             headers=HEADERS,
         )
 
@@ -540,8 +596,14 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     rate_limit = configs["openai/gpt-4o"].rate_limit
     assert rate_limit is not None
     expected_rate_limit = rate_limit.model_dump(mode="json", exclude_unset=True)
-    assert full_models["openai/gpt-4o-transcribe"]["supports"]["transcription"] is True
-    assert "rate_limit" not in full_models["openai/gpt-4o-transcribe"]
+    full_transcribe = full_models["openai/gpt-4o-transcribe"]
+    assert full_transcribe["properties"] is None
+    assert model_config_from_json(full_transcribe).properties is None
+    assert full_transcribe["supports"]["transcription"] is True
+    assert "transcription_cost" in full_transcribe
+    assert "transcription_language" in full_transcribe
+    assert "transcription_streaming" in full_transcribe
+    assert "rate_limit" not in full_transcribe
     assert full_models["openai/gpt-4o"]["country"] == configs["openai/gpt-4o"].country
     assert full_models["openai/gpt-4o"].get("rate_limit") == expected_rate_limit
 
@@ -570,8 +632,8 @@ def test_registry_snapshot_can_exclude_same_provider_alternative_keys():
     }
 
     with patch(
-        "model_gateway.routes.models.get_model_registry",
-        return_value=registry,
+        "model_gateway.routes.models.get_registries",
+        return_value=(registry, {}),
     ):
         full = client.get("/registry", headers=HEADERS)
         filtered = client.get(
@@ -606,13 +668,13 @@ def test_registry_snapshot_include_deprecated_serves_retired_entries():
 
     with (
         patch(
-            "model_gateway.routes.models.get_model_registry",
-            return_value=active,
+            "model_gateway.routes.models.get_registries",
+            return_value=(active, {}),
         ),
         patch(
             "model_gateway.routes.models.get_deprecated_model_registry",
             return_value={
-                "openai/gpt-4o": registry["openai/gpt-4o-transcribe"],
+                "openai/gpt-4o": retired,
                 retired.full_key: retired,
                 retired_alternative.full_key: retired_alternative,
             },
@@ -1082,7 +1144,7 @@ def test_lifespan_closes_owned_redis_client():
 
 
 def test_auth_failure_trace_paths_match_protected_routes():
-    from fastapi.routing import APIRoute
+    from fastapi.routing import APIRoute  # pyright: ignore[reportMissingImports]
     from model_gateway import auth
 
     client = _make_client()
@@ -1097,7 +1159,7 @@ def test_auth_failure_trace_paths_match_protected_routes():
 
 
 def test_http_trace_allowed_routes_match_protected_routes():
-    from fastapi.routing import APIRoute
+    from fastapi.routing import APIRoute  # pyright: ignore[reportMissingImports]
     from model_library import telemetry
     from model_gateway import auth
 
@@ -1872,7 +1934,7 @@ def _otel_attrs(attributes: Any) -> dict[str, object]:
 def _decode_otlp_payloads(
     bodies: list[bytes],
 ) -> tuple[list[dict[str, object]], list[tuple[str, dict[str, object]]]]:
-    from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (
+    from opentelemetry.proto.collector.trace.v1.trace_service_pb2 import (  # pyright: ignore[reportMissingImports]
         ExportTraceServiceRequest,
     )
 
@@ -2240,12 +2302,11 @@ def test_audio_transcription_success_decodes_audio_and_returns_metadata():
                     request_duration_seconds=0.25,
                     input_tokens=12,
                     output_tokens=3,
-                    total_tokens=15,
                 ),
             )
 
     client = _make_client()
-    with patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()):
+    with patch.object(model_helpers, "get_transcription_model", return_value=FakeLLM()):
         resp = _post_transcription(client, language="en")
 
     assert resp.status_code == 200
@@ -2277,7 +2338,7 @@ def test_audio_transcription_invalid_base64_returns_client_error():
 
 
 @pytest.mark.parametrize(
-    ("endpoint", "request_body", "expected_message"),
+    ("endpoint", "request_body", "method_name", "expected_message"),
     [
         (
             "/files/upload",
@@ -2289,6 +2350,7 @@ def test_audio_transcription_invalid_base64_returns_client_error():
                 "type": "file",
                 "config": {},
             },
+            "upload_file",
             "OpenAI file upload failed",
         ),
         (
@@ -2299,6 +2361,7 @@ def test_audio_transcription_invalid_base64_returns_client_error():
                 "tools": [],
                 "config": {},
             },
+            "count_tokens",
             "OpenAI token count failed",
         ),
         (
@@ -2309,6 +2372,7 @@ def test_audio_transcription_invalid_base64_returns_client_error():
                 "embedding_model": "text-embedding-3-large",
                 "config": {},
             },
+            "get_embedding",
             "OpenAI embedding failed",
         ),
         (
@@ -2318,52 +2382,30 @@ def test_audio_transcription_invalid_base64_returns_client_error():
                 "text": "check this",
                 "config": {},
             },
+            "moderate_content",
             "OpenAI moderation failed",
         ),
         (
             "/audio/transcriptions",
             _transcription_body(),
+            "transcribe_audio",
             "OpenAI transcription failed",
         ),
     ],
 )
 def test_provider_operation_provider_errors_return_200_error_envelope(
-    endpoint: str, request_body: dict[str, object], expected_message: str
+    endpoint: str,
+    request_body: dict[str, object],
+    method_name: str,
+    expected_message: str,
 ):
-    class FakeLLM:
-        async def upload_file(
-            self,
-            name: str,
-            mime: str,
-            bytes: io.BytesIO,
-            type: Literal["image", "file"] = "file",
-        ):
-            raise RuntimeError("OpenAI file upload failed")
-
-        async def count_tokens(self, inputs, *, tools, **kwargs) -> int:
-            raise RuntimeError("OpenAI token count failed")
-
-        async def get_embedding(
-            self, text: str, model: str = "text-embedding-3-small"
-        ) -> list[float]:
-            raise RuntimeError("OpenAI embedding failed")
-
-        async def moderate_content(self, text: str) -> dict[str, Any]:
-            raise RuntimeError("OpenAI moderation failed")
-
-        async def transcribe_audio(
-            self,
-            *,
-            name: str,
-            mime: str,
-            audio: bytes,
-            language: str | None,
-        ) -> dict[str, object]:
-            raise RuntimeError("OpenAI transcription failed")
+    llm = MagicMock()
+    setattr(llm, method_name, AsyncMock(side_effect=RuntimeError(expected_message)))
 
     client = _make_client()
     with (
-        patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+        patch.object(model_helpers, "get_registry_model", return_value=llm),
+        patch.object(model_helpers, "get_transcription_model", return_value=llm),
         patch.object(gateway_app.telemetry, "record_exception") as record_exception,
     ):
         resp = client.post(endpoint, json=request_body, headers=HEADERS)

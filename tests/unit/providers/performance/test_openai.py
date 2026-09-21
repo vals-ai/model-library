@@ -437,7 +437,7 @@ class TestOpenAIResponsesStreamingPerformance:
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
                 with patch(
-                    "model_library.providers.openai.QueryResultBuilder",
+                    "model_library.providers.openai.openai.QueryResultBuilder",
                     return_value=QueryResultBuilder(clock=lambda: clock_time["now"]),
                 ):
                     result = await model._query_impl(
@@ -474,7 +474,7 @@ class TestOpenAIResponsesStreamingPerformance:
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
                 with patch(
-                    "model_library.providers.openai.QueryResultBuilder",
+                    "model_library.providers.openai.openai.QueryResultBuilder",
                     side_effect=make_builder,
                 ):
                     result = await model._query_impl(
@@ -507,7 +507,7 @@ class TestOpenAIResponsesStreamingPerformance:
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
                 with patch(
-                    "model_library.providers.openai.QueryResultBuilder",
+                    "model_library.providers.openai.openai.QueryResultBuilder",
                     return_value=QueryResultBuilder(clock=lambda: clock_time["now"]),
                 ):
                     result = await model._query_impl(
@@ -551,7 +551,7 @@ class TestOpenAIResponsesStreamingPerformance:
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
                 with patch(
-                    "model_library.providers.openai.QueryResultBuilder",
+                    "model_library.providers.openai.openai.QueryResultBuilder",
                     return_value=QueryResultBuilder(clock=lambda: clock_time["now"]),
                 ):
                     result = await model._query_impl(
@@ -583,7 +583,7 @@ class TestOpenAIResponsesStreamingPerformance:
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
                 with patch(
-                    "model_library.providers.openai.QueryResultBuilder",
+                    "model_library.providers.openai.openai.QueryResultBuilder",
                     return_value=QueryResultBuilder(clock=lambda: clock_time["now"]),
                 ):
                     result = await model._query_impl(
@@ -629,7 +629,7 @@ class TestOpenAIResponsesStreamingPerformance:
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
                 with patch(
-                    "model_library.providers.openai.QueryResultBuilder",
+                    "model_library.providers.openai.openai.QueryResultBuilder",
                     return_value=QueryResultBuilder(clock=lambda: clock_time["now"]),
                 ):
                     result = await model._query_impl(

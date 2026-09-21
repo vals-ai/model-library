@@ -93,6 +93,14 @@ async def test_openai_completions_finish_reason_all_values():
         expected_raw="model_context_window_exceeded",
     )
 
+    # zai (OpenAI-compatible) reports content-policy refusals as "sensitive"
+    info = map_openai_completions_finish_reason("sensitive")
+    _assert_finish_reason_info(
+        info,
+        expected_reason=FinishReason.CONTENT_FILTER,
+        expected_raw="sensitive",
+    )
+
 
 async def test_openai_responses_finish_reason_all_values():
     from openai.types.responses.response import Response

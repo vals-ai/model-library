@@ -1,0 +1,73 @@
+base-config:
+  company: Ant Group
+  country: China
+  open_source: true
+  supports:
+    images: false
+    audio: false
+    videos: false
+    files: false
+    batch: false
+    temperature: true
+    tools: true
+    output_schema: true
+  properties:
+    reasoning_model: true
+
+
+deprecated:
+  base-config:
+    metadata:
+      deprecated: true
+
+  # Retired by Ant: the chat-completions endpoint answers 404
+  # model_not_found for this name and its lowercase form, verified
+  # 2026-09-17 with a credential that works for other Ling models.
+  ant/ling-3.0-flash-2607:
+    company: Ant Group
+    country: China
+    label: Ling 3.0 Flash
+    release_date: 2026-07-23
+    open_source: true
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: true
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: false
+      cache_read_counts_toward_limit: true
+    alternative_keys:
+    - ant/ling-3.0-flash-2607-non-thinking:
+        properties:
+          reasoning_model: false
+          max_tokens: 32768
+    default_parameters:
+      temperature: 0.6
+      top_p: 0.95
+      top_k: 20
+    provider_endpoint: ling-3.0-flash-2607
+    properties:
+      context_window: 262144
+      max_tokens: 131072
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.075
+      output: 0.22
+      cache:
+        read: 0.015
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+      batch: null
+      context: null

@@ -2,11 +2,11 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Literal, cast
 
-from pydantic import computed_field
+from pydantic import Field, computed_field
 from typing_extensions import override
 
 from model_library.base.input import ToolBody, ToolDefinition
-from model_library.base.output import QueryResultMetadata
+from model_library.base.output import QueryResult, QueryResultMetadata
 from model_library.utils import ValsModel
 
 
@@ -17,12 +17,16 @@ class ToolOutput(ValsModel):
     error: internal error tracking (set to mark the call as failed)
     metadata: token/cost metadata if the tool made its own LLM calls
     done: signal the agent to stop after this tool call
+    native_query_result: capture-only helper response, saved separately before hooks
     """
 
     output: str
     error: str | None = None
     metadata: QueryResultMetadata | None = None
     done: bool = False
+    native_query_result: QueryResult | None = Field(
+        default=None, exclude=True, repr=False
+    )
 
     @computed_field
     @property

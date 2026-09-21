@@ -18,7 +18,7 @@ PYTHON_VERSION ?= 3.11
 
 install:
 	uv venv --python $(PYTHON_VERSION)
-	uv sync --locked --dev --extra docent --extra server --extra redshift-export
+	uv sync --locked --dev --extra docent --extra server --extra voice --extra redshift-export
 	@echo "🎉 Done! Run 'source .venv/bin/activate' to activate the environment locally."
 
 venv_check:

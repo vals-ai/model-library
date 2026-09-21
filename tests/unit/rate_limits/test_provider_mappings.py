@@ -61,7 +61,7 @@ def _client(response: httpx.Response) -> tuple[MagicMock, AsyncMock]:
         pytest.param(
             MistralModel,
             "mistral-medium-latest",
-            "model_library.providers.mistral.probe_chat_completions_rate_limit",
+            "model_library.providers.mistral.chat.probe_chat_completions_rate_limit",
             id="mistral",
         ),
         pytest.param(
@@ -100,7 +100,7 @@ async def test_custom_connection_skips_default_account_probe(
 async def test_mistral_probe_uses_default_provider_config(monkeypatch):
     monkeypatch.setattr(MistralModel, "_get_default_api_key", lambda _: "default-key")
     with patch(
-        "model_library.providers.mistral.probe_chat_completions_rate_limit",
+        "model_library.providers.mistral.chat.probe_chat_completions_rate_limit",
         new_callable=AsyncMock,
     ) as probe:
         model = MistralModel("mistral-medium-latest")

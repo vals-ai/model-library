@@ -50,7 +50,7 @@ class TestAmazonStreamingPerformance:
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
                 with patch(
-                    "model_library.providers.amazon.QueryResultBuilder",
+                    "model_library.providers.amazon.chat.QueryResultBuilder",
                     side_effect=make_builder,
                 ):
                     result = await model._query_impl(

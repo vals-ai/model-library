@@ -12,7 +12,6 @@ from botocore.client import BaseClient
 from pydantic import BaseModel
 from typing_extensions import override
 
-from model_library import model_library_settings
 from model_library.failure_capture.botocore import install_botocore_capture
 from model_library.base import (
     LLM,
@@ -45,6 +44,7 @@ from model_library.exceptions import (
 )
 from model_library.model_utils import get_default_budget_tokens
 from model_library.agent.tool import is_native_web_search
+from ._credentials import default_aws_api_key
 from model_library.register_models import register_provider
 
 
@@ -75,17 +75,7 @@ def map_amazon_finish_reason(
 class AmazonModel(LLM):
     @override
     def _get_default_api_key(self) -> str:
-        if getattr(model_library_settings, "AWS_ACCESS_KEY_ID", None):
-            creds: dict[str, str] = {
-                "AWS_ACCESS_KEY_ID": model_library_settings.AWS_ACCESS_KEY_ID,
-                "AWS_SECRET_ACCESS_KEY": model_library_settings.AWS_SECRET_ACCESS_KEY,
-                "AWS_DEFAULT_REGION": model_library_settings.AWS_DEFAULT_REGION,
-            }
-            session_token = model_library_settings.get("AWS_SESSION_TOKEN")
-            if session_token:
-                creds["AWS_SESSION_TOKEN"] = session_token
-            return json.dumps(creds)
-        return "using-environment"
+        return default_aws_api_key()
 
     @override
     def get_client(

@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from inspect import signature
 from threading import Event, Lock
+from itertools import count
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -21,14 +22,19 @@ from model_library.registry_utils import (
 
 @pytest.fixture(autouse=True)
 def reset_model_registry_state(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(register_models, "_model_registry", None)
+    monkeypatch.setattr(register_models, "_registries", None)
     monkeypatch.setattr(
         register_models, "_model_registry_refreshed_at", None, raising=False
     )
 
 
-def _registry() -> dict[str, object]:
-    return {}
+_snapshot_ids = count()
+
+
+def _registry() -> ModelRegistry:
+    """A chat-only snapshot with a unique key, so snapshots compare unequal."""
+    model = _model_config(_TEMPLATE, f"test/snapshot-{next(_snapshot_ids)}")
+    return {model.full_key: model}
 
 
 def _model_config(
@@ -62,6 +68,10 @@ def _model_config(
 class LocalSettings:
     def get(self, _name: str, default: str | None = None) -> str | None:
         return default
+
+
+with patch.object(model_library, "model_library_settings", LocalSettings()):
+    _TEMPLATE = get_model_registry()["openai/gpt-4o"]
 
 
 class GatewaySettings:
@@ -108,8 +118,8 @@ def test_no_argument_gateway_registry_remains_process_lifetime_singleton(
     patch_gateway_fetch(monkeypatch, mock_fetch)
 
     with patch.object(model_library, "model_library_settings", GatewaySettings()):
-        assert get_model_registry() is first_registry
-        assert get_model_registry() is first_registry
+        assert get_model_registry() == first_registry
+        assert get_model_registry() == first_registry
 
     assert signature(get_model_registry).parameters == {}
     assert mock_fetch.call_count == 1
@@ -124,12 +134,12 @@ def test_refresh_uses_same_local_loader_as_getter(
     monkeypatch.setattr(register_models, "_register_models", mock_load)
 
     with patch.object(model_library, "model_library_settings", LocalSettings()):
-        assert get_model_registry() is first_registry
+        assert get_model_registry() == first_registry
         assert (
             register_models.refresh_model_registry(refresh_ttl=timedelta(seconds=30))
             is None
         )
-        assert get_model_registry() is refreshed_registry
+        assert get_model_registry() == refreshed_registry
 
     assert mock_load.call_count == 2
 
@@ -142,10 +152,10 @@ def test_local_refresh_uses_stale_snapshot_on_yaml_error(
     monkeypatch.setattr(register_models, "_register_models", mock_load)
 
     with patch.object(model_library, "model_library_settings", LocalSettings()):
-        assert _refresh_and_get(refresh_ttl=timedelta(0)) is registry
+        assert _refresh_and_get(refresh_ttl=timedelta(0)) == registry
         assert (
             _refresh_and_get(refresh_ttl=timedelta(0), allow_stale_on_error=True)
-            is registry
+            == registry
         )
 
     assert mock_load.call_count == 2
@@ -167,7 +177,7 @@ def test_gateway_wrapper_skips_local_provider_initialization(
             register_models.refresh_model_registry(refresh_ttl=timedelta(seconds=30))
             is None
         )
-        assert get_model_registry() is registry
+        assert get_model_registry() == registry
 
     initialize_providers.assert_not_called()
 
@@ -232,9 +242,9 @@ def test_gateway_wrapper_replaces_legacy_initialized_snapshot(
     patch_gateway_fetch(monkeypatch, mock_fetch)
 
     with patch.object(model_library, "model_library_settings", GatewaySettings()):
-        assert get_model_registry() is legacy_registry
-        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) is refreshed_registry
-        assert get_model_registry() is refreshed_registry
+        assert get_model_registry() == legacy_registry
+        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) == refreshed_registry
+        assert get_model_registry() == refreshed_registry
 
     assert mock_fetch.call_count == 2
 
@@ -295,6 +305,9 @@ def test_model_names_uses_one_registry_snapshot(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(
         "model_library.registry_utils.get_model_registry", get_registry
     )
+    monkeypatch.setattr(
+        "model_library.registry_utils.get_transcription_registry", lambda: {}
+    )
 
     assert get_model_names(include_alt_keys=False) == [first_model.full_key]
     get_registry.assert_called_once_with()
@@ -311,12 +324,12 @@ def test_refresh_ttl_replaces_expired_gateway_registry_atomically(
     monkeypatch.setattr(register_models, "monotonic", lambda: now[0])
 
     with patch.object(model_library, "model_library_settings", GatewaySettings()):
-        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) is first_registry
+        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) == first_registry
         now[0] = 129.999
-        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) is first_registry
+        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) == first_registry
         now[0] = 130.0
-        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) is second_registry
-        assert get_model_registry() is second_registry
+        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) == second_registry
+        assert get_model_registry() == second_registry
 
     assert mock_fetch.call_count == 2
 
@@ -332,7 +345,7 @@ def test_gateway_registry_first_fetch_failure_is_not_hidden(
     ):
         _refresh_and_get(refresh_ttl=timedelta(seconds=30), allow_stale_on_error=True)
 
-    assert register_models._model_registry is None
+    assert register_models._registries is None
 
 
 def test_gateway_registry_refresh_failure_raises_without_destroying_snapshot(
@@ -345,11 +358,11 @@ def test_gateway_registry_refresh_failure_raises_without_destroying_snapshot(
     monkeypatch.setattr(register_models, "monotonic", lambda: now[0])
 
     with patch.object(model_library, "model_library_settings", GatewaySettings()):
-        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) is registry
+        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) == registry
         now[0] = 130.0
         with pytest.raises(OSError, match="gateway down"):
             _refresh_and_get(refresh_ttl=timedelta(seconds=30))
-        assert get_model_registry() is registry
+        assert get_model_registry() == registry
 
 
 def test_gateway_registry_stale_fallback_starts_new_refresh_cooldown(
@@ -366,28 +379,28 @@ def test_gateway_registry_stale_fallback_starts_new_refresh_cooldown(
             _refresh_and_get(
                 refresh_ttl=timedelta(seconds=30), allow_stale_on_error=True
             )
-            is registry
+            == registry
         )
         now[0] = 130.0
         assert (
             _refresh_and_get(
                 refresh_ttl=timedelta(seconds=30), allow_stale_on_error=True
             )
-            is registry
+            == registry
         )
         now[0] = 159.999
         assert (
             _refresh_and_get(
                 refresh_ttl=timedelta(seconds=30), allow_stale_on_error=True
             )
-            is registry
+            == registry
         )
         now[0] = 160.0
         assert (
             _refresh_and_get(
                 refresh_ttl=timedelta(seconds=30), allow_stale_on_error=True
             )
-            is registry
+            == registry
         )
 
     assert mock_fetch.call_count == 3
@@ -416,21 +429,21 @@ def test_stale_fallback_cooldown_starts_after_slow_refresh_failure(
             _refresh_and_get(
                 refresh_ttl=timedelta(seconds=30), allow_stale_on_error=True
             )
-            is registry
+            == registry
         )
         now[0] = 130.0
         assert (
             _refresh_and_get(
                 refresh_ttl=timedelta(seconds=30), allow_stale_on_error=True
             )
-            is registry
+            == registry
         )
         now[0] = 194.999
         assert (
             _refresh_and_get(
                 refresh_ttl=timedelta(seconds=30), allow_stale_on_error=True
             )
-            is registry
+            == registry
         )
         assert fetch_count == 2
         now[0] = 195.0
@@ -438,7 +451,7 @@ def test_stale_fallback_cooldown_starts_after_slow_refresh_failure(
             _refresh_and_get(
                 refresh_ttl=timedelta(seconds=30), allow_stale_on_error=True
             )
-            is registry
+            == registry
         )
 
     assert fetch_count == 3
@@ -473,14 +486,14 @@ def test_concurrent_expired_callers_share_one_gateway_refresh(
         patch.object(model_library, "model_library_settings", GatewaySettings()),
         ThreadPoolExecutor(max_workers=2) as executor,
     ):
-        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) is stale_registry
+        assert _refresh_and_get(refresh_ttl=timedelta(seconds=30)) == stale_registry
         now[0] = 130.0
         first = executor.submit(_refresh_and_get, refresh_ttl=timedelta(seconds=30))
         assert load_started.wait(timeout=1)
         second = executor.submit(_refresh_and_get, refresh_ttl=timedelta(seconds=30))
         allow_load.set()
-        assert first.result(timeout=1) is refreshed_registry
-        assert second.result(timeout=1) is refreshed_registry
+        assert first.result(timeout=1) == refreshed_registry
+        assert second.result(timeout=1) == refreshed_registry
 
     assert load_count == 2
 
@@ -492,5 +505,5 @@ def test_zero_refresh_ttl_fetches_every_time(monkeypatch: pytest.MonkeyPatch):
     patch_gateway_fetch(monkeypatch, mock_fetch)
 
     with patch.object(model_library, "model_library_settings", GatewaySettings()):
-        assert _refresh_and_get(refresh_ttl=timedelta(0)) is first_registry
-        assert _refresh_and_get(refresh_ttl=timedelta(0)) is second_registry
+        assert _refresh_and_get(refresh_ttl=timedelta(0)) == first_registry
+        assert _refresh_and_get(refresh_ttl=timedelta(0)) == second_registry

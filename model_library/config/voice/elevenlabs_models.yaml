@@ -1,0 +1,22 @@
+base-config:
+  company: ElevenLabs
+  country: United States
+  documentation_url: https://elevenlabs.io/docs
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_streaming: true
+  costs_per_million_token: null
+  transcription_language:
+    format: iso-639-1
+    default: en
+
+transcription-models:
+  elevenlabs/scribe_v2_realtime:
+    label: ElevenLabs Scribe v2 Realtime
+    release_date: 2025-11-11
+    documentation_url: https://elevenlabs.io/docs/capabilities/speech-to-text
+    transcription_cost:
+      usd_per_minute: 0.0065
+      billing_basis: audio

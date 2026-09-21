@@ -25,5 +25,3 @@ trinity-models:
     default_parameters:
       temperature: 0.3
       top_p: 0.95
-    alternative_keys:
-      - openrouter/arcee-ai/trinity-large-thinking

@@ -79,7 +79,7 @@ COMMANDS = [
     Command(
         "One-off feature examples",
         "uv run python examples/extras/transcription.py [<model>]",
-        "audio transcription with a transcription-only config",
+        "audio transcription with a registered transcription model",
     ),
     Command(
         "One-off feature examples",

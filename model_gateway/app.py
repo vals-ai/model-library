@@ -267,11 +267,11 @@ def create_app() -> FastAPI:
     if control_enabled:
         register_benchmark_admission_routes(app, cache=cache)
         register_rate_limit_monitor_routes(app)
-    if query_enabled:
+    if control_enabled:
         register_model_routes(app)
+    if query_enabled:
         register_token_retry_routes(app)
         register_query_routes(app, cache=cache)
         rate_limit_probe_service = register_rate_limit_route(app, cache=cache)
         register_provider_ops_routes(app, cache=cache)
-
     return app

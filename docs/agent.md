@@ -355,9 +355,13 @@ logs/finance_agent/gpt-4o/2024-01-01_12-00-00_abc123/
 │       │   ├── state.json     # initial state
 │       │   └── history.json    # serialized initial input
 │       ├── turn_001/
-│       │   ├── result.json    # raw AgentTurn (full query result + tool records)
-│       │   ├── state.json     # state snapshot after turn
-│       │   └── history.json    # serialized LLM history after turn
+│       │   ├── result.json    # raw AgentTurn (original query + completed tool prefix)
+│       │   ├── state.json     # latest state snapshot
+│       │   ├── history.json   # latest serialized LLM history
+│       │   └── helper_queries/       # when a tool supplies native_query_result
+│       │       └── tool_000/         # zero-based tool index
+│       │           ├── result.json  # query_result, tool_call, turn_number, tool_index
+│       │           └── history.json # separate helper history
 │       └── turn_002/
 │           └── error.json     # ErrorTurn (failed LLM query)
 └── question_2/
@@ -365,6 +369,33 @@ logs/finance_agent/gpt-4o/2024-01-01_12-00-00_abc123/
     ├── result.json
     └── turns/
 ```
+
+### Native capture
+
+The default loop saves each returned model response before executing tools, then
+saves each completed tool record before `on_tool_result`. Native results retain
+pre-hook values even when hooks change the live records. An interrupted turn can
+therefore have native files without appearing in the completed-turn summaries.
+Model-visible history, stopping rules, and summary accounting are unchanged.
+
+Tools that query another model can return
+`ToolOutput(output="compact answer", metadata=response.metadata, native_query_result=response)`.
+The agent saves the full helper `QueryResult` without its history in
+`helper_queries/tool_NNN/result.json`, alongside the originating `tool_call` and
+its ID. Helper history uses the existing history serializer in a separate
+`history.json`. The capture-only field is excluded from normal serialization and
+repr, and is cleared before hooks, including after failed writes. It never adds
+helper history to the model-visible tool output.
+
+Capture is best-effort: failures are logged without failing the run. Native
+`result.json` files use atomic replacement so a failed write does not truncate a
+previous result. Files within a directory are not one atomic transaction.
+
+Custom `_run` overrides still own their main-query capture timing. They can opt
+into helper capture by passing both `output_dir` and `turn_number` to
+`_execute_tool_calls`; existing calls without those keywords continue to work
+but do not save helper queries. This does not add pre-tool main-query capture to
+custom loops automatically.
 
 ### Custom Logger
 

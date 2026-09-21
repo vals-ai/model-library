@@ -98,6 +98,10 @@ claude-fable-5-1-models:
           label: Claude Fable 5.1 (Extra High Effort)
           default_parameters:
             compute_effort: "xhigh"
+      - anthropic/claude-fable-5-1-max:
+          label: Claude Fable 5.1 (Max Effort)
+          default_parameters:
+            compute_effort: "max"
       - anthropic/claude-fable-5-1-no-fallback:
           label: Claude Fable 5.1 (No Fallback)
           provider_properties:

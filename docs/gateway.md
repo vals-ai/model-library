@@ -153,7 +153,8 @@ Gateway client HTTP retry policy:
 
 - Gateway-mode `LLM.query()` does not use the normal model/provider retry wrapper; provider retries happen inside the gateway server.
 - Provider-call failures from `/query`, `/tokens/count`, `/files/upload`, `/audio/transcriptions`, `/embeddings`, and `/moderation` return HTTP `200` with a top-level `error` envelope such as `{"error":{"type":"ProviderError","message":"...","exception_type":"RateLimitError"}}`.
-- The client raises HTTP `200` error envelopes as `GatewayProviderError` without retrying, including provider-operation deadline errors, except envelopes with `exception_type` `MaxContextWindowExceededError`, which raise `MaxContextWindowExceededError` with the `GatewayProviderError` as `__cause__`.
+- The client raises HTTP `200` error envelopes as `GatewayProviderError` without retrying, including provider-operation deadline errors, except normalized context-window and content-filter errors.
+- An envelope becomes terminal `ContentFilterError` when `code`, `type`, `error_type`, or `exception_type` identifies `content_filter`, `ContentFilterError`, `cyber_policy`, `safety_policy`, `blocked_prompt`, or `content_policy_violation`, when the message contains `output blocked by content filtering policy`, or when the message is only the model's refusal sentence (`I'm sorry, but I can't help with that request.`, nothing more), as some Responses endpoints return in a code-less stream `error` event.
 - Provider-error envelopes include the provider-operation exception type and sanitized message. They include `code` and `status_code` only when the provider/library exception already exposes those fields; the gateway does not synthesize mapped provider codes or mapped provider status codes for the response body.
 - Provider-error responses do not include `signed_history`, pickled exception objects, tracebacks, or raw provider exception transport.
 - The client retries gateway HTTP transport failures, actual HTTP `429`, and actual HTTP `5xx` responses.
@@ -189,10 +190,14 @@ For deployed environments, keep server and client Secrets Manager entries separa
 
 ### Registry snapshot
 
-`GET /registry` omits `country`, `rate_limit`, and `supports.transcription` by
-default for compatibility with older
-model-library clients. Set `include_excluded_fields=true` to include them. Set
-`include_alt_keys=false` to omit same-provider alternative keys.
+`GET /registry` omits transcription-only entries by default for compatibility
+with older model-library clients. It also omits `country`, `rate_limit`,
+`supports.transcription`, `transcription_cost`, `transcription_language`, and
+`transcription_streaming`. Set `include_excluded_fields=true` to include
+`country`, `rate_limit`, and `supports.transcription`. The three transcription
+metadata fields and transcription-only entries require both
+`include_excluded_fields=true` and `include_transcription=true`; current clients
+request both flags. Set `include_alt_keys=false` to omit same-provider alternative keys.
 
 ### One-off rate-limit probes
 

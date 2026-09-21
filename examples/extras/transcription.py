@@ -9,28 +9,27 @@ if __package__ in {None, ""}:
 import argparse
 import asyncio
 
-from model_library.base import TranscriptionConfig
-from model_library.registry_utils import get_raw_model
+from model_library.registry_utils import get_registry_model
 
-from examples.data.audio import speech_webm
+from examples.data.audio import speech_wav
 from examples.setup import console_log, setup
 
 
 async def transcribe(model_str: str) -> None:
-    """Transcribe a short clip with a transcription-only config."""
+    """Transcribe a short clip with a registry-configured model."""
     console_log("\n--- Transcription ---\n")
 
-    # Swap for get_registry_model() once transcription providers are registered.
-    model = get_raw_model(model_str, config=TranscriptionConfig())
+    model = get_registry_model(model_str)
     console_log(
         f"Supports transcription: {model.supports_transcription}, "
         f"temperature: {model.supports_temperature}"
     )
 
+    audio = speech_wav()
     result = await model.transcribe_audio(
-        name="clip.webm",
-        mime="audio/webm",
-        audio=speech_webm(),
+        name="clip.wav",
+        mime="audio/wav",
+        audio=audio,
         language="en",
     )
 

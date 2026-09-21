@@ -17,6 +17,7 @@ pip install model-library
 | Use the installed Python library | [Usage](#usage) and [Environment setup](#environment-setup) |
 | Browse models from a repo checkout | [Browse models](#browse-models) |
 | Configure provider API keys | [API keys guide](docs/api-keys.md) |
+| Use speech-to-text | [Speech-to-text guide](docs/transcription.md) |
 | Run the gateway | [Gateway guide](docs/gateway.md) |
 | Run examples from a repo checkout | [Examples guide](examples/README.md) |
 | Run tests | [Tests guide](tests/README.md) |

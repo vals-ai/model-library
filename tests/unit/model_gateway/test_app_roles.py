@@ -82,20 +82,23 @@ def test_combined_role_remains_the_direct_app_default(monkeypatch: pytest.Monkey
     assert "/benchmark-runs/acquire" in paths
     assert "/rate-limit-monitor" in paths
     assert "/rate-limit-monitor/activate" in paths
+    assert "/registry" in paths
+    assert "/models" in paths
     assert "/docs" in paths
     assert app.state.rate_limit_monitor is None
 
 
-def test_query_role_excludes_benchmark_admission(monkeypatch: pytest.MonkeyPatch):
+def test_query_role_excludes_control_operations(monkeypatch: pytest.MonkeyPatch):
     app = _create_app(monkeypatch, "query")
 
     paths = _route_paths(app)
     assert "/query" in paths
     assert "/token-retry/status" in paths
+    assert "/registry" not in paths
+    assert "/models" not in paths
     assert not any(path.startswith("/benchmark-runs/") for path in paths)
     assert not any(path.startswith("/rate-limit-monitor") for path in paths)
     assert app.state.rate_limit_monitor is None
-
 
 def test_control_role_exposes_only_health_and_control_operations(
     monkeypatch: pytest.MonkeyPatch,
@@ -111,6 +114,8 @@ def test_control_role_exposes_only_health_and_control_operations(
         "/benchmark-runs/release",
         "/rate-limit-monitor",
         "/rate-limit-monitor/activate",
+        "/registry",
+        "/models",
     }
     assert app.state.startup_canary == {
         "enabled": False,
@@ -119,7 +124,6 @@ def test_control_role_exposes_only_health_and_control_operations(
     }
     assert not app.state.usage_ledger.enabled
     assert app.state.rate_limit_monitor is None
-
 
 async def test_control_monitor_validation_uses_canonical_invalid_request(
     monkeypatch: pytest.MonkeyPatch,

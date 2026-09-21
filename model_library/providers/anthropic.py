@@ -86,6 +86,7 @@ ANTHROPIC_TASK_BUDGET_BETA = "task-budgets-2026-03-13"
 # Anthropic rejects an assistant message whose final block is thinking, so a turn that ran out of
 # tokens mid-thought is replayed with this block appended.
 TRUNCATED_THINKING_MARKER = "[response cut off at the output token limit]"
+EMPTY_TEXT_MARKER = "[empty response]"
 
 
 def _strip_fallback_blocks(
@@ -394,7 +395,7 @@ class AnthropicModel(LLM):
                 config.custom_endpoint or "https://api.anthropic.com/v1/"
             )
             config.custom_api_key = config.custom_api_key or SecretStr(
-                model_library_settings.ANTHROPIC_API_KEY
+                self._get_default_api_key()
             )
 
             # flip native back on for the delegate so it initializes its own
@@ -505,14 +506,25 @@ class AnthropicModel(LLM):
 
             match item:
                 case RawResponse():
-                    assistant_content: list[BetaContentBlock] = list(
-                        cast(ParsedBetaMessage, item.response).content
-                    )
+                    message = cast(ParsedBetaMessage, item.response)
+                    # Empty text blocks are replaced in place rather than dropped: Anthropic
+                    # rejects both empty text blocks and any shift in the position of thinking
+                    # blocks within the latest assistant message.
+                    assistant_content: list[BetaContentBlock] = [
+                        BetaTextBlock(
+                            type="text", text=EMPTY_TEXT_MARKER, citations=None
+                        )
+                        if isinstance(block, BetaTextBlock) and not block.text
+                        else block
+                        for block in message.content
+                    ]
+                    ends_in_thinking = bool(assistant_content) and assistant_content[
+                        -1
+                    ].type in ("thinking", "redacted_thinking")
                     if (
-                        self.provider_config.returns_thinking_truncated_turns
-                        and assistant_content
-                        and assistant_content[-1].type
-                        in ("thinking", "redacted_thinking")
+                        ends_in_thinking
+                        and message.stop_reason == "max_tokens"
+                        and self.provider_config.returns_thinking_truncated_turns
                     ):
                         assistant_content.append(
                             BetaTextBlock(

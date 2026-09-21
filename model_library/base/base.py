@@ -7,11 +7,11 @@ import json
 import logging
 import pickle
 import threading
-import time
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Generator, Mapping
 from math import ceil
 from pathlib import Path
+from time import perf_counter
 from typing import (
     Any,
     Callable,
@@ -59,6 +59,12 @@ from model_library.base.output import (
     TranscriptionResult,
 )
 from model_library.base.query_deadline import query_deadline_scope
+from model_library.base.transcription import (
+    TranscriptionRequest,
+    finalize_transcription_result,
+    resolve_language,
+    single_exception_from_group,
+)
 from model_library.base.query_ids import resolve_query_ids, scoped_query_ids
 from model_library.base.query_logging import (
     log_query_completed,
@@ -151,6 +157,7 @@ class LLMConfig(ValsModel):
     supports_files: bool = False
     supports_audio: bool = False
     supports_transcription: bool = False
+    supports_streaming_transcription: bool = False
     supports_videos: bool = False
     supports_batch: bool = False
     supports_temperature: bool = True
@@ -161,23 +168,6 @@ class LLMConfig(ValsModel):
     registry_key: str | None = None
     custom_api_key: SecretStr | None = None
     custom_endpoint: str | None = None
-
-
-class TranscriptionConfig(ValsModel):
-    provider_config: dict[str, Any] | ProviderConfig | None = None
-    registry_key: str | None = None
-    custom_api_key: SecretStr | None = None
-    custom_endpoint: str | None = None
-
-    def as_llm_config(self) -> LLMConfig:
-        return LLMConfig(
-            provider_config=self.provider_config,
-            registry_key=self.registry_key,
-            custom_api_key=self.custom_api_key,
-            custom_endpoint=self.custom_endpoint,
-            supports_transcription=True,
-            supports_temperature=False,
-        )
 
 
 def dump_llm_config(config: LLMConfig | None) -> dict[str, Any]:
@@ -253,7 +243,7 @@ def normalize_llm_config_for_model(
 
 
 # shared across all subclasses and instances
-# hash(provider + api_key) -> client
+# (client namespace, hash(api_key + endpoint)) -> client
 client_registry_lock = threading.Lock()
 client_registry: dict[tuple[str, str], Any] = {}
 
@@ -272,6 +262,10 @@ class LLM(ABC):
     """
 
     gateway_mode: bool = False
+
+    def _client_registry_namespace(self) -> str:
+        """Return the namespace for this model's reusable SDK client."""
+        return self.provider
 
     @property
     def _client_registry_key(self) -> tuple[str, str]:
@@ -352,13 +346,11 @@ class LLM(ABC):
         model_name: str,
         provider: str,
         *,
-        config: LLMConfig | TranscriptionConfig | None = None,
+        config: LLMConfig | None = None,
     ):
         self.provider: str = provider
         self.model_name: str = model_name
 
-        if isinstance(config, TranscriptionConfig):
-            config = config.as_llm_config()
         config = config or LLMConfig()
         self._has_custom_connection = (
             config.custom_api_key is not None or config.custom_endpoint is not None
@@ -378,6 +370,9 @@ class LLM(ABC):
         self.supports_files: bool = config.supports_files
         self.supports_audio: bool = config.supports_audio
         self.supports_transcription: bool = config.supports_transcription
+        self.supports_streaming_transcription: bool = (
+            config.supports_streaming_transcription
+        )
         self.supports_videos: bool = config.supports_videos
         self.supports_images: bool = config.supports_images
         self.supports_batch: bool = config.supports_batch
@@ -417,7 +412,7 @@ class LLM(ABC):
         raw_key, base_url = client_initialization
         hash_material = raw_key if base_url is None else raw_key + base_url
         key_hash = hashlib.sha256(hash_material.encode()).hexdigest()
-        self._client_registry_key = (self.provider, key_hash)
+        self._client_registry_key = (self._client_registry_namespace(), key_hash)
         self._client_registry_key_model_specific = (
             f"{self.provider}.{self.model_name}",
             key_hash,
@@ -447,16 +442,18 @@ class LLM(ABC):
 
         from model_library.registry_utils import get_input_context_window_from_config
 
-        return get_input_context_window_from_config(self.metadata)
+        return get_input_context_window_from_config(
+            self.metadata, output_budget=self.max_tokens
+        )
 
     @staticmethod
     async def timer_wrapper(func: Callable[[], Awaitable[R]]) -> tuple[R, float]:
         """
         Time the query
         """
-        start = time.perf_counter()
+        start = perf_counter()
         result = await func()
-        return result, time.perf_counter() - start
+        return result, perf_counter() - start
 
     async def delegate_query(
         self,
@@ -912,6 +909,33 @@ class LLM(ABC):
         language: str | None = None,
     ) -> TranscriptionResult:
         """Transcribe an audio file with a model that supports transcription."""
+        request = TranscriptionRequest(
+            name=name,
+            mime=mime,
+            audio=audio,
+            language=resolve_language(language, self._registry_key),
+        )
+        try:
+            result, request_duration_seconds = await self.timer_wrapper(
+                lambda: self._transcribe_audio(request)
+            )
+        except ExceptionGroup as group:
+            error = single_exception_from_group(group)
+            if error is None:
+                raise
+            raise error from group
+        result.metadata.request_duration_seconds = request_duration_seconds
+        return finalize_transcription_result(
+            result=result,
+            registry_key=self._registry_key,
+            audio=audio,
+            mime=mime,
+        )
+
+    async def _transcribe_audio(
+        self, request: TranscriptionRequest
+    ) -> TranscriptionResult:
+        """Transcribe one complete audio file from a typed request."""
         raise NotImplementedError(
             f"Audio transcription is not supported by {type(self).__name__}"
         )

@@ -5,19 +5,20 @@ import time
 from collections import defaultdict
 from typing import Any, Awaitable, Coroutine
 
+from pydantic import SecretStr
 from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 from rich.tree import Tree
 
-from examples.data.audio import speech_webm
 from examples.setup import setup
-from model_library.base import LLM, LLMConfig
+from model_gateway.model_helpers import managed_api_keys
+from model_library import model_library_settings
+from model_library.base import LLMConfig
 from model_library.exceptions import exception_message
 from model_library.register_models import ModelConfig, get_model_registry
 from model_library.registry_utils import (
     CLI_ONLY_PROVIDERS,
-    get_registry_config,
     get_registry_model,
 )
 from model_library.retriers.backoff import ExponentialBackoffRetrier
@@ -28,16 +29,8 @@ MAX_RETRIES = 5
 DEFAULT_TIMEOUT = 240
 DEEP_RESEARCH_TIMEOUT = 600  # 10 minutes for deep research models
 
-# models resolved at runtime rather than from the compiled registry
-DYNAMIC_MODELS = ["openrouter/openrouter/free"]
-
 # registry
 model_registry = dict(get_model_registry())
-for dynamic_key in DYNAMIC_MODELS:
-    dynamic_config = get_registry_config(dynamic_key)
-    if dynamic_config is None:
-        raise Exception(f"Could not resolve {dynamic_key}")
-    model_registry[dynamic_key] = dynamic_config
 providers = {cfg.provider_name for cfg in model_registry.values()}
 
 # concurrency
@@ -61,6 +54,21 @@ failed_model_names: dict[str, list[str]] = defaultdict(
 skipped_model_names: dict[str, list[str]] = defaultdict(
     list
 )  # provider -> [cli_only_model_names]
+
+
+def smoke_model_config(model: str) -> LLMConfig:
+    """Build the direct-smoke config, including a pinned managed key if needed."""
+    managed_keys = managed_api_keys(model)
+    if len(managed_keys) != 1 or managed_keys[0].key_setting == "META_API_KEY":
+        return LLMConfig(supports_batch=False)
+
+    api_key = model_library_settings.get(managed_keys[0].key_setting)
+    if not isinstance(api_key, str) or not api_key:
+        return LLMConfig(supports_batch=False)
+    return LLMConfig(
+        supports_batch=False,
+        custom_api_key=SecretStr(api_key),
+    )
 
 
 def create_dashboard(total: int, completed_count: int) -> Table:
@@ -134,7 +142,7 @@ def create_dashboard(total: int, completed_count: int) -> Table:
 async def process_model(model_str: str, provider_name: str):
     try:
         model = get_registry_model(
-            model_str, override_config=LLMConfig(supports_batch=False)
+            model_str, override_config=smoke_model_config(model_str)
         )
 
         # Use longer timeout for deep research models
@@ -162,8 +170,6 @@ async def process_model(model_str: str, provider_name: str):
 
             # handle blocking providers
             def query() -> Awaitable[Any]:
-                if model.supports_transcription:
-                    return _run_transcription_smoke(model)
                 return (
                     asyncio.get_event_loop().run_in_executor(
                         sync_executor,
@@ -177,11 +183,10 @@ async def process_model(model_str: str, provider_name: str):
 
             output = await asyncio.wait_for(query(), timeout=timeout)
 
-            if not model.supports_transcription:
-                if not output.metadata.total_input_tokens:
-                    raise Exception("No in tokens")
-                if not output.metadata.total_output_tokens:
-                    raise Exception("No out tokens")
+            if not output.metadata.total_input_tokens:
+                raise Exception("No in tokens")
+            if not output.metadata.total_output_tokens:
+                raise Exception("No out tokens")
 
             completed_models[provider_name] += 1
 
@@ -190,19 +195,6 @@ async def process_model(model_str: str, provider_name: str):
         exceptions.append((model_str, e))
     finally:
         running_models[provider_name].pop(model_str, None)
-
-
-async def _run_transcription_smoke(model: LLM) -> None:
-    audio = speech_webm()
-    result = await model.transcribe_audio(
-        name="smoke.webm",
-        mime="audio/webm",
-        audio=audio,
-    )
-    if "paris" not in result.text.lower():
-        raise Exception(f"Unexpected transcription: {result.text!r}")
-    if result.metadata.total_tokens is None or result.metadata.cost_usd is None:
-        raise Exception("Missing transcription usage metadata")
 
 
 MODEL_OVERRIDES: list[str] = [
@@ -299,9 +291,7 @@ async def main():
             model_override = next((o for o in MODEL_OVERRIDES if o in model_str), None)
 
             override_text = ""
-            if not model_registry[model_str].supports.transcription and (
-                error_override or model_override
-            ):
+            if error_override or model_override:
                 reason = error_override or model_override
                 override_text = f" [green][OVERRIDDEN | {reason}][/green]"
                 override_count += 1

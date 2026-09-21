@@ -27,10 +27,9 @@ def remove_none(d: Any | dict[str, Any]) -> Any | dict[str, Any]:
 # all_models.json is the package's bundled local registry snapshot. Generate it
 # from local YAMLs even when the developer shell has gateway client env vars set.
 model_library_settings.unset("MODEL_GATEWAY_URL")
-model_registry = get_model_registry()
 model_registry = dict(
     sorted(
-        model_registry.items(),
+        get_model_registry().items(),
         key=lambda kv: (kv[1].release_date or date.min, kv[0]),
         reverse=True,
     )

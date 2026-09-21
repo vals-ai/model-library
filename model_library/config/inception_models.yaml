@@ -9,6 +9,25 @@ base-config:
     files: false
 
 mercury-models:
+  inception/mercury-2.5:
+    label: Mercury 2.5
+    release_date: 2026-09-08
+    properties:
+      reasoning_model: true
+      context_window: 260_000
+      max_tokens: 65_536
+    supports:
+      output_schema: true
+    default_parameters:
+      reasoning_effort: "high"
+    costs_per_million_token:
+      input: 0.20
+      output: 0.75
+      cache:
+        read: 0.02
+    alternative_keys:
+      - openrouter/inception/mercury-2.5
+
   inception/mercury:
     label: Mercury
     release_date: 2025-11-06

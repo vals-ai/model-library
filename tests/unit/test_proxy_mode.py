@@ -49,6 +49,7 @@ from model_library.base.output import (
     TranscriptionResult,
 )
 from model_library.exceptions import (
+    ContentFilterError,
     GatewayMethodNotSupported,
     GatewayProviderError,
     QueryDeadlineExceededError,
@@ -158,6 +159,7 @@ def test_gateway_registry_model_is_immediately_configured():
     assert llm.metadata == registry_config
     assert llm.metadata is not registry_config
     assert llm._registry_key == "openai/gpt-4o"
+    assert registry_config.properties is not None
     assert llm.max_tokens == registry_config.properties.max_tokens
     assert llm.supports_images is registry_config.supports.images
     assert llm.supports_output_schema is registry_config.supports.output_schema
@@ -1201,6 +1203,10 @@ def test_gateway_mode_metadata_helpers_read_loaded_snapshot():
             "model_library.registry_utils.get_model_registry",
             return_value={"openai/gpt-4o": registry_config},
         ),
+        patch(
+            "model_library.registry_utils.get_transcription_registry",
+            return_value={},
+        ),
     ):
         assert (
             get_model_cost("openai/gpt-4o") == registry_config.costs_per_million_token
@@ -1847,7 +1853,7 @@ async def test_gateway_transcribe_audio_forwards_request_and_parses_result():
                 "request_duration_seconds": 0.25,
                 "input_tokens": 12,
                 "output_tokens": 3,
-                "total_tokens": 15,
+                "total_tokens": 999,
                 "audio_tokens": 10,
                 "text_tokens": 2,
             },
@@ -1886,11 +1892,11 @@ async def test_gateway_transcribe_audio_forwards_request_and_parses_result():
             request_duration_seconds=0.25,
             input_tokens=12,
             output_tokens=3,
-            total_tokens=15,
             audio_tokens=10,
             text_tokens=2,
         ),
     )
+    assert result.metadata.total_tokens == 15
 
 
 @pytest.mark.parametrize(
@@ -2020,6 +2026,30 @@ async def test_gateway_provider_error_envelope_exposes_raw_code_and_status():
     assert err.status_code == 429
     assert str(err) == "ProviderError (rate_limit_exceeded): provider says slow down"
     assert not is_retriable_error(err)
+
+
+@pytest.mark.parametrize("code", ["cyber_policy", "safety_policy", "blocked_prompt"])
+async def test_gateway_policy_block_envelope_raises_content_filter(code: str):
+    llm = _make_gateway()
+    response = httpx.Response(
+        200,
+        json={
+            "error": {
+                "type": "ProviderError",
+                "code": code,
+                "message": "request declined by provider policy",
+                "provider": "provider",
+            }
+        },
+    )
+
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        return_value=response,
+    ):
+        with pytest.raises(ContentFilterError, match="request declined"):
+            await llm.query([TextInput(text="hi")])
 
 
 async def test_proxy_query_forwards_pydantic_schema_and_validates_response():

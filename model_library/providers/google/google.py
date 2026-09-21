@@ -8,6 +8,7 @@ from typing import Any, Literal, Sequence, cast
 from google.genai import Client
 from google.genai import errors as genai_errors
 from google.genai.types import (
+    BlockedReason,
     Content,
     CountTokensConfig,
     File,
@@ -63,6 +64,7 @@ from model_library.base import (
     ToolCall,
     ToolDefinition,
     ToolResult,
+    TranscriptionResult,
 )
 from model_library.base.output.result import ProviderToolEvent
 from model_library.base import (
@@ -72,6 +74,7 @@ from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.input import normalize_query_input
 from model_library.exceptions import (
     BadInputError,
+    ContentFilterError,
     ImmediateRetryException,
     InvalidStructuredOutputError,
     ModelNoOutputError,
@@ -80,6 +83,11 @@ from model_library.exceptions import (
     handle_empty_response,
 )
 from model_library.providers.google.batch import GoogleBatchMixin
+from model_library.providers.google.transcribe import (
+    transcribe_interactions,
+    transcribe_live,
+)
+from model_library.base.transcription import TranscriptionRequest
 from model_library.providers.openai import OpenAIModel
 from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
@@ -513,6 +521,15 @@ class GoogleModel(LLM):
                 response_id = chunk.response_id
             candidates = chunk.candidates
             if not candidates:
+                if (
+                    chunk.prompt_feedback is not None
+                    and chunk.prompt_feedback.block_reason is not None
+                    and chunk.prompt_feedback.block_reason
+                    is not BlockedReason.BLOCKED_REASON_UNSPECIFIED
+                ):
+                    raise ContentFilterError(
+                        f"prompt blocked: {chunk.prompt_feedback.block_reason}"
+                    )
                 continue
 
             content = candidates[0].content
@@ -604,7 +621,11 @@ class GoogleModel(LLM):
             # see _calculate_cost
             cache_read_tokens = metadata.cached_content_token_count or 0
             result_metadata = QueryResultMetadata(
-                in_tokens=(metadata.prompt_token_count or 0) - cache_read_tokens,
+                in_tokens=(
+                    metadata.prompt_token_count - cache_read_tokens
+                    if metadata.prompt_token_count
+                    else 0
+                ),
                 out_tokens=metadata.candidates_token_count or 0,
                 reasoning_tokens=metadata.thoughts_token_count or 0,
                 cache_read_tokens=cache_read_tokens,
@@ -667,6 +688,16 @@ class GoogleModel(LLM):
             raise ValueError("count_tokens returned None")
 
         return response.total_tokens
+
+    @override
+    async def _transcribe_audio(
+        self, request: TranscriptionRequest
+    ) -> TranscriptionResult:
+        """Transcribe one bounded audio file through the configured Gemini model."""
+        client = self.get_client()
+        if self.supports_streaming_transcription:
+            return await transcribe_live(client, self.model_name, request)
+        return await transcribe_interactions(client, self.model_name, request)
 
     @override
     async def _calculate_cost(

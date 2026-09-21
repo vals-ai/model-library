@@ -1,8 +1,9 @@
 import logging
+import math
 from functools import cache
 from inspect import getattr_static
 from pathlib import Path
-from typing import cast, TypedDict
+from typing import TypedDict, TypeVar, cast
 
 from model_library.base import (
     GatewayLLM,
@@ -11,16 +12,21 @@ from model_library.base import (
     ProviderConfig,
     QueryResultCost,
     QueryResultMetadata,
-    TranscriptionConfig,
+    TranscriptionMetadata,
 )
 from model_library.register_models import (
     CostProperties,
     ModelConfig,
+    RegistryEntry,
+    TranscriptionModelConfig,
     get_model_registry,
     get_provider_registry,
+    get_transcription_registry,
+    visible_registry_keys,
 )
 
 logger = logging.getLogger("model_library")
+RegistryEntryT = TypeVar("RegistryEntryT", ModelConfig, TranscriptionModelConfig)
 ALL_MODELS_PATH = Path(__file__).parent / "config" / "all_models.json"
 
 # Providers whose models are only usable through their own CLI, never the gateway.
@@ -34,7 +40,7 @@ def _gateway_url() -> str | None:
 
 
 def create_config(
-    registry_config: ModelConfig,
+    registry_config: RegistryEntry,
     override_config: LLMConfig | None,
     *,
     resolve_provider_config: bool = True,
@@ -51,7 +57,7 @@ def create_config(
     provider_properties = registry_config.provider_properties
     defaults = registry_config.default_parameters
 
-    if properties:
+    if properties is not None:
         config["max_tokens"] = properties.max_tokens
         config["reasoning"] = properties.reasoning_model
 
@@ -60,6 +66,9 @@ def create_config(
         config["supports_files"] = supports.files
         config["supports_audio"] = supports.audio
         config["supports_transcription"] = supports.transcription
+        config["supports_streaming_transcription"] = bool(
+            registry_config.transcription_streaming
+        )
         config["supports_videos"] = supports.videos
         config["supports_batch"] = supports.batch
         config["supports_temperature"] = supports.temperature
@@ -97,7 +106,7 @@ def create_config(
 
 
 def _get_model_from_registry(
-    registry_config: ModelConfig,
+    registry_config: RegistryEntry,
     override_config: LLMConfig | None,
     identity: object | None = None,
 ) -> LLM:
@@ -128,7 +137,6 @@ def _get_model_from_registry(
             provider=registry_config.provider_name,
             config=model_config,
         )
-    llm._metadata = registry_config.model_copy(deep=True)  # pyright: ignore[reportPrivateUsage]
     if gateway_url:
         gateway_llm = cast(GatewayLLM, llm)
         gateway_llm.gateway_config = override_config or LLMConfig()
@@ -136,7 +144,7 @@ def _get_model_from_registry(
 
 
 def get_registry_config(model_str: str) -> ModelConfig | None:
-    config = get_model_registry().get(model_str, None)
+    config = get_model_registry().get(model_str)
     if config is not None:
         return config
 
@@ -148,10 +156,33 @@ def get_registry_config(model_str: str) -> ModelConfig | None:
     return None
 
 
+def get_transcription_registry_config(
+    model_str: str,
+) -> TranscriptionModelConfig | None:
+    return get_transcription_registry().get(model_str)
+
+
 def _get_model_metadata_config(model_str: str) -> ModelConfig | None:
     if _gateway_url():
         return get_model_registry().get(model_str)
     return get_registry_config(model_str)
+
+
+def _check_registry_model(
+    model_str: str, registry_config: RegistryEntryT | None
+) -> RegistryEntryT:
+    gateway_url = _gateway_url()
+    if gateway_url:
+        logger.info(
+            "MODEL_GATEWAY_URL is set, routing through gateway: %s", gateway_url
+        )
+    if not registry_config:
+        raise Exception(f"Model {model_str} not found in registry")
+    if registry_config.provider_name in CLI_ONLY_PROVIDERS:
+        raise ValueError(
+            f"Model {model_str} is only available through {registry_config.company} CLI"
+        )
+    return registry_config
 
 
 def get_registry_model(
@@ -164,27 +195,27 @@ def get_registry_model(
     When MODEL_GATEWAY_URL is set, the normal registry construction path creates
     a GatewayLLM with immediately available metadata and capabilities.
     """
-    gateway_url = _gateway_url()
-    if gateway_url:
-        logger.info(
-            "MODEL_GATEWAY_URL is set, routing through gateway: %s", gateway_url
-        )
+    registry_config = _check_registry_model(model_str, get_registry_config(model_str))
+    llm = _get_model_from_registry(registry_config, override_config, identity)
+    llm._metadata = registry_config.model_copy(deep=True)  # pyright: ignore[reportPrivateUsage]
+    return llm
 
-    registry_config = get_registry_config(model_str)
-    if not registry_config:
-        raise Exception(f"Model {model_str} not found in registry")
 
-    if registry_config.provider_name in CLI_ONLY_PROVIDERS:
-        raise ValueError(
-            f"Model {model_str} is only available through {registry_config.company} CLI"
-        )
-
+def get_transcription_model(
+    model_str: str,
+    override_config: LLMConfig | None = None,
+    identity: object | None = None,
+) -> LLM:
+    """Get a registry model for transcribing audio."""
+    registry_config = _check_registry_model(
+        model_str, get_transcription_registry_config(model_str)
+    )
     return _get_model_from_registry(registry_config, override_config, identity)
 
 
 def get_raw_model(
     model_str: str,
-    config: LLMConfig | TranscriptionConfig | None = None,
+    config: LLMConfig | None = None,
 ) -> LLM:
     """Get a model exluding default config"""
     provider, model_name = model_str.split("/", 1)
@@ -199,16 +230,55 @@ def get_model_cost(model_str: str) -> CostProperties | None:
     return model_config.costs_per_million_token
 
 
+def compute_transcription_cost(
+    model_str: str, metadata: TranscriptionMetadata
+) -> float | None:
+    """Calculate a transcription cost from registry pricing and exact usage."""
+    model_config = get_transcription_registry_config(model_str)
+    if not model_config:
+        raise Exception(f"Model {model_str} not found in registry")
+
+    duration_cost = model_config.transcription_cost
+    if duration_cost is not None:
+        duration_seconds = metadata.billable_duration_seconds
+        if duration_seconds is None and duration_cost.billing_basis == "audio":
+            duration_seconds = metadata.audio_duration_seconds
+        if duration_seconds is None:
+            return None
+        if duration_cost.minimum_billable_seconds is not None:
+            duration_seconds = max(
+                duration_seconds,
+                duration_cost.minimum_billable_seconds,
+            )
+        if duration_cost.increment_seconds is not None:
+            increment = duration_cost.increment_seconds
+            duration_seconds = math.ceil(duration_seconds / increment) * increment
+        return duration_cost.usd_per_minute * duration_seconds / 60
+
+    token_cost = model_config.costs_per_million_token
+    if (
+        token_cost is None
+        or metadata.input_tokens is None
+        or metadata.output_tokens is None
+    ):
+        return None
+    return (
+        token_cost.input * metadata.input_tokens
+        + token_cost.output * metadata.output_tokens
+    ) / 1_000_000
+
+
 def get_model_input_context_window(model_name: str) -> int:
     """Return the input context window for the model"""
     model = _get_model_metadata_config(model_name)
     if not model:
         raise Exception(f"Model {model_name} not found in registry")
-
     return get_input_context_window_from_config(model)
 
 
-def get_input_context_window_from_config(model: ModelConfig) -> int:
+def get_input_context_window_from_config(
+    model: ModelConfig, *, output_budget: int | None = None
+) -> int:
     """Return usable input tokens from a registry config.
 
     OpenAI, Meta, Baseten, Together, DeepSeek, and Thomson Reuters configs
@@ -224,7 +294,9 @@ def get_input_context_window_from_config(model: ModelConfig) -> int:
         "deepseek",
         "thomsonreuters",
     }:
-        context_window -= model.properties.max_tokens
+        if output_budget is None:
+            output_budget = model.properties.max_tokens
+        context_window -= output_budget
     return max(context_window, 0)
 
 
@@ -347,22 +419,13 @@ def get_model_names(
     include_alt_keys: bool = True,
 ) -> list[str]:
     """
-    Return model names in the registry.
+    Return chat model names in the registry.
     - provider: Filter by provider name
     - include_deprecated: Include deprecated models
     - include_alt_keys: Include alternative keys from the same provider
     """
     registry = get_model_registry()
-    alternative_keys_set: set[str] = set()
-
-    if not include_alt_keys:
-        for model in registry.values():
-            for alt_item in model.alternative_keys:
-                alt_key = (
-                    alt_item if isinstance(alt_item, str) else list(alt_item.keys())[0]
-                )
-                if alt_key.split("/")[0] == model.provider_name:
-                    alternative_keys_set.add(alt_key)
+    visible_keys = visible_registry_keys(registry, include_alt_keys)
 
     return sorted(
         [
@@ -370,6 +433,6 @@ def get_model_names(
             for model in registry.values()
             if (not provider or model.provider_name.lower() == provider.lower())
             and (not model.metadata.deprecated or include_deprecated)
-            and model.full_key not in alternative_keys_set
+            and model.full_key in visible_keys
         ]
     )

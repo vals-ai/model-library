@@ -10,16 +10,19 @@ model_library/config/
 ├── anthropic_models.yaml
 ├── openai_models.yaml
 ├── google_models.yaml
-├── ...                          # one file per provider
+├── ...                          # one file per general provider
+├── voice/                       # speech-to-text-only provider configs
+│   ├── assemblyai_models.yaml
+│   └── ...
 └── deprecated/
     ├── anthropic_models.yaml
     ├── openai_models.yaml
     └── ...                      # deprecated models, same provider files
 ```
 
-Active models live in `config/*.yaml`. Deprecated models live in `config/deprecated/*.yaml` and are **not loaded by default**.
+Active models live in `config/*.yaml` and `config/voice/*.yaml`. Deprecated models live in `config/deprecated/*.yaml` and are **not loaded by default**.
 
-Run `make config` to regenerate `all_models.json` from the active YAML files.
+Run `make config` to regenerate `all_models.json` (chat models only) from the active YAML files.
 
 ## YAML Inheritance
 
@@ -56,7 +59,7 @@ Result: `claude-sonnet-4-6` gets `company: Anthropic`, `country: United States`,
 
 Provider-specific `provider_properties` are validated by each provider:
 
-- **Anthropic**: Set `fallback_models` to an ordered list of up to three server-side fallback models for the Messages API. Fallback-served responses set `QueryResult.metadata.fallback` (`FallbackInfo`: requested/served model plus per-hop model, usage, and decline trigger/category), are billed at the fallback model's price, and their assistant turns are replayed verbatim, including the `fallback` boundary block.
+- **Anthropic**: Set `fallback_models` to an ordered list of up to three server-side fallback models for the Messages API. Fallback-served responses set `QueryResult.metadata.fallback` (`FallbackInfo`: requested/served model plus per-hop model, usage, and decline trigger/category), are billed at the fallback model's price, and their assistant turns preserve the `fallback` boundary block. Replaying any Anthropic assistant turn replaces empty text blocks in place with a short placeholder rather than dropping them, so thinking blocks keep their positions and signatures.
 - **Anthropic**: Set `task_budget_tokens` to send `output_config.task_budget` with the task-budgets beta, an advisory token budget the model paces its agentic loop against. It is not enforced; `max_tokens` remains the hard ceiling.
 - **Anthropic**: Set `returns_thinking_truncated_turns: true` to return a turn that ran out of tokens inside a thinking block as a `max_tokens` result with its reasoning, instead of raising, so the client can continue the turn. On these keys only, replaying such a turn appends a short text block, since Anthropic rejects an assistant message whose final block is thinking.
 - **OpenAI-compatible completions**: Set `stream_completions: false` to use non-streaming chat completions. The default is `true`.
@@ -79,7 +82,53 @@ Use `supports.files` only for non-image document or file inputs supported by the
 
 The validator still runs file examples when `supports.files` is `false`. If one succeeds, validation fails because the registry entry is stale.
 
+OpenAI-compatible completions delegates accept base64 files only and reject `FileWithUrl`. OpenRouter is the exception: its PDF parser accepts a direct URL in `file_data`, so OpenRouter models that answer file probes declare `supports.files: true`.
+
+An `openrouter/<vendor>/<model>` key in provider YAML takes precedence over the dynamic OpenRouter catalog lookup. Use one to pin pricing, limits, and capabilities for a model OpenRouter serves.
+
 Set `supports.audio: true` only when the provider accepts audio input, such as Gemini through `FileWithBytes`.
+
+Expose reasoning-effort variants as `alternative_keys` entries that override `default_parameters.reasoning_effort` (for example a `-xhigh` alias). Native SDK providers must encode every declared value: xAI `xhigh` requires `xai-sdk>=1.19.0`.
+
+## Transcription models
+
+Transcription entries must set `supports.transcription`,
+`transcription_streaming`, and `transcription_language`. They are the only
+entries allowed to omit the whole `properties` block; runtime construction keeps
+the normal `LLMConfig` defaults. When present, the resolved block must include
+`context_window`, `max_tokens`, and `reasoning_model`.
+Set `properties: null` to clear inherited chat properties.
+
+Registry entries use `ModelConfig` for chat and `TranscriptionModelConfig` for
+transcription-only models. `get_model_registry()` serves chat entries and
+`get_transcription_registry()` serves transcription-only entries;
+`get_registry_config()`/`get_registry_model()` resolve chat models and
+`get_transcription_registry_config()`/`get_transcription_model()` resolve
+transcription models.
+Transcription-only entries require absent or null properties and
+`supports.transcription: true`; complete properties select the chat schema.
+`ModelConfig.properties` remains required.
+
+Duration-billed models define `transcription_cost` with a `usd_per_minute` rate
+and an `audio` or `session` `billing_basis`; optional `minimum_billable_seconds`
+applies before optional `increment_seconds` rounding. Token-billed models use
+`costs_per_million_token` instead. Transcription entries may omit token pricing.
+`cost_usd` stays null when the price or the
+billable measurement is missing.
+
+`transcription_language` declares the spelling the provider expects, and is
+usually set once in the provider's `base-config`:
+
+```yaml
+transcription_language:
+  format: iso-639-1   # bare code, such as "en"; bcp-47 wants a locale, "en-US"
+  default: en         # used when the caller names no language
+```
+
+`transcribe_audio` applies it before the provider sees the request, so `en-US`
+reaches an ISO-639-1 provider as `en`, and a bare `en` reaches a BCP-47 provider
+as that provider's default locale. Any other value passes through unchanged,
+since a region cannot be invented for an arbitrary language.
 
 ## Deprecating Models
 
@@ -130,12 +179,18 @@ MODEL_LIBRARY_INCLUDE_DEPRECATED=True
 
 When `MODEL_GATEWAY_URL` is set before the registry is initialized:
 
-- The first `get_model_registry()` call fetches the full `/registry` snapshot
-  with `MODEL_GATEWAY_API_KEY`. `get_registry_config()` and
-  `get_registry_model()` construction use that snapshot. No-argument calls
-  retain it for the process lifetime.
-- The snapshot omits fields older clients reject as unknown (currently
-  `country`, `rate_limit`, and `supports.transcription`).
+- The first `get_model_registry()` or `get_transcription_registry()` call
+  fetches the full `/registry` snapshot with `MODEL_GATEWAY_API_KEY`,
+  `include_excluded_fields=true`, and `include_transcription=true`.
+  Both registries are populated from that one snapshot.
+  `get_registry_config()` and `get_registry_model()` construction use that
+  snapshot. No-argument calls retain it for the process lifetime.
+- The default `/registry` response preserves the legacy schema. It omits
+  `country`, `rate_limit`, `supports.transcription`, and the transcription
+  metadata fields. It also
+  omits transcription-only entries because legacy clients require chat sizing
+  properties. Clients requesting both `include_excluded_fields=true` and
+  `include_transcription=true` receive the complete registry.
 - `refresh_model_registry()` provides opt-in lazy refresh without changing the
   `get_model_registry()` singleton contract. It reloads whichever source the
   current settings select: Gateway, local YAML, or custom config. A successful

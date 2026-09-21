@@ -14,7 +14,11 @@ from model_library.base import (
     resolve_token_retry_params,
 )
 from model_library.base.input import FileWithId, InputItem, RawInput, RawResponse
-from model_library.registry_utils import get_registry_config, get_registry_model
+from model_library.registry_utils import (
+    get_registry_config,
+    get_registry_model,
+    get_transcription_model,
+)
 
 from model_gateway.benchmark_admission_types import BenchmarkAcquireRequest
 from model_gateway.cache import ModelCache
@@ -32,14 +36,14 @@ def get_cached_llm(
     *,
     config: dict[str, Any],
     model_config: dict[str, Any] | None = None,
+    transcription: bool = False,
 ) -> LLM:
     effective_config = body.config if model_config is None else model_config
+    build = get_transcription_model if transcription else get_registry_model
     return cache.get_or_create(
         body.model,
         config,
-        lambda m, _c: get_registry_model(
-            m, normalize_llm_config_for_model(m, effective_config)
-        ),
+        lambda m, _c: build(m, normalize_llm_config_for_model(m, effective_config)),
     )
 
 

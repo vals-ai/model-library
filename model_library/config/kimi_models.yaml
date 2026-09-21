@@ -38,6 +38,18 @@ kimi-models:
         read: 0.3
     alternative_keys:
       - kimi/kimi-k3-public
+      - kimi/kimi-k3-low:
+          label: Kimi K3 (Low)
+          default_parameters:
+            reasoning_effort: low
+      - kimi/kimi-k3-high:
+          label: Kimi K3 (High)
+          default_parameters:
+            reasoning_effort: high
+      - kimi/kimi-k3-max:
+          label: Kimi K3 (Max)
+          default_parameters:
+            reasoning_effort: max
   kimi/kimi-k2.7-code:
     label: Kimi K2.7 Code
     release_date: 2026-06-12

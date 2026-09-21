@@ -1,9 +1,6 @@
 from datetime import date
 
-from scripts.deprecate_model import (
-    model_to_deprecated_entry_data,
-    model_to_yaml_entry,
-)
+from scripts.deprecate_model import model_to_deprecated_entry_data, model_to_yaml_entry
 
 
 class FakeModelConfig:
@@ -40,7 +37,7 @@ def test_deprecated_entry_preserves_release_date_as_yaml_date_scalar():
 
 
 def test_deprecated_entry_keeps_null_costs_so_the_entry_stays_loadable():
-    """`costs_per_million_token` is nullable but required by RawModelConfig."""
+    """`costs_per_million_token` is nullable but required by ModelConfig."""
     model_data = model_to_deprecated_entry_data(FakeModelConfig())
     assert model_data["costs_per_million_token"] is None
     assert "costs_per_million_token: null" in model_to_yaml_entry(

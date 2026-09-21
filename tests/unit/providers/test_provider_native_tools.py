@@ -4,6 +4,7 @@ from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from xai_sdk.tools import web_search
 from google.genai.types import (
     Candidate,
     FinishReason as GoogleFinishReason,
@@ -27,7 +28,7 @@ from openai.types.responses.response_function_web_search import (
 
 from model_library.agent.metadata import TurnSummary
 from model_library.agent.tool import ProviderTool
-from model_library.base.input import TextInput
+from model_library.base.input import TextInput, ToolBody, ToolDefinition
 from model_library.base.output import FinishReason, FinishReasonInfo, QueryResult
 from model_library.base.output.result import ProviderToolEvent
 from model_library.providers.google.google import GoogleModel
@@ -864,10 +865,21 @@ def _make_xai_mock_response(
     return response
 
 
-async def _parse_xai_response(mock_response) -> QueryResult:
+def _native_web_search_tools() -> list[ToolDefinition]:
+    from model_library.agent.tool import NativeWebSearch
+
+    return [NativeWebSearch().definition]
+
+
+async def _parse_xai_response(
+    mock_response, tools: list[ToolDefinition] | None = None
+) -> QueryResult:
     from model_library.providers.xai import XAIModel
+    from xai_sdk.proto.v6.chat_pb2 import GetCompletionsRequest
 
     model = XAIModel("grok-3-latest")
+    if tools is None:
+        tools = _native_web_search_tools()
 
     mock_chunk = MagicMock()
     mock_chunk.tool_calls = []
@@ -880,12 +892,17 @@ async def _parse_xai_response(mock_response) -> QueryResult:
     mock_chat = MagicMock()
     mock_chat.stream = MagicMock(return_value=fake_stream())
     mock_client = MagicMock()
-    mock_client.chat.create.return_value = mock_chat
+
+    def create_chat(*_args: Any, **kwargs: Any):
+        mock_chat.proto = GetCompletionsRequest(**kwargs)
+        return mock_chat
+
+    mock_client.chat.create.side_effect = create_chat
 
     with patch.object(model, "get_client", return_value=mock_client):
         return await model._query_impl(
             [TextInput(text="search for something")],
-            tools=[],
+            tools=tools,
             query_logger=MagicMock(),
         )
 
@@ -908,6 +925,28 @@ async def test_xai_web_search_maps_to_provider_tool_events():
     assert event.input == json.dumps({"query": "test query", "num_results": "5"})
 
 
+@pytest.mark.parametrize(
+    "body",
+    [
+        pytest.param(web_search(), id="sdk-tool"),
+        pytest.param({"web_search": {}}, id="raw-mapping"),
+    ],
+)
+async def test_xai_raw_provider_web_search_tool_maps_to_provider_tool_events(
+    body,
+):
+    """ProviderTool web-search bodies request native search."""
+    tc = _make_xai_web_search_tool_call("test query")
+    result = await _parse_xai_response(
+        _make_xai_mock_response(tool_calls=[tc]),
+        tools=[ProviderTool(name="web_search", body=body).definition],
+    )
+
+    assert result.tool_calls == []
+    assert len(result.provider_tool_events) == 1
+    assert result.provider_tool_events[0].type == "web_search_tool"
+
+
 async def test_xai_web_search_finish_reason_is_stop():
     """Finish reason is STOP when only web search events are present."""
     tc = _make_xai_web_search_tool_call()
@@ -925,6 +964,33 @@ async def test_xai_web_search_only_response_does_not_raise():
 
     assert len(result.provider_tool_events) == 1
     assert result.tool_calls == []
+
+
+async def test_xai_web_search_typed_client_tool_call_stays_a_tool_call():
+    """Without a NativeWebSearch tool in the request, a call the API labels
+    WEB_SEARCH_TOOL is the caller's own `web_search` client tool and must be
+    returned as a ToolCall for the agent to execute."""
+    import json
+
+    client_tool = ToolDefinition(
+        name="web_search",
+        body=ToolBody(
+            name="web_search",
+            description="Search the web",
+            properties={"search_query": {"type": "string"}},
+            required=["search_query"],
+        ),
+    )
+    tc = _make_xai_web_search_tool_call("test query")
+    result = await _parse_xai_response(
+        _make_xai_mock_response(content="", tool_calls=[tc]), tools=[client_tool]
+    )
+
+    assert result.provider_tool_events == []
+    assert len(result.tool_calls) == 1
+    assert result.tool_calls[0].name == "web_search"
+    assert result.tool_calls[0].id == "tc_1"
+    assert json.loads(result.tool_calls[0].args)["query"] == "test query"
 
 
 async def test_xai_truly_empty_response_raises():

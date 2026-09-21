@@ -47,6 +47,25 @@ north-mini-code-models:
       temperature: 1
       top_p: 0.95
 
+transcription-models:
+  base-config:
+    properties: null
+    documentation_url: https://docs.cohere.com/docs/transcribe
+    supports:
+      transcription: true
+      temperature: false
+      tools: false
+    transcription_streaming: false
+    costs_per_million_token: null
+    transcription_language:
+      format: iso-639-1
+      default: en
+
+  cohere/cohere-transcribe-03-2026:
+    label: Cohere Transcribe
+    release_date: 2026-03-26
+    open_source: true
+
 command-models:
   base-config:
     supports:

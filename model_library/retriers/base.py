@@ -7,11 +7,13 @@ from typing import Any, Awaitable, Callable, Literal, TypeVar
 import model_library.telemetry as telemetry
 from model_library.base.base import QueryResult
 from model_library.exceptions import (
+    ContentFilterError,
     ImmediateRetryException,
     ImmediateRetryExhaustedError,
     MaxContextWindowExceededError,
     exception_http_status_code,
     exception_message,
+    is_content_filter_error,
     is_context_window_error,
     is_retriable_error,
 )
@@ -277,6 +279,8 @@ class BaseRetrier(ABC):
                     return result
 
             except Exception as e:
+                if is_content_filter_error(e):
+                    e = ContentFilterError(exception_message(e))
                 elapsed = time.time() - self.start_time
 
                 self.attempts += 1

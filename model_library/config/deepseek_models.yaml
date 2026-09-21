@@ -65,7 +65,48 @@ v4-models:
       cache:
         read: 0.044
     alternative_keys:
+      - deepseek/deepseek-v4-pro-0813-low:
+          label: DeepSeek V4 Pro 0813 (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - deepseek/deepseek-v4-pro-0813-high:
+          label: DeepSeek V4 Pro 0813 (High)
+          default_parameters:
+            reasoning_effort: "high"
+      - deepseek/deepseek-v4-pro-0813-max:
+          label: DeepSeek V4 Pro 0813 (Max)
+          default_parameters:
+            reasoning_effort: "max"
       - deepseek/deepseek-v4-pro-0813-nonthinking:
+          supports:
+            temperature: true
+          properties:
+            reasoning_model: false
+          default_parameters:
+            reasoning_effort: null
+            temperature: 1
+            top_p: 0.95
+
+  deepseek/deepseek-v4.1-flash:
+    label: DeepSeek V4.1 Flash
+    release_date: 2026-09-10
+    provider_endpoint: deepseek-flash
+    supports:
+      images: true
+    properties:
+      context_window: 1_048_576
+      max_tokens: 384_000
+      reasoning_model: true
+    default_parameters:
+      reasoning_effort: "high"
+      max_tokens: 384_000
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.006
+    alternative_keys:
+      - deepseek/deepseek-v4.1-flash-nonthinking:
           supports:
             temperature: true
           properties:

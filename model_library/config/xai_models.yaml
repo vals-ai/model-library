@@ -43,6 +43,23 @@ grok-4.6-models:
     label: Grok 4.6
     release_date: 2026-08-12
     provider_endpoint: grok-4.6
+    alternative_keys:
+      - grok/grok-4.6-low:
+          label: Grok 4.6 (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - grok/grok-4.6-medium:
+          label: Grok 4.6 (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
+      - grok/grok-4.6-high:
+          label: Grok 4.6 (High)
+          default_parameters:
+            reasoning_effort: "high"
+      - grok/grok-4.6-xhigh:
+          label: Grok 4.6 (Extra High)
+          default_parameters:
+            reasoning_effort: "xhigh"
 
 grok-4.5-models:
   base-config:
@@ -352,6 +369,44 @@ grok-build-models:
         output: 4.00
         cache:
           read: 0.40
+transcription-models:
+  base-config:
+    rate_limit:
+      supports_live_monitoring: false
+    properties: null
+    supports:
+      transcription: true
+      images: false
+      files: false
+      tools: false
+      temperature: false
+    transcription_streaming: true
+    costs_per_million_token: null
+    transcription_language:
+      format: iso-639-1
+      default: en
+
+  xai/grok-voice-transcribe-2.0:
+    label: Grok Voice Transcribe 2.0
+    release_date: 2026-09-18
+    documentation_url: "https://docs.x.ai/developers/model-capabilities/\
+      audio/speech-to-text"
+    transcription_cost:
+      usd_per_minute: 0.0033333333333333335
+      billing_basis: audio
+
+  xai/grok-voice-transcribe-1.0:
+    label: Grok Voice Transcribe 1.0
+    release_date: 2026-04-17
+    documentation_url: "https://docs.x.ai/developers/model-capabilities/\
+      audio/speech-to-text"
+    transcription_cost:
+      usd_per_minute: 0.0033333333333333335
+      billing_basis: audio
+    alternative_keys:
+      - xai/grok-stt
+
+
 grok-3-models:
   base-config:
     supports:

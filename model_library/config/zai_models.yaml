@@ -59,3 +59,12 @@ glm-models:
       cache:
         read: 0.26
     provider_endpoint: glm-5.3
+    alternative_keys:
+      - zai/glm-5.3-low:
+          label: GLM 5.3 (Low)
+          default_parameters:
+            reasoning_effort: low
+      - zai/glm-5.3-high:
+          label: GLM 5.3 (High)
+          default_parameters:
+            reasoning_effort: high

@@ -48,6 +48,9 @@ data = trajectory.to_json_dict()  # dict, None fields excluded
 | `agent.tool_definitions` | Passed to `from_agent_result(tool_definitions=...)` |
 | `trajectory.notes` | Set manually on `ATIFTrajectory` |
 | `trajectory.continued_trajectory_ref` | Set manually on `ATIFTrajectory` |
+| `observation.results[].extra.vals.tool_model_metrics` | Complete metadata from model calls made by that tool |
+| `final_metrics.extra.helper_metrics` | Observed helper-model totals and metadata-bearing tool execution count |
+| `final_metrics.extra.combined_metrics` | Observed task and helper-model totals; count is main responses plus helper metadata records |
 | `metrics.prompt_token_ids` | Set manually on `ATIFMetrics` |
 | `metrics.extra` | Set manually on `ATIFMetrics` |
 
@@ -69,5 +72,9 @@ History compactions are not first-party ATIF steps:
 | `trajectory.extra["compaction_metrics"]` | `total_prompt_tokens`, `total_completion_tokens`, `total_cost_usd`, and `count` |
 | `final_metrics` | Task LLM calls inside agent steps only |
 
-For the true bill, add `trajectory.extra["compaction_metrics"]` to the task cost
-in `final_metrics`.
+`final_metrics.extra.combined_metrics` adds observed task and helper usage;
+compaction usage remains separate in `trajectory.extra["compaction_metrics"]`.
+These are saved usage totals, not full billing. Each sum covers records that
+report that value and is partial when other records omit it. A value stays
+unknown only when no record reports it. Summed durations are model-call time,
+not wall-clock run time.

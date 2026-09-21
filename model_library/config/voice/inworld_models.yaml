@@ -1,0 +1,21 @@
+base-config:
+  company: Inworld
+  country: United States
+  documentation_url: https://docs.inworld.ai/stt/overview
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_streaming: true
+  costs_per_million_token: null
+  transcription_language:
+    format: bcp-47
+    default: en-US
+
+transcription-models:
+  inworld/inworld-stt-1:
+    label: Inworld STT 1
+    provider_endpoint: inworld/inworld-stt-1
+    transcription_cost:
+      usd_per_minute: 0.0025
+      billing_basis: audio

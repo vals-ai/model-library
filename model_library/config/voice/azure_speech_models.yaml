@@ -1,0 +1,18 @@
+base-config:
+  company: Microsoft
+  country: United States
+  documentation_url: "https://learn.microsoft.com/azure/ai-services/\
+    speech-service/speech-to-text"
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_streaming: true
+  costs_per_million_token: null
+  transcription_language:
+    format: bcp-47
+    default: en-US
+
+transcription-models:
+  azure_speech/universal-language-model:
+    label: Azure Speech Universal Language Model

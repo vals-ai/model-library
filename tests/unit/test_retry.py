@@ -11,8 +11,9 @@ import aiohttp
 import httpcore
 import httpx
 import pytest
+from anthropic import BadRequestError as AnthropicBadRequestError
 from anthropic import InternalServerError as AnthropicInternalServerError
-from openai import BadRequestError
+from openai import APIError, BadRequestError
 from openai import InternalServerError as OpenAIInternalServerError
 
 from model_library.base import LLM, QueryResult
@@ -23,6 +24,7 @@ from model_library.exceptions import (
     BadInputError,
     ContentFilterError,
     GatewayMethodNotSupported,
+    GatewayProviderError,
     ImmediateRetryException,
     ImmediateRetryExhaustedError,
     InvalidStructuredOutputError,
@@ -37,6 +39,7 @@ from model_library.exceptions import (
     UnexpectedSystemInputError,
     exception_to_provider_error,
     handle_empty_response,
+    is_content_filter_error,
     is_retriable_error,
 )
 from model_library.retriers.backoff import ExponentialBackoffRetrier
@@ -914,6 +917,7 @@ async def test_context_window_error_gives_up(mock_llm: LLM):
         "invalid params, context window exceeds limit (2013)",  # minimax
         "Prompt 262280 > 262144 maximum context length",  # mistral
         "Error code: 400 - {'error': {'code': 400, 'message': 'Input length 264373 exceeds the maximum allowed input length of 262112 tokens.', 'type': 'Bad Request'}}",  # poolside
+        "Error code: 400 - {'error': {'code': '1261', 'message': 'Prompt exceeds max length'}}",  # zai
     ]
 
     for exception_message in exception_messages:
@@ -1015,3 +1019,221 @@ async def test_query_retries_on_mimo_multimodal_400(mock_llm: LLM):
 
     assert result.output_text == "success"
     assert query_impl_mock.call_count == 2
+
+
+_OPENAI_USAGE_POLICY_MESSAGE = (
+    "Invalid prompt: your prompt was flagged as potentially violating our usage "
+    "policy. Please try again with a different prompt: "
+    "https://platform.openai.com/docs/guides/reasoning#advice-on-prompting"
+)
+
+
+def _openai_invalid_prompt_error(message: str) -> BadRequestError:
+    request = httpx.Request("POST", "https://api.openai.com/v1/responses")
+    response = httpx.Response(400, request=request)
+    return BadRequestError(
+        f"Error code: 400 - {{'error': {{'message': {message!r}, "
+        "'type': 'invalid_request_error', 'param': None, 'code': 'invalid_prompt'}}}",
+        response=response,
+        body={
+            "message": message,
+            "type": "invalid_request_error",
+            "param": None,
+            "code": "invalid_prompt",
+        },
+    )
+
+
+def test_openai_usage_policy_invalid_prompt_is_content_filter():
+    err = _openai_invalid_prompt_error(_OPENAI_USAGE_POLICY_MESSAGE)
+    assert err.code == "invalid_prompt"
+    assert is_content_filter_error(err) is True
+
+
+def test_other_invalid_prompt_is_not_content_filter():
+    err = _openai_invalid_prompt_error("Invalid prompt: too many images")
+    assert err.code == "invalid_prompt"
+    assert is_content_filter_error(err) is False
+
+
+def test_alibaba_data_inspection_failed_is_content_filter():
+    message = (
+        "<400> InternalError.Algo.DataInspectionFailed: "
+        "Input text data may contain inappropriate content."
+    )
+    request = httpx.Request("POST", "https://dashscope.aliyuncs.com/v1/chat/completions")
+    err = BadRequestError(
+        f"Error code: 400 - {{'error': {{'message': {message!r}, "
+        "'type': 'data_inspection_failed', 'param': None, "
+        "'code': 'data_inspection_failed'}}}",
+        response=httpx.Response(400, request=request),
+        body={
+            "message": message,
+            "type": "data_inspection_failed",
+            "param": None,
+            "code": "data_inspection_failed",
+        },
+    )
+    assert is_content_filter_error(err) is True
+
+
+def test_alibaba_streamed_output_data_inspection_failed_is_content_filter():
+    err = APIError(
+        "<400> InternalError.Algo.DataInspectionFailed: "
+        "Output data may contain inappropriate content.",
+        request=httpx.Request("POST", "https://dashscope.aliyuncs.com/v1/chat/completions"),
+        body=None,
+    )
+    assert err.code is None
+    assert is_content_filter_error(err) is True
+
+
+def test_other_alibaba_algo_error_is_not_content_filter():
+    err = APIError(
+        "<400> InternalError.Algo.InvalidParameter: max_completion_tokens [900] "
+        "must be greater than thinking_budget [8192]",
+        request=httpx.Request("POST", "https://dashscope.aliyuncs.com/v1/chat/completions"),
+        body={"code": "invalid_request_error", "type": "invalid_request_error"},
+    )
+    assert is_content_filter_error(err) is False
+
+
+def test_anthropic_output_content_filter_block_is_content_filter():
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    body = {
+        "type": "error",
+        "error": {
+            "type": "invalid_request_error",
+            "message": "Output blocked by content filtering policy",
+        },
+        "request_id": "req_011CfBdpUGzLafCh3QodeAGD",
+    }
+    err = AnthropicBadRequestError(
+        "Error code: 400 - {'type': 'error', 'error': {'type': "
+        "'invalid_request_error', 'message': 'Output blocked by content filtering policy'}, "
+        "'request_id': 'req_011CfBdpUGzLafCh3QodeAGD'}",
+        response=httpx.Response(400, request=request),
+        body=body,
+    )
+    assert is_content_filter_error(err) is True
+
+
+def test_gateway_anthropic_output_content_filter_block_is_content_filter():
+    err = GatewayProviderError(
+        error_type="ProviderError",
+        code=None,
+        message=(
+            "ProviderError: {'type': 'error', 'error': {'details': None, "
+            "'type': 'invalid_request_error', 'message': 'Output blocked by "
+            "content filtering policy', 'request_id': 'req_011CfBdpUGzLafCh3QodeAGD'}}"
+        ),
+        provider="anthropic",
+        raw_error={},
+    )
+    assert is_content_filter_error(err) is True
+
+
+def test_other_anthropic_invalid_request_is_not_content_filter():
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    body = {
+        "type": "error",
+        "error": {
+            "type": "invalid_request_error",
+            "message": "max_tokens: 200000 > 128000, which is the maximum allowed",
+        },
+        "request_id": "req_011CfBdpUGzLafCh3QodeAGD",
+    }
+    err = AnthropicBadRequestError(
+        "Error code: 400 - {'type': 'error', 'error': {'type': "
+        "'invalid_request_error', 'message': 'max_tokens: 200000 > 128000, "
+        "which is the maximum allowed'}, 'request_id': 'req_011CfBdpUGzLafCh3QodeAGD'}",
+        response=httpx.Response(400, request=request),
+        body=body,
+    )
+    assert is_content_filter_error(err) is False
+
+
+@pytest.mark.parametrize("code", ["cyber_policy", "safety_policy", "blocked_prompt"])
+def test_structured_gateway_policy_blocks_are_content_filter(code: str):
+    err = GatewayProviderError(
+        error_type="ProviderError",
+        code=code,
+        message="request declined by provider policy",
+        provider="provider",
+        raw_error={},
+    )
+
+    assert is_content_filter_error(err) is True
+
+
+def test_content_filter_error_is_content_filter():
+    assert is_content_filter_error(ContentFilterError()) is True
+
+
+_REFUSAL_TEXT = "I'm sorry, but I can't help with that request."
+
+
+def test_content_policy_violation_400_is_content_filter():
+    """An OpenAI-compatible endpoint rejecting a refused prompt with a policy code."""
+    request = httpx.Request("POST", "https://provider.example/v1/responses")
+    response = httpx.Response(400, request=request)
+    err = BadRequestError(
+        "Error code: 400 - {'error': {'code': 'content_policy_violation', "
+        "'message': 'Your request was rejected as a result of our safety system.'}}",
+        response=response,
+        body={
+            "code": "content_policy_violation",
+            "message": "Your request was rejected as a result of our safety system.",
+        },
+    )
+    assert err.code == "content_policy_violation"
+    assert is_content_filter_error(err) is True
+
+
+def test_refusal_text_api_error_is_content_filter():
+    """A stream ``error`` event whose message is the refusal sentence and carries no code."""
+    request = httpx.Request("POST", "https://provider.example/v1/responses")
+    err = APIError(_REFUSAL_TEXT, request, body={"message": _REFUSAL_TEXT})
+    assert err.code is None
+    assert str(err) == _REFUSAL_TEXT
+    assert is_content_filter_error(err) is True
+
+
+def test_refusal_text_gateway_envelope_is_content_filter():
+    """The same refusal after the gateway wrapped it as a code-less provider error."""
+    err = GatewayProviderError(
+        error_type="ProviderError",
+        code=None,
+        message=_REFUSAL_TEXT,
+        provider="provider",
+        raw_error={},
+        exception_type="APIError",
+    )
+    assert str(err) == f"ProviderError: {_REFUSAL_TEXT}"
+    assert is_content_filter_error(err) is True
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "Request failed: I'm sorry, but I can't help with that request.",
+        "I'm sorry, but I can't assist with this request right now because the service is overloaded.",
+        "The server had an error while processing your request. Sorry about that!",
+        "Invalid prompt: too many images",
+    ],
+)
+def test_refusal_text_only_matches_when_it_is_the_whole_message(message: str):
+    request = httpx.Request("POST", "https://provider.example/v1/responses")
+    err = APIError(message, request, body={"message": message})
+    assert is_content_filter_error(err) is False
+
+
+async def test_query_raises_content_filter_on_openai_usage_policy_block(
+    mock_llm: LLM,
+):
+    mock_llm._query_impl = AsyncMock(  # pyright: ignore[reportPrivateUsage]
+        side_effect=_openai_invalid_prompt_error(_OPENAI_USAGE_POLICY_MESSAGE)
+    )
+
+    with pytest.raises(ContentFilterError):
+        await mock_llm.query("Mock Input")

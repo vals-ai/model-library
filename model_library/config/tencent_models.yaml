@@ -1,0 +1,29 @@
+base-config:
+  company: Tencent
+  country: China
+  documentation_url: https://huggingface.co/tencent/Hy4-preview
+  open_source: true
+  supports:
+    images: false
+    files: true
+    temperature: true
+    tools: true
+    output_schema: true
+
+hy4-models:
+  openrouter/tencent/hy4-preview:
+    label: Hy4 preview (OpenRouter)
+    release_date: 2026-08-28
+    documentation_url: https://hy.tencent.ai/research/hy4-preview
+    properties:
+      reasoning_model: true
+      context_window: 1_048_576
+      max_tokens: 64_000
+    default_parameters:
+      temperature: 0.9
+      top_p: 1.0
+    costs_per_million_token:
+      input: 0.834
+      output: 2.501
+      cache:
+        read: 0.042

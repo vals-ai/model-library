@@ -96,5 +96,8 @@ async def test_serialize_deserialize_history_roundtrip(model_key: str):
         assert dinput == response.history
 
     if response.tool_calls:
-        tool_result = ToolResult(tool_call=response.tool_calls[0], result="low")
-        await model.query([*dinput, tool_result], tools=tools)
+        tool_results = [
+            ToolResult(tool_call=tool_call, result="low")
+            for tool_call in response.tool_calls
+        ]
+        await model.query([*dinput, *tool_results], tools=tools)

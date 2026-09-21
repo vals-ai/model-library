@@ -29,6 +29,7 @@ from model_library.base import (
 )
 from model_library.base.input import (
     FileWithBase64,
+    FileWithUrl,
     RawResponse,
     SystemInput,
     TextInput,
@@ -38,6 +39,7 @@ from model_library.base.input import (
     ToolResult,
 )
 from model_library.exceptions import (
+    BadInputError,
     ContentFilterError,
     MaxOutputTokensExceededError,
     ModelNoOutputError,
@@ -45,16 +47,92 @@ from model_library.exceptions import (
 from model_library.providers.delegates.alibaba import AlibabaModel
 from model_library.providers.delegates.baseten import BasetenModel
 from model_library.providers.delegates.cohere import CohereModel
+from model_library.providers.delegates.deepseek import DeepSeekModel
 from model_library.providers.delegates.fireworks import FireworksModel
 from model_library.providers.delegates.kimi import KimiModel
 from model_library.providers.delegates.nvidia import NvidiaModel
-from model_library.providers.openai import (
-    OpenAIConfig,
-    OpenAIModel,
-    _safe_search_results,
-)
+from model_library.providers.delegates.openrouter import OpenRouterModel
+from model_library.providers.openai import OpenAIConfig, OpenAIModel
+from model_library.providers.openai.openai import _safe_search_results
+from model_library.registry_utils import get_registry_model
 
 _INPUT = [TextInput(text="")]
+
+
+@pytest.mark.parametrize(
+    ("model_key", "endpoint", "api_base"),
+    [
+        (
+            "baseten/moonshotai/Kimi-K3",
+            "moonshotai/Kimi-K3",
+            "https://inference.baseten.co/v1",
+        ),
+        (
+            "together/moonshotai/Kimi-K3",
+            "moonshotai/Kimi-K3",
+            "https://api.together.xyz/v1/",
+        ),
+        (
+            "baseten/laguna-s-2.1-int4",
+            "poolside/laguna-s-2.1",
+            "https://deployment.example/v1",
+        ),
+    ],
+)
+@pytest.mark.parametrize("custom_endpoint", [None, "https://override.example/v1"])
+async def test_hosted_model_registry_routing(
+    model_key: str,
+    endpoint: str,
+    api_base: str,
+    custom_endpoint: str | None,
+):
+    """Preserve shared/dedicated routing, endpoint overrides, and sampling rules."""
+    with patch(
+        "model_library.providers.delegates.baseten.model_library_settings",
+        SimpleNamespace(BASETEN_API_BASE_URL="https://deployment.example/v1"),
+    ):
+        model = get_registry_model(
+            model_key,
+            override_config=LLMConfig(
+                custom_api_key=SecretStr("test-key"),
+                custom_endpoint=custom_endpoint,
+                max_tokens=8192,
+                temperature=0.5,
+                top_p=0.8,
+            ),
+        )
+    assert isinstance(model, DelegateOnly)
+    assert isinstance(model.delegate, OpenAIModel)
+    assert model.delegate.custom_endpoint == (custom_endpoint or api_base)
+    body = await model.build_body(_INPUT, tools=[])
+    assert body["model"] == endpoint
+    assert body["max_tokens"] == 8192
+    assert "max_completion_tokens" not in body
+    if model_key == "together/moonshotai/Kimi-K3":
+        assert "temperature" not in body
+        assert "top_p" not in body
+    else:
+        assert body["temperature"] == 0.5
+        assert body["top_p"] == 0.8
+
+
+@pytest.mark.parametrize(
+    ("output_budget", "expected_capacity"),
+    [(None, 917_504), (8192, 1_040_384), (500_000, 548_576), (2_000_000, 0)],
+)
+async def test_hosted_input_capacity_uses_request_budget(
+    output_budget: int | None, expected_capacity: int
+):
+    """Reserve the sent budget, with registry fallback and zero-clamped capacity."""
+    model = get_registry_model(
+        "together/moonshotai/Kimi-K3",
+        override_config=LLMConfig(
+            custom_api_key=SecretStr("test-key"), max_tokens=output_budget
+        ),
+    )
+    assert model.input_context_window == expected_capacity
+    body = await model.build_body(_INPUT, tools=[])
+    assert body.get("max_tokens") == output_budget
 
 
 @pytest.mark.parametrize("mime", ["png", "image/png"])
@@ -77,6 +155,42 @@ async def test_base64_image_mime_is_normalized(mime: str, use_completions: bool)
 
     image_url = parsed["image_url"]["url"] if use_completions else parsed["image_url"]
     assert image_url == "data:image/png;base64,dGVzdA=="
+
+
+_FILE_URL = FileWithUrl(
+    type="file",
+    name="sample.pdf",
+    mime="application/pdf",
+    url="https://example.com/sample.pdf",
+)
+
+
+async def test_openrouter_completions_file_url_is_passed_through():
+    model = OpenRouterModel(
+        "tencent/hy4-preview",
+        config=LLMConfig(custom_api_key=SecretStr("test-key")),
+    )
+
+    parsed = await model.parse_file(_FILE_URL)
+
+    assert parsed == {
+        "type": "file",
+        "file": {
+            "filename": "sample.pdf",
+            "file_data": "https://example.com/sample.pdf",
+        },
+    }
+
+
+async def test_completions_file_url_is_rejected_for_other_providers():
+    model = OpenAIModel(
+        "test-model",
+        config=LLMConfig(custom_api_key=SecretStr("test-key")),
+        use_completions=True,
+    )
+
+    with pytest.raises(BadInputError, match="does not support url"):
+        await model.parse_file(_FILE_URL)
 
 
 def _response_output_text_message(text: str) -> ResponseOutputMessage:
@@ -664,12 +778,41 @@ async def test_streaming_completions_deepseek_same_id_named_chunk_starts_new_too
     ]
 
 
-async def test_non_streaming_completions_query_parses_response():
+@pytest.mark.parametrize(
+    (
+        "prompt_tokens",
+        "cached_tokens",
+        "cache_write_tokens",
+        "expected_in_tokens",
+        "expected_total_input_tokens",
+    ),
+    [
+        (0, 2, None, 0, 2),
+        (10, 2, None, 8, 10),
+        (0, 0, None, 0, 0),
+        (10, 0, None, 10, 10),
+        (0, 2, 3, 0, 5),
+        (10, 2, 3, 5, 10),
+        (10, 0, 3, 7, 10),
+        (0, 0, 3, 0, 3),
+        (10, 2, 0, 8, 10),
+    ],
+)
+async def test_non_streaming_completions_query_parses_response(
+    prompt_tokens: int,
+    cached_tokens: int,
+    cache_write_tokens: int | None,
+    expected_in_tokens: int,
+    expected_total_input_tokens: int,
+):
     model = OpenAIModel(
         "gpt-4o-mini",
         config=LLMConfig(provider_config=OpenAIConfig(stream_completions=False)),
         use_completions=True,
     )
+    prompt_tokens_details = PromptTokensDetails(cached_tokens=cached_tokens)
+    if cache_write_tokens is not None:
+        object.__setattr__(prompt_tokens_details, "cache_write_tokens", cache_write_tokens)
     response = ChatCompletion(
         id="cmpl_123",
         created=0,
@@ -694,10 +837,10 @@ async def test_non_streaming_completions_query_parses_response():
         ],
         usage=CompletionUsage(
             completion_tokens=5,
-            prompt_tokens=10,
-            total_tokens=15,
+            prompt_tokens=prompt_tokens,
+            total_tokens=prompt_tokens + 5,
             completion_tokens_details=CompletionTokensDetails(reasoning_tokens=1),
-            prompt_tokens_details=PromptTokensDetails(cached_tokens=2),
+            prompt_tokens_details=prompt_tokens_details,
         ),
     )
     object.__setattr__(response, "_request_id", "openai-request-1")
@@ -717,10 +860,12 @@ async def test_non_streaming_completions_query_parses_response():
     assert result.tool_calls[0].id == "call_1"
     assert result.tool_calls[0].name == "lookup"
     assert result.tool_calls[0].args == '{"q":"x"}'
-    assert result.metadata.in_tokens == 8
+    assert result.metadata.in_tokens == expected_in_tokens
     assert result.metadata.out_tokens == 4
     assert result.metadata.reasoning_tokens == 1
-    assert result.metadata.cache_read_tokens == 2
+    assert result.metadata.cache_read_tokens == cached_tokens
+    assert result.metadata.cache_write_tokens == cache_write_tokens
+    assert result.metadata.total_input_tokens == expected_total_input_tokens
     assert result.extras.response_id == "cmpl_123"
     assert result.extras.provider_response_id == "cmpl_123"
     assert result.extras.provider_request_id == "openai-request-1"
@@ -760,6 +905,90 @@ async def test_non_streaming_kimi_parses_top_level_cached_tokens():
     assert result.metadata.in_tokens == 6
     assert result.metadata.out_tokens == 5
     assert result.metadata.cache_read_tokens == 4
+
+
+@pytest.mark.parametrize(
+    (
+        "prompt_tokens",
+        "usage_fields",
+        "expected_in_tokens",
+        "expected_cache_read_tokens",
+        "expected_total_input_tokens",
+    ),
+    [
+        (10, {"cached_input_tokens": 4}, 6, 4, 10),
+        (0, {"cached_input_tokens": 4}, 0, 4, 4),
+        (10, {"cached_input_tokens": 0}, 10, 0, 10),
+        (10, {}, 10, 0, 10),
+        (10, {"cached_input_tokens": 4, "cached_tokens": 2}, 8, 2, 10),
+        (10, {"cached_input_tokens": 4, "cached_tokens": 0}, 10, 0, 10),
+        (
+            10,
+            {
+                "cached_input_tokens": 4,
+                "cached_tokens": 3,
+                "prompt_tokens_details": {"cached_tokens": 2},
+            },
+            8,
+            2,
+            10,
+        ),
+        (
+            10,
+            {
+                "cached_input_tokens": 4,
+                "prompt_tokens_details": {"cached_tokens": 0},
+            },
+            10,
+            0,
+            10,
+        ),
+        (10, {"cached_input_tokens": 4, "prompt_tokens_details": {}}, 6, 4, 10),
+    ],
+)
+async def test_non_streaming_inception_parses_cached_input_tokens(
+    prompt_tokens: int,
+    usage_fields: dict[str, object],
+    expected_in_tokens: int,
+    expected_cache_read_tokens: int,
+    expected_total_input_tokens: int,
+):
+    model = OpenAIModel(
+        "mercury",
+        provider="mercury",
+        config=LLMConfig(provider_config=OpenAIConfig(stream_completions=False)),
+        use_completions=True,
+    )
+    usage = CompletionUsage.model_validate(
+        {
+            "completion_tokens": 5,
+            "prompt_tokens": prompt_tokens,
+            "total_tokens": prompt_tokens + 5,
+            **usage_fields,
+        }
+    )
+    response = ChatCompletion(
+        id="cmpl_inception_cached",
+        created=0,
+        model="mercury",
+        object="chat.completion",
+        choices=[
+            Choice(
+                finish_reason="stop",
+                index=0,
+                message=ChatCompletionMessage(role="assistant", content="hello"),
+            )
+        ],
+        usage=usage,
+    )
+
+    result = await _query_completions(model, response)
+
+    assert result.metadata.in_tokens == expected_in_tokens
+    assert result.metadata.out_tokens == 5
+    assert result.metadata.cache_read_tokens == expected_cache_read_tokens
+    assert result.metadata.cache_write_tokens is None
+    assert result.metadata.total_input_tokens == expected_total_input_tokens
 
 
 async def test_non_streaming_completions_empty_output_text_raises_no_output():
@@ -987,6 +1216,7 @@ async def test_null_assistant_history_field_normalization_preserves_tool_calls()
         (AlibabaModel, "qwen-test"),
         (BasetenModel, "baseten-test"),
         (CohereModel, "command-test"),
+        (DeepSeekModel, "deepseek-flash"),
         (FireworksModel, "fireworks-test"),
         (NvidiaModel, "nvidia-test"),
     ],
@@ -1199,14 +1429,37 @@ async def test_streaming_reasoning_delegate_tag_only_non_success_raises_mapped_e
         await _query_completions(model, _async_iter([chunk]))
 
 
-async def test_completions_stream_reasoning_without_usage_split_preserves_timeline():
+@pytest.mark.parametrize(
+    ("usage_fields", "expected_cache_write_tokens", "expected_total_input_tokens"),
+    [
+        ({"prompt_tokens_details": {"cached_tokens": 2}}, None, 2),
+        ({"cached_input_tokens": 2}, None, 2),
+        (
+            {"prompt_tokens_details": {"cached_tokens": 2, "cache_write_tokens": 3}},
+            3,
+            5,
+        ),
+    ],
+)
+async def test_completions_stream_usage_only_chunk_preserves_zero_input_and_timeline(
+    usage_fields: dict[str, object],
+    expected_cache_write_tokens: int | None,
+    expected_total_input_tokens: int,
+):
     model = OpenAIModel(
         "sonar-reasoning-pro",
         provider="perplexity",
         config=LLMConfig(reasoning=True),
         use_completions=True,
     )
-    usage = CompletionUsage(completion_tokens=6, prompt_tokens=10, total_tokens=16)
+    usage = CompletionUsage.model_validate(
+        {
+            "completion_tokens": 6,
+            "prompt_tokens": 0,
+            "total_tokens": 6,
+            **usage_fields,
+        }
+    )
     chunks = [
         SimpleNamespace(
             id="cmpl_stream",
@@ -1236,6 +1489,11 @@ async def test_completions_stream_reasoning_without_usage_split_preserves_timeli
                     ),
                 )
             ],
+            usage=None,
+        ),
+        SimpleNamespace(
+            id="cmpl_stream",
+            choices=[],
             usage=usage,
         ),
     ]
@@ -1243,6 +1501,10 @@ async def test_completions_stream_reasoning_without_usage_split_preserves_timeli
 
     assert result.reasoning == "why"
     assert result.output_text == "OK"
+    assert result.metadata.in_tokens == 0
+    assert result.metadata.cache_read_tokens == 2
+    assert result.metadata.cache_write_tokens == expected_cache_write_tokens
+    assert result.metadata.total_input_tokens == expected_total_input_tokens
     assert result.metadata.out_tokens == 6
     assert result.metadata.reasoning_tokens is None
     performance = result.metadata.performance
@@ -1732,15 +1994,36 @@ async def test_empty_code_mode_output_raises_no_output():
             )
 
 
-async def test_non_streaming_responses_usage_populates_normalized_metadata():
+@pytest.mark.parametrize(
+    (
+        "input_tokens",
+        "cached_tokens",
+        "cache_write_tokens",
+        "expected_in_tokens",
+        "expected_total_input_tokens",
+    ),
+    [
+        (0, 2, 3, 0, 5),
+        (10, 2, 3, 5, 10),
+        (0, 0, 0, 0, 0),
+        (10, 0, 0, 10, 10),
+    ],
+)
+async def test_non_streaming_responses_usage_populates_normalized_metadata(
+    input_tokens: int,
+    cached_tokens: int,
+    cache_write_tokens: int,
+    expected_in_tokens: int,
+    expected_total_input_tokens: int,
+):
     response = _responses_response(
         response_id="resp_usage",
         text_block_text="assistant text",
         usage=SimpleNamespace(
-            input_tokens=10,
+            input_tokens=input_tokens,
             output_tokens=5,
             input_tokens_details=SimpleNamespace(
-                cached_tokens=2, cache_write_tokens=3
+                cached_tokens=cached_tokens, cache_write_tokens=cache_write_tokens
             ),
             output_tokens_details=SimpleNamespace(reasoning_tokens=1),
         ),
@@ -1758,11 +2041,12 @@ async def test_non_streaming_responses_usage_populates_normalized_metadata():
             query_logger=MagicMock(),
         )
 
-    assert result.metadata.in_tokens == 5
+    assert result.metadata.in_tokens == expected_in_tokens
     assert result.metadata.out_tokens == 4
     assert result.metadata.reasoning_tokens == 1
-    assert result.metadata.cache_read_tokens == 2
-    assert result.metadata.cache_write_tokens == 3
+    assert result.metadata.cache_read_tokens == cached_tokens
+    assert result.metadata.cache_write_tokens == cache_write_tokens
+    assert result.metadata.total_input_tokens == expected_total_input_tokens
     assert result.extras.response_id == "resp_usage"
     assert result.extras.provider_response_id == "resp_usage"
     assert result.extras.provider_request_id == "openai-request-usage"

@@ -18,6 +18,39 @@ base-config:
       input_discount: 0.5
       output_discount: 0.5
 
+transcription-models:
+  base-config:
+    properties: null
+    release_date: 2026-08-26
+    supports:
+      transcription: true
+      temperature: false
+      tools: false
+    costs_per_million_token: null
+    transcription_language:
+      format: bcp-47
+      default: en-US
+
+  google/gemini-3.5-transcribe:
+    label: Gemini 3.5 Transcribe
+    release_date: 2026-08-26
+    transcription_streaming: false
+    costs_per_million_token:
+      input: 2.0
+      output: 12.0
+    documentation_url: >-
+      https://ai.google.dev/gemini-api/docs/models/gemini-3.5-transcribe
+
+  google/gemini-3.5-transcribe-live:
+    label: Gemini 3.5 Transcribe Live
+    release_date: 2026-08-26
+    transcription_streaming: true
+    costs_per_million_token:
+      input: 3.5
+      output: 21.0
+    documentation_url: >-
+      https://ai.google.dev/gemini-api/docs/models/gemini-3.5-transcribe
+
 gemini-3-models:
   base-config:
     supports:
@@ -88,6 +121,19 @@ gemini-3-models:
       output: 7.50
       cache:
         read: 0.15
+    alternative_keys:
+      - google/gemini-3.8-flash-low:
+          label: Gemini 3.8 Flash (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - google/gemini-3.8-flash-medium:
+          label: Gemini 3.8 Flash (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
+      - google/gemini-3.8-flash-high:
+          label: Gemini 3.8 Flash (High)
+          default_parameters:
+            reasoning_effort: "high"
   google/gemini-3.7-flash:
     label: Gemini 3.7 Flash
     release_date: 2026-08-13

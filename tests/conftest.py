@@ -12,6 +12,7 @@ os.environ.pop("MODEL_GATEWAY_URL", None)
 
 from examples.setup import setup
 from model_library import model_library_settings
+from model_library.register_models import ModelConfig
 from model_library.registry_utils import (
     get_model_names,
     get_registry_config,
@@ -31,6 +32,13 @@ def is_cli_model(model: str) -> bool:
     return config.provider_name in {"cursor", "devin", "factory"}
 
 
+def is_llm_model(model: str) -> bool:
+    """False for transcription-only models, which cannot be queried."""
+    config = get_registry_config(model)
+    assert config is not None
+    return isinstance(config, ModelConfig)
+
+
 def parametrize_all_models(func: F) -> F:
     """Decorator to parametrize test with all available models"""
     all_models = _local_model_names()
@@ -40,6 +48,7 @@ def parametrize_all_models(func: F) -> F:
         if "research" not in model
         and "dumbmar" not in model
         and not is_cli_model(model)
+        and is_llm_model(model)
     ]
     return pytest.mark.parametrize("model_key", all_models)(func)
 

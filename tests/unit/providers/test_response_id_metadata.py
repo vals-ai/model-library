@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from anthropic.types.beta import BetaTextBlock
 from ai21.models.chat import AssistantMessage
 from ai21.models.chat.chat_completion_response import (
@@ -146,7 +147,27 @@ async def test_anthropic_batch_captures_message_id_metadata():
     assert results[0].output.extras.provider_response_id == "anthropic-batch-message-1"
 
 
-async def test_google_query_captures_response_id_metadata():
+@pytest.mark.parametrize(
+    (
+        "prompt_token_count",
+        "cached_content_token_count",
+        "expected_uncached",
+        "expected_total",
+    ),
+    [
+        (1, 0, 1, 1),
+        (40000, 32768, 7232, 40000),
+        (0, 32768, 0, 32768),
+        (None, 32768, 0, 32768),
+        (0, 0, 0, 0),
+    ],
+)
+async def test_google_query_captures_response_id_metadata(
+    prompt_token_count: int | None,
+    cached_content_token_count: int,
+    expected_uncached: int,
+    expected_total: int,
+):
     async def stream() -> AsyncIterator[GenerateContentResponse]:
         yield GenerateContentResponse(
             response_id="google-response-1",
@@ -157,7 +178,8 @@ async def test_google_query_captures_response_id_metadata():
                 )
             ],
             usage_metadata=GenerateContentResponseUsageMetadata(
-                prompt_token_count=1,
+                prompt_token_count=prompt_token_count,
+                cached_content_token_count=cached_content_token_count,
                 candidates_token_count=2,
             ),
         )
@@ -172,6 +194,11 @@ async def test_google_query_captures_response_id_metadata():
     ):
         result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
 
+    assert result.output_text == "hello"
+    assert result.metadata.in_tokens == expected_uncached
+    assert result.metadata.cache_read_tokens == cached_content_token_count
+    assert result.metadata.total_input_tokens == expected_total
+    assert result.metadata.out_tokens == 2
     assert result.extras.response_id == "google-response-1"
     assert result.extras.provider_response_id == "google-response-1"
 

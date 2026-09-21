@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, NamedTuple
 
 from model_library.agent.metadata import (
     AgentTurn,
@@ -40,6 +40,17 @@ class ATIFMetrics(ValsModel):
     completion_token_ids: list[int] | None = None
     prompt_token_ids: list[int] | None = None
     extra: dict[str, Any] | None = None
+
+
+class _MetadataTotals(NamedTuple):
+    prompt_tokens: int
+    completion_tokens: int
+    cached_tokens: int | None
+    cost_usd: float | None
+    reasoning_tokens: int | None
+    cache_write_tokens: int | None
+    duration_seconds: float | None
+    record_count: int
 
 
 class ATIFFinalMetrics(ValsModel):
@@ -159,18 +170,8 @@ class ATIFTrajectory(ValsModel):
                     )
 
         # Aggregate metrics
-        total_prompt = 0
-        total_completion = 0
-        total_cached = 0
-        total_cost = 0.0
-        total_reasoning = 0
-        total_cache_write = 0
-        total_duration = 0.0
-        has_cached = False
-        has_cost = False
-        has_reasoning = False
-        has_cache_write = False
-        has_duration = False
+        main_metadata: list[QueryResultMetadata] = []
+        helper_metadata: list[QueryResultMetadata] = []
 
         for turn in turns:
             if isinstance(turn, ErrorTurn):
@@ -190,24 +191,13 @@ class ATIFTrajectory(ValsModel):
                 continue
 
             metadata = turn.query_result.metadata
+            main_metadata.append(metadata)
+            helper_metadata.extend(
+                record.tool_output.metadata
+                for record in turn.tool_call_records
+                if record.tool_output.metadata is not None
+            )
             step_metrics = _make_step_metrics(metadata)
-            total_prompt += step_metrics.prompt_tokens
-            total_completion += step_metrics.completion_tokens
-            if step_metrics.cached_tokens is not None:
-                has_cached = True
-                total_cached += step_metrics.cached_tokens
-            if step_metrics.cost_usd is not None:
-                has_cost = True
-                total_cost += step_metrics.cost_usd
-            if metadata.reasoning_tokens is not None:
-                has_reasoning = True
-                total_reasoning += metadata.reasoning_tokens
-            if metadata.cache_write_tokens is not None:
-                has_cache_write = True
-                total_cache_write += metadata.cache_write_tokens
-            if metadata.duration_seconds is not None:
-                has_duration = True
-                total_duration += metadata.duration_seconds
 
             turn_model_name, turn_extra = _model_routing(metadata, model_name)
 
@@ -229,22 +219,27 @@ class ATIFTrajectory(ValsModel):
                 )
             )
 
-        final_extra = {
+        main_totals = _aggregate_metadata(main_metadata)
+        final_extra: dict[str, Any] = {
             key: value
             for key, value in {
-                "total_reasoning_tokens": total_reasoning if has_reasoning else None,
-                "total_cache_write_tokens": total_cache_write
-                if has_cache_write
-                else None,
-                "total_duration_seconds": total_duration if has_duration else None,
+                "total_reasoning_tokens": main_totals.reasoning_tokens,
+                "total_cache_write_tokens": main_totals.cache_write_tokens,
+                "total_duration_seconds": main_totals.duration_seconds,
             }.items()
             if value is not None
         }
+        if helper_metadata:
+            helper_totals = _aggregate_metadata(helper_metadata)
+            combined_totals = _aggregate_metadata(main_metadata + helper_metadata)
+            final_extra["helper_metrics"] = _extra_metrics(helper_totals)
+            final_extra["combined_metrics"] = _extra_metrics(combined_totals)
+
         final_metrics = ATIFFinalMetrics(
-            total_prompt_tokens=total_prompt,
-            total_completion_tokens=total_completion,
-            total_cached_tokens=total_cached if has_cached else None,
-            total_cost_usd=total_cost if has_cost else None,
+            total_prompt_tokens=main_totals.prompt_tokens,
+            total_completion_tokens=main_totals.completion_tokens,
+            total_cached_tokens=main_totals.cached_tokens,
+            total_cost_usd=main_totals.cost_usd,
             total_steps=len(steps),
             extra=final_extra or None,
         )
@@ -295,6 +290,47 @@ class ATIFTrajectory(ValsModel):
             final_metrics=final_metrics,
             extra=extra,
         )
+
+
+def _aggregate_metadata(metadata: Sequence[QueryResultMetadata]) -> _MetadataTotals:
+    costs = [item.cost.total for item in metadata if item.cost is not None]
+    cached_tokens = [
+        item.cache_read_tokens
+        for item in metadata
+        if item.cache_read_tokens is not None
+    ]
+    reasoning_tokens = [
+        item.reasoning_tokens for item in metadata if item.reasoning_tokens is not None
+    ]
+    cache_write_tokens = [
+        item.cache_write_tokens
+        for item in metadata
+        if item.cache_write_tokens is not None
+    ]
+    durations = [
+        item.duration_seconds for item in metadata if item.duration_seconds is not None
+    ]
+    return _MetadataTotals(
+        prompt_tokens=sum(item.total_input_tokens for item in metadata),
+        completion_tokens=sum(item.total_output_tokens for item in metadata),
+        cached_tokens=sum(cached_tokens) if cached_tokens else None,
+        cost_usd=sum(costs) if costs else None,
+        reasoning_tokens=sum(reasoning_tokens) if reasoning_tokens else None,
+        cache_write_tokens=sum(cache_write_tokens) if cache_write_tokens else None,
+        duration_seconds=sum(durations) if durations else None,
+        record_count=len(metadata),
+    )
+
+
+def _extra_metrics(totals: _MetadataTotals) -> dict[str, int | float | None]:
+    return {
+        "total_prompt_tokens": totals.prompt_tokens,
+        "total_completion_tokens": totals.completion_tokens,
+        "total_cost_usd": totals.cost_usd,
+        "total_reasoning_tokens": totals.reasoning_tokens,
+        "total_duration_seconds": totals.duration_seconds,
+        "count": totals.record_count,
+    }
 
 
 def _make_step_metrics(metadata: QueryResultMetadata) -> ATIFMetrics:
@@ -365,6 +401,17 @@ def _make_observation(turn: AgentTurn) -> ATIFObservation | None:
         ATIFObservationResult(
             source_call_id=record.tool_call.id,
             content=record.tool_output.output,
+            extra=(
+                {
+                    "vals": {
+                        "tool_model_metrics": record.tool_output.metadata.model_dump(
+                            mode="json", exclude_none=True
+                        )
+                    }
+                }
+                if record.tool_output.metadata is not None
+                else None
+            ),
         )
         for record in turn.tool_call_records
     ]

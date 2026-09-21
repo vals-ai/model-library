@@ -297,7 +297,10 @@ def test_amazon_model_installs_hooks_and_captures_retry_then_raw_stream() -> Non
     sdk_client.meta.events = Events()
     with (
         patch.dict(client_registry, {}, clear=True),
-        patch("model_library.providers.amazon.boto3.client", return_value=sdk_client),
+        patch(
+            "model_library.providers.amazon.chat.boto3.client",
+            return_value=sdk_client,
+        ),
     ):
         model = AmazonModel("anthropic.claude-3-5-haiku-2024-10-22-v2:0")
         assert _AMAZON_GET_CLIENT(model, api_key="using-environment") is sdk_client
@@ -343,7 +346,10 @@ def test_amazon_model_hook_registration_failure_is_captured(
 
     with (
         patch.dict(client_registry, {}, clear=True),
-        patch("model_library.providers.amazon.boto3.client", return_value=sdk_client),
+        patch(
+            "model_library.providers.amazon.chat.boto3.client",
+            return_value=sdk_client,
+        ),
         core.capture(enabled=True) as active,
         caplog.at_level(logging.WARNING),
     ):
@@ -368,7 +374,7 @@ class _Proto:
         return self.payload
 
 async def test_pinned_xai_capture() -> None:
-    assert importlib.metadata.version("xai-sdk") == "1.12.2"
+    assert importlib.metadata.version("xai-sdk") == "1.19.0"
     model = XAIModel("grok-3-mini")
 
     class FailingChat:

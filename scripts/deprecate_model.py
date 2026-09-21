@@ -16,6 +16,8 @@ from typing import Any, cast
 
 import yaml
 
+from model_library.register_models import active_config_files
+
 CONFIG_DIR = Path(__file__).parent.parent / "model_library" / "config"
 DEPRECATED_DIR = CONFIG_DIR / "deprecated"
 MODEL_KEY_PATTERN = re.compile(r"^  \S+/\S+.*:$")
@@ -56,7 +58,8 @@ def find_model_lines(filepath: Path, model_key: str) -> tuple[int, int] | None:
 
 def find_model_file(model_key: str) -> tuple[Path, int, int]:
     """Search all active YAML files for the model key."""
-    for filepath in sorted(CONFIG_DIR.glob("*.yaml")):
+    config_files = active_config_files(CONFIG_DIR)
+    for filepath in sorted(config_files):
         result = find_model_lines(filepath, model_key)
         if result:
             return filepath, result[0], result[1]
@@ -121,8 +124,7 @@ def deprecate(model_key: str) -> None:
 
     from model_library.register_models import get_model_registry
 
-    registry = get_model_registry()
-    model_config = registry.get(model_key)
+    model_config = get_model_registry().get(model_key)
     if model_config is None:
         print(f"error: model '{model_key}' not found in registry")
         sys.exit(1)

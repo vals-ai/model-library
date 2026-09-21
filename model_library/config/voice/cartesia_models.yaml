@@ -1,0 +1,18 @@
+base-config:
+  company: Cartesia
+  country: United States
+  documentation_url: https://docs.cartesia.ai/api-reference/stt/websocket
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_streaming: true
+  costs_per_million_token: null
+  transcription_language:
+    format: iso-639-1
+    default: en
+
+transcription-models:
+  cartesia/ink-2:
+    label: Cartesia Ink 2
+    release_date: 2026-05-22

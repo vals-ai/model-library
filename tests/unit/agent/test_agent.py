@@ -1680,6 +1680,7 @@ class TestHistoryCompaction:
         metadata = get_registry_config("openai/gpt-4o-mini")
         assert metadata is not None
         metadata = metadata.model_copy(deep=True)
+        assert metadata.properties is not None
         metadata.properties.context_window = 200_000
         metadata.properties.max_tokens = 0
         object.__setattr__(llm, "_metadata", metadata)

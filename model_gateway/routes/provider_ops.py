@@ -278,7 +278,9 @@ def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
             except binascii.Error as exc:
                 raise ValueError("Invalid content_base64") from exc
             operation.add_event("model_cache_lookup")
-            llm = model_helpers.get_cached_llm(cache, body, config=config)
+            llm = model_helpers.get_cached_llm(
+                cache, body, config=config, transcription=True
+            )
             result_or_error = await operation.provider_call(
                 llm.transcribe_audio(
                     name=body.name,

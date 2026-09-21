@@ -21,6 +21,43 @@ deprecated:
     metadata:
       deprecated: true
 
+  together/deepseek-ai/DeepSeek-V4-Flash-0731:
+    company: DeepSeek
+    label: DeepSeek V4 Flash 0731 (Together)
+    open_source: true
+    documentation_url: https://www.together.ai/models/deepseek-v4-flash-0731
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: true
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    default_parameters: {}
+    provider_endpoint: deepseek-ai/DeepSeek-V4-Flash-0731
+    properties:
+      context_window: 1048576
+      max_tokens: 384000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.14
+      output: 0.28
+      cache:
+        read: 0.03
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+      batch: null
+      context: null
+
   together/meta-llama/Llama-4-Maverick-17B-128E-Instruct-FP8:
     company: Meta
     country: United States

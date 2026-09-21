@@ -14,6 +14,8 @@ from model_library.base import (
     QueryResult,
     ToolDefinition,
 )
+from model_library.base.output.transcription import TranscriptionResult
+from model_library.base.transcription import TranscriptionRequest
 from model_library.rate_limits import RateLimit
 
 
@@ -39,6 +41,15 @@ class DelegateOnly(LLM):
     ) -> None:
         assert self.delegate
         return self.delegate.get_client()
+
+    @override
+    async def _transcribe_audio(
+        self, request: TranscriptionRequest
+    ) -> TranscriptionResult:
+        assert self.delegate
+        return await self.delegate._transcribe_audio(  # pyright: ignore[reportPrivateUsage]
+            request
+        )
 
     def init_delegate(
         self,

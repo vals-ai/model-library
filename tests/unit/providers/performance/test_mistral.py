@@ -376,7 +376,7 @@ class TestMistralStreamingPerformance:
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
                 with patch(
-                    "model_library.providers.mistral.QueryResultBuilder",
+                    "model_library.providers.mistral.chat.QueryResultBuilder",
                     side_effect=make_builder,
                 ):
                     result = await model._query_impl(

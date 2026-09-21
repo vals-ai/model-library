@@ -2,17 +2,32 @@ import importlib
 import json
 import pkgutil
 import threading
+from collections.abc import Mapping
 from copy import deepcopy
 from datetime import date, timedelta
 from functools import cache
 from pathlib import Path
 from time import monotonic
 from urllib.parse import urljoin
-from typing import Any, Callable, Literal, Type, TypeVar, cast, get_type_hints
+from typing import (
+    Any,
+    Callable,
+    Literal,
+    Type,
+    TypeVar,
+    cast,
+    get_type_hints,
+)
 
 import httpx
 import yaml
-from pydantic import ConfigDict, ValidationError, create_model, model_validator
+from pydantic import (
+    ConfigDict,
+    TypeAdapter,
+    ValidationError,
+    create_model,
+    model_validator,
+)
 from pydantic.fields import Field
 from pydantic.main import BaseModel
 
@@ -171,6 +186,26 @@ class CostProperties(BaseModel):
     context: ContextCost | None = None
 
 
+class TranscriptionCostProperties(BaseModel):
+    """USD pricing for duration-billed transcription."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    usd_per_minute: float = Field(ge=0)
+    billing_basis: Literal["audio", "session"]
+    minimum_billable_seconds: float | None = Field(default=None, gt=0)
+    increment_seconds: float | None = Field(default=None, gt=0)
+
+
+class TranscriptionLanguageProperties(BaseModel):
+    """Language format and default for transcription requests."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    format: Literal["iso-639-1", "bcp-47"]
+    default: str = Field(min_length=1)
+
+
 class BaseProviderProperties(BaseModel):
     """Static base class for dynamic ProviderProperties."""
 
@@ -324,7 +359,7 @@ class DefaultParameters(BaseModel):
     compute_effort: str | int | bool | None = None
 
 
-class RawModelConfig(BaseModel):
+class CommonRegistryConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     company: str
@@ -333,17 +368,29 @@ class RawModelConfig(BaseModel):
     release_date: date | None = None
     open_source: bool
     documentation_url: str | None = None
-    properties: Properties
     supports: Supports
     metadata: Metadata = Field(default_factory=Metadata)
     provider_properties: BaseProviderProperties = Field(
         default_factory=BaseProviderProperties
     )
-    costs_per_million_token: CostProperties | None
+    transcription_cost: TranscriptionCostProperties | None = None
+    transcription_language: TranscriptionLanguageProperties | None = None
+    transcription_streaming: bool | None = None
     rate_limit: DefaultRateLimit | None = None
     alternative_keys: list[str | dict[str, Any]] = Field(default_factory=list)
     default_parameters: DefaultParameters = Field(default_factory=DefaultParameters)
     provider_endpoint: str | None = None
+
+    @model_validator(mode="after")
+    def validate_transcription_properties(self):
+        """Require request metadata for every transcription model."""
+        if not self.supports.transcription:
+            return self
+        if self.transcription_language is None:
+            raise ValueError(f"{self.label} must set transcription_language")
+        if self.transcription_streaming is None:
+            raise ValueError(f"{self.label} must set transcription_streaming")
+        return self
 
     def model_dump(self, *args: object, **kwargs: object):
         data = super().model_dump(*args, **kwargs)
@@ -360,19 +407,60 @@ class RawModelConfig(BaseModel):
         return data
 
 
+class RawModelConfig(CommonRegistryConfig):
+    properties: Properties
+    costs_per_million_token: CostProperties | None
+
+
+class RawTranscriptionModelConfig(CommonRegistryConfig):
+    properties: None = None
+    costs_per_million_token: CostProperties | None = None
+
+    @model_validator(mode="after")
+    def validate_transcription_support(self):
+        if self.supports.transcription is not True:
+            raise ValueError("Transcription entries must set supports.transcription")
+        return self
+
+
 class ModelConfig(RawModelConfig):
-    # post processing fields
     provider_endpoint: str  # pyright: ignore[reportIncompatibleVariableOverride, reportGeneralTypeIssues]
     provider_name: str
     full_key: str
     slug: str
 
 
+class TranscriptionModelConfig(RawTranscriptionModelConfig):
+    provider_endpoint: str  # pyright: ignore[reportIncompatibleVariableOverride, reportGeneralTypeIssues]
+    provider_name: str
+    full_key: str
+    slug: str
+
+
+raw_registry_entry_adapter: TypeAdapter[
+    RawModelConfig | RawTranscriptionModelConfig
+] = TypeAdapter(RawModelConfig | RawTranscriptionModelConfig)
+RegistryEntry = ModelConfig | TranscriptionModelConfig
+registry_entry_adapter: TypeAdapter[RegistryEntry] = TypeAdapter(RegistryEntry)
+RegistryEntries = dict[str, RegistryEntry]
 ModelRegistry = dict[str, ModelConfig]
+TranscriptionRegistry = dict[str, TranscriptionModelConfig]
+Registries = tuple[ModelRegistry, TranscriptionRegistry]
+
+
+def split_registry_entries(entries: RegistryEntries) -> Registries:
+    models: ModelRegistry = {}
+    transcription: TranscriptionRegistry = {}
+    for key, entry in entries.items():
+        if isinstance(entry, ModelConfig):
+            models[key] = entry
+        else:
+            transcription[key] = entry
+    return models, transcription
 
 
 def visible_registry_keys(
-    registry: ModelRegistry,
+    registry: Mapping[str, RegistryEntry],
     include_alt_keys: bool,
 ) -> set[str]:
     if include_alt_keys:
@@ -392,15 +480,15 @@ def visible_registry_keys(
     return set(registry) - same_provider_alternative_keys
 
 
-def model_config_from_json(data: dict[str, Any]) -> ModelConfig:
-    """Build a ModelConfig from a gateway registry JSON object."""
+def model_config_from_json(data: dict[str, Any]) -> RegistryEntry:
+    """Parse a chat or transcription entry from gateway registry JSON."""
     provider_properties = data["provider_properties"]
     payload = json.dumps(data)
     try:
-        model = ModelConfig.model_validate_json(payload)
+        model = registry_entry_adapter.validate_json(payload)
     except ValidationError as error:
         logger.warning("Retrying gateway registry parse ignoring extras: %s", error)
-        model = ModelConfig.model_validate_json(payload, extra="ignore")
+        model = registry_entry_adapter.validate_json(payload, extra="ignore")
     model.supports = model.supports.resolve()
     model.provider_properties = GatewayProviderProperties.model_validate(
         provider_properties
@@ -418,12 +506,13 @@ def _gateway_registry_request(gateway_url: str) -> tuple[str, dict[str, str]]:
         )
 
     registry_url = urljoin(
-        gateway_url.rstrip("/") + "/", "registry?include_excluded_fields=true"
+        gateway_url.rstrip("/") + "/",
+        "registry?include_excluded_fields=true&include_transcription=true",
     )
     return registry_url, {"Authorization": f"Bearer {api_key}"}
 
 
-def _model_registry_from_gateway_payload(payload: object) -> ModelRegistry:
+def _model_registry_from_gateway_payload(payload: object) -> RegistryEntries:
     if not isinstance(payload, dict):
         raise ValueError("Gateway registry response must be a JSON object")
 
@@ -439,7 +528,7 @@ def _model_registry_from_gateway_payload(payload: object) -> ModelRegistry:
     }
 
 
-def fetch_gateway_model_registry(gateway_url: str) -> ModelRegistry:
+def fetch_gateway_model_registry(gateway_url: str) -> RegistryEntries:
     """Fetch and parse a model registry snapshot from Gateway."""
     registry_url, headers = _gateway_registry_request(gateway_url)
     logger.info("Loading model registry from gateway: %s", registry_url)
@@ -469,7 +558,7 @@ def deep_update(
 
 def parse_yaml_blocks(
     model_blocks: dict[str, dict[str, dict[str, Any]]],
-    registry: ModelRegistry,
+    registry: RegistryEntries,
 ) -> None:
     """Parse a single YAML document's model blocks and merge into registry."""
     ProviderProperties = get_dynamic_provider_properties_model()
@@ -499,16 +588,15 @@ def parse_yaml_blocks(
                 raise ValueError("rate_limit must be omitted, not null")
 
             # create model config object
-            raw_model_obj: RawModelConfig = RawModelConfig.model_validate(
+            raw_model_obj = raw_registry_entry_adapter.validate_python(
                 current_model_config
             )
             raw_model_obj.supports = raw_model_obj.supports.resolve()
-
             provider_endpoint = (
                 raw_model_obj.provider_endpoint or model_name.split("/", 1)[1]
             )
             # add provider metadata
-            model_obj = ModelConfig.model_validate(
+            model_obj = registry_entry_adapter.validate_python(
                 {
                     **raw_model_obj.model_dump(),
                     "provider_name": model_name.split("/")[0],
@@ -559,10 +647,14 @@ def parse_yaml_blocks(
                 if alt_config:
                     copy_dict = copy.model_dump()
                     copy_dict = deep_update(copy_dict, alt_config)
-                    copy = ModelConfig.model_validate(copy_dict)
+                    copy = registry_entry_adapter.validate_python(copy_dict)
 
                 # handle thinking labels
-                if copy.properties.reasoning_model and "Nonthinking" in copy.label:
+                if (
+                    isinstance(copy, ModelConfig)
+                    and copy.properties.reasoning_model
+                    and "Nonthinking" in copy.label
+                ):
                     copy.label = copy.label.replace("Nonthinking", "Thinking")
 
                 copy.slug = key.replace("/", "_")
@@ -575,18 +667,22 @@ def parse_yaml_blocks(
                 registry[key] = copy
 
 
-def _register_models(deprecated_only: bool = False) -> ModelRegistry:
+def active_config_files(config_dir: Path) -> list[Path]:
+    return [*config_dir.glob("*.yaml"), *(config_dir / "voice").glob("*.yaml")]
+
+
+def _register_models(deprecated_only: bool = False) -> RegistryEntries:
     logger.debug(f"Loading model registry from {path_library}")
 
-    registry: ModelRegistry = {}
+    registry: RegistryEntries = {}
 
-    deprecated_dir = Path(path_library) / "deprecated"
+    config_dir = Path(path_library)
+    deprecated_dir = config_dir / "deprecated"
 
     if deprecated_only:
         yaml_files = list(deprecated_dir.glob("*.yaml"))
     else:
-        # load each provider YAML
-        yaml_files = list(Path(path_library).glob("*.yaml"))
+        yaml_files = active_config_files(config_dir)
 
         # include deprecated model configs (default: not included)
         include_deprecated = model_library_settings.get(
@@ -647,7 +743,22 @@ def _import_all_providers():
         # skip private modules
         if module_name.split(".")[-1].startswith("_"):
             continue
-        importlib.import_module(module_name)
+        try:
+            importlib.import_module(module_name)
+        except ModuleNotFoundError as error:
+            if error.name not in {
+                "assemblyai",
+                "cartesia",
+                "deepgram",
+                "elevenlabs",
+                "google.cloud.speech_v2",
+                "amazon_transcribe",
+                "azure",
+                "azure.cognitiveservices",
+                "azure.cognitiveservices.speech",
+            }:
+                raise
+            logger.debug("Skipping %s; install model-library[voice]", module_name)
 
 
 def get_provider_registry() -> dict[str, type[LLM]]:
@@ -662,12 +773,12 @@ def get_provider_registry() -> dict[str, type[LLM]]:
     return _provider_registry
 
 
-_model_registry: ModelRegistry | None = None
+_registries: Registries | None = None
 _model_registry_refreshed_at: float | None = None
 _model_registry_lock = threading.Lock()
 
 
-def _load_model_registry() -> ModelRegistry:
+def _load_registry_entries() -> RegistryEntries:
     from model_library import model_library_settings as current_settings
 
     gateway_url = current_settings.get("MODEL_GATEWAY_URL")
@@ -688,21 +799,52 @@ def _load_model_registry() -> ModelRegistry:
 
 
 @cache
-def get_deprecated_model_registry() -> ModelRegistry:
-    """Registry built only from `config/deprecated/*.yaml`, kept separate from the
-    shared registry so asking for retired entries never changes what it serves."""
+def _deprecated_registries() -> Registries:
+    """Registries built only from `config/deprecated/*.yaml`, kept separate from the
+    shared registries so asking for retired entries never changes what they serve."""
     get_provider_registry()
-    return _register_models(deprecated_only=True)
+    return split_registry_entries(_register_models(deprecated_only=True))
+
+
+def get_deprecated_model_registry() -> ModelRegistry:
+    return _deprecated_registries()[0]
+
+
+def get_deprecated_transcription_registry() -> TranscriptionRegistry:
+    return _deprecated_registries()[1]
+
+
+def get_registries() -> Registries:
+    """Thread-safe singleton access to one consistent (chat, transcription) snapshot."""
+    global _registries
+    if _registries is None:
+        with _model_registry_lock:
+            if _registries is None:
+                _registries = split_registry_entries(_load_registry_entries())
+    return _registries
 
 
 def get_model_registry() -> ModelRegistry:
-    """Thread-safe singleton access to model registry."""
-    global _model_registry
-    if _model_registry is None:
-        with _model_registry_lock:
-            if _model_registry is None:
-                _model_registry = _load_model_registry()
-    return _model_registry
+    return get_registries()[0]
+
+
+def get_transcription_registry() -> TranscriptionRegistry:
+    return get_registries()[1]
+
+
+def update_registries(entries: RegistryEntries) -> None:
+    """Merge entries into the live registries, replacing any existing entry with
+    the same key even when it moves between chat and transcription."""
+    new_models, new_transcription = split_registry_entries(entries)
+    get_registries()
+    with _model_registry_lock:
+        assert _registries is not None
+        models, transcription = _registries
+        for key in entries:
+            models.pop(key, None)
+            transcription.pop(key, None)
+        models.update(new_models)
+        transcription.update(new_transcription)
 
 
 def refresh_model_registry(
@@ -711,20 +853,20 @@ def refresh_model_registry(
     allow_stale_on_error: bool = False,
 ) -> None:
     """Refresh the shared model registry when its refresh TTL has expired."""
-    global _model_registry, _model_registry_refreshed_at
+    global _registries, _model_registry_refreshed_at
 
     with _model_registry_lock:
         now = monotonic()
-        current_registry = _model_registry
+        current_registries = _registries
         if (
-            current_registry is not None
+            current_registries is not None
             and _model_registry_refreshed_at is not None
             and now - _model_registry_refreshed_at < refresh_ttl.total_seconds()
         ):
             return
 
         try:
-            registry = _load_model_registry()
+            entries = _load_registry_entries()
         except httpx.HTTPError as error:
             refresh_error: Exception = error
         except OSError as error:
@@ -734,13 +876,13 @@ def refresh_model_registry(
         except yaml.YAMLError as error:
             refresh_error = error
         else:
-            _model_registry = registry
+            _registries = split_registry_entries(entries)
             _model_registry_refreshed_at = monotonic()
             return
 
         if (
             not allow_stale_on_error
-            or current_registry is None
+            or current_registries is None
             or _model_registry_refreshed_at is None
         ):
             raise refresh_error

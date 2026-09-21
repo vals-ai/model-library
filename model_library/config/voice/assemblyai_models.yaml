@@ -1,0 +1,23 @@
+base-config:
+  company: AssemblyAI
+  country: United States
+  documentation_url: https://www.assemblyai.com/docs
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_streaming: true
+  costs_per_million_token: null
+  transcription_language:
+    format: iso-639-1
+    default: en
+
+transcription-models:
+  assemblyai/universal-3-5-pro:
+    label: AssemblyAI Universal-3.5 Pro
+    release_date: 2026-06-23
+    documentation_url: "https://www.assemblyai.com/docs/pre-recorded-audio/\
+      universal-3-5-pro"
+    transcription_cost:
+      usd_per_minute: 0.0075
+      billing_basis: session

@@ -3,7 +3,6 @@ from __future__ import annotations
 import io
 import json
 import logging
-import time
 from collections import deque
 from collections.abc import Hashable, Mapping, Sequence
 from typing import Any, AsyncIterator, Literal, cast
@@ -64,7 +63,6 @@ from model_library.base import (
     ToolCall,
     ToolDefinition,
     ToolResult,
-    TranscriptionMetadata,
     TranscriptionResult,
 )
 from model_library.base.output.builder import QueryResultBuilder
@@ -81,6 +79,8 @@ from model_library.exceptions import (
 )
 from model_library.model_utils import get_reasoning_in_tag
 from model_library.agent.tool import is_native_web_search
+from model_library.base.transcription import TranscriptionRequest
+from model_library.providers.openai import voice
 from model_library.register_models import register_provider
 from model_library.retriers.base import BaseRetrier
 from model_library.utils import create_openai_client_with_defaults
@@ -141,7 +141,7 @@ def map_openai_completions_finish_reason(
             reason = FinishReason.MAX_TOKENS
         case "tool_calls" | "function_call":
             reason = FinishReason.TOOL_CALLS
-        case "content_filter":
+        case "content_filter" | "sensitive":
             reason = FinishReason.CONTENT_FILTER
         case "model_context_window_exceeded":
             reason = FinishReason.CONTEXT_WINDOW_EXCEEDED
@@ -619,7 +619,11 @@ class OpenAIModel(LLM):
                         f"data:{file.mime};base64,{file.base64}"
                     )
                 case FileWithUrl():
-                    raise Exception("Completions endpoint does not support url")
+                    if self.provider != "openrouter":
+                        raise BadInputError("Completions endpoint does not support url")
+                    # OpenRouter's PDF parser accepts a direct URL in file_data.
+                    base_dict["file"]["filename"] = file.name
+                    base_dict["file"]["file_data"] = file.url
                 case FileWithId():
                     base_dict["file"]["file_id"] = file.file_id
                 case _:
@@ -746,13 +750,13 @@ class OpenAIModel(LLM):
         if self.parallel_tool_calls is not None:
             body["parallel_tool_calls"] = self.parallel_tool_calls
 
-        # DeepSeek, Ant and older Kimi thinking modes use max_tokens. Ant ignores
+        # DeepSeek, Ant, Baseten, Together and older Kimi modes use max_tokens. Ant ignores
         # max_completion_tokens outright, which would leave generation uncapped.
         # Kimi K3 follows the current API contract and uses max_completion_tokens.
         if (
             self.reasoning
             and self.max_tokens
-            and self.provider not in ("deepseek", "ant")
+            and self.provider not in ("deepseek", "ant", "baseten", "together")
             and (self.provider != "kimi" or self.model_name == "kimi-k3")
         ):
             del body["max_tokens"]
@@ -858,16 +862,23 @@ class OpenAIModel(LLM):
                 if usage.completion_tokens_details
                 else None
             )
-            cache_read_tokens = (
-                usage.prompt_tokens_details.cached_tokens or 0
-                if usage.prompt_tokens_details
-                else getattr(usage, "cached_tokens", 0)  # for kimi
-            )
+            details = usage.prompt_tokens_details
+            if details:
+                cache_read_tokens = details.cached_tokens
+            else:
+                cache_read_tokens = getattr(usage, "cached_tokens", None)  # for kimi
+            if cache_read_tokens is None:
+                cache_read_tokens = getattr(usage, "cached_input_tokens", 0)
+            cache_write_tokens = getattr(details, "cache_write_tokens", None)
+            in_tokens = usage.prompt_tokens
+            if in_tokens:
+                in_tokens -= cache_read_tokens + (cache_write_tokens or 0)
             return QueryResultMetadata(
-                in_tokens=usage.prompt_tokens - cache_read_tokens,
+                in_tokens=in_tokens,
                 out_tokens=usage.completion_tokens - (reasoning_tokens or 0),
                 reasoning_tokens=reasoning_tokens,
                 cache_read_tokens=cache_read_tokens,
+                cache_write_tokens=cache_write_tokens,
             )
 
         def should_start_new_tool_call_segment(
@@ -1377,6 +1388,10 @@ class OpenAIModel(LLM):
                 f"Model returned no response. Recent events: {list(recent_stream_events)}"
             )
             raise ImmediateRetryException("Model returned no response")
+        if stream_responses and response.status in {"queued", "in_progress"}:
+            raise ImmediateRetryException(
+                f"Response stream ended before completion: {response.id}"
+            )
         query_logger.debug(f"Response finished: {response.id}")
 
         finish_reason = (
@@ -1488,9 +1503,11 @@ class OpenAIModel(LLM):
             )
             reasoning_tokens = response.usage.output_tokens_details.reasoning_tokens
             result_metadata = QueryResultMetadata(
-                in_tokens=response.usage.input_tokens
-                - cache_read_tokens
-                - cache_write_tokens,
+                in_tokens=(
+                    response.usage.input_tokens - cache_read_tokens - cache_write_tokens
+                    if response.usage.input_tokens
+                    else 0
+                ),
                 out_tokens=response.usage.output_tokens - reasoning_tokens,
                 reasoning_tokens=reasoning_tokens,
                 cache_read_tokens=cache_read_tokens,
@@ -1609,57 +1626,23 @@ class OpenAIModel(LLM):
             func=_get_embedding, logger=self.instance_logger
         )
 
-    async def transcribe_audio(
+    async def transcribe_file_audio(
         self,
         *,
         name: str,
         mime: str,
         audio: bytes,
-        language: str | None = None,
+        language: str | None,
     ) -> TranscriptionResult:
-        """Transcribe one bounded audio file through OpenAI's Audio API."""
-        from openai.types.audio.transcription import (
-            Transcription,
-            UsageTokens,
+        return await voice.transcribe_file_audio(
+            self, name=name, mime=mime, audio=audio, language=language
         )
 
-        started = time.perf_counter()
-        optional_args: dict[str, Any] = (
-            {"language": language} if language is not None else {}
-        )
-
-        response = cast(
-            Transcription,
-            await self.get_client().audio.transcriptions.create(
-                file=(name, audio, mime),
-                model=self.model_name,
-                response_format="json",
-                **optional_args,
-            ),
-        )
-        metadata = TranscriptionMetadata(
-            audio_bytes=len(audio),
-            request_duration_seconds=time.perf_counter() - started,
-        )
-        usage = response.usage
-        if isinstance(usage, UsageTokens):
-            metadata.input_tokens = usage.input_tokens
-            metadata.output_tokens = usage.output_tokens
-            metadata.total_tokens = usage.total_tokens
-            if usage.input_token_details is not None:
-                metadata.audio_tokens = usage.input_token_details.audio_tokens
-                metadata.text_tokens = usage.input_token_details.text_tokens
-            if (
-                self.metadata is not None
-                and self.metadata.costs_per_million_token is not None
-            ):
-                costs = self.metadata.costs_per_million_token
-                metadata.cost_usd = (
-                    usage.input_tokens * costs.input
-                    + usage.output_tokens * costs.output
-                ) / 1_000_000
-
-        return TranscriptionResult(text=response.text, metadata=metadata)
+    @override
+    async def _transcribe_audio(
+        self, request: TranscriptionRequest
+    ) -> TranscriptionResult:
+        return await voice.transcribe_audio(self, request)
 
     async def moderate_content(self, text: str) -> ModerationCreateResponse:
         """Query OpenAI's Moderation endpoint"""

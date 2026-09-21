@@ -11,7 +11,7 @@ from xai_sdk.chat import Content, Response, system, tool_result, user
 from xai_sdk.chat import file as xai_file
 from xai_sdk.chat import image as xai_image
 from xai_sdk.chat import tool as xai_tool
-from xai_sdk.proto.v6.chat_pb2 import Message, Tool
+from xai_sdk.proto.v6.chat_pb2 import Message, Tool, ToolCallType
 from xai_sdk.tools import get_tool_call_type, web_search
 
 from model_library import model_library_settings
@@ -438,10 +438,17 @@ class XAIModel(LLM):
         if attempt is not None:
             attempt.finish()
 
+        native_search_requested = any(
+            tool_call.type == ToolCallType.TOOL_CALL_TYPE_WEB_SEARCH_TOOL
+            for tool_call in latest_response.tool_calls
+        ) and any(tool.HasField("web_search") for tool in chat.proto.tools)
         tool_calls: list[ToolCall] = []
         provider_tool_events: list[ProviderToolEvent] = []
         for i, tool_call in enumerate(latest_response.tool_calls):
-            if get_tool_call_type(tool_call) == "web_search_tool":
+            if (
+                native_search_requested
+                and get_tool_call_type(tool_call) == "web_search_tool"
+            ):
                 provider_tool_events.append(
                     ProviderToolEvent.web_search(
                         provider="xai",

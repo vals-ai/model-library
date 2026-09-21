@@ -1,0 +1,31 @@
+base-config:
+  company: Deepgram
+  country: United States
+  documentation_url: https://developers.deepgram.com/docs
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_streaming: true
+  costs_per_million_token: null
+  transcription_language:
+    format: iso-639-1
+    default: en
+
+transcription-models:
+  deepgram/flux-general-en:
+    label: Deepgram Flux General English
+    release_date: 2025-10-02
+    documentation_url: https://developers.deepgram.com/docs/flux
+    transcription_cost:
+      usd_per_minute: 0.0065
+      billing_basis: audio
+
+  deepgram/nova-3-streaming:
+    label: Deepgram Nova-3 (Streaming)
+    release_date: 2025-02-12
+    provider_endpoint: nova-3
+    documentation_url: https://developers.deepgram.com/docs/live-streaming-audio
+    transcription_cost:
+      usd_per_minute: 0.0048
+      billing_basis: audio

@@ -148,7 +148,7 @@ CONTEXT_WINDOW_PATTERN = re.compile(
     r"exceed.* context (limit|window|length)|"
     r"input token count exceeds the maximum number of tokens allowed|"
     r"context window exceeds|"
-    r"exceeds maximum length|"
+    r"exceeds max(imum)? length|"
     r"too long.*tokens.*maximum|"
     r"too large for model with \d+ maximum context length|"
     r"prompt \d+ > \d+ maximum context length|"  # mistral
@@ -171,6 +171,52 @@ CONTEXT_WINDOW_PATTERN = re.compile(
 
 def is_context_window_error(e: Exception) -> bool:
     return CONTEXT_WINDOW_PATTERN.search(str(e).lower()) is not None
+
+
+REFUSAL_TEXT_ERROR_PATTERN = re.compile(
+    r"^(?:\w+(?: \([\w.]+\))?: )?I['\u2019]m sorry, but I can['\u2019]?t (?:help|assist) with (?:that|this)(?: request)?\.?\s*$",
+)
+"""An error whose whole message is the model's refusal sentence and nothing else.
+
+Some Responses-API endpoints end a refused request with an ``error`` stream
+event carrying the refusal text as the message and no code, which the SDK
+raises as a bare ``APIError``. The optional prefix is the ``ExceptionType: `` /
+``ExceptionType (code): `` form that gateway envelopes and
+``exception_message`` put in front of the provider message.
+"""
+
+
+def is_content_filter_error(e: Exception) -> bool:
+    """Whether a provider reported a refusal via an error body code/type/message."""
+    if isinstance(e, ContentFilterError):
+        return True
+    structured_error = " ".join(
+        str(getattr(e, field, "") or "").lower()
+        for field in ("code", "type", "error_type", "exception_type")
+    )
+    if "content_filter" in structured_error or "contentfiltererror" in structured_error:
+        return True
+    if any(
+        marker in structured_error
+        for marker in (
+            "cyber_policy",
+            "safety_policy",
+            "blocked_prompt",
+            "content_policy_violation",
+        )
+    ):
+        return True
+    message = str(e)
+    if "DataInspectionFailed" in message:
+        return True
+    if "output blocked by content filtering policy" in message.lower():
+        return True
+    if REFUSAL_TEXT_ERROR_PATTERN.match(message):
+        return True
+    return (
+        getattr(e, "code", None) == "invalid_prompt"
+        and "violating our usage policy" in message
+    )
 
 
 class ModelNoOutputError(ImmediateRetryException):

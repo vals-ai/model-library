@@ -6,9 +6,10 @@ from urllib.parse import urlparse
 import yaml
 
 from model_library.register_models import (
-    ModelRegistry,
-    get_model_registry,
+    RegistryEntries,
+    active_config_files,
     parse_yaml_blocks,
+    update_registries,
 )
 from model_library.utils import get_logger
 
@@ -20,24 +21,20 @@ DEFAULT_URL_TIMEOUT_SECONDS = 30
 def _default_config_files() -> list[str]:
     config_dir = Path(__file__).parent / "config"
     return sorted(
-        path.name
-        for path in config_dir.glob("*.yaml")
-        if path.name != "all_models.json"
+        path.relative_to(config_dir).as_posix()
+        for path in active_config_files(config_dir)
     )
 
 
 def load_custom_model_configs(
     source: str | Path,
-    registry: ModelRegistry | None = None,
+    registry: RegistryEntries | None = None,
 ) -> None:
     """Load model configs from a single YAML file and merge into the registry, overriding defaults.
 
     source can be a URL (http:// or https://) or a local file path.
     The YAML format is the same as the bundled provider configs.
     """
-    if registry is None:
-        registry = get_model_registry()
-
     source_str = str(source)
     logger.info(f"Loading model configs from {source_str}")
 
@@ -58,8 +55,15 @@ def load_custom_model_configs(
         logger.error(f"Error parsing YAML: {e}")
         raise e
 
-    if model_blocks:
+    if not model_blocks:
+        return
+    if registry is not None:
         parse_yaml_blocks(model_blocks, registry)
+        return
+
+    entries: RegistryEntries = {}
+    parse_yaml_blocks(model_blocks, entries)
+    update_registries(entries)
 
 
 def load_latest_vals_model_configs(branch: str = "main") -> None:

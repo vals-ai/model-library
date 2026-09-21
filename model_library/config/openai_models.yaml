@@ -21,7 +21,8 @@ base-config:
     reasoning_effort: "high"
 gpt-6-models:
   base-config:
-    documentation_url: "https://developers.openai.com/api/docs/models/gpt-6-astra"
+    documentation_url: "https://developers.openai.com/api/docs/models/\
+      gpt-6-astra"
     supports:
       images: true
       files: true
@@ -57,10 +58,26 @@ gpt-6-models:
     provider_properties:
       reasoning_context: all_turns
     alternative_keys:
+      - openai/gpt-6-astra-low:
+          label: GPT-6 Astra (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - openai/gpt-6-astra-medium:
+          label: GPT-6 Astra (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
       - openai/gpt-6-astra-high:
           label: GPT-6 Astra (High)
           default_parameters:
             reasoning_effort: "high"
+      - openai/gpt-6-astra-xhigh:
+          label: GPT-6 Astra (Extra High)
+          default_parameters:
+            reasoning_effort: "xhigh"
+      - openai/gpt-6-astra-max:
+          label: GPT-6 Astra (Max)
+          default_parameters:
+            reasoning_effort: "max"
 
 gpt-5.6-models:
   base-config:
@@ -144,7 +161,8 @@ gpt-5.6-models:
 
 daybreak-models:
   base-config:
-    documentation_url: "https://developers.openai.com/api/docs/models/daybreak-blue-latest"
+    documentation_url: "https://developers.openai.com/api/docs/models/\
+      daybreak-blue-latest"
     supports:
       images: true
       files: true
@@ -567,7 +585,8 @@ deep-research-models:
       supports_live_monitoring: false
     metadata:
       available_for_everyone: true
-    documentation_url: https://platform.openai.com/docs/models/o4-mini-deep-research
+    documentation_url: "https://platform.openai.com/docs/models/\
+      o4-mini-deep-research"
 
   openai/o4-mini-deep-research:
 
@@ -582,7 +601,8 @@ deep-research-models:
       supports_live_monitoring: false
     metadata:
       available_for_everyone: true
-    documentation_url: https://platform.openai.com/docs/models/o4-mini-deep-research
+    documentation_url: "https://platform.openai.com/docs/models/\
+      o4-mini-deep-research"
 
 o-series-models:
   base-config:
@@ -713,7 +733,11 @@ o-series-models:
             supports_live_monitoring: true
 transcription-models:
   base-config:
-    documentation_url: https://platform.openai.com/docs/models/gpt-4o-transcribe
+    rate_limit:
+      supports_live_monitoring: false
+    properties: null
+    documentation_url: https://platform.openai.com/docs/guides/speech-to-text
+    costs_per_million_token: null
     supports:
       batch: false
       files: false
@@ -721,21 +745,43 @@ transcription-models:
       tools: false
       output_schema: false
       transcription: true
-    properties:
-      context_window: 16_000
-      max_tokens: 2_000
-      reasoning_model: false
     default_parameters:
       reasoning_effort: false
+    transcription_language:
+      format: iso-639-1
+      default: en
 
   openai/gpt-4o-transcribe:
 
     label: GPT 4o Transcribe
+    transcription_streaming: false
     release_date: 2025-03-20
+    documentation_url: https://platform.openai.com/docs/models/gpt-4o-transcribe
     costs_per_million_token:
       input: 2.5
       output: 10.0
-      batch: null
+
+  openai/gpt-4o-mini-transcribe-streaming-response:
+    label: GPT 4o Mini Transcribe (Streaming)
+    transcription_streaming: true
+    release_date: 2025-03-20
+    provider_endpoint: gpt-4o-mini-transcribe
+    documentation_url: "https://developers.openai.com/api/docs/models/\
+      gpt-4o-mini-transcribe"
+    costs_per_million_token:
+      input: 1.25
+      output: 5.0
+
+  openai/gpt-live-transcribe:
+    label: GPT Live Transcribe
+    release_date: 2026-07-29
+    transcription_streaming: true
+    documentation_url: "https://developers.openai.com/api/docs/models/\
+      gpt-live-transcribe"
+    costs_per_million_token: null
+    transcription_cost:
+      usd_per_minute: 0.017
+      billing_basis: audio
 
     rate_limit:
       supports_live_monitoring: false

@@ -1,0 +1,23 @@
+base-config:
+  company: AWS
+  country: United States
+  documentation_url: "https://docs.aws.amazon.com/transcribe/latest/dg/\
+    streaming.html"
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_streaming: true
+  costs_per_million_token: null
+  transcription_language:
+    format: bcp-47
+    default: en-US
+
+transcription-models:
+  aws_transcribe/streaming:
+    label: Amazon Transcribe Streaming
+    release_date: 2018-11-19
+    transcription_cost:
+      usd_per_minute: 0.01
+      billing_basis: audio
+      increment_seconds: 1.0

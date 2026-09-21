@@ -5,9 +5,11 @@ from typing import Any
 from fastapi import FastAPI
 
 from model_library.register_models import (
-    ModelConfig,
+    RegistryEntries,
+    RegistryEntry,
     get_deprecated_model_registry,
-    get_model_registry,
+    get_deprecated_transcription_registry,
+    get_registries,
     visible_registry_keys,
 )
 from model_library.registry_utils import get_model_names, get_registry_config
@@ -19,11 +21,19 @@ def register_model_routes(app: FastAPI) -> None:
         include_deprecated: bool = False,
         include_alt_keys: bool = True,
         include_excluded_fields: bool = False,
+        include_transcription: bool = False,
     ):
-        registry = get_model_registry()
+        with_transcription = include_excluded_fields and include_transcription
+        models, transcription = get_registries()
+        registry: RegistryEntries = dict(models)
+        if with_transcription:
+            registry.update(transcription)
         if include_deprecated:
             # Active entries win over retired ones sharing a key.
-            registry = {**get_deprecated_model_registry(), **registry}
+            deprecated: RegistryEntries = dict(get_deprecated_model_registry())
+            if with_transcription:
+                deprecated.update(get_deprecated_transcription_registry())
+            registry = {**deprecated, **registry}
         visible_keys = visible_registry_keys(registry, include_alt_keys)
         exclude = None
         if not include_excluded_fields:
@@ -31,9 +41,18 @@ def register_model_routes(app: FastAPI) -> None:
                 "supports": {"transcription"},
                 "country": True,
                 "rate_limit": True,
+                "transcription_cost": True,
+                "transcription_language": True,
+                "transcription_streaming": True,
+            }
+        elif not include_transcription:
+            exclude = {
+                "transcription_cost": True,
+                "transcription_language": True,
+                "transcription_streaming": True,
             }
 
-        def serialize_config(config: ModelConfig) -> dict[str, Any]:
+        def serialize_config(config: RegistryEntry) -> dict[str, Any]:
             payload = config.model_dump(mode="json", exclude=exclude)
             if include_excluded_fields:
                 if config.rate_limit is None:

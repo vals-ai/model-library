@@ -1,0 +1,58 @@
+base-config:
+  company: Arcee AI
+  country: United States
+  documentation_url: https://docs.arcee.ai/api-reference/your-first-api-call
+  open_source: true
+  supports:
+    temperature: true
+    images: false
+    files: false
+    tools: true
+
+
+deprecated:
+  base-config:
+    metadata:
+      deprecated: true
+
+  openrouter/arcee-ai/trinity-large-thinking:
+    company: Arcee AI
+    country: United States
+    label: Trinity Large Thinking
+    release_date: 2026-04-01
+    open_source: true
+    documentation_url: https://docs.arcee.ai/api-reference/your-first-api-call
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    alternative_keys: []
+    default_parameters:
+      temperature: 0.3
+      top_p: 0.95
+    provider_endpoint: arcee-ai/trinity-large-thinking
+    properties:
+      context_window: 262144
+      max_tokens: 80000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.25
+      output: 0.9
+      cache:
+        read: 0.06
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+      batch: null
+      context: null

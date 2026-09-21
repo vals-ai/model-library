@@ -28,7 +28,7 @@ make deprecate model=provider/model-key  # Move a model to deprecated
 
 ## Model config structure
 
-- Active configs: `model_library/config/*.yaml` (one per provider)
+- Active configs: `model_library/config/*.yaml` and `model_library/config/voice/*.yaml` (one per provider)
 - Deprecated configs: `model_library/config/deprecated/*.yaml` (not loaded by default)
 - Generated: `model_library/config/all_models.json` (do not edit)
 - YAML uses 3-level inheritance: provider base-config → block base-config → model entry

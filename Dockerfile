@@ -11,10 +11,10 @@ WORKDIR /app
 ENV SETUPTOOLS_SCM_PRETEND_VERSION=0.0.0
 COPY pyproject.toml uv.lock ./
 RUN uv venv --python 3.11 && \
-    uv sync --locked --no-dev --extra server --no-install-project
+    uv sync --locked --no-dev --extra server --extra voice --no-install-project
 COPY model_library/ model_library/
 COPY model_gateway/ model_gateway/
-RUN uv sync --locked --no-dev --extra server --no-editable
+RUN uv sync --locked --no-dev --extra server --extra voice --no-editable
 
 # --- runtime stage ---
 FROM ${PYTHON_IMAGE}

@@ -29,10 +29,12 @@ deepseek-models:
     default_parameters:
       temperature: 1
 
-  fireworks/deepseek-v4-flash-0731:
-    label: DeepSeek V4 Flash 0731
-    release_date: 2026-07-31
-    provider_endpoint: deepseek-v4-flash-0731
+  fireworks/deepseek-v4p1-flash:
+    label: DeepSeek V4.1 Flash (Fireworks)
+    release_date: 2026-09-10
+    documentation_url: https://fireworks.ai/models/fireworks/deepseek-v4p1-flash
+    supports:
+      images: true
     properties:
       context_window: 1_000_000
       max_tokens: 131_072
@@ -41,10 +43,49 @@ deepseek-models:
       temperature: 1
       top_p: 0.95
     costs_per_million_token:
-      input: 0.14
-      output: 0.28
+      input: 0.22
+      output: 0.66
       cache:
-        read: 0.028
+        read: 0.007
+  fireworks/deepseek-v4-flash-0731:
+    alternative_keys:
+      - baseten/deepseek-ai/DeepSeek-V4-Flash-0731:
+          country: null
+          label: DeepSeek V4 Flash 0731 (Baseten)
+          release_date: null
+          documentation_url: https://www.baseten.co/library/deepseek-v4-flash-0731/
+          supports:
+            output_schema: true
+          provider_properties:
+            api_base: https://inference.baseten.co/v1
+          default_parameters:
+            temperature: null
+            top_p: null
+          properties:
+            context_window: 1_048_000
+            max_tokens: 384_000
+          costs_per_million_token:
+            input: 0.13
+            output: 0.26
+            cache:
+              read: 0.028
+            batch: null
+    label: DeepSeek V4 Flash 0731
+    release_date: 2026-07-31
+    provider_endpoint: deepseek-v4-flash-0731
+    documentation_url: https://fireworks.ai/models/deepseek-ai/deepseek-v4-flash-0731
+    properties:
+      context_window: 1_000_000
+      max_tokens: 131_072
+      reasoning_model: true
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.22
+      output: 0.66
+      cache:
+        read: 0.007
 openai-models:
   base-config:
     company: OpenAI
@@ -75,6 +116,33 @@ kimi-models:
       images: false
 
   fireworks/kimi-k3:
+    alternative_keys:
+      - together/moonshotai/Kimi-K3:
+          country: null
+          label: Kimi K3 (Together)
+          release_date: 2026-07-27
+          documentation_url: https://www.together.ai/models/kimi-k3
+          supports:
+            temperature: false
+            output_schema: true
+          properties:
+            context_window: 1_048_576
+          costs_per_million_token:
+            batch: null
+      - baseten/moonshotai/Kimi-K3:
+          country: null
+          label: Kimi K3 (Baseten)
+          release_date: 2026-07-27
+          documentation_url: https://www.baseten.co/library/kimi-k3/
+          supports:
+            output_schema: true
+          provider_properties:
+            api_base: https://inference.baseten.co/v1
+          properties:
+            context_window: 1_048_000
+            max_tokens: 262_000
+          costs_per_million_token:
+            batch: null
     label: Kimi K3
     release_date: 2026-07-19
     properties:
@@ -89,6 +157,31 @@ kimi-models:
       cache:
         read: 0.30
 
+minimax-models:
+  base-config:
+    company: MiniMax
+    country: China
+    open_source: true
+    supports:
+      images: true
+      temperature: true
+
+  fireworks/minimax-m3:
+    label: MiniMax-M3 (Fireworks)
+    release_date: 2026-06-11
+    documentation_url: https://fireworks.ai/models/fireworks/minimax-m3
+    properties:
+      context_window: 512_000
+      max_tokens: 64_000
+      reasoning_model: true
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.06
 nvidia-models:
   base-config:
     company: NVIDIA
@@ -189,6 +282,55 @@ zai-models:
     supports:
       images: false
       temperature: true
+  fireworks/glm-5p3-flash:
+    alternative_keys:
+      # Library output budget matches Fireworks, not a Together-published limit.
+      - together/zai-org/GLM-5.3-Flash:
+          country: null
+          label: GLM 5.3 Flash (Together)
+          documentation_url: https://www.together.ai/models/glm-5-3-flash
+          supports:
+            output_schema: true
+          default_parameters:
+            temperature: null
+            top_p: null
+          properties:
+            context_window: 1_048_575
+          costs_per_million_token:
+            batch: null
+      - baseten/zai-org/GLM-5.3-Flash:
+          country: null
+          label: GLM 5.3 Flash (Baseten)
+          documentation_url: https://www.baseten.co/library/glm-53-flash/
+          supports:
+            output_schema: true
+          provider_properties:
+            api_base: https://inference.baseten.co/v1
+          default_parameters:
+            temperature: null
+            top_p: null
+          properties:
+            context_window: 1_048_000
+            max_tokens: 262_000
+          costs_per_million_token:
+            batch: null
+    label: GLM 5.3 Flash (Fireworks)
+    release_date: 2026-08-26
+    documentation_url: https://fireworks.ai/models/fireworks/glm-5p3-flash
+    supports:
+      images: true
+    properties:
+      context_window: 1_000_000
+      max_tokens: 131_072
+      reasoning_model: true
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+    costs_per_million_token:
+      input: 0.15
+      output: 0.50
+      cache:
+        read: 0.03
   fireworks/glm-5p3:
     label: GLM 5.3 (Fireworks)
     release_date: 2026-08-18
@@ -204,6 +346,19 @@ zai-models:
     default_parameters:
       temperature: 1
       top_p: 0.95
+    alternative_keys:
+      - fireworks/glm-5p3-low:
+          label: GLM 5.3 (Fireworks, Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - fireworks/glm-5p3-high:
+          label: GLM 5.3 (Fireworks, High)
+          default_parameters:
+            reasoning_effort: "high"
+      - fireworks/glm-5p3-max:
+          label: GLM 5.3 (Fireworks, Max)
+          default_parameters:
+            reasoning_effort: "max"
 
   fireworks/glm-5p2:
     label: GLM 5.2 (Fireworks)

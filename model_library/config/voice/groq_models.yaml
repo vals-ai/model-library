@@ -1,0 +1,30 @@
+base-config:
+  company: OpenAI
+  country: United States
+  documentation_url: https://console.groq.com/docs/speech-to-text
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_streaming: false
+  costs_per_million_token: null
+  transcription_language:
+    format: iso-639-1
+    default: en
+
+transcription-models:
+  groq/whisper-large-v3-turbo:
+    label: Whisper Large-v3 Turbo
+    release_date: 2024-10-09
+    transcription_cost:
+      usd_per_minute: 0.0006666666666666666
+      billing_basis: audio
+      minimum_billable_seconds: 10.0
+
+  groq/whisper-large-v3:
+    label: Whisper Large-v3
+    release_date: 2024-06-24
+    transcription_cost:
+      usd_per_minute: 0.00185
+      billing_basis: audio
+      minimum_billable_seconds: 10.0

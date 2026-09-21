@@ -42,9 +42,11 @@ from model_library.base.input import (
 )
 from model_library.base.output import QueryResult, TranscriptionResult
 from model_library.exceptions import (
+    ContentFilterError,
     GatewayMethodNotSupported,
     GatewayProviderError,
     MaxContextWindowExceededError,
+    is_content_filter_error,
 )
 from model_library.rate_limits import RateLimit
 from model_library.utils import gateway_httpx_client
@@ -184,6 +186,8 @@ def _raise_for_gateway_error_envelope(data: dict[str, Any]) -> None:
     )
     if exception_type == MaxContextWindowExceededError.__name__:
         raise MaxContextWindowExceededError(message) from gateway_error
+    if is_content_filter_error(gateway_error):
+        raise ContentFilterError(message) from gateway_error
     raise gateway_error
 
 

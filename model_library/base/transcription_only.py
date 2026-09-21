@@ -1,20 +1,18 @@
 import io
 import logging
-from abc import abstractmethod
-from typing import Any, Literal, Sequence
+from typing import Any, ClassVar, Literal, Sequence
 
 from pydantic import BaseModel
 from typing_extensions import override
 
 from model_library.base import (
     LLM,
+    LLMConfig,
     FileInput,
     FileWithId,
     InputItem,
     QueryResult,
     ToolDefinition,
-    TranscriptionConfig,
-    TranscriptionResult,
 )
 
 
@@ -31,25 +29,46 @@ class TranscriptionOnlyException(Exception):
 
 
 class TranscriptionOnly(LLM):
+    provider_name: ClassVar[str]
+
     def __init__(
         self,
         model_name: str,
-        provider: str,
+        provider: str | None = None,
         *,
-        config: TranscriptionConfig | None = None,
+        config: LLMConfig | None = None,
     ):
-        super().__init__(model_name, provider, config=config or TranscriptionConfig())
+        if config is None:
+            config = LLMConfig(
+                supports_transcription=True,
+                supports_temperature=False,
+            )
+        self._custom_api_key = config.custom_api_key
+        super().__init__(
+            model_name,
+            provider if provider is not None else self.provider_name,
+            config=config,
+        )
+
+    def _api_key(self) -> str:
+        if self._custom_api_key is not None:
+            return self._custom_api_key.get_secret_value()
+        return self._get_default_api_key()
 
     @override
-    @abstractmethod
-    async def transcribe_audio(
-        self,
-        *,
-        name: str,
-        mime: str,
-        audio: bytes,
-        language: str | None = None,
-    ) -> TranscriptionResult: ...
+    def _client_registry_namespace(self) -> str:
+        return f"{self.provider}.transcription"
+
+    @override
+    def get_client(
+        self, api_key: str | None = None, base_url: str | None = None
+    ) -> Any:
+        if api_key is not None or base_url is not None:
+            raise TranscriptionOnlyException()
+        try:
+            return super().get_client()
+        except (AttributeError, KeyError) as exc:
+            raise TranscriptionOnlyException() from exc
 
     @override
     async def _query_impl(

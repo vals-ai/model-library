@@ -42,7 +42,8 @@ def test_amazon_client_enables_tcp_keepalive_without_changing_credentials(
     with (
         patch.dict(client_registry, {}, clear=True),
         patch(
-            "model_library.providers.amazon.boto3.client", return_value=sdk_client
+            "model_library.providers.amazon.chat.boto3.client",
+            return_value=sdk_client,
         ) as create_client,
     ):
         model = AmazonModel("anthropic.claude-3-5-haiku-2024-10-22-v2:0")

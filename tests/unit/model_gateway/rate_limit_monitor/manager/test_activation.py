@@ -8,6 +8,8 @@ from model_gateway.rate_limit_monitor.manager import (
     MonitorInvalidModel,
     _SourceProbe,
 )
+from model_library.registry_utils import get_transcription_registry_config
+
 from tests.unit.model_gateway.rate_limit_monitor.manager._support import (
     MODEL,
     ANTHROPIC_MODEL,
@@ -44,6 +46,34 @@ async def test_unsupported_model_is_rejected_without_store_or_provider_work(
 
     assert store.activate_calls == []
     provider_factory.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "model",
+    [
+        "meta/muse_voice_transcribe",
+        "openai/gpt-4o-transcribe",
+        "openai/gpt-4o-mini-transcribe-streaming-response",
+    ],
+)
+async def test_transcription_registry_entries_reject_monitoring(monkeypatch, model):
+    config = get_transcription_registry_config(model)
+    assert config is not None
+    assert config.rate_limit is not None
+    assert config.rate_limit.supports_live_monitoring is False
+
+    store = FakeStore()
+    monitor = monitor_module.RateLimitMonitor(store)
+    provider_factory = AsyncMock()
+    monkeypatch.setattr(monitor_module, "get_registry_model", provider_factory)
+
+    try:
+        with pytest.raises(MonitorInvalidModel):
+            await monitor.activate(model)
+        assert store.activate_calls == []
+        provider_factory.assert_not_called()
+    finally:
+        await monitor.close()
 
 
 async def test_activation_accepts_same_and_cross_provider_alternative_keys(
