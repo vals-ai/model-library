@@ -852,7 +852,6 @@ def test_gateway_config_roundtrips_all_provider_configs(model_key: str):
 
     config = create_config(registry_config, None)
     config.custom_api_key = SecretStr("provider-key")
-    config.custom_endpoint = "https://provider.test/v1"
 
     dumped = dump_llm_config(config)
     request = QueryRequest.model_validate(
@@ -863,7 +862,6 @@ def test_gateway_config_roundtrips_all_provider_configs(model_key: str):
     assert rebuilt is not None
     assert rebuilt.custom_api_key is not None
     assert rebuilt.custom_api_key.get_secret_value() == "provider-key"
-    assert rebuilt.custom_endpoint == "https://provider.test/v1"
     assert isinstance(rebuilt.provider_config, ProviderConfig)
     assert isinstance(rebuilt.provider_config, type(provider_config_template))
     assert config.provider_config is not None
@@ -1711,7 +1709,6 @@ async def test_proxy_query_forwards_override_config():
         config=LLMConfig(
             max_tokens=123,
             custom_api_key=SecretStr("provider-key"),
-            custom_endpoint="https://provider.test/v1",
             provider_config=OpenAIConfig(verbosity="low"),
         ),
     )
@@ -1735,7 +1732,6 @@ async def test_proxy_query_forwards_override_config():
     body = _load_json(mock_post.call_args[1]["content"])
     assert body["config"]["max_tokens"] == 123
     assert body["config"]["custom_api_key"] == "provider-key"
-    assert body["config"]["custom_endpoint"] == "https://provider.test/v1"
     assert body["config"]["provider_config"]["verbosity"] == "low"
 
 
@@ -2211,7 +2207,6 @@ async def test_gateway_client_to_server_contract_with_mock_model():
                     config=LLMConfig(
                         max_tokens=17,
                         custom_api_key=SecretStr("provider-key"),
-                        custom_endpoint="https://provider.test/v1",
                         provider_config=OpenAIConfig(verbosity="low"),
                     ),
                 )
@@ -2225,7 +2220,6 @@ async def test_gateway_client_to_server_contract_with_mock_model():
     assert seen["config"].max_tokens == 17
     assert seen["config"].custom_api_key is not None
     assert seen["config"].custom_api_key.get_secret_value() == "provider-key"
-    assert seen["config"].custom_endpoint == "https://provider.test/v1"
     assert isinstance(seen["config"].provider_config, OpenAIConfig)
     assert seen["config"].provider_config.verbosity == "low"
     assert first.output_parsed == Answer(value=7)

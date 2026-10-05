@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from model_library.register_models import (
     RegistryEntries,
@@ -14,10 +14,13 @@ from model_library.register_models import (
 )
 from model_library.registry_utils import get_model_names, get_registry_config
 
+from model_gateway.run_tokens import registry_visibility
+
 
 def register_model_routes(app: FastAPI) -> None:
     @app.get("/registry")
     async def registry_snapshot(
+        request: Request,
         include_deprecated: bool = False,
         include_alt_keys: bool = True,
         include_excluded_fields: bool = False,
@@ -39,6 +42,7 @@ def register_model_routes(app: FastAPI) -> None:
         if not include_excluded_fields:
             exclude = {
                 "supports": {"transcription"},
+                "metadata": {"router"},
                 "country": True,
                 "rate_limit": True,
                 "transcription_cost": True,
@@ -63,11 +67,12 @@ def register_model_routes(app: FastAPI) -> None:
                     )
             return payload
 
+        visible_to_caller = registry_visibility(request)
         return {
             "models": {
                 key: serialize_config(config)
                 for key, config in registry.items()
-                if key in visible_keys
+                if key in visible_keys and visible_to_caller(key, config)
             }
         }
 

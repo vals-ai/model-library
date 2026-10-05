@@ -398,6 +398,31 @@ class TestAgentResultToATIF:
             }
         }
 
+    def test_routed_step_records_the_served_model(self):
+        router = "openrouter/openrouter/auto"
+        turns: list[AgentTurn | ErrorTurn] = [
+            self._make_turn(
+                "A1",
+                metadata=QueryResultMetadata(served_model="openai/gpt-5"),
+            )
+        ]
+
+        trajectory = ATIFTrajectory.from_agent_result(
+            turns=turns, agent_name="agent", model_name=router
+        )
+
+        assert trajectory.agent.model_name == router
+        assert trajectory.steps[0].model_name == "openai/gpt-5"
+        assert trajectory.steps[0].extra == {
+            "vals": {
+                "model_routing": {
+                    "requested_model": router,
+                    "resolved_model": "openai/gpt-5",
+                    "routed": True,
+                }
+            }
+        }
+
     def test_raw_response_not_exported_in_extra(self):
         """Provider raw responses stay in history and are not duplicated in ATIF extra."""
         question = TextInput(text="Hi")

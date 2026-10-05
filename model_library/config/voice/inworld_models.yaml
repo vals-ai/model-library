@@ -15,6 +15,7 @@ base-config:
 transcription-models:
   inworld/inworld-stt-1:
     label: Inworld STT 1
+    release_date: 2025-10-09
     provider_endpoint: inworld/inworld-stt-1
     transcription_cost:
       usd_per_minute: 0.0025

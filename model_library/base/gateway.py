@@ -63,7 +63,8 @@ def _dump_items(items: Sequence[InputItem]) -> list[dict[str, Any]]:
 
     Normal items use model_dump(). RawResponse/RawInput are built manually
     because their fields hold opaque blobs (base64+HMAC from the server)
-    that must be echoed as-is — model_dump() would fail on provider SDK objects.
+    that must be echoed as-is, or caller-built RawInput values sent as plain
+    JSON — model_dump() would fail on provider SDK objects.
     """
     result: list[dict[str, Any]] = []
     for item in items:

@@ -1,0 +1,12 @@
+base-config:
+  company: StepFun
+  country: China
+  documentation_url: https://platform.stepfun.ai/docs
+  open_source: false
+  supports:
+    images: false
+    files: false
+    tools: true
+    temperature: true
+  properties:
+    reasoning_model: true

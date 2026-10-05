@@ -43,6 +43,14 @@ class GatewayRequestBase(BaseModel):
 
         return raw_data
 
+    @field_validator("config")
+    @classmethod
+    def _reject_routing_overrides(cls, config: LLMConfig) -> LLMConfig:
+        # These pick another endpoint or registry entry than the named model's.
+        if config.custom_endpoint is not None or config.registry_key is not None:
+            raise ValueError("custom_endpoint and registry_key cannot be set")
+        return config
+
     def config_dict(self) -> dict[str, Any]:
         return dump_llm_config(self.config)
 

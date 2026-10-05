@@ -131,6 +131,19 @@ def _safe_search_results(
         return None
 
 
+def _capture_routing(
+    routing: dict[str, Any], response: ChatCompletion | ChatCompletionChunk
+) -> None:
+    if response.model:
+        routing["served_model"] = response.model
+    if provider := (response.model_extra or {}).get("provider"):
+        routing["upstream_provider"] = provider
+    if response.usage is not None:
+        cost = (response.usage.model_extra or {}).get("cost")
+        if cost is not None:
+            routing["upstream_cost"] = float(cost)
+
+
 def map_openai_completions_finish_reason(
     finish_reason: str | None,
 ) -> FinishReasonInfo:
@@ -409,6 +422,8 @@ class OpenAIModel(LLM):
         self.normalize_null_assistant_history_fields = (
             normalize_null_assistant_history_fields
         )
+        # Set by router delegates: capture the served model and router-reported cost.
+        self.router_mode: bool = False
 
         super().__init__(model_name, provider, config=config)
 
@@ -597,6 +612,10 @@ class OpenAIModel(LLM):
                 case FileWithUrl():
                     base_dict["image_url"] = image.url
                 case FileWithId():
+                    if self.provider in ("grok", "xai"):
+                        raise BadInputError(
+                            "xAI Responses API does not support image file_id; use base64 or URL"
+                        )
                     base_dict["file_id"] = image.file_id
                 case _:
                     raise BadInputError("OpenAI does not support byte-backed files")
@@ -647,6 +666,8 @@ class OpenAIModel(LLM):
     @property
     @override
     def search_tool(self) -> dict[str, str]:
+        if self.provider in ("grok", "xai"):
+            return {"type": "web_search"}
         return {"type": "web_search_preview"}
 
     @override
@@ -855,6 +876,7 @@ class OpenAIModel(LLM):
         finish_reason: str | None = None
         refusal: str | None = None
         metadata: QueryResultMetadata = QueryResultMetadata()
+        routing: dict[str, Any] | None = {} if self.router_mode else None
 
         def metadata_from_usage(usage: CompletionUsage) -> QueryResultMetadata:
             reasoning_tokens = (
@@ -862,6 +884,8 @@ class OpenAIModel(LLM):
                 if usage.completion_tokens_details
                 else None
             )
+            if reasoning_tokens is None:
+                reasoning_tokens = getattr(usage, "reasoning_tokens", None)  # SGLang
             details = usage.prompt_tokens_details
             if details:
                 cache_read_tokens = details.cached_tokens
@@ -958,6 +982,8 @@ class OpenAIModel(LLM):
                 )
             if completion.usage:
                 metadata = metadata_from_usage(completion.usage)
+            if routing is not None:
+                _capture_routing(routing, completion)
         else:
             stream = cast(AsyncIterator[ChatCompletionChunk], completion)
             async for chunk in stream:
@@ -965,6 +991,8 @@ class OpenAIModel(LLM):
                     completion_id = chunk.id
                     provider_request_id = getattr(chunk, "_request_id", None)
                     query_logger.debug(f"Completion created: {completion_id}")
+                if routing is not None:
+                    _capture_routing(routing, chunk)
 
                 if chunk.choices:
                     choice = chunk.choices[0]
@@ -1036,6 +1064,10 @@ class OpenAIModel(LLM):
 
         if self.stream_completions:
             raw_tool_calls = [tool_call for tool_call in raw_tool_calls if tool_call.id]
+
+        if routing is not None:
+            metadata.served_model = routing.pop("served_model", None)
+            metadata.extra.update(routing)
 
         mapped_finish_reason = map_openai_completions_finish_reason(finish_reason)
 
@@ -1435,7 +1467,7 @@ class OpenAIModel(LLM):
                     ]
                     provider_tool_events.append(
                         ProviderToolEvent.web_search(
-                            provider="openai",
+                            provider=self.provider,
                             kind="web_search_call",
                             query=query,
                             sources=sources,

@@ -46,7 +46,7 @@ Gateway requests send the model key and explicit `LLMConfig` override. The serve
 | --- | --- | --- |
 | Agent/provider runtime parameter | Top-level `LLMConfig` fields | Pass the config to `get_registry_model(..., override_config=config)`. |
 | Provider-specific parameter | `LLMConfig.provider_config` | Use the typed provider config. |
-| Bring your own key or endpoint | `LLMConfig.custom_api_key` and `LLMConfig.custom_endpoint` | `custom_endpoint` requires `custom_api_key`; the gateway must not send server-held provider keys to caller-selected endpoints. |
+| Bring your own key | `LLMConfig.custom_api_key` | The gateway rejects `custom_endpoint` and `registry_key`. |
 | Query attribution | `query(...)` fields | Keep `identity`, `run_id`, `question_id`, and `query_id` out of `LLMConfig`. |
 
 Agent/provider runtime parameters:
@@ -77,17 +77,14 @@ model = get_registry_model(
 )
 ```
 
-Bring-your-own-key/custom-endpoint requests also go through `LLMConfig`:
+Bring-your-own-key requests also go through `LLMConfig`. The gateway rejects `custom_endpoint` and `registry_key`:
 
 ```python
 from pydantic import SecretStr
 
 model = get_registry_model(
     "openai/gpt-4o",
-    override_config=LLMConfig(
-        custom_endpoint="https://provider.example/v1",
-        custom_api_key=SecretStr(provider_key),
-    ),
+    override_config=LLMConfig(custom_api_key=SecretStr(provider_key)),
 )
 ```
 
@@ -206,7 +203,7 @@ model = get_registry_model(args.model, override_config=config)
 - [ ] Model-config overrides use `get_registry_model(model_key, override_config=config)` when needed.
 - [ ] No provider class or `get_raw_model()` construction remains in the gateway path.
 - [ ] Runtime model-config overrides are represented as `LLMConfig`, including `provider_config` when needed.
-- [ ] BYOK/custom-endpoint migrations explicitly account for `custom_api_key` and `custom_endpoint` as caller-supplied provider credentials.
+- [ ] BYOK migrations explicitly account for `custom_api_key` as a caller-supplied provider credential; `custom_endpoint` paths stay off the gateway.
 - [ ] `query()` calls do not pass provider-specific kwargs.
 - [ ] Code that reads metadata constructs the model with `get_registry_model()` first.
 - [ ] Code does not use client-side batch or custom retrier paths.

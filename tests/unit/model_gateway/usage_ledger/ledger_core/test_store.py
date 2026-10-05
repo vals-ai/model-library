@@ -452,7 +452,6 @@ def test_build_success_usage_event_owns_each_value_once_in_root_or_details():
             "config": {
                 "max_tokens": 10,
                 "custom_api_key": "provider-secret",
-                "custom_endpoint": "https://custom.example/v1",
                 "provider_config": {"prompt_cache_retention": "24h"},
             },
             "run_id": "run-1",
@@ -2008,10 +2007,7 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
                     "benchmark_name": "swebench",
                     "agent_name": "swe-agent",
                 },
-                "config": {
-                    "custom_endpoint": "https://private-provider.example.internal/v1",
-                    "custom_api_key": "sk-provider",
-                },
+                "config": {"custom_api_key": "sk-provider"},
             },
             headers={"Authorization": "Bearer sk-test"},
         )
@@ -2026,7 +2022,7 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
     assert "identity" not in event
     assert event["api_key_name"] == "test"
     assert "api_key_fingerprint" not in event
-    assert event["provider_endpoint"] == "custom"
+    assert event["provider_endpoint"] == "default"
     assert event["input_tokens"] == 12
     assert event["output_tokens"] == 3
 
@@ -2034,7 +2030,6 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
     request_data = details["request"]
     result_data = details["result"]
     config = request_data["config"]
-    assert config["custom_endpoint"] == "https://private-provider.example.internal/v1"
     assert config["custom_api_key"] == "**********"
     raw_input = cast(dict[str, object], raw_request_inputs[0])["input"]
     raw_input_length = len(json.dumps(raw_input, sort_keys=True, separators=(",", ":")))

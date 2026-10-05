@@ -1,5 +1,7 @@
 """Tests for small registry-owned provider configurations."""
 
+import hashlib
+
 from pydantic import SecretStr
 
 from model_library.base import LLMConfig
@@ -11,6 +13,10 @@ from model_library.providers.delegates.zai import ZAIConfig, ZAIModel
 from model_library.registry_utils import get_registry_model
 
 _INPUT = [TextInput(text="")]
+
+
+def _key_hash(api_key: str, base_url: str) -> str:
+    return hashlib.sha256((api_key + base_url).encode()).hexdigest()
 
 class TestRegistryProviderConfigs:
     async def test_anthropic_registry_model_has_typed_config(self):
@@ -56,7 +62,6 @@ class TestRegistryProviderConfigs:
         assert (
             mainland.delegate.custom_endpoint == "https://open.bigmodel.cn/api/paas/v4/"
         )
-
     async def test_zai_thinking_stays_enabled_when_disabling_unsupported(self):
         model = get_registry_model("zai/glm-5.3")
         assert isinstance(model, ZAIModel)

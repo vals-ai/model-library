@@ -157,12 +157,7 @@ async def test_acquire_serializes_raw_byok_config(
 
     monkeypatch.setattr(model_library, "model_library_settings", GatewaySettings())
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
-        model = _model(
-            LLMConfig(
-                custom_api_key=SecretStr("byok-secret"),
-                custom_endpoint="https://provider.test/v1",
-            )
-        )
+        model = _model(LLMConfig(custom_api_key=SecretStr("byok-secret")))
         monkeypatch.setattr(model, "get_client", lambda: http_client)
 
         await GatewayBenchmarkAdmissionClient(model).acquire(
@@ -173,10 +168,7 @@ async def test_acquire_serializes_raw_byok_config(
             immediate_queue_release=False,
         )
 
-    assert request_payload["config"] == {
-        "custom_api_key": "byok-secret",
-        "custom_endpoint": "https://provider.test/v1",
-    }
+    assert request_payload["config"] == {"custom_api_key": "byok-secret"}
 
 
 async def test_release_returns_authoritative_terminal_outcome(

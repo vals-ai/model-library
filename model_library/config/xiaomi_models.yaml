@@ -21,6 +21,40 @@ mimo-models:
       temperature: 0.3
       top_p: 0.95
 
+  xiaomi/mimo-v2.6-pro:
+    label: MiMo V2.6 Pro
+    release_date: 2026-09-21
+    supports:
+      images: true
+    properties:
+      context_window: 1_000_000
+      max_tokens: 128_000
+      reasoning_model: true
+    default_parameters:
+      temperature: 1.0
+    costs_per_million_token:
+      input: 0.435
+      output: 0.87
+      cache:
+        read: 0.0036
+
+  xiaomi/mimo-v2.6-flash:
+    label: MiMo V2.6 Flash
+    release_date: 2026-09-21
+    supports:
+      images: true
+    properties:
+      context_window: 1_000_000
+      max_tokens: 128_000
+      reasoning_model: true
+    default_parameters:
+      temperature: 1.0
+    costs_per_million_token:
+      input: 0.14
+      output: 0.28
+      cache:
+        read: 0.0028
+
   xiaomi/mimo-v2.5:
     label: MiMo V2.5
     release_date: 2026-04-22

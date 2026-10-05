@@ -165,36 +165,6 @@ def test_llm_config_telemetry_attributes_keeps_json_and_adds_safe_scalars():
     assert type(attrs["llm.config.provider_config.zero_float"]) is float
 
 
-def test_query_telemetry_buckets_custom_endpoint_without_raw_url():
-    from model_gateway.types import QueryRequest
-
-    raw_endpoint = "https://private-provider.example.internal/v1"
-    config = dump_gateway_config(
-        LLMConfig(
-            custom_endpoint=raw_endpoint,
-            custom_api_key=SecretStr("sk-provider"),
-        )
-    )
-    attrs = telemetry_helpers.query_telemetry_attributes(
-        QueryRequest(
-            model="openai/gpt-4o",
-            inputs=[TextInput(text="hi")],
-            config=LLMConfig(
-                custom_endpoint=raw_endpoint,
-                custom_api_key=SecretStr("sk-provider"),
-            ),
-        ),
-        config,
-        config_query_params=telemetry_helpers.query_config_params(config),
-        token_retry_params=None,
-    )
-
-    assert attrs["model.provider_endpoint"] == "custom"
-    assert attrs["llm.config.custom_endpoint"] == f'"{raw_endpoint}"'
-    assert attrs["llm.config.custom_api_key"] == '"**********"'
-    assert "sk-provider" not in attrs.values()
-
-
 def test_query_telemetry_emits_public_retry_limit() -> None:
     from model_gateway.types import QueryRequest
 
@@ -827,7 +797,7 @@ def test_token_count_rejects_malformed_raw_history_with_400():
                 "inputs": [
                     {
                         "kind": "raw_input",
-                        "input": {"messages": [{"role": "user", "content": "hi"}]},
+                        "input": {"pickle": "not-a-pickle", "hmac": "bad"},
                     }
                 ],
                 "tools": [],
@@ -1704,19 +1674,23 @@ def test_query_provider_operation_deadline_returns_provider_error(mock_llm: LLM)
     }
 
 
-def test_query_rejects_custom_endpoint_without_custom_api_key():
+@pytest.mark.parametrize(
+    "config",
+    [{"custom_endpoint": "https://provider.test/v1"}, {"registry_key": "openai/gpt-5"}],
+)
+def test_query_rejects_overrides_that_redirect_the_named_model(config):
     client = _make_client()
     resp = client.post(
         "/query",
         json={
             "model": "openai/gpt-4o",
             "inputs": [{"kind": "text", "text": "hi"}],
-            "config": {"custom_endpoint": "https://provider.test/v1"},
+            "config": config,
         },
         headers=HEADERS,
     )
     assert resp.status_code == 400
-    assert resp.json()["code"] == "custom_key_rejected"
+    assert resp.json()["code"] == "invalid_request"
 
 
 def test_query_returns_429_when_gateway_capacity_is_full(capsys):
@@ -2115,44 +2089,6 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
         "provider_config": {"prompt_cache_retention": "24h"},
     }
     assert not config_seen_payloads[-1]["model.config_redacted_json_truncated"]
-
-
-def test_query_forwards_custom_endpoint_with_custom_api_key():
-    from model_library.base import LLMConfig
-    from model_library.base.output import QueryResult
-
-    seen: dict[str, object] = {}
-
-    class FakeLLM:
-        async def query(self, inputs, **kwargs):
-            return QueryResult(output_text="ok", history=inputs)
-
-    def fake_get_registry_model(model, config):
-        seen["config"] = config
-        return FakeLLM()
-
-    client = _make_client()
-    with patch.object(
-        model_helpers, "get_registry_model", side_effect=fake_get_registry_model
-    ):
-        resp = client.post(
-            "/query",
-            json={
-                "model": "openai/gpt-4o",
-                "inputs": [{"kind": "text", "text": "hi"}],
-                "config": {
-                    "custom_endpoint": "https://provider.test/v1",
-                    "custom_api_key": "sk-provider",
-                },
-            },
-            headers=HEADERS,
-        )
-
-    assert resp.status_code == 200
-    config = cast(LLMConfig, seen["config"])
-    assert config.custom_endpoint == "https://provider.test/v1"
-    assert config.custom_api_key is not None
-    assert config.custom_api_key.get_secret_value() == "sk-provider"
 
 
 def test_models_returns_list():
@@ -2624,7 +2560,7 @@ def test_query_rejects_malformed_raw_history_with_400():
                 "inputs": [
                     {
                         "kind": "raw_input",
-                        "input": {"messages": [{"role": "user", "content": "hi"}]},
+                        "input": {"pickle": "not-a-pickle", "hmac": "bad"},
                     }
                 ],
             },
@@ -2637,6 +2573,44 @@ def test_query_rejects_malformed_raw_history_with_400():
     assert error_attrs["gateway.error.code"] == "hmac_verification_failed"
     assert error_attrs["gateway.error.phase"] == "restore_history"
     assert error_attrs["http.response.status_code"] == 400
+
+
+@pytest.mark.parametrize("path", ["/query", "/tokens/count"])
+def test_caller_built_raw_input_reaches_provider_unchanged(path: str):
+    from model_library.base.input import RawInput
+    from model_library.base.output import QueryResult, QueryResultMetadata
+
+    message = {"role": "assistant", "content": "1, 2, 3,"}
+    seen: list[object] = []
+
+    class FakeLLM:
+        async def query(self, inputs, **kwargs):
+            seen.extend(inputs)
+            return QueryResult(
+                output_text="ok",
+                history=[*inputs],
+                metadata=QueryResultMetadata(in_tokens=1, out_tokens=1),
+            )
+
+        async def count_tokens(self, inputs, *, tools, **kwargs):
+            seen.extend(inputs)
+            return 3
+
+    client = _make_client()
+    with patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()):
+        resp = client.post(
+            path,
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "raw_input", "input": message}],
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 200
+    assert len(seen) == 1
+    assert isinstance(seen[0], RawInput)
+    assert seen[0].input == message
 
 
 def test_query_marks_sign_history_phase_when_signing_fails():

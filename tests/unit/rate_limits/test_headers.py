@@ -16,7 +16,9 @@ from model_library.providers.anthropic import AnthropicModel
 from model_library.providers.delegates.fireworks import FireworksModel
 from model_library.providers.mistral import MistralModel
 from model_library.providers.openai import OpenAIModel
-from model_library.providers.xai import XAIModel
+from model_library.providers.xai import XAIConfig, XAIModel
+
+_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 _DATE_HEADER = "Mon, 01 Jan 2024 00:00:00 GMT"
 _DATE_TIMESTAMP = 1_704_067_200.0
@@ -277,7 +279,7 @@ async def test_xai_native_probe_uses_default_account() -> None:
             return_value=client,
         ),
     ):
-        model = XAIModel("grok-3-mini", config=LLMConfig())
+        model = XAIModel("grok-3-mini", config=_NATIVE)
         assert model.delegate is None
         rate_limit = await model.get_rate_limit()
 

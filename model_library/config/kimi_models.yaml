@@ -21,13 +21,15 @@ kimi-models:
     supports:
       images: true
       videos: true
-      temperature: false
+      temperature: true
     properties:
       reasoning_model: true
       context_window: 1_048_576
       max_tokens: 1_048_576
     default_parameters:
       reasoning_effort: max
+      temperature: 1
+      top_p: 0.95
       max_tokens: 262_144
     provider_properties:
       prompt_cache_key: hash

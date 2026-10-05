@@ -3,9 +3,12 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from model_library.base import LLMConfig
 from model_library.base.base import client_registry
 from model_library.providers.amazon import AmazonModel
-from model_library.providers.xai import XAIModel
+from model_library.providers.xai import XAIConfig, XAIModel
+
+_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 # The unit-test fixture replaces provider get_client methods at runtime.
 _AMAZON_GET_CLIENT = AmazonModel.get_client
@@ -70,7 +73,7 @@ def test_xai_client_passes_explicit_keepalive_options(base_url: str | None):
             "model_library.providers.xai.AsyncClient", return_value=sdk_client
         ) as create_client,
     ):
-        model = XAIModel("grok-3-mini")
+        model = XAIModel("grok-3-mini", config=_NATIVE)
         client = _XAI_GET_CLIENT(model, api_key="xai-key", base_url=base_url)
 
     expected_arguments = {

@@ -3,18 +3,23 @@
 import asyncio
 import time
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Literal
 from unittest.mock import MagicMock
 
 import pytest
 
 import model_library
+import model_library.register_models as register_models_module
 import model_library.registry_utils as registry_utils
 from model_library.base import GatewayLLM, LLM
 from model_library.providers.delegates.fireworks import FireworksModel
 from model_library.providers.google import GoogleModel
 from model_library.register_models import (
+    ICONS_DIR,
+    CompanyIcon,
     ModelRegistry,
+    get_company_icon,
     get_deprecated_model_registry,
     get_model_registry,
     get_provider_registry,
@@ -86,6 +91,49 @@ async def test_registry_is_singleton():
     assert registry1 is registry2
 
 
+@pytest.mark.parametrize(
+    ("company", "expected"),
+    [
+        ("OpenAI", CompanyIcon(light="OpenAI.svg", dark="OpenAI-dark.svg")),
+        ("Inworld", CompanyIcon(light="Inworld.png")),
+        ("AssemblyAI", CompanyIcon(light="AssemblyAI.svg")),
+        ("AWS", CompanyIcon(light="AWS.svg", dark="AWS-dark.svg")),
+        (
+            "Google Cloud",
+            CompanyIcon(light="Google Cloud.svg", dark="Google Cloud-dark.svg"),
+        ),
+        (
+            "MiniMax AI",
+            CompanyIcon(light="MiniMax AI.svg", dark="MiniMax AI-dark.svg"),
+        ),
+        ("Tencent", CompanyIcon(light="Tencent.svg", dark="Tencent-dark.svg")),
+        ("Reson8", CompanyIcon(light="Reson8.png")),
+        ("Unknown Company", None),
+    ],
+)
+def test_get_company_icon_uses_exact_bundled_filenames(
+    company: str, expected: CompanyIcon | None
+) -> None:
+    icon = get_company_icon(company)
+
+    assert icon == expected
+    if icon is not None:
+        assert (ICONS_DIR / icon.light).is_file()
+        if icon.dark is not None:
+            assert (ICONS_DIR / icon.dark).is_file()
+
+
+def test_get_company_icon_rejects_ambiguous_light_files(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _ = (tmp_path / "Duplicate.svg").write_text("<svg></svg>")
+    _ = (tmp_path / "Duplicate.png").write_bytes(b"png")
+    monkeypatch.setattr(register_models_module, "ICONS_DIR", tmp_path)
+
+    with pytest.raises(ValueError, match="Multiple light icons found for Duplicate"):
+        get_company_icon("Duplicate")
+
+
 def test_deprecated_registry_loads_nullable_costs():
     config = get_deprecated_model_registry()["poolside/laguna-xs.2"]
 
@@ -109,43 +157,6 @@ async def test_registry_contains_expected_providers():
     expected = ["openai", "zai", "fireworks", "azure"]
     for name in expected:
         assert name in registry
-
-
-def test_gateway_metadata_helpers_do_not_use_openrouter_fallback(monkeypatch):
-    from model_library import openrouter_registry
-
-    registry_config = get_model_registry()["openai/gpt-4o"]
-    resolver = MagicMock(return_value=registry_config)
-    gateway_settings = MagicMock()
-    gateway_settings.get.side_effect = lambda name, default=None: (
-        "https://gateway.test" if name == "MODEL_GATEWAY_URL" else default
-    )
-    direct_settings = MagicMock()
-    direct_settings.get.side_effect = lambda _name, default=None: default
-    metadata_helpers = [
-        (
-            registry_utils.get_model_cost,
-            registry_config.costs_per_million_token,
-        ),
-        (
-            registry_utils.get_model_input_context_window,
-            registry_utils.get_input_context_window_from_config(registry_config),
-        ),
-    ]
-
-    monkeypatch.setattr(registry_utils, "get_model_registry", lambda: {})
-    monkeypatch.setattr(openrouter_registry, "resolve_openrouter_model", resolver)
-    monkeypatch.setattr(model_library, "model_library_settings", gateway_settings)
-
-    for helper, _expected in metadata_helpers:
-        with pytest.raises(Exception, match="not found in registry"):
-            helper("openrouter/test-model")
-    resolver.assert_not_called()
-
-    monkeypatch.setattr(model_library, "model_library_settings", direct_settings)
-    for helper, expected in metadata_helpers:
-        assert helper("openrouter/test-model") == expected
-    assert resolver.call_count == len(metadata_helpers)
 
 
 def test_gateway_registry_model_skips_provider_resolution(monkeypatch):
@@ -215,7 +226,9 @@ async def test_cli_models_not_instantiable():
     ("model_key", "label"),
     [("devin/adaptive", "Devin Adaptive"), ("factory/router", "Factory Router")],
 )
-def test_agent_router_models_are_publicly_selectable(model_key: str, label: str) -> None:
+def test_agent_router_models_are_publicly_selectable(
+    model_key: str, label: str
+) -> None:
     config = get_model_registry()[model_key]
 
     assert config.label == label
@@ -226,7 +239,9 @@ def test_agent_router_models_are_publicly_selectable(model_key: str, label: str)
 
 
 @pytest.mark.parametrize("model_key", ["devin/adaptive", "factory/router"])
-def test_agent_router_models_carry_nominal_prices_excluded_from_cost(model_key: str) -> None:
+def test_agent_router_models_carry_nominal_prices_excluded_from_cost(
+    model_key: str,
+) -> None:
     config = get_model_registry()[model_key]
     costs = config.costs_per_million_token
 

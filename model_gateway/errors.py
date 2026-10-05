@@ -4,6 +4,10 @@ import httpx
 from pydantic import BaseModel, ValidationError
 
 
+class RunTokenAuthorizationError(Exception):
+    """A run token was presented for work its claims do not cover."""
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str

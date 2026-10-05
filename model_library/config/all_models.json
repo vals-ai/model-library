@@ -1,4 +1,3248 @@
 {
+    "openai/gpt-6.1-sol-xhigh": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Sol (Extra High)",
+        "release_date": "2026-09-29",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-6.1-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-sol-xhigh",
+        "slug": "openai_gpt-6.1-sol-xhigh"
+    },
+    "openai/gpt-6.1-sol-medium": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Sol (Medium)",
+        "release_date": "2026-09-29",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "gpt-6.1-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-sol-medium",
+        "slug": "openai_gpt-6.1-sol-medium"
+    },
+    "openai/gpt-6.1-sol-max": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Sol (Max)",
+        "release_date": "2026-09-29",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6.1-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-sol-max",
+        "slug": "openai_gpt-6.1-sol-max"
+    },
+    "openai/gpt-6.1-sol-low": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Sol (Low)",
+        "release_date": "2026-09-29",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "gpt-6.1-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-sol-low",
+        "slug": "openai_gpt-6.1-sol-low"
+    },
+    "openai/gpt-6.1-sol-high": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Sol (High)",
+        "release_date": "2026-09-29",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-6.1-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-sol-high",
+        "slug": "openai_gpt-6.1-sol-high"
+    },
+    "openai/gpt-6.1-sol": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Sol",
+        "release_date": "2026-09-29",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-6.1-sol-low": {
+                    "label": "GPT-6.1 Sol (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.1-sol-medium": {
+                    "label": "GPT-6.1 Sol (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.1-sol-high": {
+                    "label": "GPT-6.1 Sol (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.1-sol-xhigh": {
+                    "label": "GPT-6.1 Sol (Extra High)",
+                    "default_parameters": {
+                        "reasoning_effort": "xhigh"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.1-sol-max": {
+                    "label": "GPT-6.1 Sol (Max)",
+                    "default_parameters": {
+                        "reasoning_effort": "max"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6.1-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-sol",
+        "slug": "openai_gpt-6.1-sol"
+    },
+    "anthropic/claude-sonnet-5-5-xhigh": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Sonnet 5.5 (Extra High Effort)",
+        "release_date": "2026-09-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "thinking_off_type": "between_tools",
+            "fallback_models": [
+                "claude-sonnet-5"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "xhigh"
+        },
+        "provider_endpoint": "claude-sonnet-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "write": 2.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-5-xhigh",
+        "slug": "anthropic_claude-sonnet-5-5-xhigh"
+    },
+    "anthropic/claude-sonnet-5-5-no-fallback": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Sonnet 5.5 (No Fallback)",
+        "release_date": "2026-09-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "thinking_off_type": "between_tools",
+            "fallback_models": []
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-sonnet-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "write": 2.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-5-no-fallback",
+        "slug": "anthropic_claude-sonnet-5-5-no-fallback"
+    },
+    "anthropic/claude-sonnet-5-5-medium": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Sonnet 5.5 (Medium Effort)",
+        "release_date": "2026-09-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "thinking_off_type": "between_tools",
+            "fallback_models": [
+                "claude-sonnet-5"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "medium"
+        },
+        "provider_endpoint": "claude-sonnet-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "write": 2.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-5-medium",
+        "slug": "anthropic_claude-sonnet-5-5-medium"
+    },
+    "anthropic/claude-sonnet-5-5-max": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Sonnet 5.5 (Max Effort)",
+        "release_date": "2026-09-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "thinking_off_type": "between_tools",
+            "fallback_models": [
+                "claude-sonnet-5"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-sonnet-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "write": 2.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-5-max",
+        "slug": "anthropic_claude-sonnet-5-5-max"
+    },
+    "anthropic/claude-sonnet-5-5-low": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Sonnet 5.5 (Low Effort)",
+        "release_date": "2026-09-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "thinking_off_type": "between_tools",
+            "fallback_models": [
+                "claude-sonnet-5"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "low"
+        },
+        "provider_endpoint": "claude-sonnet-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "write": 2.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-5-low",
+        "slug": "anthropic_claude-sonnet-5-5-low"
+    },
+    "anthropic/claude-sonnet-5-5-high": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Sonnet 5.5 (High Effort)",
+        "release_date": "2026-09-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "thinking_off_type": "between_tools",
+            "fallback_models": [
+                "claude-sonnet-5"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "high"
+        },
+        "provider_endpoint": "claude-sonnet-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "write": 2.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-5-high",
+        "slug": "anthropic_claude-sonnet-5-5-high"
+    },
+    "anthropic/claude-sonnet-5-5": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Sonnet 5.5",
+        "release_date": "2026-09-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "thinking_off_type": "between_tools",
+            "fallback_models": [
+                "claude-sonnet-5"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [
+            {
+                "anthropic/claude-sonnet-5-5-low": {
+                    "label": "Claude Sonnet 5.5 (Low Effort)",
+                    "default_parameters": {
+                        "compute_effort": "low"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-sonnet-5-5-medium": {
+                    "label": "Claude Sonnet 5.5 (Medium Effort)",
+                    "default_parameters": {
+                        "compute_effort": "medium"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-sonnet-5-5-high": {
+                    "label": "Claude Sonnet 5.5 (High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "high"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-sonnet-5-5-xhigh": {
+                    "label": "Claude Sonnet 5.5 (Extra High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "xhigh"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-sonnet-5-5-max": {
+                    "label": "Claude Sonnet 5.5 (Max Effort)",
+                    "default_parameters": {
+                        "compute_effort": "max"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-sonnet-5-5-no-fallback": {
+                    "label": "Claude Sonnet 5.5 (No Fallback)",
+                    "provider_properties": {
+                        "fallback_models": []
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-sonnet-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "write": 2.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-5",
+        "slug": "anthropic_claude-sonnet-5-5"
+    },
+    "openai/gpt-6-sol-xhigh": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Sol (Extra High)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-6-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-sol-xhigh",
+        "slug": "openai_gpt-6-sol-xhigh"
+    },
+    "openai/gpt-6-sol-medium": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Sol (Medium)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "gpt-6-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-sol-medium",
+        "slug": "openai_gpt-6-sol-medium"
+    },
+    "openai/gpt-6-sol-max": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Sol (Max)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-sol-max",
+        "slug": "openai_gpt-6-sol-max"
+    },
+    "openai/gpt-6-sol-low": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Sol (Low)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "gpt-6-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-sol-low",
+        "slug": "openai_gpt-6-sol-low"
+    },
+    "openai/gpt-6-sol-high": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Sol (High)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-6-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-sol-high",
+        "slug": "openai_gpt-6-sol-high"
+    },
+    "openai/gpt-6-sol": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Sol",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-6-sol-low": {
+                    "label": "GPT-6 Sol (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6-sol-medium": {
+                    "label": "GPT-6 Sol (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6-sol-high": {
+                    "label": "GPT-6 Sol (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6-sol-xhigh": {
+                    "label": "GPT-6 Sol (Extra High)",
+                    "default_parameters": {
+                        "reasoning_effort": "xhigh"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6-sol-max": {
+                    "label": "GPT-6 Sol (Max)",
+                    "default_parameters": {
+                        "reasoning_effort": "max"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-sol",
+        "slug": "openai_gpt-6-sol"
+    },
+    "openai/gpt-6-luna-xhigh": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Luna (Extra High)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-6-luna",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-05",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 0.2,
+                "output": 0.75,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-luna-xhigh",
+        "slug": "openai_gpt-6-luna-xhigh"
+    },
+    "openai/gpt-6-luna-medium": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Luna (Medium)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "gpt-6-luna",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-05",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 0.2,
+                "output": 0.75,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-luna-medium",
+        "slug": "openai_gpt-6-luna-medium"
+    },
+    "openai/gpt-6-luna-max": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Luna (Max)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6-luna",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-05",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 0.2,
+                "output": 0.75,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-luna-max",
+        "slug": "openai_gpt-6-luna-max"
+    },
+    "openai/gpt-6-luna-low": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Luna (Low)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "gpt-6-luna",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-05",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 0.2,
+                "output": 0.75,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-luna-low",
+        "slug": "openai_gpt-6-luna-low"
+    },
+    "openai/gpt-6-luna-high": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Luna (High)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-6-luna",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-05",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 0.2,
+                "output": 0.75,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-luna-high",
+        "slug": "openai_gpt-6-luna-high"
+    },
+    "openai/gpt-6-luna": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Luna",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-6-luna-low": {
+                    "label": "GPT-6 Luna (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6-luna-medium": {
+                    "label": "GPT-6 Luna (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6-luna-high": {
+                    "label": "GPT-6 Luna (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6-luna-xhigh": {
+                    "label": "GPT-6 Luna (Extra High)",
+                    "default_parameters": {
+                        "reasoning_effort": "xhigh"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6-luna-max": {
+                    "label": "GPT-6 Luna (Max)",
+                    "default_parameters": {
+                        "reasoning_effort": "max"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6-luna",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-05",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 0.2,
+                "output": 0.75,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-luna",
+        "slug": "openai_gpt-6-luna"
+    },
+    "fireworks/ember-1": {
+        "company": "Fireworks",
+        "country": "United States",
+        "label": "Ember-1",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://fireworks.ai/models/fireworks/ember-1",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "ember-1",
+        "properties": {
+            "context_window": 1040000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "fireworks",
+        "full_key": "fireworks/ember-1",
+        "slug": "fireworks_ember-1"
+    },
+    "anthropic/claude-opus-5-5-xhigh": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 5.5 (Extra High Effort)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-5",
+                "claude-opus-4-8"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "xhigh"
+        },
+        "provider_endpoint": "claude-opus-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 4.0,
+            "output": 20.0,
+            "cache": {
+                "read": 0.4,
+                "write": 5.0,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-5-xhigh",
+        "slug": "anthropic_claude-opus-5-5-xhigh"
+    },
+    "anthropic/claude-opus-5-5-no-fallback": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 5.5 (No Fallback)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": []
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 4.0,
+            "output": 20.0,
+            "cache": {
+                "read": 0.4,
+                "write": 5.0,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-5-no-fallback",
+        "slug": "anthropic_claude-opus-5-5-no-fallback"
+    },
+    "anthropic/claude-opus-5-5-medium": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 5.5 (Medium Effort)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-5",
+                "claude-opus-4-8"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "medium"
+        },
+        "provider_endpoint": "claude-opus-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 4.0,
+            "output": 20.0,
+            "cache": {
+                "read": 0.4,
+                "write": 5.0,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-5-medium",
+        "slug": "anthropic_claude-opus-5-5-medium"
+    },
+    "anthropic/claude-opus-5-5-max": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 5.5 (Max Effort)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-5",
+                "claude-opus-4-8"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 4.0,
+            "output": 20.0,
+            "cache": {
+                "read": 0.4,
+                "write": 5.0,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-5-max",
+        "slug": "anthropic_claude-opus-5-5-max"
+    },
+    "anthropic/claude-opus-5-5-low": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 5.5 (Low Effort)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-5",
+                "claude-opus-4-8"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "low"
+        },
+        "provider_endpoint": "claude-opus-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 4.0,
+            "output": 20.0,
+            "cache": {
+                "read": 0.4,
+                "write": 5.0,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-5-low",
+        "slug": "anthropic_claude-opus-5-5-low"
+    },
+    "anthropic/claude-opus-5-5-high": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 5.5 (High Effort)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-5",
+                "claude-opus-4-8"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "high"
+        },
+        "provider_endpoint": "claude-opus-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 4.0,
+            "output": 20.0,
+            "cache": {
+                "read": 0.4,
+                "write": 5.0,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-5-high",
+        "slug": "anthropic_claude-opus-5-5-high"
+    },
+    "anthropic/claude-opus-5-5": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 5.5",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-5",
+                "claude-opus-4-8"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [
+            {
+                "anthropic/claude-opus-5-5-low": {
+                    "label": "Claude Opus 5.5 (Low Effort)",
+                    "default_parameters": {
+                        "compute_effort": "low"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-5-medium": {
+                    "label": "Claude Opus 5.5 (Medium Effort)",
+                    "default_parameters": {
+                        "compute_effort": "medium"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-5-high": {
+                    "label": "Claude Opus 5.5 (High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "high"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-5-xhigh": {
+                    "label": "Claude Opus 5.5 (Extra High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "xhigh"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-5-max": {
+                    "label": "Claude Opus 5.5 (Max Effort)",
+                    "default_parameters": {
+                        "compute_effort": "max"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-5-5-no-fallback": {
+                    "label": "Claude Opus 5.5 (No Fallback)",
+                    "provider_properties": {
+                        "fallback_models": []
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 4.0,
+            "output": 20.0,
+            "cache": {
+                "read": 0.4,
+                "write": 5.0,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-5",
+        "slug": "anthropic_claude-opus-5-5"
+    },
+    "xiaomi/mimo-v2.6-pro": {
+        "company": "Xiaomi",
+        "country": "China",
+        "label": "MiMo V2.6 Pro",
+        "release_date": "2026-09-21",
+        "open_source": true,
+        "documentation_url": "https://platform.xiaomimimo.com/#/docs/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "mimo-v2.6-pro",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "December 2024",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.435,
+            "output": 0.87,
+            "cache": {
+                "read": 0.0036,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "xiaomi",
+        "full_key": "xiaomi/mimo-v2.6-pro",
+        "slug": "xiaomi_mimo-v2.6-pro"
+    },
+    "xiaomi/mimo-v2.6-flash": {
+        "company": "Xiaomi",
+        "country": "China",
+        "label": "MiMo V2.6 Flash",
+        "release_date": "2026-09-21",
+        "open_source": true,
+        "documentation_url": "https://platform.xiaomimimo.com/#/docs/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "mimo-v2.6-flash",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "December 2024",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.14,
+            "output": 0.28,
+            "cache": {
+                "read": 0.0028,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "xiaomi",
+        "full_key": "xiaomi/mimo-v2.6-flash",
+        "slug": "xiaomi_mimo-v2.6-flash"
+    },
+    "grok/grok-4.7-xhigh": {
+        "company": "xAI",
+        "country": "United States",
+        "label": "Grok 4.7 (Extra High)",
+        "release_date": "2026-09-21",
+        "open_source": false,
+        "documentation_url": "https://docs.x.ai/developers/models/grok-4.7",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "grok-4.7",
+        "properties": {
+            "context_window": 500000,
+            "max_tokens": 500000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "grok",
+        "full_key": "grok/grok-4.7-xhigh",
+        "slug": "grok_grok-4.7-xhigh"
+    },
+    "grok/grok-4.7-medium": {
+        "company": "xAI",
+        "country": "United States",
+        "label": "Grok 4.7 (Medium)",
+        "release_date": "2026-09-21",
+        "open_source": false,
+        "documentation_url": "https://docs.x.ai/developers/models/grok-4.7",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "grok-4.7",
+        "properties": {
+            "context_window": 500000,
+            "max_tokens": 500000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "grok",
+        "full_key": "grok/grok-4.7-medium",
+        "slug": "grok_grok-4.7-medium"
+    },
+    "grok/grok-4.7-low": {
+        "company": "xAI",
+        "country": "United States",
+        "label": "Grok 4.7 (Low)",
+        "release_date": "2026-09-21",
+        "open_source": false,
+        "documentation_url": "https://docs.x.ai/developers/models/grok-4.7",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "grok-4.7",
+        "properties": {
+            "context_window": 500000,
+            "max_tokens": 500000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "grok",
+        "full_key": "grok/grok-4.7-low",
+        "slug": "grok_grok-4.7-low"
+    },
+    "grok/grok-4.7-high": {
+        "company": "xAI",
+        "country": "United States",
+        "label": "Grok 4.7 (High)",
+        "release_date": "2026-09-21",
+        "open_source": false,
+        "documentation_url": "https://docs.x.ai/developers/models/grok-4.7",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "grok-4.7",
+        "properties": {
+            "context_window": 500000,
+            "max_tokens": 500000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "grok",
+        "full_key": "grok/grok-4.7-high",
+        "slug": "grok_grok-4.7-high"
+    },
+    "grok/grok-4.7": {
+        "company": "xAI",
+        "country": "United States",
+        "label": "Grok 4.7",
+        "release_date": "2026-09-21",
+        "open_source": false,
+        "documentation_url": "https://docs.x.ai/developers/models/grok-4.7",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [
+            {
+                "grok/grok-4.7-low": {
+                    "label": "Grok 4.7 (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "grok/grok-4.7-medium": {
+                    "label": "Grok 4.7 (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            },
+            {
+                "grok/grok-4.7-high": {
+                    "label": "Grok 4.7 (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "grok/grok-4.7-xhigh": {
+                    "label": "Grok 4.7 (Extra High)",
+                    "default_parameters": {
+                        "reasoning_effort": "xhigh"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.95,
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "grok-4.7",
+        "properties": {
+            "context_window": 500000,
+            "max_tokens": 500000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "grok",
+        "full_key": "grok/grok-4.7",
+        "slug": "grok_grok-4.7"
+    },
+    "google/gemini-3.8-flash-cyber-medium": {
+        "company": "Google",
+        "country": "United States",
+        "label": "Gemini 3.8 Flash Cyber (Medium)",
+        "release_date": "2026-09-16",
+        "open_source": false,
+        "documentation_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber",
+        "supports": {
+            "images": true,
+            "audio": true,
+            "transcription": false,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "use_vertex": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "gemini-3.8-flash-cyber",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.5,
+            "output": 7.5,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "google",
+        "full_key": "google/gemini-3.8-flash-cyber-medium",
+        "slug": "google_gemini-3.8-flash-cyber-medium"
+    },
+    "google/gemini-3.8-flash-cyber-low": {
+        "company": "Google",
+        "country": "United States",
+        "label": "Gemini 3.8 Flash Cyber (Low)",
+        "release_date": "2026-09-16",
+        "open_source": false,
+        "documentation_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber",
+        "supports": {
+            "images": true,
+            "audio": true,
+            "transcription": false,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "use_vertex": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "gemini-3.8-flash-cyber",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.5,
+            "output": 7.5,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "google",
+        "full_key": "google/gemini-3.8-flash-cyber-low",
+        "slug": "google_gemini-3.8-flash-cyber-low"
+    },
+    "google/gemini-3.8-flash-cyber-high": {
+        "company": "Google",
+        "country": "United States",
+        "label": "Gemini 3.8 Flash Cyber (High)",
+        "release_date": "2026-09-16",
+        "open_source": false,
+        "documentation_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber",
+        "supports": {
+            "images": true,
+            "audio": true,
+            "transcription": false,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "use_vertex": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-3.8-flash-cyber",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.5,
+            "output": 7.5,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "google",
+        "full_key": "google/gemini-3.8-flash-cyber-high",
+        "slug": "google_gemini-3.8-flash-cyber-high"
+    },
+    "google/gemini-3.8-flash-cyber": {
+        "company": "Google",
+        "country": "United States",
+        "label": "Gemini 3.8 Flash Cyber",
+        "release_date": "2026-09-16",
+        "open_source": false,
+        "documentation_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber",
+        "supports": {
+            "images": true,
+            "audio": true,
+            "transcription": false,
+            "videos": true,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "use_vertex": true
+        },
+        "alternative_keys": [
+            {
+                "google/gemini-3.8-flash-cyber-low": {
+                    "label": "Gemini 3.8 Flash Cyber (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "google/gemini-3.8-flash-cyber-medium": {
+                    "label": "Gemini 3.8 Flash Cyber (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            },
+            {
+                "google/gemini-3.8-flash-cyber-high": {
+                    "label": "Gemini 3.8 Flash Cyber (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "temperature": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-3.8-flash-cyber",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.5,
+            "output": 7.5,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "google",
+        "full_key": "google/gemini-3.8-flash-cyber",
+        "slug": "google_gemini-3.8-flash-cyber"
+    },
+    "together/deepseek-ai/DeepSeek-V4.1-Flash": {
+        "company": "DeepSeek",
+        "country": "China",
+        "label": "DeepSeek V4.1 Flash (Together)",
+        "release_date": "2026-09-10",
+        "open_source": true,
+        "documentation_url": "https://www.together.ai/models/deepseek-v4-1-flash",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 262144,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.006,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "together",
+        "full_key": "together/deepseek-ai/DeepSeek-V4.1-Flash",
+        "slug": "together_deepseek-ai_DeepSeek-V4.1-Flash"
+    },
     "fireworks/deepseek-v4p1-flash": {
         "company": "DeepSeek",
         "country": "China",
@@ -32,7 +3276,8 @@
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 1.0,
-            "top_p": 0.95
+            "top_p": 1.0,
+            "reasoning_effort": "max"
         },
         "provider_endpoint": "deepseek-v4p1-flash",
         "properties": {
@@ -114,6 +3359,63 @@
         "full_key": "deepseek/deepseek-v4.1-flash-nonthinking",
         "slug": "deepseek_deepseek-v4.1-flash-nonthinking"
     },
+    "deepseek/deepseek-v4.1-flash-high": {
+        "company": "DeepSeek",
+        "country": "China",
+        "label": "DeepSeek V4.1 Flash",
+        "release_date": "2026-09-10",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "deepseek-flash",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.006,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4.1-flash-high",
+        "slug": "deepseek_deepseek-v4.1-flash-high"
+    },
     "deepseek/deepseek-v4.1-flash": {
         "company": "DeepSeek",
         "country": "China",
@@ -128,7 +3430,7 @@
             "videos": false,
             "files": false,
             "batch": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true,
             "output_schema": false
         },
@@ -145,6 +3447,13 @@
             "cache_read_counts_toward_limit": true
         },
         "alternative_keys": [
+            {
+                "deepseek/deepseek-v4.1-flash-high": {
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
             {
                 "deepseek/deepseek-v4.1-flash-nonthinking": {
                     "supports": {
@@ -163,7 +3472,8 @@
         "default_parameters": {
             "max_tokens": 384000,
             "temperature": 1.0,
-            "reasoning_effort": "high"
+            "top_p": 1.0,
+            "reasoning_effort": "max"
         },
         "provider_endpoint": "deepseek-flash",
         "properties": {
@@ -184,6 +3494,60 @@
         "provider_name": "deepseek",
         "full_key": "deepseek/deepseek-v4.1-flash",
         "slug": "deepseek_deepseek-v4.1-flash"
+    },
+    "baseten/deepseek-ai/DeepSeek-V4.1-Flash": {
+        "company": "DeepSeek",
+        "country": "China",
+        "label": "DeepSeek V4.1 Flash (Baseten)",
+        "release_date": "2026-09-10",
+        "open_source": true,
+        "documentation_url": "https://www.baseten.co/library/deepseek-v41-flash/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "api_base": "https://inference.baseten.co/v1"
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "deepseek-ai/DeepSeek-V4.1-Flash",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 32768,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.007,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "baseten",
+        "full_key": "baseten/deepseek-ai/DeepSeek-V4.1-Flash",
+        "slug": "baseten_deepseek-ai_DeepSeek-V4.1-Flash"
     },
     "openrouter/inception/mercury-2.5": {
         "company": "Inception",
@@ -3932,90 +7296,6 @@
         "full_key": "alibaba/qwen3.8-max",
         "slug": "alibaba_qwen3.8-max"
     },
-    "fireworks/deepseek-v4-flash-0731": {
-        "company": "DeepSeek",
-        "country": "China",
-        "label": "DeepSeek V4 Flash 0731",
-        "release_date": "2026-07-31",
-        "open_source": true,
-        "documentation_url": "https://fireworks.ai/models/deepseek-ai/deepseek-v4-flash-0731",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [
-            {
-                "baseten/deepseek-ai/DeepSeek-V4-Flash-0731": {
-                    "label": "DeepSeek V4 Flash 0731 (Baseten)",
-                    "documentation_url": "https://www.baseten.co/library/deepseek-v4-flash-0731/",
-                    "supports": {
-                        "output_schema": true
-                    },
-                    "provider_properties": {
-                        "api_base": "https://inference.baseten.co/v1"
-                    },
-                    "default_parameters": {},
-                    "properties": {
-                        "context_window": 1048000,
-                        "max_tokens": 384000
-                    },
-                    "costs_per_million_token": {
-                        "input": 0.13,
-                        "output": 0.26,
-                        "cache": {
-                            "read": 0.028
-                        }
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "deepseek-v4-flash-0731",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 0.22,
-            "output": 0.66,
-            "cache": {
-                "read": 0.007,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "provider_name": "fireworks",
-        "full_key": "fireworks/deepseek-v4-flash-0731",
-        "slug": "fireworks_deepseek-v4-flash-0731"
-    },
     "deepseek/deepseek-v4-flash-0731-nonthinking": {
         "company": "DeepSeek",
         "country": "China",
@@ -4156,7 +7436,7 @@
             "videos": false,
             "files": false,
             "batch": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true,
             "output_schema": true
         },
@@ -4169,7 +7449,11 @@
         },
         "provider_properties": {},
         "alternative_keys": [],
-        "default_parameters": {},
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "max"
+        },
         "provider_endpoint": "moonshotai/Kimi-K3",
         "properties": {
             "context_window": 1048576,
@@ -4218,11 +7502,15 @@
             "api_base": "https://inference.baseten.co/v1"
         },
         "alternative_keys": [],
-        "default_parameters": {},
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "max"
+        },
         "provider_endpoint": "moonshotai/Kimi-K3",
         "properties": {
             "context_window": 1048000,
-            "max_tokens": 262000,
+            "max_tokens": 262144,
             "training_cutoff": null,
             "reasoning_model": true
         },
@@ -4305,6 +7593,73 @@
         "provider_name": "anthropic",
         "full_key": "anthropic/claude-opus-5-xhigh",
         "slug": "anthropic_claude-opus-5-xhigh"
+    },
+    "anthropic/claude-opus-5-range": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 5 (Cyber Range)",
+        "release_date": "2026-07-22",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true,
+            "fallback_models": [
+                "claude-opus-4-8"
+            ]
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-5-range",
+        "slug": "anthropic_claude-opus-5-range"
     },
     "anthropic/claude-opus-5-no-fallback": {
         "company": "Anthropic",
@@ -4723,6 +8078,15 @@
                         "fallback_models": []
                     }
                 }
+            },
+            {
+                "anthropic/claude-opus-5-range": {
+                    "label": "Claude Opus 5 (Cyber Range)",
+                    "metadata": {
+                        "available_for_everyone": false,
+                        "internal_only": true
+                    }
+                }
             }
         ],
         "default_parameters": {
@@ -5005,7 +8369,6 @@
                     "release_date": "2026-07-27",
                     "documentation_url": "https://www.together.ai/models/kimi-k3",
                     "supports": {
-                        "temperature": false,
                         "output_schema": true
                     },
                     "properties": {
@@ -5027,13 +8390,17 @@
                     },
                     "properties": {
                         "context_window": 1048000,
-                        "max_tokens": 262000
+                        "max_tokens": 262144
                     },
                     "costs_per_million_token": {}
                 }
             }
         ],
-        "default_parameters": {},
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "max"
+        },
         "provider_endpoint": "kimi-k3",
         "properties": {
             "context_window": 1000000,
@@ -5072,7 +8439,7 @@
             "videos": true,
             "files": false,
             "batch": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true,
             "output_schema": false
         },
@@ -5093,6 +8460,8 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 262144,
+            "temperature": 1.0,
+            "top_p": 0.95,
             "reasoning_effort": "max"
         },
         "provider_endpoint": "kimi-k3",
@@ -5129,7 +8498,7 @@
             "videos": true,
             "files": false,
             "batch": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true,
             "output_schema": false
         },
@@ -5150,6 +8519,8 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 262144,
+            "temperature": 1.0,
+            "top_p": 0.95,
             "reasoning_effort": "max"
         },
         "provider_endpoint": "kimi-k3",
@@ -5186,7 +8557,7 @@
             "videos": true,
             "files": false,
             "batch": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true,
             "output_schema": false
         },
@@ -5207,6 +8578,8 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 262144,
+            "temperature": 1.0,
+            "top_p": 0.95,
             "reasoning_effort": "low"
         },
         "provider_endpoint": "kimi-k3",
@@ -5243,7 +8616,7 @@
             "videos": true,
             "files": false,
             "batch": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true,
             "output_schema": false
         },
@@ -5264,6 +8637,8 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 262144,
+            "temperature": 1.0,
+            "top_p": 0.95,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "kimi-k3",
@@ -5300,7 +8675,7 @@
             "videos": true,
             "files": false,
             "batch": false,
-            "temperature": false,
+            "temperature": true,
             "tools": true,
             "output_schema": false
         },
@@ -5347,6 +8722,8 @@
         ],
         "default_parameters": {
             "max_tokens": 262144,
+            "temperature": 1.0,
+            "top_p": 0.95,
             "reasoning_effort": "max"
         },
         "provider_endpoint": "kimi-k3",
@@ -6058,11 +9435,11 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 3.0,
-            "output": 15.0,
+            "input": 2.0,
+            "output": 10.0,
             "cache": {
-                "read": 0.3,
-                "write": 3.75,
+                "read": 0.2,
+                "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
             },
@@ -6074,6 +9451,70 @@
         "provider_name": "anthropic",
         "full_key": "anthropic/claude-sonnet-5-xhigh",
         "slug": "anthropic_claude-sonnet-5-xhigh"
+    },
+    "anthropic/claude-sonnet-5-range": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Sonnet 5 (Cyber Range)",
+        "release_date": "2026-06-30",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": true,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-sonnet-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-01",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "write": 2.5,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-5-range",
+        "slug": "anthropic_claude-sonnet-5-range"
     },
     "anthropic/claude-sonnet-5-medium": {
         "company": "Anthropic",
@@ -6122,11 +9563,11 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 3.0,
-            "output": 15.0,
+            "input": 2.0,
+            "output": 10.0,
             "cache": {
-                "read": 0.3,
-                "write": 3.75,
+                "read": 0.2,
+                "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
             },
@@ -6186,11 +9627,11 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 3.0,
-            "output": 15.0,
+            "input": 2.0,
+            "output": 10.0,
             "cache": {
-                "read": 0.3,
-                "write": 3.75,
+                "read": 0.2,
+                "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
             },
@@ -6250,11 +9691,11 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 3.0,
-            "output": 15.0,
+            "input": 2.0,
+            "output": 10.0,
             "cache": {
-                "read": 0.3,
-                "write": 3.75,
+                "read": 0.2,
+                "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
             },
@@ -6332,6 +9773,15 @@
                         "compute_effort": "xhigh"
                     }
                 }
+            },
+            {
+                "anthropic/claude-sonnet-5-range": {
+                    "label": "Claude Sonnet 5 (Cyber Range)",
+                    "metadata": {
+                        "available_for_everyone": false,
+                        "internal_only": true
+                    }
+                }
             }
         ],
         "default_parameters": {
@@ -6347,11 +9797,11 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 3.0,
-            "output": 15.0,
+            "input": 2.0,
+            "output": 10.0,
             "cache": {
-                "read": 0.3,
-                "write": 3.75,
+                "read": 0.2,
+                "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
             },
@@ -6363,134 +9813,6 @@
         "provider_name": "anthropic",
         "full_key": "anthropic/claude-sonnet-5",
         "slug": "anthropic_claude-sonnet-5"
-    },
-    "fireworks/glm-5p2-medium": {
-        "company": "zAI",
-        "country": "China",
-        "label": "GLM 5.2 (Fireworks, Medium)",
-        "release_date": "2026-06-13",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95,
-            "reasoning_effort": "medium"
-        },
-        "provider_endpoint": "glm-5p2",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.4,
-            "output": 4.4,
-            "cache": {
-                "read": 0.14,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "provider_name": "fireworks",
-        "full_key": "fireworks/glm-5p2-medium",
-        "slug": "fireworks_glm-5p2-medium"
-    },
-    "fireworks/glm-5p2": {
-        "company": "zAI",
-        "country": "China",
-        "label": "GLM 5.2 (Fireworks)",
-        "release_date": "2026-06-13",
-        "open_source": true,
-        "documentation_url": "https://docs.z.ai/",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [
-            {
-                "fireworks/glm-5p2-medium": {
-                    "label": "GLM 5.2 (Fireworks, Medium)",
-                    "default_parameters": {
-                        "reasoning_effort": "medium"
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "glm-5p2",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.4,
-            "output": 4.4,
-            "cache": {
-                "read": 0.14,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            }
-        },
-        "provider_name": "fireworks",
-        "full_key": "fireworks/glm-5p2",
-        "slug": "fireworks_glm-5p2"
     },
     "kimi/kimi-k2.7-code": {
         "company": "Moonshot AI",
@@ -6603,6 +9925,57 @@
         "provider_name": "fireworks",
         "full_key": "fireworks/qwen3p7-plus",
         "slug": "fireworks_qwen3p7-plus"
+    },
+    "together/MiniMaxAI/MiniMax-M3": {
+        "company": "MiniMax",
+        "country": "China",
+        "label": "MiniMax-M3 (Together)",
+        "release_date": "2026-06-11",
+        "open_source": true,
+        "documentation_url": "https://www.together.ai/models/minimax-m3",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "MiniMaxAI/MiniMax-M3",
+        "properties": {
+            "context_window": 524288,
+            "max_tokens": 64000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.06,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "together",
+        "full_key": "together/MiniMaxAI/MiniMax-M3",
+        "slug": "together_MiniMaxAI_MiniMax-M3"
     },
     "fireworks/minimax-m3": {
         "company": "MiniMax",
@@ -7171,6 +10544,70 @@
         "full_key": "minimax/MiniMax-M3",
         "slug": "minimax_MiniMax-M3"
     },
+    "anthropic/claude-opus-4-8-range": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 4.8 (Cyber Range)",
+        "release_date": "2026-05-28",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-4-8",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-4-8-range",
+        "slug": "anthropic_claude-opus-4-8-range"
+    },
     "anthropic/claude-opus-4-8-medium": {
         "company": "Anthropic",
         "country": "United States",
@@ -7346,6 +10783,15 @@
                     "label": "Claude Opus 4.8 (Medium Effort)",
                     "default_parameters": {
                         "compute_effort": "medium"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-4-8-range": {
+                    "label": "Claude Opus 4.8 (Cyber Range)",
+                    "metadata": {
+                        "available_for_everyone": false,
+                        "internal_only": true
                     }
                 }
             }
@@ -7951,7 +11397,11 @@
         },
         "costs_per_million_token": {
             "input": 1.5,
-            "output": 7.5
+            "output": 7.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            }
         },
         "provider_name": "mistralai",
         "full_key": "mistralai/mistral-medium-3.5",
@@ -9020,6 +12470,69 @@
         "full_key": "alibaba/qwen3.6-max-preview",
         "slug": "alibaba_qwen3.6-max-preview"
     },
+    "anthropic/claude-opus-4-7-range": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 4.7 (Cyber Range)",
+        "release_date": "2026-04-16",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-opus-4-7",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-4-7-range",
+        "slug": "anthropic_claude-opus-4-7-range"
+    },
     "anthropic/claude-opus-4-7-high": {
         "company": "Anthropic",
         "country": "United States",
@@ -9122,6 +12635,15 @@
                     "label": "Claude Opus 4.7 (High Effort)",
                     "default_parameters": {
                         "compute_effort": "high"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-4-7-range": {
+                    "label": "Claude Opus 4.7 (Cyber Range)",
+                    "metadata": {
+                        "available_for_everyone": false,
+                        "internal_only": true
                     }
                 }
             }
@@ -9595,14 +13117,18 @@
         },
         "provider_endpoint": "mistral-small-2603",
         "properties": {
-            "context_window": 256000,
+            "context_window": 262144,
             "max_tokens": 256000,
             "training_cutoff": null,
             "reasoning_model": true
         },
         "costs_per_million_token": {
             "input": 0.15,
-            "output": 0.6
+            "output": 0.6,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            }
         },
         "provider_name": "mistralai",
         "full_key": "mistralai/mistral-small-2603",
@@ -11363,104 +14889,6 @@
         "full_key": "openai/gpt-5.2",
         "slug": "openai_gpt-5.2"
     },
-    "mistralai/labs-devstral-small-2512": {
-        "company": "Mistral",
-        "country": "France",
-        "label": "Devstral Small 2",
-        "release_date": "2025-12-09",
-        "open_source": true,
-        "documentation_url": "https://docs.mistral.ai/models/devstral-small-2-25-12",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.2
-        },
-        "provider_endpoint": "labs-devstral-small-2512",
-        "properties": {
-            "context_window": 256000,
-            "max_tokens": 256000,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 0.1,
-            "output": 0.3
-        },
-        "provider_name": "mistralai",
-        "full_key": "mistralai/labs-devstral-small-2512",
-        "slug": "mistralai_labs-devstral-small-2512"
-    },
-    "mistralai/devstral-2512": {
-        "company": "Mistral",
-        "country": "France",
-        "label": "Devstral 2",
-        "release_date": "2025-12-09",
-        "open_source": true,
-        "documentation_url": "https://docs.mistral.ai/models/devstral-2-25-12",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.2
-        },
-        "provider_endpoint": "devstral-2512",
-        "properties": {
-            "context_window": 256000,
-            "max_tokens": 256000,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 0.4,
-            "output": 2.0
-        },
-        "provider_name": "mistralai",
-        "full_key": "mistralai/devstral-2512",
-        "slug": "mistralai_devstral-2512"
-    },
     "mistralai/mistral-large-2512": {
         "company": "Mistral",
         "country": "France",
@@ -11497,18 +14925,84 @@
         },
         "provider_endpoint": "mistral-large-2512",
         "properties": {
-            "context_window": 256000,
+            "context_window": 262144,
             "max_tokens": 256000,
             "training_cutoff": null,
             "reasoning_model": false
         },
         "costs_per_million_token": {
             "input": 0.5,
-            "output": 1.5
+            "output": 1.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            }
         },
         "provider_name": "mistralai",
         "full_key": "mistralai/mistral-large-2512",
         "slug": "mistralai_mistral-large-2512"
+    },
+    "anthropic/claude-opus-4-5-range": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Opus 4.5 (Cyber Range)",
+        "release_date": "2025-11-24",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": true,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "compute_effort": "high"
+        },
+        "provider_endpoint": "claude-opus-4-5-20251101",
+        "properties": {
+            "context_window": 200000,
+            "max_tokens": 64000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 25.0,
+            "cache": {
+                "read": 0.5,
+                "write": 6.25,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-opus-4-5-range",
+        "slug": "anthropic_claude-opus-4-5-range"
     },
     "anthropic/claude-opus-4-5-20251101-thinking": {
         "company": "Anthropic",
@@ -11609,6 +15103,15 @@
                 "anthropic/claude-opus-4-5-20251101-thinking": {
                     "properties": {
                         "reasoning_model": true
+                    }
+                }
+            },
+            {
+                "anthropic/claude-opus-4-5-range": {
+                    "label": "Claude Opus 4.5 (Cyber Range)",
+                    "metadata": {
+                        "available_for_everyone": false,
+                        "internal_only": true
                     }
                 }
             }
@@ -12145,6 +15648,76 @@
         "full_key": "deepseek/deepseek-chat",
         "slug": "deepseek_deepseek-chat"
     },
+    "anthropic/claude-sonnet-4-5-range": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Sonnet 4.5 (Cyber Range)",
+        "release_date": "2025-09-29",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "batch": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": true,
+            "available_as_evaluator": true,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0
+        },
+        "provider_endpoint": "claude-sonnet-4-5-20250929",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 64000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.3,
+                "write": 3.75,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 6.0,
+                "output": 22.5,
+                "cache": {
+                    "read": 0.6,
+                    "write": 7.5,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-sonnet-4-5-range",
+        "slug": "anthropic_claude-sonnet-4-5-range"
+    },
     "anthropic/claude-sonnet-4-5-20250929-thinking": {
         "company": "Anthropic",
         "country": "United States",
@@ -12250,6 +15823,15 @@
                 "anthropic/claude-sonnet-4-5-20250929-thinking": {
                     "properties": {
                         "reasoning_model": true
+                    }
+                }
+            },
+            {
+                "anthropic/claude-sonnet-4-5-range": {
+                    "label": "Claude Sonnet 4.5 (Cyber Range)",
+                    "metadata": {
+                        "available_for_everyone": false,
+                        "internal_only": true
                     }
                 }
             }
@@ -12693,104 +16275,6 @@
         "provider_name": "grok",
         "full_key": "grok/grok-4-fast",
         "slug": "grok_grok-4-fast"
-    },
-    "mistralai/magistral-small-2509": {
-        "company": "Mistral",
-        "country": "France",
-        "label": "Magistral Small 1.2 (09/2025)",
-        "release_date": "2025-09-18",
-        "open_source": true,
-        "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": false,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7
-        },
-        "provider_endpoint": "magistral-small-2509",
-        "properties": {
-            "context_window": 128000,
-            "max_tokens": 128000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 0.5,
-            "output": 1.5
-        },
-        "provider_name": "mistralai",
-        "full_key": "mistralai/magistral-small-2509",
-        "slug": "mistralai_magistral-small-2509"
-    },
-    "mistralai/magistral-medium-2509": {
-        "company": "Mistral",
-        "country": "France",
-        "label": "Magistral Medium 1.2 (09/2025)",
-        "release_date": "2025-09-18",
-        "open_source": false,
-        "documentation_url": "https://docs.mistral.ai/getting-started/models/models_overview/",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": false,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7
-        },
-        "provider_endpoint": "magistral-medium-2509",
-        "properties": {
-            "context_window": 128000,
-            "max_tokens": 128000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 2.0,
-            "output": 5.0
-        },
-        "provider_name": "mistralai",
-        "full_key": "mistralai/magistral-medium-2509",
-        "slug": "mistralai_magistral-medium-2509"
     },
     "alibaba/qwen3-max-preview": {
         "company": "Alibaba",
@@ -14489,55 +17973,6 @@
         "full_key": "bedrock/claude-opus-4-20250514-v1",
         "slug": "bedrock_claude-opus-4-20250514-v1"
     },
-    "mistralai/mistral-medium-2505": {
-        "company": "Mistral",
-        "country": "France",
-        "label": "Mistral Medium 3.1 (05/2025)",
-        "release_date": "2025-05-07",
-        "open_source": false,
-        "documentation_url": "https://mistral.ai/news/mistral-medium-3",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7
-        },
-        "provider_endpoint": "mistral-medium-2505",
-        "properties": {
-            "context_window": 131072,
-            "max_tokens": 32768,
-            "training_cutoff": "2024-05",
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 0.4,
-            "output": 2.0
-        },
-        "provider_name": "mistralai",
-        "full_key": "mistralai/mistral-medium-2505",
-        "slug": "mistralai_mistral-medium-2505"
-    },
     "openai/o4-mini-2025-04-16": {
         "company": "OpenAI",
         "country": "United States",
@@ -15499,55 +18934,6 @@
         "provider_name": "grok",
         "full_key": "grok/grok-3",
         "slug": "grok_grok-3"
-    },
-    "mistralai/mistral-small-2503": {
-        "company": "Mistral",
-        "country": "France",
-        "label": "Mistral Small 3.1 (03/2025)",
-        "release_date": "2025-03-17",
-        "open_source": false,
-        "documentation_url": "https://mistral.ai/news/mistral-small-3-1",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7
-        },
-        "provider_endpoint": "mistral-small-2503",
-        "properties": {
-            "context_window": 131072,
-            "max_tokens": 8192,
-            "training_cutoff": "2024-05",
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 0.075,
-            "output": 0.3
-        },
-        "provider_name": "mistralai",
-        "full_key": "mistralai/mistral-small-2503",
-        "slug": "mistralai_mistral-small-2503"
     },
     "cohere/command-a-03-2025": {
         "company": "Cohere",
@@ -16827,7 +20213,7 @@
         "provider_endpoint": "deepseek-ai/DeepSeek-V4-Flash-0731",
         "properties": {
             "context_window": 1048000,
-            "max_tokens": 384000,
+            "max_tokens": 262144,
             "training_cutoff": null,
             "reasoning_model": true
         },

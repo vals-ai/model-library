@@ -60,11 +60,13 @@ Result: `claude-sonnet-4-6` gets `company: Anthropic`, `country: United States`,
 Provider-specific `provider_properties` are validated by each provider:
 
 - **Anthropic**: Set `fallback_models` to an ordered list of up to three server-side fallback models for the Messages API. Fallback-served responses set `QueryResult.metadata.fallback` (`FallbackInfo`: requested/served model plus per-hop model, usage, and decline trigger/category), are billed at the fallback model's price, and their assistant turns preserve the `fallback` boundary block. Replaying any Anthropic assistant turn replaces empty text blocks in place with a short placeholder rather than dropping them, so thinking blocks keep their positions and signatures.
+- **Anthropic**: Set `thinking_off_type: between_tools` on auto-thinking models that reject `{"type": "disabled"}`; a request with `reasoning: false` then sends `between_tools`, and since that setting only accepts low/medium/high effort, `xhigh`/`max` are sent as `high`. `fallback_models` entries on such a request carry `thinking: {"type": "disabled"}` since the API validates each fallback against its own model.
 - **Anthropic**: Set `task_budget_tokens` to send `output_config.task_budget` with the task-budgets beta, an advisory token budget the model paces its agentic loop against. It is not enforced; `max_tokens` remains the hard ceiling.
 - **Anthropic**: Set `returns_thinking_truncated_turns: true` to return a turn that ran out of tokens inside a thinking block as a `max_tokens` result with its reasoning, instead of raising, so the client can continue the turn. On these keys only, replaying such a turn appends a short text block, since Anthropic rejects an assistant message whose final block is thinking.
 - **OpenAI-compatible completions**: Set `stream_completions: false` to use non-streaming chat completions. The default is `true`.
 - **OpenAI Responses**: Set `code_mode: true` to add the hosted Code Mode tool. When enabled, function tools without explicit `allowed_callers` are sent with `allowed_callers: ["code_mode", "direct"]`.
 - **OpenAI / Google**: Set `service_tier: flex` to request Flex processing (sent as `service_tier`); responses are billed at the model's `batch` discount.
+- **xAI**: Grok requests use the OpenAI-compatible Responses API by default (encrypted reasoning is requested via `include: ["reasoning.encrypted_content"]`). Set `native: true` to use the `xai_sdk` gRPC client instead.
 - **Meta**: Set `use_responses: true` on selected models to route the OpenAI-compatible delegate through the Responses API instead of Chat Completions.
 - **OpenAI-compatible providers**: Set `prompt_cache_key: id` to derive an OpenAI prompt-cache key from the resolved `run_id` and `question_id`, or `prompt_cache_key: hash` to derive it from the stable prompt prefix, for Responses and Chat Completions.
 - **Alibaba Qwen reasoning models**: Set `preserve_thinking: true` to preserve reasoning context across turns.
@@ -76,6 +78,8 @@ Set `country` to the model creator's country, not the hosting provider's country
 
 Set `provider_endpoint` when the registry key differs from the model ID sent to the provider.
 
+Company icons live in `model_library/config/icons/`. Name the light asset exactly `<company>.svg|png` and an optional dark asset `<company>-dark.svg|png`. Add a separate exact-name asset when two company labels use the same artwork; registry configs and `/registry` payloads contain only `company`, not icon filenames. Call `get_company_icon(company)` to resolve the bundled filenames; it returns `None` when no exact light asset exists and leaves `dark=None` when there is no dark asset. PNG and SVG files are bundled in the Python package.
+
 See the [field reference](../model_library/config/README.md#fields) for the `rate_limit` YAML shape. This field stores accounting policy and optional static retry/admission capacity. Live provider observations are separate and never rewrite YAML. Omit `rate_limit` when neither policy nor static capacity is known; public exports strip static capacity and retain policy.
 
 Use `supports.files` only for non-image document or file inputs supported by the provider. For image- or video-only APIs, leave it `false` and set `supports.images` or `supports.videos` instead.
@@ -84,11 +88,11 @@ The validator still runs file examples when `supports.files` is `false`. If one 
 
 OpenAI-compatible completions delegates accept base64 files only and reject `FileWithUrl`. OpenRouter is the exception: its PDF parser accepts a direct URL in `file_data`, so OpenRouter models that answer file probes declare `supports.files: true`.
 
-An `openrouter/<vendor>/<model>` key in provider YAML takes precedence over the dynamic OpenRouter catalog lookup. Use one to pin pricing, limits, and capabilities for a model OpenRouter serves.
-
 Set `supports.audio: true` only when the provider accepts audio input, such as Gemini through `FileWithBytes`.
 
 Expose reasoning-effort variants as `alternative_keys` entries that override `default_parameters.reasoning_effort` (for example a `-xhigh` alias). Native SDK providers must encode every declared value: xAI `xhigh` requires `xai-sdk>=1.19.0`.
+
+xAI entries with `properties.reasoning_model: true` request `use_encrypted_content=True`. The returned `encrypted_content` lives on the raw response kept in history, survives `serialize_input`/`deserialize_input`, and is replayed on later turns so reasoning continues across multi-turn and tool-call loops. Without it, xAI stops reasoning after a few turns.
 
 ## Transcription models
 
@@ -186,8 +190,8 @@ When `MODEL_GATEWAY_URL` is set before the registry is initialized:
   `get_registry_config()` and `get_registry_model()` construction use that
   snapshot. No-argument calls retain it for the process lifetime.
 - The default `/registry` response preserves the legacy schema. It omits
-  `country`, `rate_limit`, `supports.transcription`, and the transcription
-  metadata fields. It also
+  `country`, `rate_limit`, `metadata.router`, `supports.transcription`, and the
+  transcription metadata fields. It also
   omits transcription-only entries because legacy clients require chat sizing
   properties. Clients requesting both `include_excluded_fields=true` and
   `include_transcription=true` receive the complete registry.

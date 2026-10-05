@@ -9,13 +9,15 @@ from model_library.providers.delegates.alibaba import AlibabaConfig, AlibabaMode
 from model_library.providers.delegates.fireworks import FireworksModel
 from model_library.providers.delegates.kimi import KimiModel
 from model_library.providers.mistral import MistralModel
-from model_library.providers.xai import XAIModel
+from model_library.providers.xai import XAIConfig, XAIModel
 from model_library.rate_limits import (
     RateLimit,
     RateLimitCapacity,
     RequestRateLimit,
     TokenRateLimit,
 )
+
+_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 _DATE_HEADER = "Mon, 01 Jan 2024 00:00:00 GMT"
 _DATE_TIMESTAMP = 1_704_067_200.0
@@ -51,12 +53,6 @@ def _client(response: httpx.Response) -> tuple[MagicMock, AsyncMock]:
             "qwen3.8-max",
             "model_library.providers.delegates.alibaba.default_httpx_client",
             id="alibaba",
-        ),
-        pytest.param(
-            KimiModel,
-            "kimi-k3",
-            "model_library.providers.delegates.kimi.default_httpx_client",
-            id="kimi",
         ),
         pytest.param(
             MistralModel,
@@ -119,7 +115,7 @@ async def test_xai_native_probe_uses_default_provider_config(monkeypatch):
         "model_library.providers.xai.probe_chat_completions_rate_limit",
         new_callable=AsyncMock,
     ) as probe:
-        model = XAIModel("grok-3-mini")
+        model = XAIModel("grok-3-mini", config=_NATIVE)
         assert model.delegate is None
         await model.get_rate_limit()
 
@@ -385,6 +381,48 @@ async def test_kimi_reports_rpm_and_concurrency_and_omits_lifetime_quota(
     get.assert_awaited_once_with(
         "https://api.moonshot.ai/v1/users/me",
         headers={"Authorization": "Bearer default-key"},
+    )
+
+
+async def test_kimi_custom_endpoint_skips_account_probe(monkeypatch) -> None:
+    monkeypatch.setattr(KimiModel, "_default_api_key", lambda _: "default-key")
+    model = KimiModel(
+        "kimi-k3", config=LLMConfig(custom_endpoint="https://custom.example/v1")
+    )
+
+    with patch(
+        "model_library.providers.delegates.kimi.default_httpx_client",
+        side_effect=AssertionError("unexpected account probe"),
+    ) as probe:
+        assert await model.get_rate_limit() is None
+
+    probe.assert_not_called()
+
+
+async def test_kimi_custom_api_key_probes_that_account(monkeypatch) -> None:
+    monkeypatch.setattr(
+        KimiModel,
+        "_default_api_key",
+        lambda _: pytest.fail("default key read despite custom key"),
+    )
+    model = KimiModel(
+        "kimi-k3", config=LLMConfig(custom_api_key=SecretStr("custom-key"))
+    )
+    client, get = _client(
+        _response({"data": {"organization": {"max_concurrency": 6000}}})
+    )
+
+    with patch(
+        "model_library.providers.delegates.kimi.default_httpx_client",
+        return_value=client,
+    ):
+        rate_limit = await model.get_rate_limit()
+
+    assert rate_limit is not None
+    assert rate_limit.requests[0].limit == 6000
+    get.assert_awaited_once_with(
+        "https://api.moonshot.ai/v1/users/me",
+        headers={"Authorization": "Bearer custom-key"},
     )
 
 

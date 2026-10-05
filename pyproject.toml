@@ -92,6 +92,7 @@ include = ["model_library*", "model_gateway*"]
   "config/voice/*.yaml",
   "config/defaults/*.yaml",
   "config/deprecated/*.yaml",
+  "config/icons/*",
   "config/defaults/*.json",
   "config/all_models.json",
 ]

@@ -144,28 +144,13 @@ def _get_model_from_registry(
 
 
 def get_registry_config(model_str: str) -> ModelConfig | None:
-    config = get_model_registry().get(model_str)
-    if config is not None:
-        return config
-
-    if model_str.startswith("openrouter/"):
-        from model_library.openrouter_registry import resolve_openrouter_model
-
-        return resolve_openrouter_model(model_str)
-
-    return None
+    return get_model_registry().get(model_str)
 
 
 def get_transcription_registry_config(
     model_str: str,
 ) -> TranscriptionModelConfig | None:
     return get_transcription_registry().get(model_str)
-
-
-def _get_model_metadata_config(model_str: str) -> ModelConfig | None:
-    if _gateway_url():
-        return get_model_registry().get(model_str)
-    return get_registry_config(model_str)
 
 
 def _check_registry_model(
@@ -224,7 +209,7 @@ def get_raw_model(
 
 
 def get_model_cost(model_str: str) -> CostProperties | None:
-    model_config = _get_model_metadata_config(model_str)
+    model_config = get_registry_config(model_str)
     if not model_config:
         raise Exception(f"Model {model_str} not found in registry")
     return model_config.costs_per_million_token
@@ -270,7 +255,7 @@ def compute_transcription_cost(
 
 def get_model_input_context_window(model_name: str) -> int:
     """Return the input context window for the model"""
-    model = _get_model_metadata_config(model_name)
+    model = get_registry_config(model_name)
     if not model:
         raise Exception(f"Model {model_name} not found in registry")
     return get_input_context_window_from_config(model)
@@ -281,9 +266,9 @@ def get_input_context_window_from_config(
 ) -> int:
     """Return usable input tokens from a registry config.
 
-    OpenAI, Meta, Baseten, Together, DeepSeek, and Thomson Reuters configs
-    express a total context window that includes the output budget, so subtract
-    max output tokens for prompt/input capacity.
+    OpenAI, Meta, Baseten, Together, DeepSeek, Thomson Reuters, and Inception
+    configs express a total context window that includes the output budget, so
+    subtract max output tokens for prompt/input capacity.
     """
     context_window = model.properties.context_window
     if model.provider_name in {
@@ -293,6 +278,7 @@ def get_input_context_window_from_config(
         "together",
         "deepseek",
         "thomsonreuters",
+        "inception",
     }:
         if output_budget is None:
             output_budget = model.properties.max_tokens

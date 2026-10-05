@@ -21,11 +21,12 @@ def _make_client(
     *,
     client: tuple[str, int] = ("testclient", 50000),
     runtime_role: str = "combined",
+    api_keys: dict[str, str] | None = None,
 ) -> TestClient:
     from model_gateway import main
 
     class ServerSettings:
-        MODEL_GATEWAY_API_KEYS = json.dumps({"test": "sk-test"})
+        MODEL_GATEWAY_API_KEYS = json.dumps(api_keys or {"test": "sk-test"})
         MODEL_GATEWAY_HMAC_SECRET = "test-secret"
 
         def get(self, name: str, default: str = "") -> str:

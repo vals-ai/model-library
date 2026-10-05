@@ -25,6 +25,8 @@ from examples.validate_model import (
 
 
 class _FakeModel(SimpleNamespace):
+    is_router = False
+
     async def query(self, *_args: Any, **_kwargs: Any) -> QueryResult:
         return _query_result("ok")
 
@@ -100,8 +102,6 @@ def test_validate_model_rate_limit_detail_names_algorithms() -> None:
     assert detail == (
         "requests=sliding_window=29999/30000; TPM=token_bucket=180000000/180000000"
     )
-
-
 def test_validate_model_media_and_file_cases_require_semantic_answers() -> None:
     cases = {(case.section, case.name): case for case in _build_cases(_fake_llm())}
 

@@ -57,6 +57,36 @@ def _mistral_tool_call_event_key(tool_call: MistralToolCall) -> Hashable | None:
     return None
 
 
+def _drop_unanswered_tool_calls(
+    messages: list[dict[str, Any] | Any],
+) -> list[dict[str, Any] | Any]:
+    """Mistral rejects a history where an assistant tool call is not followed
+    by a tool result (400 invalid_request_message_order)."""
+    from mistralai.client.models import AssistantMessage
+
+    result: list[dict[str, Any] | Any] = []
+    for index, message in enumerate(messages):
+        if isinstance(message, AssistantMessage) and message.tool_calls:
+            following = messages[index + 1] if index + 1 < len(messages) else None
+            if not (isinstance(following, dict) and following.get("role") == "tool"):
+                if not message.content:
+                    continue
+                message = message.model_copy(update={"tool_calls": None})
+        result.append(message)
+    return result
+
+
+def _mistral_cached_tokens(usage: object) -> int:
+    if not isinstance(usage, BaseModel) or not usage.model_extra:
+        return 0
+    details = usage.model_extra.get("prompt_tokens_details")
+    if isinstance(details, dict):
+        cached = details.get("cached_tokens")  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
+        if isinstance(cached, int):
+            return cached
+    return 0
+
+
 def map_mistral_finish_reason(
     finish_reason: str | None,
 ) -> FinishReasonInfo:
@@ -189,7 +219,7 @@ class MistralModel(LLM):
         # in case content user item is the last item
         flush_content_user()
 
-        return new_input
+        return _drop_unanswered_tool_calls(new_input)
 
     @override
     async def parse_image(
@@ -329,6 +359,7 @@ class MistralModel(LLM):
         # The chunk can be a ThinkChunk (reasoning), TextChunk or str (content), or may contain usage.
         in_tokens = 0
         out_tokens = 0
+        cache_read_tokens = 0
         finish_reason = None
         response_id: str | None = None
         raw_tool_calls: list[MistralToolCall] = []
@@ -366,8 +397,10 @@ class MistralModel(LLM):
                         finish_reason = choice.finish_reason
 
                 if hasattr(data, "usage") and data.usage is not None:
-                    in_tokens += data.usage.prompt_tokens or 0
+                    cached = _mistral_cached_tokens(data.usage)
+                    in_tokens += (data.usage.prompt_tokens or 0) - cached
                     out_tokens += data.usage.completion_tokens or 0
+                    cache_read_tokens += cached
 
         except Exception as e:
             query_logger.error(f"Error: {e}", exc_info=True)
@@ -432,6 +465,7 @@ class MistralModel(LLM):
             metadata=QueryResultMetadata(
                 in_tokens=in_tokens,
                 out_tokens=out_tokens,
+                cache_read_tokens=cache_read_tokens,
                 # Reasoning tokens are not supported by Mistral 09/22/25
             ),
             extras=QueryResultExtras(

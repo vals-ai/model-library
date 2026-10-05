@@ -4,9 +4,9 @@ import base64
 import binascii
 import io
 import time
-from typing import cast
+from typing import Annotated, cast
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 
 import model_library.telemetry as telemetry
 from model_library.base import LLM, dump_gateway_config, dump_llm_config
@@ -14,6 +14,7 @@ from model_library.base import LLM, dump_gateway_config, dump_llm_config
 from model_gateway import model_helpers
 from model_gateway.cache import ModelCache
 from model_gateway.metrics import model_dimensions
+from model_gateway.run_tokens import run_token_authorized
 from model_gateway.route_helpers import (
     EmbeddingModel,
     GatewayOperation,
@@ -38,7 +39,12 @@ from model_gateway.types import (
 
 def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
     @app.post("/tokens/count")
-    async def count_tokens(body: TokenCountRequest):
+    async def count_tokens(
+        body: Annotated[
+            TokenCountRequest,
+            Depends(run_token_authorized(TokenCountRequest)),
+        ],
+    ):
         start = time.perf_counter()
         display_config = dump_gateway_config(body.config)
         dimensions = model_dimensions(
@@ -97,7 +103,12 @@ def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
             return operation.error(exc, phase=error_phase)
 
     @app.post("/files/upload")
-    async def upload_file(body: UploadFileRequest):
+    async def upload_file(
+        body: Annotated[
+            UploadFileRequest,
+            Depends(run_token_authorized(UploadFileRequest)),
+        ],
+    ):
         start = time.perf_counter()
         config = dump_llm_config(body.config)
         display_config = dump_gateway_config(body.config)
@@ -160,7 +171,12 @@ def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
             return operation.error(exc, phase="files_upload")
 
     @app.post("/embeddings")
-    async def embeddings(body: EmbeddingRequest):
+    async def embeddings(
+        body: Annotated[
+            EmbeddingRequest,
+            Depends(run_token_authorized(EmbeddingRequest)),
+        ],
+    ):
         start = time.perf_counter()
         config = dump_llm_config(body.config)
         display_config = dump_gateway_config(body.config)
@@ -207,7 +223,12 @@ def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
             return operation.error(exc, phase="embeddings")
 
     @app.post("/moderation")
-    async def moderation(body: ModerationRequest):
+    async def moderation(
+        body: Annotated[
+            ModerationRequest,
+            Depends(run_token_authorized(ModerationRequest)),
+        ],
+    ):
         start = time.perf_counter()
         config = dump_llm_config(body.config)
         display_config = dump_gateway_config(body.config)
@@ -247,7 +268,12 @@ def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
             return operation.error(exc, phase="moderation")
 
     @app.post("/audio/transcriptions")
-    async def transcribe_audio(body: TranscriptionRequest):
+    async def transcribe_audio(
+        body: Annotated[
+            TranscriptionRequest,
+            Depends(run_token_authorized(TranscriptionRequest)),
+        ],
+    ):
         start = time.perf_counter()
         config = dump_llm_config(body.config)
         display_config = dump_gateway_config(body.config)

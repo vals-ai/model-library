@@ -46,12 +46,13 @@ Set provider credentials using the names in [API keys](api-keys.md).
 
 Realtime-audio models require a complete WAV payload: 16 kHz mono PCM16 for
 AssemblyAI, ElevenLabs, Inworld, xAI, Cartesia, realtime Mistral, Gemini Live,
-Muse Voice Transcribe, and OpenAI Live; 8–48 kHz mono PCM16 for AWS Transcribe;
-any mono PCM16 rate for Azure Speech and Deepgram; Google Cloud auto-detects the
-container's encoding.
+Muse Voice Transcribe, OpenAI Live, and Reson8 Realtime; 8–48 kHz mono PCM16
+for AWS Transcribe; any mono PCM16 rate for Azure Speech and Deepgram; Google
+Cloud auto-detects the container's encoding.
 Complete-file models — both Groq models, GPT-4o Transcribe, OpenAI Mini's
 streaming-response transport, Mistral Voxtral Mini 2602, Gemini Transcribe,
-and Cohere Transcribe — accept the MIME types their own endpoint supports.
+Cohere Transcribe, and Reson8 Resonant-1 — accept the MIME types their own
+endpoint supports.
 Cohere also requires an ISO-639-1 `language`; Muse Voice Transcribe ignores it,
 since its API takes only a bias hint and detects the language itself.
 

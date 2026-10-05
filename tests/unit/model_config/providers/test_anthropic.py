@@ -169,6 +169,66 @@ class TestAnthropicConfig:
 
         assert body["thinking"] == {"type": "disabled"}
 
+    async def test_between_tools_thinking_off_clamps_effort_to_high(self):
+        model = AnthropicModel(
+            "claude-test",
+            config=LLMConfig(
+                max_tokens=4096,
+                reasoning=False,
+                compute_effort="max",
+                provider_config=AnthropicConfig(
+                    supports_auto_thinking=True,
+                    supports_compute_effort=True,
+                    thinking_off_type="between_tools",
+                ),
+            ),
+        )
+
+        body = await model.build_body(_INPUT, tools=[])
+
+        assert body["thinking"] == {"type": "between_tools"}
+        assert body["output_config"] == {"effort": "high"}
+
+    async def test_between_tools_thinking_off_keeps_supported_effort(self):
+        model = AnthropicModel(
+            "claude-test",
+            config=LLMConfig(
+                max_tokens=4096,
+                reasoning=False,
+                compute_effort="low",
+                provider_config=AnthropicConfig(
+                    supports_auto_thinking=True,
+                    supports_compute_effort=True,
+                    thinking_off_type="between_tools",
+                ),
+            ),
+        )
+
+        body = await model.build_body(_INPUT, tools=[])
+
+        assert body["thinking"] == {"type": "between_tools"}
+        assert body["output_config"] == {"effort": "low"}
+
+    async def test_reasoning_with_between_tools_config_still_uses_adaptive(self):
+        model = AnthropicModel(
+            "claude-test",
+            config=LLMConfig(
+                max_tokens=4096,
+                reasoning=True,
+                compute_effort="max",
+                provider_config=AnthropicConfig(
+                    supports_auto_thinking=True,
+                    supports_compute_effort=True,
+                    thinking_off_type="between_tools",
+                ),
+            ),
+        )
+
+        body = await model.build_body(_INPUT, tools=[])
+
+        assert body["thinking"] == {"type": "adaptive"}
+        assert body["output_config"] == {"effort": "max"}
+
     async def test_supports_compute_effort_adds_output_config(self):
         model = AnthropicModel(
             "claude-test",
@@ -339,6 +399,22 @@ class TestAnthropicConfig:
         )
         assert result.metadata.extra == {
             "anthropic_response_model": "claude-primary-test"
+        }
+
+    async def test_between_tools_fallbacks_override_thinking_to_disabled(self):
+        captured, _ = await _query_anthropic_with_provider_config(
+            AnthropicConfig(
+                fallback_models=["claude-fallback-test"],
+                supports_auto_thinking=True,
+                thinking_off_type="between_tools",
+            )
+        )
+
+        extra_body = cast(dict[str, object], captured["extra_body"])
+        assert extra_body == {
+            "fallbacks": [
+                {"model": "claude-fallback-test", "thinking": {"type": "disabled"}}
+            ]
         }
 
     async def test_no_fallback_leaves_metadata_fallback_unset(self):

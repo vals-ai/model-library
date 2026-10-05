@@ -86,6 +86,14 @@ class Metadata(BaseModel):
     internal_only: bool = False
     available_as_evaluator: bool = False
     ignored_for_cost: bool = False
+    router: bool = Field(default=False, exclude_if=lambda v: not v)
+
+
+class CompanyIcon(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    light: str
+    dark: str | None = None
 
 
 class Properties(BaseModel):
@@ -542,6 +550,34 @@ def fetch_gateway_model_registry(gateway_url: str) -> RegistryEntries:
 
 # Folder containing provider YAMLs
 path_library = Path(__file__).parent / "config"
+ICONS_DIR = path_library / "icons"
+
+
+def get_company_icon(company: str) -> CompanyIcon | None:
+    """Find the icon files named exactly for ``company`` in ``ICONS_DIR``."""
+    light = [
+        path
+        for suffix in (".svg", ".png")
+        if (path := ICONS_DIR / f"{company}{suffix}").is_file()
+    ]
+    if len(light) > 1:
+        raise ValueError(
+            f"Multiple light icons found for {company}: {[path.name for path in light]}"
+        )
+    if not light:
+        return None
+
+    dark = [
+        path
+        for suffix in (".svg", ".png")
+        if (path := ICONS_DIR / f"{company}-dark{suffix}").is_file()
+    ]
+    if len(dark) > 1:
+        raise ValueError(
+            f"Multiple dark icons found for {company}: {[path.name for path in dark]}"
+        )
+
+    return CompanyIcon(light=light[0].name, dark=dark[0].name if dark else None)
 
 
 def deep_update(

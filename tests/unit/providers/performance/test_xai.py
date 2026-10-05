@@ -4,8 +4,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from model_library.base import QueryResultMetadata, QueryResultPerformance
-from model_library.providers.xai import XAIModel
+from model_library.base import LLMConfig, QueryResultMetadata, QueryResultPerformance
+from model_library.providers.xai import XAIConfig, XAIModel
+
+_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 
 def _require_performance(metadata: QueryResultMetadata) -> QueryResultPerformance:
@@ -40,7 +42,7 @@ class TestXAIStreamingPerformance:
                 )
 
     async def test_xai_streaming_chunks_populate_performance_timeline(self):
-        model = XAIModel("grok-3-mini")
+        model = XAIModel("grok-3-mini", config=_NATIVE)
         usage = SimpleNamespace(
             prompt_tokens=3,
             cached_prompt_text_tokens=0,
@@ -93,7 +95,7 @@ class TestXAIStreamingPerformance:
         )
 
     async def test_xai_streaming_falls_back_to_final_response_content(self):
-        model = XAIModel("grok-3-mini")
+        model = XAIModel("grok-3-mini", config=_NATIVE)
         usage = SimpleNamespace(
             prompt_tokens=3,
             cached_prompt_text_tokens=0,
@@ -121,7 +123,7 @@ class TestXAIStreamingPerformance:
         assert result.metadata.performance is None
 
     async def test_xai_streaming_keeps_content_delta_when_final_content_is_empty(self):
-        model = XAIModel("grok-3-mini")
+        model = XAIModel("grok-3-mini", config=_NATIVE)
         usage = SimpleNamespace(
             prompt_tokens=3,
             cached_prompt_text_tokens=0,
@@ -147,7 +149,7 @@ class TestXAIStreamingPerformance:
         assert result.output_text == "hello"
 
     async def test_xai_streaming_tool_call_populates_performance_timeline(self):
-        model = XAIModel("grok-3-mini")
+        model = XAIModel("grok-3-mini", config=_NATIVE)
         usage = SimpleNamespace(
             prompt_tokens=3,
             cached_prompt_text_tokens=0,
@@ -191,7 +193,7 @@ class TestXAIStreamingPerformance:
     async def test_xai_streaming_same_tool_call_chunks_share_one_timeline_segment(
         self, first_chunk_id: str
     ):
-        model = XAIModel("grok-3-mini")
+        model = XAIModel("grok-3-mini", config=_NATIVE)
         usage = SimpleNamespace(
             prompt_tokens=3,
             cached_prompt_text_tokens=0,
@@ -256,7 +258,7 @@ class TestXAIStreamingPerformance:
         ] == ["tool_call"]
 
     async def test_xai_streaming_multiple_complete_tool_calls_split_timeline(self):
-        model = XAIModel("grok-3-mini")
+        model = XAIModel("grok-3-mini", config=_NATIVE)
         usage = SimpleNamespace(
             prompt_tokens=3,
             cached_prompt_text_tokens=0,

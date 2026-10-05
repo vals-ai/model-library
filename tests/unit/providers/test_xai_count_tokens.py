@@ -2,8 +2,11 @@ import base64
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from model_library.base import LLMConfig
 from model_library.base.input import FileWithBase64, TextInput
-from model_library.providers.xai import XAIModel
+from model_library.providers.xai import XAIConfig, XAIModel
+
+_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 # The unit-test fixture replaces provider get_client methods at runtime.
 _XAI_COUNT_TOKENS = XAIModel.count_tokens
@@ -31,7 +34,7 @@ async def test_count_tokens_counts_locally_and_ignores_image_payloads():
     client.chat.create.return_value = FakeChat()
     client.tokenize.tokenize_text = AsyncMock(return_value=[1, 2, 3])
 
-    model = XAIModel("grok-3-mini")
+    model = XAIModel("grok-3-mini", config=_NATIVE)
     with patch.object(XAIModel, "get_client", return_value=client):
         count = await _XAI_COUNT_TOKENS(
             model,

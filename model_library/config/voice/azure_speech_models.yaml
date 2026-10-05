@@ -16,3 +16,4 @@ base-config:
 transcription-models:
   azure_speech/universal-language-model:
     label: Azure Speech Universal Language Model
+    release_date: 2024-11-22

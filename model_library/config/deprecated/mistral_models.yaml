@@ -12,6 +12,9 @@ base-config:
     max_tokens: null
     training_cutoff: null
     reasoning_model: false
+  costs_per_million_token:
+    cache:
+      read_discount: 0.1
 
 
 deprecated:
@@ -22,6 +25,274 @@ deprecated:
       temperature: true
     default_parameters:
       temperature: 0.7
+
+  mistralai/mistral-small-2503:
+    company: Mistral
+    country: France
+    label: Mistral Small 3.1 (03/2025)
+    release_date: 2025-03-17
+    open_source: false
+    documentation_url: https://mistral.ai/news/mistral-small-3-1
+    supports:
+      images: true
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: true
+      cache_read_counts_toward_limit: true
+    alternative_keys: []
+    default_parameters:
+      temperature: 0.7
+    provider_endpoint: mistral-small-2503
+    properties:
+      context_window: 131072
+      max_tokens: 8192
+      training_cutoff: 2024-05
+      reasoning_model: false
+    costs_per_million_token:
+      input: 0.075
+      output: 0.3
+      cache:
+        read: null
+        write: null
+        read_discount: 0.1
+        write_markup: 1.0
+      batch: null
+      context: null
+
+  mistralai/mistral-medium-2505:
+    company: Mistral
+    country: France
+    label: Mistral Medium 3.1 (05/2025)
+    release_date: 2025-05-07
+    open_source: false
+    documentation_url: https://mistral.ai/news/mistral-medium-3
+    supports:
+      images: true
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: true
+      cache_read_counts_toward_limit: true
+    alternative_keys: []
+    default_parameters:
+      temperature: 0.7
+    provider_endpoint: mistral-medium-2505
+    properties:
+      context_window: 131072
+      max_tokens: 32768
+      training_cutoff: 2024-05
+      reasoning_model: false
+    costs_per_million_token:
+      input: 0.4
+      output: 2.0
+      cache:
+        read: null
+        write: null
+        read_discount: 0.1
+        write_markup: 1.0
+      batch: null
+      context: null
+
+  mistralai/labs-devstral-small-2512:
+    company: Mistral
+    country: France
+    label: Devstral Small 2
+    release_date: 2025-12-09
+    open_source: true
+    documentation_url: https://docs.mistral.ai/models/devstral-small-2-25-12
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: true
+      cache_read_counts_toward_limit: true
+    alternative_keys: []
+    default_parameters:
+      temperature: 0.2
+    provider_endpoint: labs-devstral-small-2512
+    properties:
+      context_window: 256000
+      max_tokens: 256000
+      reasoning_model: false
+    costs_per_million_token:
+      input: 0.1
+      output: 0.3
+      cache:
+        read: null
+        write: null
+        read_discount: 0.1
+        write_markup: 1.0
+      batch: null
+      context: null
+
+  mistralai/devstral-2512:
+    company: Mistral
+    country: France
+    label: Devstral 2
+    release_date: 2025-12-09
+    open_source: true
+    documentation_url: https://docs.mistral.ai/models/devstral-2-25-12
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: true
+      cache_read_counts_toward_limit: true
+    alternative_keys: []
+    default_parameters:
+      temperature: 0.2
+    provider_endpoint: devstral-2512
+    properties:
+      context_window: 256000
+      max_tokens: 256000
+      reasoning_model: false
+    costs_per_million_token:
+      input: 0.4
+      output: 2.0
+      cache:
+        read: null
+        write: null
+        read_discount: 0.1
+        write_markup: 1.0
+      batch: null
+      context: null
+
+  mistralai/magistral-small-2509:
+    company: Mistral
+    country: France
+    label: Magistral Small 1.2 (09/2025)
+    release_date: 2025-09-18
+    open_source: true
+    documentation_url: https://docs.mistral.ai/getting-started/models/models_overview/
+    supports:
+      images: true
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: false
+      cache_read_counts_toward_limit: true
+      requests: []
+    alternative_keys: []
+    default_parameters:
+      temperature: 0.7
+    provider_endpoint: magistral-small-2509
+    properties:
+      context_window: 128000
+      max_tokens: 128000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.5
+      output: 1.5
+      cache:
+        read: null
+        write: null
+        read_discount: 0.1
+        write_markup: 1.0
+      batch: null
+      context: null
+
+  mistralai/magistral-medium-2509:
+    company: Mistral
+    country: France
+    label: Magistral Medium 1.2 (09/2025)
+    release_date: 2025-09-18
+    open_source: false
+    documentation_url: https://docs.mistral.ai/getting-started/models/models_overview/
+    supports:
+      images: true
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: false
+      cache_read_counts_toward_limit: true
+      requests: []
+    alternative_keys: []
+    default_parameters:
+      temperature: 0.7
+    provider_endpoint: magistral-medium-2509
+    properties:
+      context_window: 128000
+      max_tokens: 128000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 2.0
+      output: 5.0
+      cache:
+        read: null
+        write: null
+        read_discount: 0.1
+        write_markup: 1.0
+      batch: null
+      context: null
 
   mistralai/magistral-medium-2506:
     label: Magistral Medium 1.0 (06/2025)

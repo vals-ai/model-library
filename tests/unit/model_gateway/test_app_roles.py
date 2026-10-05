@@ -116,6 +116,8 @@ def test_control_role_exposes_only_health_and_control_operations(
         "/rate-limit-monitor/activate",
         "/registry",
         "/models",
+        "/service-auth",
+        "/service-auth/revoke",
     }
     assert app.state.startup_canary == {
         "enabled": False,

@@ -12,6 +12,7 @@ from model_library.providers.voice.azure_speech import AzureSpeechModel
 from model_library.providers.voice.cartesia import CartesiaModel
 from model_library.providers.voice.groq import GroqModel
 from model_library.providers.voice.inworld import InworldModel
+from model_library.providers.voice.reson8 import Reson8Model
 from model_library.providers.voice.xai import XAITranscriptionModel
 from tests.unit.providers.transcription_test_support import (
     clear_transcription_client_registry as clear_transcription_client_registry,
@@ -35,6 +36,7 @@ from tests.unit.providers.transcription_test_support import (
         ),
         (XAITranscriptionModel, "grok-voice-transcribe-2.0", "xai/grok-voice-transcribe-2.0"),
         (InworldModel, "inworld-stt-1", "inworld/inworld-stt-1"),
+        (Reson8Model, "resonant-1", "reson8/resonant-1"),
         (GroqModel, "whisper-large-v3-turbo", "groq/whisper-large-v3-turbo"),
     ],
 )

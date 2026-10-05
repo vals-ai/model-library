@@ -53,6 +53,8 @@ HTTP_TRACE_ALLOWED_ROUTES = frozenset(
         "/rate-limit-monitor",
         "/rate-limit-monitor/activate",
         "/registry",
+        "/service-auth",
+        "/service-auth/revoke",
         "/token-retry/status",
         "/tokens/count",
     }

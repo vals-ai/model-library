@@ -56,20 +56,28 @@ class ZAIModel(DelegateOnly):
         )
 
         config = config or LLMConfig()
-        config.custom_endpoint = config.custom_endpoint or (
-            _INTERNATIONAL_ENDPOINT
-            if self.provider_config.international
-            else _MAINLAND_ENDPOINT
-        )
-        config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.ZAI_API_KEY
-        )
+        if config.custom_api_key is None:
+            config.custom_endpoint = config.custom_endpoint or self._default_endpoint()
+            config.custom_api_key = SecretStr(self._default_api_key())
+        else:
+            config.custom_endpoint = config.custom_endpoint or self._public_endpoint()
 
         self.init_delegate(
             config=config,
             delegate_provider="openai",
             use_completions=True,
         )
+
+    def _default_endpoint(self) -> str:
+        return self._public_endpoint()
+
+    def _public_endpoint(self) -> str:
+        if self.provider_config.international:
+            return _INTERNATIONAL_ENDPOINT
+        return _MAINLAND_ENDPOINT
+
+    def _default_api_key(self) -> str:
+        return model_library_settings.ZAI_API_KEY
 
     @override
     def _get_extra_body(self) -> dict[str, Any]:

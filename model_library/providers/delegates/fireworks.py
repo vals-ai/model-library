@@ -1,22 +1,29 @@
-from typing import Literal
+import logging
+from typing import Any, Literal, Sequence
 
-from pydantic import SecretStr
+from pydantic import BaseModel, SecretStr
 from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
     DelegateOnly,
+    InputItem,
     LLMConfig,
     ProviderConfig,
+    QueryResult,
     QueryResultCost,
     QueryResultMetadata,
+    ToolDefinition,
 )
 from model_library.rate_limits import RateLimit, RateLimitCapacity, TokenRateLimit
 from model_library.register_models import register_provider
 
+FIREROUTER_ENDPOINT_PREFIX = "accounts/fireworks/routers/"
+
 
 class FireworksConfig(ProviderConfig):
     serverless: bool = True
+    firerouter_routing_preference: int | None = None
 
 
 @register_provider("fireworks")
@@ -32,18 +39,26 @@ class FireworksModel(DelegateOnly):
     ):
         super().__init__(model_name, provider, config=config)
 
-        if self.provider_config.serverless:
-            self.model_name = "accounts/fireworks/models/" + self.model_name
-        else:
-            self.model_name = "accounts/rayan-936e28/deployedModels/" + self.model_name
+        is_firerouter = self.model_name.startswith(FIREROUTER_ENDPOINT_PREFIX)
+        if not is_firerouter:
+            if self.provider_config.serverless:
+                self.model_name = "accounts/fireworks/models/" + self.model_name
+            else:
+                self.model_name = (
+                    "accounts/rayan-936e28/deployedModels/" + self.model_name
+                )
 
         # https://docs.fireworks.ai/tools-sdks/openai-compatibility
         config = config or LLMConfig()
         config.custom_endpoint = (
             config.custom_endpoint or "https://api.fireworks.ai/inference/v1"
         )
+        # FireRouter's closed (Claude/GPT) legs use Provider Keys stored on the
+        # Nexus account; the regular key would silently serve open models only.
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.FIREWORKS_API_KEY
+            model_library_settings.FIREWORKS_NEXUS_API_KEY
+            if is_firerouter
+            else model_library_settings.FIREWORKS_API_KEY
         )
 
         self.init_delegate(
@@ -51,6 +66,29 @@ class FireworksModel(DelegateOnly):
             delegate_provider="openai",
             use_completions=True,
             normalize_null_assistant_history_fields=True,
+        )
+
+    @override
+    async def _query_impl(
+        self,
+        input: Sequence[InputItem],
+        *,
+        tools: list[ToolDefinition],
+        query_logger: logging.Logger,
+        output_schema: dict[str, Any] | type[BaseModel] | None = None,
+        **kwargs: object,
+    ) -> QueryResult:
+        if self.is_router:
+            self.enable_router_mode()
+            preference = self.provider_config.firerouter_routing_preference
+            if preference is not None:
+                kwargs["extra_headers"] = {"x-routing-preference": str(preference)}
+        return await super()._query_impl(
+            input,
+            tools=tools,
+            query_logger=query_logger,
+            output_schema=output_schema,
+            **kwargs,
         )
 
     @override

@@ -28,13 +28,17 @@ from openai.types.responses.response_function_web_search import (
 
 from model_library.agent.metadata import TurnSummary
 from model_library.agent.tool import ProviderTool
+from model_library.base import LLMConfig
 from model_library.base.input import TextInput, ToolBody, ToolDefinition
 from model_library.base.output import FinishReason, FinishReasonInfo, QueryResult
 from model_library.base.output.result import ProviderToolEvent
 from model_library.providers.google.google import GoogleModel
 from model_library.providers.openai import OpenAIModel
+from model_library.providers.xai import XAIConfig, XAIModel
 
 from tests.unit.agent.helpers import DoneTool, make_agent, make_metadata, mock_llm
+
+_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 
 def _make_web_search_response(
@@ -174,6 +178,23 @@ async def test_web_search_call_maps_to_provider_tool_events():
     assert event.provider == "openai"
     assert event.input == "test query"
     assert event.status == "completed"
+
+
+async def test_web_search_call_event_provider_follows_delegate_provider():
+    """Grok's default Responses delegate must attribute searches to xai, not openai."""
+    delegate = XAIModel("grok-4.7").delegate
+    assert delegate is not None
+    mock_client = MagicMock()
+    mock_client.responses.create = AsyncMock(return_value=_make_web_search_response())
+    with patch.object(delegate, "get_client", return_value=mock_client):
+        result = await delegate._query_impl(  # pyright: ignore[reportPrivateUsage]
+            [TextInput(text="search for something")],
+            tools=[],
+            stream=False,
+            query_logger=MagicMock(),
+        )
+
+    assert [e.provider for e in result.provider_tool_events] == ["xai"]
 
 
 async def test_web_search_call_finish_reason_is_stop():
@@ -874,10 +895,9 @@ def _native_web_search_tools() -> list[ToolDefinition]:
 async def _parse_xai_response(
     mock_response, tools: list[ToolDefinition] | None = None
 ) -> QueryResult:
-    from model_library.providers.xai import XAIModel
     from xai_sdk.proto.v6.chat_pb2 import GetCompletionsRequest
 
-    model = XAIModel("grok-3-latest")
+    model = XAIModel("grok-3-latest", config=_NATIVE)
     if tools is None:
         tools = _native_web_search_tools()
 
@@ -1128,10 +1148,8 @@ async def test_native_web_search_xai_parse_tools():
     from xai_sdk.proto.v6.chat_pb2 import Tool as XAITool
 
     from model_library.agent.tool import NativeWebSearch
-    from model_library.base.base import LLMConfig
-    from model_library.providers.xai import XAIModel
 
-    model = XAIModel("grok-3-latest", config=LLMConfig(native=True))
+    model = XAIModel("grok-3-latest", config=_NATIVE)
     tool = NativeWebSearch()
     result = await model.parse_tools([tool.definition])
 

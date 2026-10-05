@@ -77,6 +77,14 @@ def test_query_result_extras_provider_request_id_does_not_hydrate_response_ids()
     assert extras.provider_request_id == "provider-request"
 
 
+def test_query_result_metadata_clamps_negative_out_tokens():
+    metadata = QueryResultMetadata(out_tokens=5 - 8, reasoning_tokens=8)
+
+    assert metadata.out_tokens == 0
+    assert metadata.reasoning_tokens == 8
+    assert metadata.total_output_tokens == 8
+
+
 class TestQueryResultCostAddition:
     async def test_add_full_costs(self):
         cost1 = QueryResultCost(

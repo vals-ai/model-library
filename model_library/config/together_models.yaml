@@ -15,6 +15,57 @@ base-config:
       input_discount: 0.5
       output_discount: 0.5
 
+deepseek-models:
+  together/deepseek-ai/DeepSeek-V4.1-Flash:
+    company: DeepSeek
+    country: China
+    label: DeepSeek V4.1 Flash (Together)
+    release_date: 2026-09-10
+    documentation_url: https://www.together.ai/models/deepseek-v4-1-flash
+    supports:
+      tools: true
+      temperature: true
+      output_schema: true
+    default_parameters:
+      reasoning_effort: max
+      temperature: 1
+      top_p: 1
+    properties:
+      context_window: 1_048_576
+      max_tokens: 262_144
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.006
+      batch: null
+
+minimax-models:
+  together/MiniMaxAI/MiniMax-M3:
+    company: MiniMax
+    country: China
+    label: MiniMax-M3 (Together)
+    release_date: 2026-06-11
+    documentation_url: https://www.together.ai/models/minimax-m3
+    supports:
+      tools: true
+      temperature: true
+      output_schema: true
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+    properties:
+      context_window: 524_288
+      max_tokens: 64_000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.06
+      batch: null
+
 # Meta Llama Models
 llama-models:
   base-config:

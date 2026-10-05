@@ -165,7 +165,8 @@ CONTEXT_WINDOW_PATTERN = re.compile(
     r"string too long|"
     r"input exceeded the context window|"
     r"input length \d+ exceeds the maximum allowed input length|"  # poolside
-    r"configured context length exceeded"
+    r"configured context length exceeded|"
+    r"the request contains invalid parameters"  # meta
 )
 
 

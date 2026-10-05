@@ -17,10 +17,13 @@ from aiohttp import web
 from google.protobuf.wrappers_pb2 import StringValue
 
 from model_library import utils as model_utils
+from model_library.base import LLMConfig
 from model_library.base.base import client_registry
 from model_library.failure_capture import core
 from model_library.providers.amazon import AmazonModel
-from model_library.providers.xai import XAIModel
+from model_library.providers.xai import XAIConfig, XAIModel
+
+_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 _AMAZON_GET_CLIENT = AmazonModel.get_client
 
@@ -375,7 +378,7 @@ class _Proto:
 
 async def test_pinned_xai_capture() -> None:
     assert importlib.metadata.version("xai-sdk") == "1.19.0"
-    model = XAIModel("grok-3-mini")
+    model = XAIModel("grok-3-mini", config=_NATIVE)
 
     class FailingChat:
         requested: list[int] = []
@@ -426,7 +429,7 @@ async def test_pinned_xai_capture() -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["make_request", "request_serialization"])
 async def test_xai_capture_request_failure_preserves_result(failure: str) -> None:
-    model = XAIModel("grok-3-mini")
+    model = XAIModel("grok-3-mini", config=_NATIVE)
 
     class FailingChat:
         def _make_request(self, n: int) -> _Proto:
@@ -473,7 +476,7 @@ async def test_xai_capture_request_failure_preserves_result(failure: str) -> Non
 
 @pytest.mark.asyncio
 async def test_xai_capture_response_serialization_failure_preserves_result() -> None:
-    model = XAIModel("grok-3-mini")
+    model = XAIModel("grok-3-mini", config=_NATIVE)
 
     class Chat:
         def _make_request(self, n: int) -> _Proto:
@@ -516,7 +519,7 @@ async def test_xai_capture_response_serialization_failure_preserves_result() -> 
 
 @pytest.mark.asyncio
 async def test_xai_capture_request_base_exception_propagates_unchanged() -> None:
-    model = XAIModel("grok-3-mini")
+    model = XAIModel("grok-3-mini", config=_NATIVE)
 
     class DiagnosticFailure(BaseException):
         pass
@@ -549,7 +552,7 @@ async def test_xai_capture_request_base_exception_propagates_unchanged() -> None
 
 @pytest.mark.asyncio
 async def test_xai_capture_disabled_skips_diagnostic_request() -> None:
-    model = XAIModel("grok-3-mini")
+    model = XAIModel("grok-3-mini", config=_NATIVE)
 
     class Chat:
         def _make_request(self, n: int) -> _Proto:

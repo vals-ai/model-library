@@ -9,11 +9,9 @@ these provider keys server-side; gateway clients authenticate with
 
 `LLMConfig(custom_api_key=SecretStr(...))` can override the default provider key
 for a single model call. `custom_endpoint` is for caller-supplied,
-provider-compatible URLs. Requests that set `custom_endpoint` must also set
-`custom_api_key`; the gateway uses that caller-supplied key for the custom URL
-and never sends server-held provider keys to arbitrary endpoints. Meta Muse
-Voice transcription rejects `custom_endpoint` because it uses Meta's fixed
-realtime WebSocket protocol.
+provider-compatible URLs when calling providers directly; the gateway rejects
+requests that set it. Meta Muse Voice transcription rejects `custom_endpoint`
+because it uses Meta's fixed realtime WebSocket protocol.
 
 ## Provider mapping
 
@@ -41,12 +39,12 @@ realtime WebSocket protocol.
 | `openrouter/*` | OpenRouter | `OPENROUTER_API_KEY` |
 | `perplexity/*` | Perplexity | `PERPLEXITY_API_KEY` |
 | `poolside/*` | Poolside | `POOLSIDE_API_KEY` |
+| `stepfun/*` | StepFun | `STEPFUN_API_KEY` |
 | `thinkingmachines/*` | Thinking Machines (Tinker) | `TINKER_API_KEY` |
 | `together/*` | Together AI | `TOGETHER_API_KEY` |
 | `vercel/*` | Vercel AI Gateway | `VERCEL_API_KEY` |
 | `xiaomi/*` | Xiaomi | `XIAOMI_API_KEY` |
 | `zai/*` | ZhipuAI / Z.ai | `ZAI_API_KEY` |
-
 ## Speech-to-text provider mapping
 
 | Model prefix | Provider | Settings |
@@ -61,6 +59,7 @@ realtime WebSocket protocol.
 | `groq/*` | Groq | `GROQ_API_KEY` |
 | `inworld/*` | Inworld | `INWORLD_API_KEY` |
 | `meta/muse_voice_transcribe` | Meta Muse Voice Transcribe | `META_API_KEY` |
+| `reson8/*` | Reson8 | `RESON8_API_KEY` |
 
 Transcription models served by providers in the table above (`cohere/*`,
 `google/*`, `mistral/*`, `openai/*`, `xai/*`) use that provider's key.

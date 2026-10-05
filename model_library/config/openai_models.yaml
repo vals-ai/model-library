@@ -79,6 +79,123 @@ gpt-6-models:
           default_parameters:
             reasoning_effort: "max"
 
+  openai/gpt-6-sol:
+    label: GPT-6 Sol
+    documentation_url: "https://developers.openai.com/api/docs/models/\
+      gpt-6-sol"
+    release_date: 2026-09-22
+    costs_per_million_token:
+      input: 2
+      output: 10
+      context:
+        input: 4
+        output: 15
+    default_parameters:
+      reasoning_effort: "max"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-6-sol-low:
+          label: GPT-6 Sol (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - openai/gpt-6-sol-medium:
+          label: GPT-6 Sol (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
+      - openai/gpt-6-sol-high:
+          label: GPT-6 Sol (High)
+          default_parameters:
+            reasoning_effort: "high"
+      - openai/gpt-6-sol-xhigh:
+          label: GPT-6 Sol (Extra High)
+          default_parameters:
+            reasoning_effort: "xhigh"
+      - openai/gpt-6-sol-max:
+          label: GPT-6 Sol (Max)
+          default_parameters:
+            reasoning_effort: "max"
+
+  openai/gpt-6.1-sol:
+    label: GPT-6.1 Sol
+    documentation_url: "https://developers.openai.com/api/docs/models/\
+      gpt-6.1-sol"
+    release_date: 2026-09-29
+    costs_per_million_token:
+      input: 2
+      output: 10
+      cache:
+        read_discount: 0.05
+      context:
+        input: 4
+        output: 15
+        cache:
+          read_discount: 0.05
+    default_parameters:
+      reasoning_effort: "max"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-6.1-sol-low:
+          label: GPT-6.1 Sol (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - openai/gpt-6.1-sol-medium:
+          label: GPT-6.1 Sol (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
+      - openai/gpt-6.1-sol-high:
+          label: GPT-6.1 Sol (High)
+          default_parameters:
+            reasoning_effort: "high"
+      - openai/gpt-6.1-sol-xhigh:
+          label: GPT-6.1 Sol (Extra High)
+          default_parameters:
+            reasoning_effort: "xhigh"
+      - openai/gpt-6.1-sol-max:
+          label: GPT-6.1 Sol (Max)
+          default_parameters:
+            reasoning_effort: "max"
+
+  openai/gpt-6-luna:
+    label: GPT-6 Luna
+    documentation_url: "https://developers.openai.com/api/docs/models/\
+      gpt-6-luna"
+    release_date: 2026-09-22
+    properties:
+      training_cutoff: "2026-05"
+    costs_per_million_token:
+      input: 0.1
+      output: 0.5
+      context:
+        input: 0.2
+        output: 0.75
+    default_parameters:
+      reasoning_effort: "max"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-6-luna-low:
+          label: GPT-6 Luna (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - openai/gpt-6-luna-medium:
+          label: GPT-6 Luna (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
+      - openai/gpt-6-luna-high:
+          label: GPT-6 Luna (High)
+          default_parameters:
+            reasoning_effort: "high"
+      - openai/gpt-6-luna-xhigh:
+          label: GPT-6 Luna (Extra High)
+          default_parameters:
+            reasoning_effort: "xhigh"
+      - openai/gpt-6-luna-max:
+          label: GPT-6 Luna (Max)
+          default_parameters:
+            reasoning_effort: "max"
+
 gpt-5.6-models:
   base-config:
     documentation_url: ""

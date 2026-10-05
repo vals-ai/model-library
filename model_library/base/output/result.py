@@ -182,13 +182,20 @@ class QueryResultCost(ValsModel):
         )
 
     def __add__(self, other: "QueryResultCost") -> "QueryResultCost":
+        # An override replaces its own breakdown, so once either side has one the
+        # sum must use each side's effective total, not just the overrides.
+        total_override = (
+            self.total + other.total
+            if self.total_override is not None or other.total_override is not None
+            else None
+        )
         return QueryResultCost(
             input=self.input + other.input,
             output=self.output + other.output,
             reasoning=add_optional(self.reasoning, other.reasoning),
             cache_read=add_optional(self.cache_read, other.cache_read),
             cache_write=add_optional(self.cache_write, other.cache_write),
-            total_override=add_optional(self.total_override, other.total_override),
+            total_override=total_override,
         )
 
     @override
@@ -251,7 +258,18 @@ class QueryResultMetadata(ValsModel):
     cache_read_tokens: int | None = None
     cache_write_tokens: int | None = None
     fallback: FallbackInfo | None = None
+    served_model: str | None = Field(
+        default=None,
+        exclude_if=lambda v: v is None,
+        description="Model id exactly as the router returned it.",
+    )
     extra: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("out_tokens", mode="after")
+    @classmethod
+    def _clamp_out_tokens(cls, v: int) -> int:
+        """Providers may report reasoning tokens exceeding the completion count they are subtracted from."""
+        return max(v, 0)
 
     @field_serializer(
         "performance",

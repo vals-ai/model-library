@@ -4,10 +4,12 @@ from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from model_library.base import TextInput
+from model_library.base import LLMConfig, TextInput
 from model_library.providers.amazon import AmazonModel
 from model_library.providers.anthropic import AnthropicModel
-from model_library.providers.xai import XAIModel
+from model_library.providers.xai import XAIConfig, XAIModel
+
+_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 _INPUT = [TextInput(text="hello")]
 _LOGGER = logging.getLogger("test")
@@ -146,7 +148,7 @@ async def _query_xai(
 
     chat = SimpleNamespace(stream=stream)
     client = SimpleNamespace(chat=SimpleNamespace(create=lambda **_: chat))
-    model = XAIModel("grok-test")
+    model = XAIModel("grok-test", config=_NATIVE)
 
     with (
         patch.object(model, "get_client", return_value=client),

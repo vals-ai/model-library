@@ -3,9 +3,9 @@
 import asyncio
 import time
 from collections.abc import Awaitable, Callable
-from typing import TypeVar, cast
+from typing import Annotated, TypeVar, cast
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 
 import model_library.telemetry as telemetry
 from model_gateway.cache import ModelCache
@@ -17,6 +17,7 @@ from model_gateway.model_helpers import (
     require_raw_input_secret,
 )
 from model_gateway.route_helpers import GatewayOperation, ok_response
+from model_gateway.run_tokens import run_token_authorized
 from model_gateway.telemetry_helpers import (
     query_config_params,
     query_telemetry_attributes,
@@ -54,7 +55,10 @@ def _is_local_startup_canary(request: Request, body: QueryRequest) -> bool:
 
 def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
     @app.post("/query")
-    async def query(request: Request, body: QueryRequest):
+    async def query(
+        request: Request,
+        body: Annotated[QueryRequest, Depends(run_token_authorized(QueryRequest))],
+    ):
         start = time.perf_counter()
         usage_request = snapshot_usage_request(body)
         config = dump_llm_config(body.config)

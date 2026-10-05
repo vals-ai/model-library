@@ -24,7 +24,7 @@ from model_gateway.asgi_observability import GatewayObservabilityMiddleware
 from model_gateway.auth import create_auth_middleware
 from model_gateway.cache import ModelCache
 from model_gateway.capacity import GatewayCapacityLimiter, create_capacity_middleware
-from model_gateway.errors import ErrorBody, ErrorResponse
+from model_gateway.errors import ErrorBody, ErrorResponse, RunTokenAuthorizationError
 from model_gateway.metrics import (
     MetricPublisher,
     create_metrics_middleware,
@@ -50,6 +50,7 @@ from model_gateway.routes.rate_limit import (
     register_rate_limit_route,
 )
 from model_gateway.routes.query import register_query_routes
+from model_gateway.routes.run_tokens import register_run_token_routes
 from model_gateway.routes.token_retry import register_token_retry_routes
 from model_gateway.startup_canary import run_startup_canary, startup_canary_state
 from model_gateway.telemetry_helpers import error_telemetry_attributes
@@ -244,6 +245,24 @@ def create_app() -> FastAPI:
     app.middleware("http")(create_auth_middleware(api_keys_by_name))
     app.add_middleware(GatewayObservabilityMiddleware)
 
+    @app.exception_handler(RunTokenAuthorizationError)
+    async def run_token_authorization_handler(
+        request: Request, exc: RunTokenAuthorizationError
+    ) -> JSONResponse:
+        claims = request.state.run_token_claims
+        telemetry.add_event(
+            "gateway.run_token.violation",
+            {
+                "gateway.run_token.run_id": claims.run_id,
+                "gateway.run_token.task_id": claims.task_id,
+                "gateway.error.message": str(exc),
+            },
+        )
+        return JSONResponse(
+            status_code=403,
+            content={"code": "model_not_authorized", "message": str(exc)},
+        )
+
     @app.exception_handler(RequestValidationError)
     async def validation_exception_handler(
         request: Request, exc: RequestValidationError
@@ -266,6 +285,7 @@ def create_app() -> FastAPI:
     )
     if control_enabled:
         register_benchmark_admission_routes(app, cache=cache)
+        register_run_token_routes(app)
         register_rate_limit_monitor_routes(app)
     if control_enabled:
         register_model_routes(app)

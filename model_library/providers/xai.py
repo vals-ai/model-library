@@ -27,6 +27,7 @@ from model_library.base import (
     FinishReasonInfo,
     InputItem,
     LLMConfig,
+    ProviderConfig,
     QueryResult,
     QueryResultCost,
     QueryResultExtras,
@@ -89,8 +90,14 @@ def map_xai_finish_reason(
     return FinishReasonInfo(reason=reason, raw=finish_reason)
 
 
+class XAIConfig(ProviderConfig):
+    native: bool = False
+
+
 @register_provider("grok")
 class XAIModel(LLM):
+    provider_config = XAIConfig()
+
     @override
     def _get_default_api_key(self) -> str:
         return model_library_settings.XAI_API_KEY
@@ -128,6 +135,7 @@ class XAIModel(LLM):
         config: LLMConfig | None = None,
     ):
         super().__init__(model_name, provider, config=config)
+        self.native = self.provider_config.native
 
         # https://docs.x.ai/docs/guides/migration
         if self.native:
@@ -154,7 +162,6 @@ class XAIModel(LLM):
                 model_name=self.model_name,
                 provider=provider,
                 config=config,
-                use_completions=True,
             )
             config.native = False
 
@@ -318,6 +325,9 @@ class XAIModel(LLM):
         bytes: io.BytesIO,
         type: Literal["image", "file"] = "file",
     ) -> FileWithId:
+        if self.delegate:
+            return await self.delegate.upload_file(name, mime, bytes, type=type)
+
         response = await self.get_client().files.upload(
             bytes,
             filename=name,
@@ -354,6 +364,9 @@ class XAIModel(LLM):
 
         if self.reasoning_effort:
             body["reasoning_effort"] = self.reasoning_effort
+
+        if self.reasoning:
+            body["use_encrypted_content"] = True
 
         body.update(kwargs)
 

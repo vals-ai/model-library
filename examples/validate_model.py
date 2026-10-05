@@ -175,6 +175,24 @@ def _non_empty_text(result: ProbeValue) -> tuple[bool, str | None]:
     return not errors, _detail(errors)
 
 
+def _router_capture_valid(result: ProbeValue) -> tuple[bool, str | None]:
+    errors = _query_result_errors(result)
+    if not isinstance(result, QueryResult):
+        return False, _detail(errors)
+    metadata = result.metadata
+    upstream_cost = metadata.extra.get("upstream_cost")
+    if metadata.served_model is None:
+        errors.append("router did not report a served model")
+    if upstream_cost is None:
+        errors.append("router did not report usage.cost (upstream_cost is None)")
+    detail = (
+        f"served_model={metadata.served_model}; "
+        f"upstream_provider={metadata.extra.get('upstream_provider')}; "
+        f"upstream_cost={upstream_cost}"
+    )
+    return not errors, detail if not errors else _detail([*errors, detail])
+
+
 def _agent_tool_use_valid(result: ProbeValue) -> tuple[bool, str | None]:
     if not isinstance(result, AgentResult):
         return False, "agent probe did not return an AgentResult"
@@ -626,7 +644,7 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
             expected="required",
             severity="fail",
             runner=core_probe,
-            predicate=_non_empty_text,
+            predicate=_router_capture_valid if model.is_router else _non_empty_text,
         ),
         semantic_transport_case(
             section="Images",
@@ -737,6 +755,10 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
             capability_name="supports_tools",
         ),
     ]
+
+    if model.is_router:
+        # Routers skip reasoning (the served model may reason) and the caching, rate-limit and pricing probes.
+        return cases
 
     cases.extend(
         [
@@ -944,7 +966,8 @@ def _print_report(report: ValidationReport, model: LLM) -> None:
             detail_prefix = "    "
         if (
             result.status not in {"fail", "warn"}
-            and result.section in {"Reasoning", "Caching", "Rate Limit", "Pricing"}
+            and result.section
+            in {"Core", "Reasoning", "Caching", "Rate Limit", "Pricing"}
             and result.detail
         ):
             console.print(

@@ -38,7 +38,6 @@ glm-models:
       cache:
         read: 0.015
     provider_endpoint: glm-5.3-flash
-
   zai/glm-5.3:
     label: GLM 5.3
     release_date: 2026-08-18

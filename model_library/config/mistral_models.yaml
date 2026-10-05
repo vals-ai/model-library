@@ -15,46 +15,9 @@ base-config:
     max_tokens: null
     training_cutoff: null
     reasoning_model: false
-
-magistral-models:
-  base-config:
-    supports:
-      temperature: true
-    properties:
-      reasoning_model: true
-    default_parameters:
-      temperature: 0.7
-
-  mistralai/magistral-medium-2509:
-
-    rate_limit:
-      supports_live_monitoring: false
-    label: Magistral Medium 1.2 (09/2025)
-    release_date: 2025-09-18
-    supports:
-      images: true
-    properties:
-      context_window: 128_000
-      max_tokens: 128_000
-    costs_per_million_token:
-      input: 2
-      output: 5
-
-  mistralai/magistral-small-2509:
-
-    rate_limit:
-      supports_live_monitoring: false
-    label: Magistral Small 1.2 (09/2025)
-    open_source: true
-    release_date: 2025-09-18
-    supports:
-      images: true
-    properties:
-      context_window: 128_000
-      max_tokens: 128_000
-    costs_per_million_token:
-      input: 0.5
-      output: 1.5
+  costs_per_million_token:
+    cache:
+      read_discount: 0.1
 
 # Standard Mistral Models
 mistral-models:
@@ -72,7 +35,7 @@ mistral-models:
     supports:
       images: true
     properties:
-      context_window: 256_000
+      context_window: 262_144
       max_tokens: 256_000
       reasoning_model: true
     costs_per_million_token:
@@ -87,7 +50,7 @@ mistral-models:
     supports:
       images: true
     properties:
-      context_window: 256_000
+      context_window: 262_144
       max_tokens: 256_000
     costs_per_million_token:
       input: 0.5
@@ -113,61 +76,6 @@ mistral-models:
       temperature: 0.7
       top_p: 0.95
       reasoning_effort: "high"
-  mistralai/mistral-medium-2505:
-    label: Mistral Medium 3.1 (05/2025)
-    release_date: 2025-05-07
-    documentation_url: https://mistral.ai/news/mistral-medium-3
-    supports:
-      images: true
-    properties:
-      context_window: 131_072
-      max_tokens: 32768
-      training_cutoff: "2024-05"
-    costs_per_million_token:
-      input: 0.4
-      output: 2.0
-  mistralai/mistral-small-2503:
-    label: Mistral Small 3.1 (03/2025)
-    release_date: 2025-03-17
-    documentation_url: https://mistral.ai/news/mistral-small-3-1
-    supports:
-      images: true
-    properties:
-      context_window: 131_072
-      max_tokens: 8192
-      training_cutoff: "2024-05"
-    costs_per_million_token:
-      input: 0.075
-      output: 0.3
-devstral-models:
-  base-config:
-    supports:
-      temperature: true
-    default_parameters:
-      temperature: 0.2
-
-  mistralai/devstral-2512:
-    label: Devstral 2
-    open_source: true
-    release_date: 2025-12-09
-    documentation_url: https://docs.mistral.ai/models/devstral-2-25-12
-    properties:
-      context_window: 256_000
-      max_tokens: 256_000
-    costs_per_million_token:
-      input: 0.4
-      output: 2.0
-  mistralai/labs-devstral-small-2512:
-    label: Devstral Small 2
-    open_source: true
-    release_date: 2025-12-09
-    documentation_url: https://docs.mistral.ai/models/devstral-small-2-25-12
-    properties:
-      context_window: 256_000
-      max_tokens: 256_000
-    costs_per_million_token:
-      input: 0.1
-      output: 0.3
 transcription-models:
   base-config:
     rate_limit:

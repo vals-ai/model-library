@@ -22,6 +22,108 @@ deprecated:
     metadata:
       deprecated: true
 
+  fireworks/glm-5p2:
+    company: zAI
+    country: China
+    label: GLM 5.2 (Fireworks)
+    release_date: 2026-06-13
+    open_source: true
+    documentation_url: https://docs.z.ai/
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: true
+      cache_read_counts_toward_limit: true
+    alternative_keys:
+    - fireworks/glm-5p2-medium:
+        label: GLM 5.2 (Fireworks, Medium)
+        default_parameters:
+          reasoning_effort: medium
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    provider_endpoint: glm-5p2
+    properties:
+      context_window: 1000000
+      max_tokens: 131072
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.4
+      output: 4.4
+      cache:
+        read: 0.14
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+      batch:
+        input: null
+        output: null
+        input_discount: 0.5
+        output_discount: 0.5
+      context: null
+
+  fireworks/deepseek-v4-flash-0731:
+    company: DeepSeek
+    country: China
+    label: DeepSeek V4 Flash 0731
+    release_date: 2026-07-31
+    open_source: true
+    documentation_url: https://fireworks.ai/models/deepseek-ai/deepseek-v4-flash-0731
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      batch: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: true
+      cache_read_counts_toward_limit: true
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    provider_endpoint: deepseek-v4-flash-0731
+    properties:
+      context_window: 1000000
+      max_tokens: 131072
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.22
+      output: 0.66
+      cache:
+        read: 0.007
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+      batch:
+        input: null
+        output: null
+        input_discount: 0.5
+        output_discount: 0.5
+      context: null
+
   fireworks/gpt-oss-20b:
     company: OpenAI
     country: United States

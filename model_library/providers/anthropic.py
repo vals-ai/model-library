@@ -83,6 +83,8 @@ ANTHROPIC_FILES_BETA = "files-api-2025-04-14"
 ANTHROPIC_INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14"
 ANTHROPIC_SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-06-01"
 ANTHROPIC_TASK_BUDGET_BETA = "task-budgets-2026-03-13"
+BETWEEN_TOOLS_THINKING = {"type": "between_tools"}
+BETWEEN_TOOLS_UNSUPPORTED_EFFORTS = frozenset({"xhigh", "max"})
 # Anthropic rejects an assistant message whose final block is thinking, so a turn that ran out of
 # tokens mid-thought is replayed with this block appended.
 TRUNCATED_THINKING_MARKER = "[response cut off at the output token limit]"
@@ -136,6 +138,7 @@ def map_anthropic_finish_reason(
 class AnthropicConfig(ProviderConfig):
     supports_compute_effort: bool = False
     supports_auto_thinking: bool = False
+    thinking_off_type: Literal["disabled", "between_tools"] = "disabled"
     task_budget_tokens: int | None = None
     returns_thinking_truncated_turns: bool = False
     fallback_models: list[str] = Field(default_factory=list)
@@ -733,7 +736,7 @@ class AnthropicModel(LLM):
             if self.reasoning:
                 body["thinking"] = {"type": "adaptive"}
             else:
-                body["thinking"] = {"type": "disabled"}
+                body["thinking"] = {"type": self.provider_config.thinking_off_type}
         elif self.reasoning:
             budget_tokens = kwargs.pop(
                 "budget_tokens", get_default_budget_tokens(self.max_tokens)
@@ -747,7 +750,13 @@ class AnthropicModel(LLM):
         # use instead of reasoning_effort with auto_thinking
         output_config: dict[str, Any] = {}
         if self.provider_config.supports_compute_effort and self.compute_effort:
-            output_config["effort"] = self.compute_effort
+            effort = self.compute_effort
+            if (
+                body.get("thinking") == BETWEEN_TOOLS_THINKING
+                and effort in BETWEEN_TOOLS_UNSUPPORTED_EFFORTS
+            ):
+                effort = "high"
+            output_config["effort"] = effort
         if self.provider_config.task_budget_tokens:
             output_config["task_budget"] = {
                 "type": "tokens",
@@ -757,9 +766,11 @@ class AnthropicModel(LLM):
             body["output_config"] = output_config
 
         # Thinking models don't support temperature: https://docs.claude.com/en/docs/build-with-claude/extended-thinking#feature-compatibility
-        if self.supports_temperature and not self.reasoning:
-            if self.temperature is not None:
+        if self.supports_temperature:
+            if not self.reasoning and self.temperature is not None:
                 body["temperature"] = self.temperature
+            if self.provider == "minimax" and self.top_p is not None:
+                body["top_p"] = self.top_p
 
         if output_schema is not None:
             schema = transform_schema(output_schema)
@@ -832,8 +843,13 @@ class AnthropicModel(LLM):
                 extra_body = cast(
                     dict[str, Any], stream_kwargs.setdefault("extra_body", {})
                 )
+                fallback_overrides: dict[str, Any] = {}
+                # fallback entries are validated against their own model, which
+                # may not accept between_tools
+                if body.get("thinking") == BETWEEN_TOOLS_THINKING:
+                    fallback_overrides["thinking"] = {"type": "disabled"}
                 extra_body["fallbacks"] = [
-                    {"model": model} for model in fallback_models
+                    {"model": model, **fallback_overrides} for model in fallback_models
                 ]
 
             stream_kwargs["betas"] = betas

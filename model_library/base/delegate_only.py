@@ -92,6 +92,13 @@ class DelegateOnly(LLM):
         super().__init__(model_name, provider, config=config)
         config.native = True
 
+    def enable_router_mode(self) -> None:
+        """Called per query: router status comes from registry metadata, attached after construction."""
+        from model_library.providers.openai import OpenAIModel
+
+        assert isinstance(self.delegate, OpenAIModel)
+        self.delegate.router_mode = True
+
     def _get_extra_body(self) -> dict[str, Any]:
         """Build extra body parameters for delegate-specific features."""
         return {}

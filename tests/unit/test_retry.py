@@ -918,6 +918,7 @@ async def test_context_window_error_gives_up(mock_llm: LLM):
         "Prompt 262280 > 262144 maximum context length",  # mistral
         "Error code: 400 - {'error': {'code': 400, 'message': 'Input length 264373 exceeds the maximum allowed input length of 262112 tokens.', 'type': 'Bad Request'}}",  # poolside
         "Error code: 400 - {'error': {'code': '1261', 'message': 'Prompt exceeds max length'}}",  # zai
+        "Error code: 400 - {'error': {'code': None, 'message': 'The request contains invalid parameters. Check the request body for any errors or inconsistencies.', 'param': None, 'type': 'invalid_request_error'}}",  # meta
     ]
 
     for exception_message in exception_messages:
@@ -929,6 +930,25 @@ async def test_context_window_error_gives_up(mock_llm: LLM):
             await mock_llm.query("Mock Input")
 
         assert exc_info.value.args[0] == exception_message
+
+
+class _FormattedProviderError(Exception):
+    """SDK error whose ``str`` adds the response body to its short constructor message."""
+
+    def __str__(self) -> str:
+        return f"{self.args[0]}: Status 400. Body: {self.args[1]}"
+
+
+async def test_context_window_error_keeps_provider_message(mock_llm: LLM):
+    body = '{"message":"Prompt 275593 > 262144 maximum context length"}'
+    mock_llm._query_impl = AsyncMock(  # pyright: ignore[reportPrivateUsage]
+        side_effect=[_FormattedProviderError("API error occurred", body)]
+    )
+
+    with pytest.raises(MaxContextWindowExceededError) as exc_info:
+        await mock_llm.query("Mock Input")
+
+    assert str(exc_info.value) == f"API error occurred: Status 400. Body: {body}"
 
 
 @pytest.mark.parametrize(

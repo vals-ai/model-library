@@ -436,6 +436,10 @@ class LLM(ABC):
         return self._metadata
 
     @property
+    def is_router(self) -> bool:
+        return self.metadata is not None and self.metadata.metadata.router
+
+    @property
     def input_context_window(self) -> int | None:
         if self.metadata is None:
             return None
@@ -699,7 +703,15 @@ class LLM(ABC):
         )
         output.metadata.duration_seconds = round_to_milliseconds(duration)
         try:
-            output.metadata.cost = await self._calculate_cost(output.metadata)
+            if self.is_router:
+                bill = output.metadata.extra.get("upstream_cost")
+                output.metadata.cost = (
+                    None
+                    if bill is None
+                    else QueryResultCost(input=0, output=0, total_override=bill)
+                )
+            else:
+                output.metadata.cost = await self._calculate_cost(output.metadata)
         except Exception as exc:
             telemetry.record_exception(exc, {"cost_calculation.phase": "calculate"})
             self.instance_logger.warning(
@@ -1123,16 +1135,25 @@ class LLM(ABC):
         return items
 
     @staticmethod
+    def is_raw_input_blob(value: Any) -> bool:
+        """Whether a RawInput.input value is a str or a dict with a "pickle" key."""
+        return isinstance(value, str) or (isinstance(value, dict) and "pickle" in value)
+
+    @staticmethod
     def restore_raw_fields(
         items: list[InputItem], *, secret: bytes | None = None
     ) -> None:
-        """Unpickle RawResponse.response and RawInput.input fields in-place."""
+        """Unpickle RawResponse.response and serialized RawInput.input fields in-place.
+
+        Other RawInput values, such as provider message dicts built by the caller,
+        are left as-is and passed to the provider unchanged.
+        """
         for item in items:
             if isinstance(item, RawResponse) and isinstance(item.response, (str, dict)):
                 item.response = LLM._unpickle_field(
                     cast("str | SignedPickle", item.response), secret
                 )
-            elif isinstance(item, RawInput) and isinstance(item.input, (str, dict)):
+            elif isinstance(item, RawInput) and LLM.is_raw_input_blob(item.input):
                 item.input = LLM._unpickle_field(
                     cast("str | SignedPickle", item.input), secret
                 )

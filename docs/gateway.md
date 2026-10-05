@@ -27,6 +27,8 @@ When `MODEL_GATEWAY_URL` is set, `get_model_registry()` fetches and caches the G
 
 For application/agent migration steps, see [Migrating agents and providers to Model Gateway](gateway-migration.md).
 
+Task-scoped gateway credentials: [Run tokens](run-tokens.md).
+
 ## Environment variables
 
 ### Server
@@ -37,7 +39,7 @@ The gateway server uses server-side auth/signing config. Do not set `MODEL_GATEW
 
 - `MODEL_GATEWAY_API_KEYS` (**required**): JSON object mapping stable names to valid client API keys. Gateway startup fails if unset or empty.
 - `MODEL_GATEWAY_HMAC_SECRET` (**required**): secret for HMAC-signing pickled fields in history blobs. Gateway startup fails without this so every task can safely return and accept raw history blobs.
-- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc. (**usually required**): provider API keys for providers served by this gateway. See [Provider API keys](api-keys.md). Per-request `custom_api_key` can supply caller credentials at call time. Per-request `custom_endpoint` is accepted only with `custom_api_key`; the gateway uses that caller-supplied key for the custom URL and never sends server-held provider keys to arbitrary endpoints.
+- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc. (**usually required**): provider API keys for providers served by this gateway. See [Provider API keys](api-keys.md). Per-request `custom_api_key` can supply caller credentials at call time. Requests that set `custom_endpoint` or `registry_key` are rejected.
 - `GCP_CREDS`, `GCP_PROJECT_ID`, and `GCP_REGION` (**required for Google Vertex requests**): service-account credentials, project ID, and Vertex region. `config.provider_config.use_vertex=true` selects Vertex; other Google requests use `GOOGLE_API_KEY`.
 #### Capacity and timeouts
 
@@ -192,9 +194,10 @@ For deployed environments, keep server and client Secrets Manager entries separa
 
 `GET /registry` omits transcription-only entries by default for compatibility
 with older model-library clients. It also omits `country`, `rate_limit`,
-`supports.transcription`, `transcription_cost`, `transcription_language`, and
-`transcription_streaming`. Set `include_excluded_fields=true` to include
-`country`, `rate_limit`, and `supports.transcription`. The three transcription
+`metadata.router`, `supports.transcription`, `transcription_cost`,
+`transcription_language`, and `transcription_streaming`. Set
+`include_excluded_fields=true` to include `country`, `rate_limit`,
+`metadata.router`, and `supports.transcription`. The three transcription
 metadata fields and transcription-only entries require both
 `include_excluded_fields=true` and `include_transcription=true`; current clients
 request both flags. Set `include_alt_keys=false` to omit same-provider alternative keys.
@@ -277,11 +280,12 @@ Client (get_model_registry / get_registry_model)
    - Normal items use `model_dump()`, such as:
      - `TextInput`
      - `ToolResult`
-   - Raw items contain opaque blobs received from the server in a previous response:
+   - Raw items received from the server in a previous response contain opaque blobs:
      - `RawResponse`
      - `RawInput`
    - Raw blobs are base64-encoded and HMAC-signed.
    - The client echoes raw blobs as-is without deserializing them.
+   - A `RawInput` built by the caller, such as a provider message dict, is sent as plain JSON.
    - Gateway query requests reject arbitrary provider-specific query kwargs.
    - Use registry/default config or explicit `LLMConfig.provider_config` overrides instead.
 
@@ -301,7 +305,7 @@ Client (get_model_registry / get_registry_model)
 5. **Server restores Raw fields**
 
    - On receiving `inputs`, the server calls `LLM.restore_raw_fields()`.
-   - `LLM.restore_raw_fields()` finds `RawResponse`/`RawInput` items with serialized blobs.
+   - `LLM.restore_raw_fields()` unpickles every string or dict `RawResponse` field, but a `RawInput` field only when it is a string or a dict with a `pickle` key. Other `RawInput` values, such as caller-built provider message dicts, pass to the provider unchanged.
    - The server requires and verifies HMAC before restoring raw fields in-place.
    - The full input list is then passed to `llm.query()`.
 
@@ -318,10 +322,10 @@ Client (get_model_registry / get_registry_model)
 
 - **Client → Server**: Bearer token auth with constant-time comparison (pre-hashed keys)
 - **Server → Client**: Raw fields in history are HMAC-signed when returned
-- **Server input validation**: Raw fields in client inputs are HMAC-verified before restoring — tampered or unsigned blobs are rejected
+- **Server input validation**: Serialized raw blobs in client inputs are HMAC-verified before restoring — tampered or unsigned blobs are rejected. Caller-built `RawInput` values that are not blobs are never unpickled
 - **Client never deserializes**: The client only echoes opaque blobs; all deserialization happens server-side
 - **custom_api_key**: Passed only in per-request provider config so clients can use BYOK without using it as the gateway bearer token
-- **custom_endpoint**: Accepted only together with per-request `custom_api_key`; caller-selected endpoints never receive the gateway server's environment provider keys
+- **custom_endpoint, registry_key**: Rejected on every request; they would serve the named model from another endpoint or registry entry
 
 ## Running locally
 

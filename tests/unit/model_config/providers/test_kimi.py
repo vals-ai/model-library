@@ -6,10 +6,12 @@ from pydantic import SecretStr
 import pytest
 
 from model_library.base import LLMConfig
+from model_library.providers.delegates import kimi as kimi_module
 from model_library.base.input import FileWithId, RawInput, RawResponse, TextInput
 from model_library.providers.delegates.kimi import KimiConfig, KimiModel
 from model_library.providers.openai import OpenAIConfig, OpenAIModel
 from model_library.registry_utils import get_registry_model
+from model_library.settings import ModelLibrarySettings
 
 _INPUT = [TextInput(text="")]
 

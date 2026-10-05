@@ -54,9 +54,10 @@ class KimiModel(DelegateOnly):
 
         # https://platform.moonshot.ai/docs/guide/migrating-from-openai-to-kimi#about-api-compatibility
         config = config or LLMConfig()
-        default_api_key = SecretStr(self._default_api_key())
         resolved_endpoint = config.custom_endpoint or _DEFAULT_ENDPOINT
-        resolved_api_key = config.custom_api_key or default_api_key
+        resolved_api_key = config.custom_api_key or SecretStr(self._default_api_key())
+        self._has_custom_endpoint = config.custom_endpoint is not None
+        self._api_key = resolved_api_key
         delegate_config = config.model_copy(
             update={
                 "custom_endpoint": resolved_endpoint,
@@ -80,13 +81,13 @@ class KimiModel(DelegateOnly):
 
     @override
     async def get_rate_limit(self) -> RateLimit | None:
-        if self._has_custom_connection:
+        if self._has_custom_endpoint:
             return None
 
         async with default_httpx_client() as client:
             response = await client.get(
                 f"{_DEFAULT_ENDPOINT.rstrip('/')}/users/me",
-                headers={"Authorization": f"Bearer {self._default_api_key()}"},
+                headers={"Authorization": f"Bearer {self._api_key.get_secret_value()}"},
             )
             response.raise_for_status()
             payload = response.json()

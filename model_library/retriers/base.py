@@ -191,8 +191,7 @@ class BaseRetrier(ABC):
 
         # instead of raising the provider exception, raise the custom MaxContextWindowExceededError
         if is_context_window_error(exception):
-            message = exception.args[0] if exception.args else str(exception)
-            raise MaxContextWindowExceededError(message)
+            raise MaxContextWindowExceededError(str(exception))
 
         raise exception
 

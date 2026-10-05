@@ -40,47 +40,8 @@ deepseek-models:
       max_tokens: 131_072
       reasoning_model: true
     default_parameters:
-      temperature: 1
-      top_p: 0.95
-    costs_per_million_token:
-      input: 0.22
-      output: 0.66
-      cache:
-        read: 0.007
-  fireworks/deepseek-v4-flash-0731:
-    alternative_keys:
-      - baseten/deepseek-ai/DeepSeek-V4-Flash-0731:
-          country: null
-          label: DeepSeek V4 Flash 0731 (Baseten)
-          release_date: null
-          documentation_url: https://www.baseten.co/library/deepseek-v4-flash-0731/
-          supports:
-            output_schema: true
-          provider_properties:
-            api_base: https://inference.baseten.co/v1
-          default_parameters:
-            temperature: null
-            top_p: null
-          properties:
-            context_window: 1_048_000
-            max_tokens: 384_000
-          costs_per_million_token:
-            input: 0.13
-            output: 0.26
-            cache:
-              read: 0.028
-            batch: null
-    label: DeepSeek V4 Flash 0731
-    release_date: 2026-07-31
-    provider_endpoint: deepseek-v4-flash-0731
-    documentation_url: https://fireworks.ai/models/deepseek-ai/deepseek-v4-flash-0731
-    properties:
-      context_window: 1_000_000
-      max_tokens: 131_072
-      reasoning_model: true
-    default_parameters:
-      temperature: 1
-      top_p: 0.95
+      reasoning_effort: max
+      top_p: 1
     costs_per_million_token:
       input: 0.22
       output: 0.66
@@ -116,6 +77,10 @@ kimi-models:
       images: false
 
   fireworks/kimi-k3:
+    default_parameters:
+      reasoning_effort: max
+      temperature: 1
+      top_p: 0.95
     alternative_keys:
       - together/moonshotai/Kimi-K3:
           country: null
@@ -123,7 +88,6 @@ kimi-models:
           release_date: 2026-07-27
           documentation_url: https://www.together.ai/models/kimi-k3
           supports:
-            temperature: false
             output_schema: true
           properties:
             context_window: 1_048_576
@@ -140,7 +104,7 @@ kimi-models:
             api_base: https://inference.baseten.co/v1
           properties:
             context_window: 1_048_000
-            max_tokens: 262_000
+            max_tokens: 262_144
           costs_per_million_token:
             batch: null
     label: Kimi K3
@@ -157,6 +121,26 @@ kimi-models:
       cache:
         read: 0.30
 
+  fireworks/ember-1:
+    label: Ember-1
+    company: Fireworks
+    country: United States
+    open_source: false
+    release_date: 2026-09-22
+    documentation_url: https://fireworks.ai/models/fireworks/ember-1
+    supports:
+      images: true
+    properties:
+      context_window: 1_040_000
+      max_tokens: 131_072
+      reasoning_model: true
+    costs_per_million_token:
+      input: 3.0
+      output: 15.0
+      cache:
+        read: 0.30
+    rate_limit:
+      supports_live_monitoring: false
 minimax-models:
   base-config:
     company: MiniMax
@@ -167,6 +151,9 @@ minimax-models:
       temperature: true
 
   fireworks/minimax-m3:
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
     label: MiniMax-M3 (Fireworks)
     release_date: 2026-06-11
     documentation_url: https://fireworks.ai/models/fireworks/minimax-m3
@@ -174,9 +161,6 @@ minimax-models:
       context_window: 512_000
       max_tokens: 64_000
       reasoning_model: true
-    default_parameters:
-      temperature: 1.0
-      top_p: 0.95
     costs_per_million_token:
       input: 0.30
       output: 1.20
@@ -359,24 +343,3 @@ zai-models:
           label: GLM 5.3 (Fireworks, Max)
           default_parameters:
             reasoning_effort: "max"
-
-  fireworks/glm-5p2:
-    label: GLM 5.2 (Fireworks)
-    release_date: 2026-06-13
-    properties:
-      context_window: 1_000_000
-      max_tokens: 131_072
-      reasoning_model: true
-    costs_per_million_token:
-      input: 1.40
-      output: 4.40
-      cache:
-        read: 0.14
-    default_parameters:
-      temperature: 1
-      top_p: 0.95
-    alternative_keys:
-      - fireworks/glm-5p2-medium:
-          label: GLM 5.2 (Fireworks, Medium)
-          default_parameters:
-            reasoning_effort: "medium"

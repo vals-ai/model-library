@@ -16,6 +16,61 @@ base-config:
     available_for_everyone: false
     ignored_for_cost: true
 
+deepseek-models:
+  baseten/deepseek-ai/DeepSeek-V4.1-Flash:
+    company: DeepSeek
+    country: China
+    label: DeepSeek V4.1 Flash (Baseten)
+    release_date: 2026-09-10
+    documentation_url: https://www.baseten.co/library/deepseek-v41-flash/
+    supports:
+      images: true
+      output_schema: true
+    metadata:
+      available_for_everyone: true
+      ignored_for_cost: false
+    provider_properties:
+      api_base: https://inference.baseten.co/v1
+    default_parameters:
+      reasoning_effort: max
+      temperature: 1
+      top_p: 1
+    properties:
+      context_window: 1_048_576
+      max_tokens: 32_768
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.007
+
+  baseten/deepseek-ai/DeepSeek-V4-Flash-0731:
+    company: DeepSeek
+    country: null
+    label: DeepSeek V4 Flash 0731 (Baseten)
+    documentation_url: https://www.baseten.co/library/deepseek-v4-flash-0731/
+    provider_endpoint: deepseek-ai/DeepSeek-V4-Flash-0731
+    supports:
+      output_schema: true
+    metadata:
+      available_for_everyone: true
+      ignored_for_cost: false
+    provider_properties:
+      api_base: https://inference.baseten.co/v1
+    default_parameters:
+      temperature: null
+      top_p: null
+    properties:
+      context_window: 1_048_000
+      max_tokens: 262_144
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.13
+      output: 0.26
+      cache:
+        read: 0.028
+
 laguna-models:
   baseten/laguna-s-2.1-int4:
     label: Laguna S 2.1 INT4

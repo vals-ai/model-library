@@ -202,30 +202,13 @@ def test_rate_limit_serves_repeat_no_data_requests_from_cache():
     assert probes == 1
 
 
-@pytest.mark.parametrize(
-    "config",
-    [
-        pytest.param({"custom_api_key": "caller-key"}, id="custom-api-key"),
-        pytest.param(
-            {"custom_endpoint": "https://caller.example/v1"},
-            id="custom-endpoint",
-        ),
-        pytest.param(
-            {
-                "custom_api_key": "caller-key",
-                "custom_endpoint": "https://caller.example/v1",
-            },
-            id="custom-api-key-and-endpoint",
-        ),
-    ],
-)
 @pytest.mark.asyncio
-async def test_rate_limit_custom_connection_returns_no_data_without_probe(
-    config: dict[str, str],
-) -> None:
+async def test_rate_limit_custom_api_key_returns_no_data_without_probe() -> None:
     cache = MagicMock(spec=ModelCache)
     service = rate_limit_route.RateLimitProbeService(cache)
-    body = RateLimitRequest.model_validate({"model": "openai/gpt-4o", "config": config})
+    body = RateLimitRequest.model_validate(
+        {"model": "openai/gpt-4o", "config": {"custom_api_key": "caller-key"}}
+    )
     with (
         patch.object(
             rate_limit_route,

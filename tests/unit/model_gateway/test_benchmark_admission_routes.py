@@ -93,10 +93,6 @@ def _acquire_body(
     [
         LLMConfig(),
         LLMConfig(custom_api_key=SecretStr("byok-secret")),
-        LLMConfig(
-            custom_api_key=SecretStr("byok-secret"),
-            custom_endpoint="https://provider.test/v1",
-        ),
     ],
 )
 async def test_gateway_paths_share_identity_but_only_provider_ops_start_token_retry(
@@ -346,10 +342,7 @@ async def test_acquire_never_persists_or_logs_raw_config_secret(
                 headers=HEADERS,
                 json=_acquire_body(
                     "run-1",
-                    config={
-                        "custom_api_key": secret,
-                        "custom_endpoint": "https://provider.test/v1",
-                    },
+                    config={"custom_api_key": secret},
                 ),
             )
 

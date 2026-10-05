@@ -1,0 +1,33 @@
+base-config:
+  company: Reson8
+  country: Netherlands
+  documentation_url: https://docs.reson8.dev/
+  open_source: false
+  supports:
+    transcription: true
+    temperature: false
+  transcription_language:
+    format: iso-639-1
+    default: en
+
+transcription-models:
+  base-config:
+    release_date: 2026-04-08
+
+  # Pro overage rates from https://reson8.dev/#pricing, converted from EUR at
+  # the ECB reference rate of 1 EUR = 1.1463 USD on 2026-09-22.
+  reson8/resonant-1:
+    label: Reson8 Resonant-1
+    transcription_streaming: false
+    documentation_url: https://docs.reson8.dev/api/speech-to-text/prerecorded/
+    transcription_cost:
+      usd_per_minute: 0.0068778
+      billing_basis: audio
+
+  reson8/resonant-1-realtime:
+    label: Reson8 Resonant-1 (Realtime)
+    transcription_streaming: true
+    documentation_url: https://docs.reson8.dev/api/speech-to-text/realtime/
+    transcription_cost:
+      usd_per_minute: 0.0137556
+      billing_basis: audio

@@ -81,7 +81,7 @@ def _managed_api_key(
 def has_serialized_raw_blob(inputs: list[InputItem]) -> bool:
     return any(
         (isinstance(item, RawResponse) and isinstance(item.response, (str, dict)))
-        or (isinstance(item, RawInput) and isinstance(item.input, (str, dict)))
+        or (isinstance(item, RawInput) and LLM.is_raw_input_blob(item.input))
         for item in inputs
     )
 

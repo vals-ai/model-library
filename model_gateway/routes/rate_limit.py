@@ -3,9 +3,9 @@
 import asyncio
 import time
 from collections import OrderedDict
-from typing import Any
+from typing import Annotated, Any
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.responses import JSONResponse
 
 import model_library.telemetry as telemetry
@@ -15,6 +15,7 @@ from model_gateway import model_helpers
 from model_gateway.cache import ModelCache
 from model_gateway.metrics import model_dimensions
 from model_gateway.route_helpers import GatewayOperation, ok_response
+from model_gateway.run_tokens import run_token_authorized
 from model_gateway.telemetry_helpers import dimension_telemetry_attributes
 from model_gateway.types import ProviderError, RateLimitRequest, RateLimitResponse
 
@@ -97,10 +98,7 @@ class RateLimitProbeService:
             self._probes.pop(key, None)
 
     async def get_rate_limit(self, body: RateLimitRequest) -> JSONResponse:
-        if (
-            body.config.custom_api_key is not None
-            or body.config.custom_endpoint is not None
-        ):
+        if body.config.custom_api_key is not None:
             return ok_response(RateLimitResponse())
 
         config = dump_llm_config(LLMConfig())
@@ -140,7 +138,12 @@ def register_rate_limit_route(
     service = RateLimitProbeService(cache)
 
     @app.post("/rate-limit")
-    async def rate_limit(body: RateLimitRequest):
+    async def rate_limit(
+        body: Annotated[
+            RateLimitRequest,
+            Depends(run_token_authorized(RateLimitRequest)),
+        ],
+    ):
         return await service.get_rate_limit(body)
 
     return service

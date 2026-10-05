@@ -357,6 +357,14 @@ def _make_step_metrics(metadata: QueryResultMetadata) -> ATIFMetrics:
 def _model_routing(
     metadata: QueryResultMetadata, requested_model: str
 ) -> tuple[str, dict[str, Any] | None]:
+    if metadata.served_model is not None:
+        routing: dict[str, Any] = {
+            "requested_model": requested_model,
+            "resolved_model": metadata.served_model,
+            "routed": True,
+        }
+        return metadata.served_model, {"vals": {"model_routing": routing}}
+
     if metadata.fallback is None:
         response_model = metadata.extra.get("anthropic_response_model")
         if not isinstance(response_model, str) or not response_model:

@@ -108,12 +108,8 @@ async def test_hosted_model_registry_routing(
     assert body["model"] == endpoint
     assert body["max_tokens"] == 8192
     assert "max_completion_tokens" not in body
-    if model_key == "together/moonshotai/Kimi-K3":
-        assert "temperature" not in body
-        assert "top_p" not in body
-    else:
-        assert body["temperature"] == 0.5
-        assert body["top_p"] == 0.8
+    assert body["temperature"] == 0.5
+    assert body["top_p"] == 0.8
 
 
 @pytest.mark.parametrize(
@@ -663,7 +659,9 @@ def _completion_chunk(
         choices=[
             SimpleNamespace(
                 finish_reason=finish_reason,
-                delta=SimpleNamespace(refusal=None, content=None, tool_calls=tool_calls),
+                delta=SimpleNamespace(
+                    refusal=None, content=None, tool_calls=tool_calls
+                ),
             )
         ],
         usage=None,
@@ -812,7 +810,9 @@ async def test_non_streaming_completions_query_parses_response(
     )
     prompt_tokens_details = PromptTokensDetails(cached_tokens=cached_tokens)
     if cache_write_tokens is not None:
-        object.__setattr__(prompt_tokens_details, "cache_write_tokens", cache_write_tokens)
+        object.__setattr__(
+            prompt_tokens_details, "cache_write_tokens", cache_write_tokens
+        )
     response = ChatCompletion(
         id="cmpl_123",
         created=0,
@@ -905,6 +905,69 @@ async def test_non_streaming_kimi_parses_top_level_cached_tokens():
     assert result.metadata.in_tokens == 6
     assert result.metadata.out_tokens == 5
     assert result.metadata.cache_read_tokens == 4
+
+
+async def test_non_streaming_parses_top_level_reasoning_tokens():
+    model = OpenAIModel(
+        "glm",
+        provider="zai",
+        config=LLMConfig(provider_config=OpenAIConfig(stream_completions=False)),
+        use_completions=True,
+    )
+    usage = CompletionUsage(completion_tokens=10, prompt_tokens=4, total_tokens=14)
+    object.__setattr__(usage, "reasoning_tokens", 7)
+    response = ChatCompletion(
+        id="cmpl_top_level_reasoning",
+        created=0,
+        model="glm",
+        object="chat.completion",
+        choices=[
+            Choice(
+                finish_reason="stop",
+                index=0,
+                message=ChatCompletionMessage(role="assistant", content="hello"),
+            )
+        ],
+        usage=usage,
+    )
+
+    result = await _query_completions(model, response)
+
+    assert result.metadata.reasoning_tokens == 7
+    assert result.metadata.out_tokens == 3
+
+
+async def test_non_streaming_reasoning_above_completion_tokens_clamps_out_tokens():
+    model = OpenAIModel(
+        "gpt-5-mini",
+        provider="openai",
+        config=LLMConfig(provider_config=OpenAIConfig(stream_completions=False)),
+        use_completions=True,
+    )
+    response = ChatCompletion(
+        id="cmpl_reasoning_heavy",
+        created=0,
+        model="gpt-5-mini",
+        object="chat.completion",
+        choices=[
+            Choice(
+                finish_reason="stop",
+                index=0,
+                message=ChatCompletionMessage(role="assistant", content="hello"),
+            )
+        ],
+        usage=CompletionUsage(
+            completion_tokens=5,
+            prompt_tokens=10,
+            total_tokens=15,
+            completion_tokens_details=CompletionTokensDetails(reasoning_tokens=8),
+        ),
+    )
+
+    result = await _query_completions(model, response)
+
+    assert result.metadata.out_tokens == 0
+    assert result.metadata.reasoning_tokens == 8
 
 
 @pytest.mark.parametrize(
