@@ -9,7 +9,7 @@ from typing import Any
 
 from rich.pretty import pretty_repr
 
-from model_library.agent.agent import Agent, AgentStopReason
+from model_library.agent.agent import Agent, AgentResult, AgentStopReason
 from model_library.agent.conductor.config import ConductorConfig
 from model_library.agent.conductor.metadata import (
     ConductorResult,
@@ -86,6 +86,7 @@ class ConductorAgent:
         question_id: str,
         run_id: str | None = None,
         initial_prompt: str = DEFAULT_INITIAL_PROMPT,
+        first_message: str | None = None,
         state: dict[str, Any] | None = None,
         logger: logging.Logger | None = None,
     ) -> ConductorResult:
@@ -95,6 +96,9 @@ class ConductorAgent:
             question_id: Identifier scoping this run's log directory.
             run_id: Optional run identifier forwarded to both agents.
             initial_prompt: The first message sent to the auditor to start the conversation.
+                Ignored when *first_message* is set.
+            first_message: When provided, skip the auditor on exchange 1 and send
+                this text directly to the target. The auditor begins on exchange 2.
             state: Optional shared state dict forwarded to both agents.
             logger: Optional parent logger; a child logger is created from it.
         """
@@ -110,6 +114,7 @@ class ConductorAgent:
 
             return await self._run(
                 initial_prompt=initial_prompt,
+                first_message=first_message,
                 question_id=question_id,
                 run_id=run_id,
                 state=state if state is not None else {},
@@ -165,6 +170,7 @@ class ConductorAgent:
         self,
         *,
         initial_prompt: str,
+        first_message: str | None,
         question_id: str,
         run_id: str | None,
         state: dict[str, Any],
@@ -196,49 +202,67 @@ class ConductorAgent:
                 f"Exchange {exchange_number}/{self._config.max_exchanges} starting"
             )
 
-            # Build auditor input: history + new message
-            new_message = (
-                messages[-1].result.final_answer if messages else initial_prompt
-            )
-            auditor_input = auditor_history + [TextInput(text=new_message)]
-
-            # Run auditor
-            try:
-                auditor_result = await self._auditor.run(
-                    auditor_input,
-                    question_id=question_id,
-                    run_id=run_id,
-                    state=state,
+            if first_message is not None and exchange_number == 1:
+                logger.info("Using first_message — skipping auditor on exchange 1")
+                auditor_message = first_message
+                synthetic_result = AgentResult(
+                    final_answer=first_message,
+                    final_error=None,
+                    final_history=auditor_history + [TextInput(text=first_message)],
+                    turns=[],
+                    final_duration_seconds=0.0,
+                    output_dir=output_dir,
                 )
-            except Exception as e:
-                logger.error(
-                    f"Auditor failed on exchange {exchange_number}: {e}",
-                    exc_info=True,
+                messages.append(
+                    ConversationMessage(role="auditor", result=synthetic_result)
                 )
-                stop_reason = ConductorStopReason.ERROR
-                break
-
-            auditor_history = auditor_result.final_history
-            messages.append(ConversationMessage(role="auditor", result=auditor_result))
-
-            # Stop before running target if auditor signaled done
-            if auditor_result.stop_reason == AgentStopReason.DONE_TOOL:
-                logger.info("Stop: auditor signaled done")
-                stop_reason = ConductorStopReason.AUDITOR_DONE
-                break
-
-            # Stop if auditor produced no usable message
-            if not auditor_result.final_answer:
-                logger.warning(
-                    f"Auditor produced empty response (stop_reason={auditor_result.stop_reason})"
+                auditor_history = synthetic_result.final_history
+            else:
+                new_message = (
+                    messages[-1].result.final_answer if messages else initial_prompt
                 )
-                stop_reason = ConductorStopReason.ERROR
-                break
+                auditor_input = auditor_history + [TextInput(text=new_message)]
+
+                # Run auditor
+                try:
+                    auditor_result = await self._auditor.run(
+                        auditor_input,
+                        question_id=question_id,
+                        run_id=run_id,
+                        state=state,
+                        log_scope=f"exchange_{exchange_number:03d}",
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Auditor failed on exchange {exchange_number}: {e}",
+                        exc_info=True,
+                    )
+                    stop_reason = ConductorStopReason.ERROR
+                    break
+
+                auditor_history = auditor_result.final_history
+                messages.append(
+                    ConversationMessage(role="auditor", result=auditor_result)
+                )
+
+                # Stop before running target if auditor signaled done
+                if auditor_result.stop_reason == AgentStopReason.DONE_TOOL:
+                    logger.info("Stop: auditor signaled done")
+                    stop_reason = ConductorStopReason.AUDITOR_DONE
+                    break
+
+                # Stop if auditor produced no usable message
+                if not auditor_result.final_answer:
+                    logger.warning(
+                        f"Auditor produced empty response (stop_reason={auditor_result.stop_reason})"
+                    )
+                    stop_reason = ConductorStopReason.ERROR
+                    break
+
+                auditor_message = auditor_result.final_answer
 
             # Build target input: history + auditor's message
-            target_input = target_history + [
-                TextInput(text=auditor_result.final_answer)
-            ]
+            target_input = target_history + [TextInput(text=auditor_message)]
 
             # Run target
             try:
@@ -247,6 +271,7 @@ class ConductorAgent:
                     question_id=question_id,
                     run_id=run_id,
                     state=state,
+                    log_scope=f"exchange_{exchange_number:03d}",
                 )
             except Exception as e:
                 logger.error(

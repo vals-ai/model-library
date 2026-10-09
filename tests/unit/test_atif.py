@@ -12,6 +12,7 @@ from model_library.agent.agent import Agent
 from model_library.agent.config import AgentConfig, TurnLimit
 from model_library.agent.metadata import (
     AgentTurn,
+    CompactionSummary,
     ErrorTurn,
     SerializableException,
     ToolCallRecord,
@@ -188,7 +189,13 @@ class TestAgentResultToATIF:
             self._make_turn(
                 "The answer is 4.",
                 history=turn_history,
-                metadata=QueryResultMetadata(in_tokens=10, out_tokens=5),
+                metadata=QueryResultMetadata(
+                    in_tokens=10,
+                    out_tokens=5,
+                    cache_read_tokens=0,
+                    cache_write_tokens=0,
+                    reasoning_tokens=0,
+                ),
             )
         ]
 
@@ -450,11 +457,17 @@ class TestAgentResultToATIF:
 
         meta1 = QueryResultMetadata(
             in_tokens=100,
+            cache_read_tokens=0,
+            cache_write_tokens=0,
+            reasoning_tokens=0,
             out_tokens=50,
             cost=QueryResultCost(input=0.001, output=0.002),
         )
         meta2 = QueryResultMetadata(
             in_tokens=200,
+            cache_read_tokens=0,
+            cache_write_tokens=0,
+            reasoning_tokens=0,
             out_tokens=100,
             cost=QueryResultCost(input=0.002, output=0.004),
         )
@@ -705,3 +718,104 @@ class TestAgentATIFExport:
 
         atif_path = result.output_dir / "trajectory_atif.json"
         assert not atif_path.exists()
+
+
+@pytest.mark.parametrize(
+    "provided", [{}, {"in_tokens": 0}, {"in_tokens": 0, "out_tokens": 0}]
+)
+def test_missing_usage_is_omitted_without_losing_measured_zero(provided):
+    turn = TestAgentResultToATIF()._make_turn(
+        "answer",
+        history=[],
+        metadata=QueryResultMetadata(
+            cache_read_tokens=0, cache_write_tokens=0, reasoning_tokens=0, **provided
+        ),
+    )
+    trajectory = ATIFTrajectory.from_agent_result(
+        turns=[turn],
+        agent_name="target",
+        model_name="synthetic",
+        initial_input=[TextInput(text="question")],
+    ).to_json_dict()
+    assert trajectory["steps"][0]["message"] == "question"
+    assert ATIFTrajectory.model_validate(trajectory).to_json_dict() == trajectory
+    metrics = trajectory["steps"][1]["metrics"]
+    totals = trajectory["final_metrics"]
+    for native, atif in [
+        ("in_tokens", "prompt_tokens"),
+        ("out_tokens", "completion_tokens"),
+    ]:
+        if native in provided:
+            assert metrics[atif] == totals["total_" + atif] == 0
+        else:
+            assert atif not in metrics and "total_" + atif not in totals
+
+
+def test_zero_turn_capture_retains_input_without_fabricated_usage():
+    trajectory = ATIFTrajectory.from_agent_result(
+        turns=[],
+        initial_input=[TextInput(text="question before failure")],
+        agent_name="target",
+        model_name="synthetic",
+    ).to_json_dict()
+    assert trajectory["steps"][0]["message"] == "question before failure"
+    assert trajectory["final_metrics"] == {"total_steps": 1}
+    assert ATIFTrajectory.model_validate(trajectory).to_json_dict() == trajectory
+
+
+@pytest.mark.parametrize("missing", ["cache", "cost", "error"])
+def test_partial_usage_does_not_become_a_complete_total(missing):
+    measured = QueryResultMetadata(
+        in_tokens=7,
+        out_tokens=3,
+        cache_read_tokens=2,
+        cache_write_tokens=0,
+        reasoning_tokens=0,
+        cost=QueryResultCost(input=0.01, output=0.02),
+    )
+    partial = measured.model_copy(deep=True)
+    if missing == "cache":
+        partial.cache_read_tokens = None
+    if missing == "cost":
+        partial.cost = None
+    turns = [TestAgentResultToATIF()._make_turn("one", history=[], metadata=measured)]
+    if missing == "error":
+        turns.append(
+            ErrorTurn(
+                error=SerializableException(type="TimeoutError", message="timeout"),
+                duration_seconds=1,
+            )
+        )
+    else:
+        turns.append(
+            TestAgentResultToATIF()._make_turn("two", history=[], metadata=partial)
+        )
+    payload = ATIFTrajectory.from_agent_result(
+        turns=turns, agent_name="target", model_name="synthetic"
+    ).to_json_dict()
+    field = {
+        "cache": "total_cached_tokens",
+        "cost": "total_cost_usd",
+        "error": "total_prompt_tokens",
+    }[missing]
+    assert field not in payload["final_metrics"]
+    assert payload["steps"][0]["metrics"]["prompt_tokens"] == 9
+
+
+def test_compaction_evidence_preserves_unknown_usage_and_explicit_zero():
+    capture = CompactionSummary(
+        summary="retained context",
+        metadata=QueryResultMetadata(out_tokens=0, extra={"request_id": "synthetic"}),
+    )
+    payload = ATIFTrajectory.from_agent_result(
+        turns=[],
+        initial_input=[TextInput(text="question")],
+        compactions=[capture],
+        agent_name="target",
+        model_name="synthetic",
+    ).to_json_dict()
+    record = payload["extra"]["compactions"][0]
+    assert record["summary"] == "retained context"
+    assert record["timestamp"] == capture.timestamp
+    assert record["metadata"] == {"out_tokens": 0, "extra": {"request_id": "synthetic"}}
+    assert ATIFTrajectory.model_validate(payload).to_json_dict() == payload

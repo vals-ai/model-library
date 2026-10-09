@@ -72,6 +72,7 @@ def test_query_result_response_body_renames_history_to_signed_history():
         **QueryResult.model_dump(
             result, mode="json", exclude={"history"}, exclude_none=True
         ),
+        "metadata": {},
         "signed_history": "signed",
     }
     assert "history" not in body

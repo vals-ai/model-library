@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import threading
+from importlib import import_module
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any, cast
@@ -11,6 +12,8 @@ from typing import Any, cast
 import pytest
 
 from model_library.agent import Agent, AgentHooks, AgentResult, Tool, ToolOutput
+from model_library.agent.metadata import AgentTurn
+from model_library.atif import ATIFTrajectory
 from model_library.base.base import LLM
 from model_library.base.input import (
     InputItem,
@@ -19,7 +22,7 @@ from model_library.base.input import (
     ToolCall,
     ToolResult,
 )
-from model_library.base.output import QueryResult
+from model_library.base.output import QueryResult, QueryResultMetadata
 from tests.unit.agent.helpers import (
     DoneTool,
     make_agent,
@@ -442,3 +445,132 @@ async def test_partial_capture_kwargs_are_rejected(kwargs):
         await agent._execute_tool_calls(
             [], {}, [], logging.getLogger(__name__), **kwargs
         )
+
+
+async def test_progress_observer_sees_partial_native_turn_and_missing_usage(tmp_path):
+    tool = BlockingTool()
+    observed = []
+
+    def observe(output_dir):
+        path = output_dir / "turns" / "turn_001" / "result.json"
+        if path.exists():
+            observed.append(json.loads(path.read_text()))
+
+    response = make_tool_response(
+        [make_tool_call("block")], QueryResultMetadata(out_tokens=0)
+    )
+    agent = make_agent(mock_llm(response), [tool], on_progress=observe)
+    task = asyncio.create_task(agent.run([TextInput(text="go")], question_id="q1"))
+    try:
+        await asyncio.wait_for(tool.started.wait(), timeout=5)
+        assert len(observed) == 1
+        assert observed[0]["tool_call_records"] == []
+        assert "in_tokens" not in observed[0]["query_result"]["metadata"]
+        assert observed[0]["query_result"]["metadata"]["out_tokens"] == 0
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert (
+        load_result(turn_dir(tmp_path))["query_result"]["metadata"]["out_tokens"] == 0
+    )
+
+
+async def test_progress_observer_preserves_error_and_success_outcomes(tmp_path):
+    seen_errors = []
+
+    def observe(output_dir):
+        error_path = output_dir / "turns" / "turn_001" / "error.json"
+        if error_path.exists():
+            seen_errors.append(json.loads(error_path.read_text())["error"]["message"])
+        raise OSError("artifact destination failed")
+
+    failed = await make_agent(
+        mock_llm(RuntimeError("judge unavailable")), on_progress=observe
+    ).run([TextInput(text="go")], question_id="q1")
+    assert failed.final_error.message == "judge unavailable"
+    assert "judge unavailable" in seen_errors
+    succeeded = await make_agent(
+        mock_llm(make_text_response("answer")), on_progress=observe
+    ).run([TextInput(text="go")], question_id="q2")
+    assert succeeded.success and succeeded.final_answer == "answer"
+
+
+async def test_helper_native_metadata_keeps_absent_usage_unset(tmp_path):
+    helper = HelperTool(make_text_response("helper", QueryResultMetadata(out_tokens=0)))
+    agent = make_agent(
+        mock_llm(
+            make_tool_response([make_tool_call("helper")]), make_text_response("done")
+        ),
+        [helper],
+    )
+    result = await agent.run([TextInput(text="go")], question_id="q1")
+    assert result.final_answer == "done"
+    native = load_result(turn_dir(tmp_path))
+    helper_native = load_result(turn_dir(tmp_path) / "helper_queries" / "tool_000")
+    for metadata in [
+        native["tool_call_records"][0]["tool_output"]["metadata"],
+        helper_native["query_result"]["metadata"],
+    ]:
+        assert metadata["out_tokens"] == 0
+        assert not {
+            "in_tokens",
+            "cache_read_tokens",
+            "cache_write_tokens",
+            "total_input_tokens",
+        }.intersection(metadata)
+
+    trajectory = ATIFTrajectory.from_agent_result(
+        turns=[AgentTurn.model_validate(native)],
+        initial_input=[TextInput(text="go")],
+        agent_name="target",
+        model_name="synthetic",
+    ).to_json_dict()
+    nested = trajectory["steps"][1]["observation"]["results"][0]["extra"]["vals"][
+        "tool_model_metrics"
+    ]
+    assert nested["out_tokens"] == 0
+    assert not {
+        "in_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "total_input_tokens",
+    }.intersection(nested)
+    assert ATIFTrajectory.model_validate(trajectory).to_json_dict() == trajectory
+
+
+@pytest.mark.parametrize("failed_file", ["result.json", "history.json"])
+async def test_helper_capture_failure_preserves_result_and_reports_incomplete(
+    tmp_path, monkeypatch, failed_file
+):
+    helper = HelperTool(
+        make_text_response("paid helper response", make_metadata(50, 20, 0.08))
+    )
+    calls = [make_tool_call("helper"), make_tool_call("submit", {"answer": "done"})]
+    agent = make_agent(mock_llm(make_tool_response(calls)), [helper, DoneTool()])
+    agent_module = import_module("model_library.agent.agent")
+    original_atomic = agent_module._write_json_atomic
+    original_text = Path.write_text
+
+    def write_json(path, data):
+        if "helper_queries" in path.parts and path.name == failed_file:
+            raise OSError("synthetic helper result failure")
+        return original_atomic(path, data)
+
+    def write_text(path, *args, **kwargs):
+        if "helper_queries" in path.parts and path.name == failed_file:
+            raise OSError("synthetic helper history failure")
+        return original_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(agent_module, "_write_json_atomic", write_json)
+    monkeypatch.setattr(Path, "write_text", write_text)
+    result = await agent.run([TextInput(text="go")], question_id="q1")
+    assert result.final_answer == "done"
+    assert result.final_error is None
+    assert result.native_capture_errors == ["turn_1/helper_0: OSError"]
+    assert helper.outputs[0].native_query_result is None
+    assert result.turns[0].tool_calls[0].metadata.in_tokens == 50
+    assert result.turns[0].tool_calls[0].metadata.out_tokens == 20
+    assert not (
+        turn_dir(tmp_path) / "helper_queries" / "tool_000" / failed_file
+    ).exists()

@@ -5,6 +5,7 @@ import logging
 import time
 import uuid
 from collections.abc import Awaitable, Callable, Generator, Sequence
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from enum import StrEnum
 from itertools import count, takewhile
@@ -60,6 +61,17 @@ class AgentStopReason(StrEnum):
     ERROR = "error"
 
 
+_native_capture_errors: ContextVar[list[str] | None] = ContextVar(
+    "native_capture_errors", default=None
+)
+
+
+def _record_capture_error(stage: str, exc: Exception) -> None:
+    errors = _native_capture_errors.get()
+    if errors is not None:
+        errors.append(f"{stage}: {type(exc).__name__}")
+
+
 class AgentResult(ValsModel):
     """Result of an agent run
 
@@ -87,6 +99,7 @@ class AgentResult(ValsModel):
     """
 
     final_answer: str
+    native_capture_errors: list[str] = Field(default_factory=list)
     final_error: SerializableException | None = None
     final_history: list[InputItem] = Field(exclude=True, repr=False)
     turns: list[TurnSummary | ErrorTurn]
@@ -211,6 +224,7 @@ class Agent:
         config: AgentConfig,
         hooks: AgentHooks | None = None,
         history_secret: bytes | None = None,
+        on_progress: Callable[[Path], None] | None = None,
     ):
         self._name = name
         self._llm = llm
@@ -230,6 +244,7 @@ class Agent:
         self._hooks = dataclasses.replace(user_hooks)
         self._default_compaction_initialized = user_hooks.compaction is not None
         self._history_secret = history_secret
+        self._on_progress = on_progress
 
     def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
         yield "name", self._name
@@ -275,6 +290,7 @@ class Agent:
         state: dict[str, Any] | None = None,
         logger: logging.Logger | None = None,
         atif_export: bool = False,
+        log_scope: str | None = None,
     ) -> AgentResult:
         """Run the agent loop
 
@@ -306,6 +322,12 @@ class Agent:
         After the loop, determine_answer hook runs with full context.
         Default returns None, falling back to done tool output or LLM text.
         """
+        if log_scope is not None and (
+            not log_scope
+            or Path(log_scope).name != log_scope
+            or log_scope in {".", ".."}
+        ):
+            raise ValueError("log_scope must be a single directory name")
         question_logger = (
             (logger or logging.getLogger("agent"))
             .getChild(f"{self._name}<{self._llm.model_name}>")
@@ -321,19 +343,44 @@ class Agent:
             if hook is not None:
                 self._hooks = dataclasses.replace(self._hooks, compaction=hook)
             self._default_compaction_initialized = True
-        with run_logging(question_logger, self._log_dir, question_id) as output_dir:
+        log_dir = self._log_dir / log_scope if log_scope is not None else self._log_dir
+        with run_logging(
+            question_logger,
+            log_dir,
+            question_id,
+            artifact_dir=log_dir / question_id if log_scope is not None else None,
+        ) as output_dir:
             question_logger.debug(repr(self))
 
-            # run the loop
-            return await self._run(
-                input,
-                state=state,
-                question_id=question_id,
-                run_id=run_id,
-                output_dir=output_dir,
-                logger=question_logger,
-                atif_export=atif_export,
-            )
+            capture_errors: list[str] = []
+            token = _native_capture_errors.set(capture_errors)
+            try:
+                result = await self._run(
+                    input,
+                    state=state,
+                    question_id=question_id,
+                    run_id=run_id,
+                    output_dir=output_dir,
+                    logger=question_logger,
+                    atif_export=atif_export,
+                )
+                result.native_capture_errors = list(capture_errors)
+                return result
+            finally:
+                _native_capture_errors.reset(token)
+
+    def _notify_progress(self, output_dir: Path, logger: logging.Logger) -> None:
+        """Notify the artifact writer after native files are saved, including partial turns.
+
+        The callback is synchronous and can run in a worker thread. Its exceptions
+        are logged without replacing the agent outcome.
+        """
+        if self._on_progress is not None:
+            try:
+                self._on_progress(output_dir)
+            except Exception as exc:
+                _record_capture_error("progress", exc)
+                logger.exception("Failed to update progress artifacts")
 
     def _write_init_dir(
         self,
@@ -363,7 +410,9 @@ class Agent:
             (init_dir / "history.json").write_text(
                 LLM.serialize_input(input, secret=self._history_secret)
             )
-        except Exception:
+            self._notify_progress(output_dir, logger)
+        except Exception as exc:
+            _record_capture_error("init", exc)
             logger.exception("Failed to write init directory")
 
     def _write_turn_dir(
@@ -381,6 +430,20 @@ class Agent:
             turn_dir.mkdir(parents=True, exist_ok=True)
             # Exclude history from result JSON — history is saved separately.
             turn_data = turn.model_dump(exclude={"query_result": {"history"}})
+            turn_data["query_result"]["metadata"] = (
+                turn.query_result.metadata.model_dump(
+                    exclude_unset=True, exclude_computed_fields=True
+                )
+            )
+            for raw_record, record in zip(
+                turn_data["tool_call_records"], turn.tool_call_records, strict=True
+            ):
+                if record.tool_output.metadata is not None:
+                    raw_record["tool_output"]["metadata"] = (
+                        record.tool_output.metadata.model_dump(
+                            exclude_unset=True, exclude_computed_fields=True
+                        )
+                    )
             _write_json_atomic(turn_dir / "result.json", turn_data)
             (turn_dir / "state.json").write_text(
                 json.dumps(state, indent=2, default=str)
@@ -388,7 +451,9 @@ class Agent:
             (turn_dir / "history.json").write_text(
                 LLM.serialize_input(history, secret=self._history_secret)
             )
-        except Exception:
+            self._notify_progress(output_dir, logger)
+        except Exception as exc:
+            _record_capture_error(f"turn_{turn_number}", exc)
             logger.exception(f"Failed to write turn {turn_number} directory")
 
     def _write_helper_query(
@@ -412,19 +477,25 @@ class Agent:
                 / f"tool_{tool_index:03d}"
             )
             helper_dir.mkdir(parents=True, exist_ok=True)
+            helper_data = helper_result.model_dump(exclude={"history"})
+            helper_data["metadata"] = helper_result.metadata.model_dump(
+                exclude_unset=True, exclude_computed_fields=True
+            )
             _write_json_atomic(
                 helper_dir / "result.json",
                 {
                     "turn_number": turn_number,
                     "tool_index": tool_index,
                     "tool_call": record.tool_call.model_dump(),
-                    "query_result": helper_result.model_dump(exclude={"history"}),
+                    "query_result": helper_data,
                 },
             )
             (helper_dir / "history.json").write_text(
                 LLM.serialize_input(helper_result.history, secret=self._history_secret)
             )
-        except Exception:
+            self._notify_progress(output_dir, logger)
+        except Exception as exc:
+            _record_capture_error(f"turn_{turn_number}/helper_{tool_index}", exc)
             logger.exception(
                 f"Failed to write helper query for turn {turn_number}, tool {tool_index}"
             )
@@ -443,8 +514,10 @@ class Agent:
         turn_dir = output_dir / "turns" / f"turn_{turn_number:03d}"
         try:
             turn_dir.mkdir(parents=True, exist_ok=True)
-            (turn_dir / "error.json").write_text(error_turn.model_dump_json(indent=2))
-        except Exception:
+            _write_json_atomic(turn_dir / "error.json", error_turn.model_dump())
+            self._notify_progress(output_dir, logger)
+        except Exception as exc:
+            _record_capture_error(f"error_{turn_number}", exc)
             logger.exception(f"Failed to write error turn {turn_number} directory")
 
     async def _run(
@@ -675,7 +748,8 @@ class Agent:
                     self._write_turn_dir(
                         output_dir, turn_number, native_turn, state, history, logger
                     )
-                except Exception:
+                except Exception as exc:
+                    _record_capture_error(f"response_{turn_number}", exc)
                     logger.exception(f"Failed to capture turn {turn_number} response")
 
                 async def capture_tool_record(record: ToolCallRecord) -> None:
@@ -863,6 +937,7 @@ class Agent:
 
                 trajectory = ATIFTrajectory.from_agent_result(
                     turns=raw_turns,
+                    initial_input=input,
                     compactions=compactions,
                     agent_name=self._name,
                     model_name=self._llm.model_name,
@@ -884,7 +959,8 @@ class Agent:
                 trajectory_path.write_text(
                     json.dumps(trajectory.to_json_dict(), indent=2, default=str)
                 )
-            except Exception:
+            except Exception as exc:
+                _record_capture_error("atif", exc)
                 logger.warning("ATIF export failed", exc_info=True)
 
         logger.debug(f"Run complete: {result!r}")
@@ -892,7 +968,8 @@ class Agent:
         try:
             result_path = output_dir / "result.json"
             result_path.write_text(result.model_dump_json())
-        except Exception:
+        except Exception as exc:
+            _record_capture_error("result", exc)
             logger.exception("Failed to serialize result")
 
         return result

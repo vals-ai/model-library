@@ -386,7 +386,7 @@ class QueryResult(ValsModel):
     """
 
     output_text: str | None = None
-    output_parsed: dict[str, Any] | BaseModel | None = None
+    output_parsed: JsonValue | BaseModel = None
     reasoning: str | None = None
     finish_reason: FinishReasonInfo = Field(
         default_factory=lambda: FinishReasonInfo(reason=FinishReason.UNKNOWN, raw=None)

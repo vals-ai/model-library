@@ -74,7 +74,12 @@ History compactions are not first-party ATIF steps:
 
 `final_metrics.extra.combined_metrics` adds observed task and helper usage;
 compaction usage remains separate in `trajectory.extra["compaction_metrics"]`.
-These are saved usage totals, not full billing. Each sum covers records that
-report that value and is partial when other records omit it. A value stays
-unknown only when no record reports it. Summed durations are model-call time,
+These are saved usage totals, not full billing. A total is omitted when any contributing record omits that value.
+Failed calls keep totals unavailable. Measured zero remains zero. Summed durations are model-call time,
 not wall-clock run time.
+
+## Incomplete execution
+
+Pass `initial_input` to `ATIFTrajectory.from_agent_result` when a run can fail before its first response. The converter retains this context even when no turn completes. `Agent.run(atif_export=True)` supplies the input automatically. A durable progress consumer must supply context when it exports before completion.
+
+Prompt totals require reported input, cache-read, and cache-write counts. Completion totals require reported output and reasoning counts. Unknown categories prevent a complete total. Cache, reasoning, cost, and duration totals require a value from every contributing record. Native metadata remains the source for each separate token category. ATIF export does not infer unavailable provider usage from default values.

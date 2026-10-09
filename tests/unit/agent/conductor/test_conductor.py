@@ -1,6 +1,9 @@
 """Unit tests for ConductorAgent."""
 
 import json
+import logging
+
+import pytest
 from typing import Any
 from unittest.mock import AsyncMock, patch
 
@@ -173,7 +176,10 @@ class TestHistoryAccumulates:
         assert isinstance(auditor_inputs_received[0][0], SystemInput)
         assert auditor_inputs_received[0][0].text == "test auditor prompt"
         assert isinstance(auditor_inputs_received[0][1], TextInput)
-        assert auditor_inputs_received[0][1].text == "Start the conversation. Send your first message in character."
+        assert (
+            auditor_inputs_received[0][1].text
+            == "Start the conversation. Send your first message in character."
+        )
 
         # Exchange 1: target receives system prompt + auditor's answer
         assert len(target_inputs_received[0]) == 2
@@ -396,9 +402,7 @@ class TestTranscriptContent:
         conductor = make_conductor(auditor, target, max_exchanges=2)
 
         result = await conductor.run(question_id="q1")
-        transcript = json.loads(
-            (result.output_dir / "transcript.json").read_text()
-        )
+        transcript = json.loads((result.output_dir / "transcript.json").read_text())
 
         assert len(transcript) == 4
         assert transcript[0] == {"role": "auditor", "content": "auditor-msg-1"}
@@ -420,9 +424,85 @@ class TestTranscriptContent:
         conductor = make_conductor(auditor, target, max_exchanges=5)
 
         result = await conductor.run(question_id="q1")
-        transcript = json.loads(
-            (result.output_dir / "transcript.json").read_text()
-        )
+        transcript = json.loads((result.output_dir / "transcript.json").read_text())
 
         assert len(transcript) == 1
         assert transcript[0] == {"role": "auditor", "content": "done-msg"}
+
+
+@pytest.fixture(params=[False, True])
+def existing_parent_handler(request, tmp_path):
+    logger = logging.getLogger("agent")
+    handler = (
+        logging.FileHandler(tmp_path / "shared-agent.log") if request.param else None
+    )
+    if handler is not None:
+        logger.addHandler(handler)
+    try:
+        yield handler
+    finally:
+        if handler is not None:
+            logger.removeHandler(handler)
+            handler.close()
+
+
+async def test_explicit_opening_preserves_followup_history_and_exchange_files(
+    tmp_path, existing_parent_handler
+):
+    auditor_llm = mock_llm(make_text_response("follow-up"))
+    target_llm = mock_llm(
+        make_text_response("first answer"), make_text_response("last answer")
+    )
+    auditor = make_agent(auditor_llm, name="auditor")
+    target = make_agent(target_llm, name="target")
+    result = await make_conductor(auditor, target, max_exchanges=2).run(
+        question_id="q1", first_message="Exact authored question"
+    )
+    assert [m.result.final_answer for m in result.messages] == [
+        "Exact authored question",
+        "first answer",
+        "follow-up",
+        "last answer",
+    ]
+    assert auditor_llm.query.await_count == 1
+    assert target_llm.query.await_count == 2
+    assert (
+        target_llm.query.call_args_list[0].kwargs["input"][-1].text
+        == "Exact authored question"
+    )
+    auditor_input = auditor_llm.query.call_args.kwargs["input"]
+    assert [x.text for x in auditor_input] == [
+        "test auditor prompt",
+        "Exact authored question",
+        "first answer",
+    ]
+    root = tmp_path / "target" / "mock-model" / "run"
+    answers = [
+        json.loads(
+            (
+                root / f"exchange_{i:03d}" / "q1" / "turns" / "turn_001" / "result.json"
+            ).read_text()
+        )["query_result"]["output_text"]
+        for i in (1, 2)
+    ]
+    assert answers == ["first answer", "last answer"]
+
+    auditor_path = (
+        tmp_path
+        / "auditor"
+        / "mock-model"
+        / "run"
+        / "exchange_002"
+        / "q1"
+        / "turns"
+        / "turn_001"
+        / "result.json"
+    )
+    assert (
+        json.loads(auditor_path.read_text())["query_result"]["output_text"]
+        == "follow-up"
+    )
+    if existing_parent_handler is not None:
+        assert existing_parent_handler in logging.getLogger("agent").handlers
+        assert not list(root.rglob("agent.log"))
+        assert not (tmp_path / "q1" / "turns").exists()

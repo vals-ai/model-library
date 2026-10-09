@@ -105,3 +105,17 @@ logs/<name>/<auditor_model>_<target_model>/<timestamp>_<uuid>/
 | `agent/conductor/conductor.py` | `ConductorAgent` class |
 | `agent/conductor/config.py` | `ConductorConfig` |
 | `agent/conductor/metadata.py` | `ConversationMessage`, `ConductorResult`, `ConductorStopReason` |
+
+## Explicit opening and durable progress
+
+Pass `first_message` to `ConductorAgent.run` to send an authored opening directly to the target. The auditor starts on exchange two. The transcript retains the opening as an auditor message, with no model call or token charge. Omit this argument to keep the auditor-generated opening.
+
+Each agent stores exchange files under `exchange_NNN/<question_id>/turns`. Earlier exchanges remain available after later exchanges finish. An existing parent file handler remains in use for logs without changing these artifact paths.
+
+Pass `on_progress: Callable[[Path], None]` to `Agent` to update external artifacts from native files. The callback receives the current agent output directory. The agent calls it after initialization, response progress, helper-query capture, and error capture. A response is available before its tools finish.
+
+The callback is synchronous and can run on a worker thread. It must finish before that write returns. Callback exceptions are logged without replacing the conversation outcome. Consumers that require artifacts must reject missing evidence at their release boundary.
+
+Use the existing native `turns/init`, `turns/turn_NNN/result.json`, and `turns/turn_NNN/error.json` files. Helper results remain under `helper_queries/tool_NNN`. Native response metadata omits unset fields, so absent usage differs from a measured zero. A progress callback can observe multiple versions of one turn and must replace that turn instead of counting it again.
+
+Native capture failures appear in `message.result.native_capture_errors`. This list preserves the failure stage and exception type without replacing the conversation result. Artifact collectors must report incomplete evidence when this list is nonempty. The list covers response, state, history, helper, and progress-callback failures.

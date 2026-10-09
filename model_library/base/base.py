@@ -729,7 +729,9 @@ class LLM(ABC):
             except (json.JSONDecodeError, ValidationError) as exc:
                 parser_error_type = type(exc).__name__
             if parser_error_type is not None:
-                raise InvalidStructuredOutputError(parser_error_type=parser_error_type)
+                raise InvalidStructuredOutputError(
+                    parser_error_type=parser_error_type, query_result=output
+                )
 
         log_query_completed(
             query_logger,

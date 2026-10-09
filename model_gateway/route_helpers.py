@@ -2,7 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import time
 from typing import Any, Protocol, TypeVar, cast
 
@@ -23,7 +23,11 @@ from model_gateway.metrics import (
 )
 from model_gateway.telemetry_helpers import error_telemetry_attributes, latency_ms
 from model_gateway.types import ProviderError
-from model_library.exceptions import exception_to_provider_error
+from model_library.exceptions import (
+    InvalidStructuredOutputError,
+    exception_to_provider_error,
+)
+from model_library.base.output import QueryResult
 
 T = TypeVar("T")
 
@@ -88,6 +92,7 @@ class GatewayOperation:
     dimensions: Mapping[str, str]
     start: float
     provider: str | None
+    failed_query_result: QueryResult | None = field(default=None, repr=False)
 
     def start_event(self, attrs: Mapping[str, object | None]) -> None:
         telemetry.set_attributes(attrs)
@@ -184,6 +189,8 @@ class GatewayOperation:
                         )
                     raise
                 except Exception as exc:
+                    if isinstance(exc, InvalidStructuredOutputError):
+                        self.failed_query_result = exc.query_result
                     artifact = (
                         active_capture.finalize()
                         if active_capture is not None

@@ -473,6 +473,14 @@ def _before_send(event: dict[str, Any], hint: object) -> dict[str, Any] | None:
     """Suppress deferred exceptions and add current Gateway debug tags."""
     if _provider_exception_deferred.get() and "exception" in event:
         return None
+    exceptions = event.get("exception", {}).get("values", [])
+    if any(
+        item.get("type") in {"InvalidStructuredOutputError", "GatewayProviderError"}
+        for item in exceptions
+    ):
+        for item in exceptions:
+            for frame in item.get("stacktrace", {}).get("frames", []):
+                frame.pop("vars", None)
     tags = _attach_sentry_search_tags(event)
     if tags is not None:
         fingerprint = _sentry_fingerprint(event, hint, tags)

@@ -8,6 +8,7 @@ from pydantic import (
     Field,
     ValidationInfo,
     field_validator,
+    field_serializer,
     model_validator,
 )
 
@@ -131,6 +132,15 @@ class GatewayResponse(BaseModel):
         return self
 
 
+class FailedQueryResponse(BaseModel):
+    error: ProviderError
+    failed_query_result: QueryResult
+
+    @field_serializer("failed_query_result")
+    def serialize_failed_query_result(self, result: QueryResult) -> dict[str, Any]:
+        return query_result_response_body(result, signed_history="[]")
+
+
 class TokenCountResponse(GatewayResponse):
     tokens: int | None = None
 
@@ -156,6 +166,12 @@ def query_result_response_body(
         mode="json",
         exclude={"history"},
         exclude_none=True,
+    )
+    data["metadata"] = result.metadata.model_dump(
+        mode="json",
+        exclude=set(type(result.metadata).model_fields)
+        - result.metadata.model_fields_set,
+        exclude_computed_fields=True,
     )
     data["signed_history"] = signed_history
     return data

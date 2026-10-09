@@ -4,7 +4,7 @@ import re
 from typing import TYPE_CHECKING, Any, NoReturn
 
 if TYPE_CHECKING:
-    from model_library.base.output import FinishReasonInfo
+    from model_library.base.output import FinishReasonInfo, QueryResult
 
 from ai21 import TooManyRequestsError as AI21RateLimitError
 from aiohttp import ClientPayloadError
@@ -262,6 +262,7 @@ class InvalidStructuredOutputError(ImmediateRetryException):
 
     Do not include raw model output or parser details in the exception message:
     gateway logs and Sentry capture exception strings and chained causes.
+    query_result retains a completed response for explicit evidence storage only.
     """
 
     DEFAULT_MESSAGE: str = "Model produced invalid structured output"
@@ -271,7 +272,9 @@ class InvalidStructuredOutputError(ImmediateRetryException):
         message: str | None = None,
         *,
         parser_error_type: str | None = None,
+        query_result: QueryResult | None = None,
     ):
+        self.query_result = query_result
         self.parser_error_type = parser_error_type
         super().__init__(InvalidStructuredOutputError.DEFAULT_MESSAGE)
 
@@ -337,7 +340,9 @@ class GatewayProviderError(NoRetryException):
         raw_error: object,
         exception_type: str | None = None,
         status_code: int | None = None,
+        query_result: QueryResult | None = None,
     ):
+        self.query_result = query_result
         self.error_type = error_type
         self.code = code
         self.message = message

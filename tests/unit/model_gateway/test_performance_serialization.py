@@ -21,10 +21,12 @@ def test_query_result_response_body_compresses_performance_for_client_round_trip
             )
         ]
     )
-    result = QueryResult(metadata=QueryResultMetadata(performance=performance))
+    result = QueryResult(metadata=QueryResultMetadata(performance=performance, out_tokens=0))
 
     body = query_result_response_body(result, signed_history="[]")
 
+    assert "in_tokens" not in body["metadata"]
+    assert body["metadata"]["out_tokens"] == 0
     envelope = body["metadata"]["performance"]
     assert envelope["encoding"] == "gzip+base64"
 

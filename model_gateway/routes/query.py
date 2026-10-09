@@ -24,6 +24,7 @@ from model_gateway.telemetry_helpers import (
 )
 from model_gateway.types import (
     GatewayResponse,
+    FailedQueryResponse,
     ProviderError,
     QueryRequest,
     query_result_response_body,
@@ -184,6 +185,13 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 span_attrs=query_attrs,
             )
             if isinstance(result_or_error, ProviderError):
+                if operation.failed_query_result is not None:
+                    return ok_response(
+                        FailedQueryResponse(
+                            error=result_or_error,
+                            failed_query_result=operation.failed_query_result,
+                        )
+                    )
                 return ok_response(GatewayResponse(error=result_or_error))
             result = result_or_error
             operation.add_event(

@@ -16,7 +16,7 @@ import model_library
 import model_library.telemetry as telemetry
 from openai.lib._pydantic import to_strict_json_schema
 from openai.types.moderation_create_response import ModerationCreateResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing_extensions import override
 
 from model_library.base.base import (
@@ -45,6 +45,7 @@ from model_library.exceptions import (
     ContentFilterError,
     GatewayMethodNotSupported,
     GatewayProviderError,
+    InvalidStructuredOutputError,
     MaxContextWindowExceededError,
     is_content_filter_error,
 )
@@ -176,6 +177,24 @@ def _raise_for_gateway_error_envelope(data: dict[str, Any]) -> None:
         if isinstance(raw_status_code, int) and not isinstance(raw_status_code, bool)
         else None
     )
+    failed_query_result = None
+    invalid_failed_response = False
+    if (
+        exception_type == InvalidStructuredOutputError.__name__
+        and "failed_query_result" in data
+    ):
+        try:
+            failed_query_result = _parse_query_result(data["failed_query_result"], None)
+        except (ValidationError, TypeError, ValueError):
+            invalid_failed_response = True
+    if invalid_failed_response:
+        raise GatewayProviderError(
+            error_type="GatewayError",
+            code="malformed_failed_response",
+            message="Gateway failed response is malformed",
+            provider=provider,
+            raw_error=None,
+        )
     gateway_error = GatewayProviderError(
         error_type=error_type,
         code=code,
@@ -184,6 +203,7 @@ def _raise_for_gateway_error_envelope(data: dict[str, Any]) -> None:
         raw_error=error,
         exception_type=exception_type,
         status_code=status_code,
+        query_result=failed_query_result,
     )
     if exception_type == MaxContextWindowExceededError.__name__:
         raise MaxContextWindowExceededError(message) from gateway_error
@@ -232,15 +252,6 @@ def _parse_query_result(
         history_items = list(adapter.validate_json(history_json))
     result_data["history"] = history_items
 
-    output_parsed: dict[str, Any] | BaseModel | None = result_data.get("output_parsed")
-    if schema_model is not None:
-        if output_parsed is not None:
-            result_data["output_parsed"] = schema_model.model_validate(output_parsed)
-        elif result_data.get("output_text"):
-            result_data["output_parsed"] = schema_model.model_validate_json(
-                result_data["output_text"]
-            )
-
     finish_reason = result_data.get("finish_reason")
     if finish_reason is None:
         result_data.pop("finish_reason", None)
@@ -251,7 +262,23 @@ def _parse_query_result(
         finish_reason_data.setdefault("raw", None)
         result_data["finish_reason"] = finish_reason_data
 
-    return QueryResult.model_validate(result_data)
+    result = QueryResult.model_validate(result_data)
+    parser_error_type: str | None = None
+    if schema_model is not None:
+        try:
+            if result.output_parsed is not None:
+                result.output_parsed = schema_model.model_validate(result.output_parsed)
+            elif result.output_text:
+                result.output_parsed = schema_model.model_validate_json(
+                    result.output_text
+                )
+        except ValidationError as exc:
+            parser_error_type = type(exc).__name__
+    if parser_error_type is not None:
+        raise InvalidStructuredOutputError(
+            parser_error_type=parser_error_type, query_result=result
+        )
+    return result
 
 
 def _gateway_retry_delay_seconds(attempt: int) -> float:

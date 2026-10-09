@@ -153,6 +153,8 @@ def run_logging(
     logger: logging.Logger,
     log_dir: Path,
     question_id: str,
+    *,
+    artifact_dir: Path | None = None,
 ) -> Generator[Path, None, None]:
     """Manage file logging for an agent run.
 
@@ -160,21 +162,25 @@ def run_logging(
     If the logger already has a FileHandler, reuses it (no new handler created).
     Otherwise creates log_dir/<question_id>/agent.log.
 
-    The output directory is always scoped: <base>/<question_id>/
+    An explicit artifact_dir is retained when an existing file handler is reused.
     """
     # Use existing FileHandler if present (walk up the logger hierarchy, skip root)
     current: logging.Logger | None = logger
     while current and current is not logging.root:
         for h in current.handlers:
             if isinstance(h, logging.FileHandler):
-                output_dir = Path(h.baseFilename).parent / question_id
+                output_dir = (
+                    artifact_dir
+                    if artifact_dir is not None
+                    else Path(h.baseFilename).parent / question_id
+                )
                 output_dir.mkdir(parents=True, exist_ok=True)
                 yield output_dir
                 return
         current = current.parent if current.propagate else None
 
     # Create our own FileHandler
-    output_dir = log_dir / question_id
+    output_dir = artifact_dir if artifact_dir is not None else log_dir / question_id
     output_dir.mkdir(parents=True, exist_ok=True)
     file_handler = logging.FileHandler(output_dir / "agent.log", encoding="utf-8")
     file_handler.setFormatter(
