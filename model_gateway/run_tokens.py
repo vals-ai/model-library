@@ -18,6 +18,9 @@ _BodyT = TypeVar("_BodyT", bound=GatewayRequestBase)
 
 RUN_TOKEN_PREFIX = "mgwt_"
 
+# Fields that send the call to another model or endpoint with the gateway's key.
+DENIED_PROVIDER_CONFIG_FIELDS = frozenset({"api_base", "fallback_models"})
+
 
 class RunTokenClaims(BaseModel):
     run_id: str
@@ -110,9 +113,20 @@ def run_token_authorized(model: type[_BodyT]) -> Callable[..., Any]:
         # Retry params reconfigure provider budgets shared across runs.
         if getattr(body, "token_retry_params", None) is not None:
             raise RunTokenAuthorizationError("Run tokens cannot set token_retry_params")
-        # A request provider_config replaces the entry's whole one, which would drop a
-        # YAML openrouter_allowed_models pool and let the sandbox reach other models.
-        if body.config.provider_config is not None:
+        provider_config = body.config.provider_config
+        if provider_config is not None:
+            set_fields = (
+                provider_config.keys()
+                if isinstance(provider_config, dict)
+                else provider_config.model_fields_set
+            )
+            denied = sorted(set_fields & DENIED_PROVIDER_CONFIG_FIELDS)
+            if denied:
+                raise RunTokenAuthorizationError(
+                    f"Run tokens cannot set provider_config field(s): {', '.join(denied)}"
+                )
+            # A request provider_config replaces the entry's whole one, which would drop
+            # a YAML openrouter_allowed_models pool and let the sandbox reach other models.
             entry = get_registry_config(body.model)
             if (
                 entry is not None

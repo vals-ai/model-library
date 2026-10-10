@@ -296,6 +296,42 @@ def test_token_can_set_provider_config_on_other_models() -> None:
     assert body.config.provider_config is not None
 
 
+@pytest.mark.parametrize(
+    ("model", "provider_config"),
+    [
+        (
+            "anthropic/claude-fable-5-no-fallback",
+            {"fallback_models": ["claude-opus-4-8"]},
+        ),
+        (
+            "baseten/deepseek-ai/DeepSeek-V4.1-Flash",
+            {"api_base": "https://attacker.example/v1"},
+        ),
+    ],
+)
+def test_token_cannot_reroute_through_provider_config(
+    model: str, provider_config: dict[str, Any]
+) -> None:
+    client = _make_client()
+    token = _mint(client, allowed_models=[model])["token"]
+    provider = AsyncMock()
+    with patch.object(query_routes, "get_query_llm", provider):
+        response = _post_query(
+            client, token, model=model, config={"provider_config": provider_config}
+        )
+    assert response.status_code == 403
+    provider.assert_not_called()
+
+    # The executor's static key keeps the override.
+    body = _capture_query(
+        client,
+        HEADERS["Authorization"].removeprefix("Bearer "),
+        model=model,
+        config={"provider_config": provider_config},
+    )
+    assert body.config.provider_config is not None
+
+
 def test_sandbox_token_cannot_enter_control_or_model_catalog() -> None:
     client = _make_client()
     minted = _mint(client)
