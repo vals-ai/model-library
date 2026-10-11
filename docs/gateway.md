@@ -142,6 +142,7 @@ Provider retry policy:
 - Direct provider execution and gateway-server provider execution use the normal model retrier unless a custom retrier replaces it.
 - Eight failed outer provider calls with an integer `status_code` of exactly `500` exhaust a query's HTTP-500 retry budget; seven such failures may still be followed by success on call eight. Other retryable errors retain the selected retrier's normal budget.
 - Provider SDKs may retry internally within each outer provider call. Exceptions classified only by message text do not consume the structured HTTP-500 budget.
+- When an exception is classified by its message text, a retryable status code (`429`, `500`, `502`, `503`, `504`, `529`) counts only as a whole number: `65000` or `1,500,000` in a validation message does not make the error retryable.
 
 Local query deadlines:
 

@@ -413,6 +413,13 @@ RETRIABLE_EXCEPTION_CODES = [
     "multimodal data is corrupted",  # transient 400 from some OpenAI-compatible endpoints on image payloads
 ]
 
+# Numeric codes match whole numbers only: "65000" and "1,500,000" contain "500" but are not a 500.
+# The numeric codes are read from RETRIABLE_EXCEPTION_CODES once, at import.
+_NUMERIC_RETRIABLE_CODES = frozenset(
+    code for code in RETRIABLE_EXCEPTION_CODES if code.isdigit()
+)
+_MESSAGE_NUMBER_PATTERN = re.compile(r"\d{1,3}(?:,\d{3})+|\d+")
+
 
 def exception_http_status_code(exception: Exception) -> int | None:
     status_code = getattr(exception, "status_code", None)
@@ -435,7 +442,15 @@ def is_retriable_error(e: Exception) -> bool:
         return True
 
     error_message = str(e).lower()
-    return any(code in error_message for code in RETRIABLE_EXCEPTION_CODES)
+    if not _NUMERIC_RETRIABLE_CODES.isdisjoint(
+        _MESSAGE_NUMBER_PATTERN.findall(error_message)
+    ):
+        return True
+    return any(
+        code in error_message
+        for code in RETRIABLE_EXCEPTION_CODES
+        if code not in _NUMERIC_RETRIABLE_CODES
+    )
 
 
 def exception_to_provider_error(exception: Exception) -> ProviderErrorPayload:

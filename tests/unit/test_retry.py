@@ -834,6 +834,12 @@ async def test_immediate_retry_exhausted_is_not_retriable():
         ("server_error occurred", True),  # server_error keyword
         ("Error 404", False),  # not found
         ("Error 400", False),  # bad request
+        ("HTTP/1.1 503 Service Unavailable", True),  # status code as a whole number
+        ("upstream returned 502.", True),  # status code before punctuation
+        ("HTTP Error 502.3 - Bad Gateway", True),  # status code with a sub-status
+        ("max_tokens: 65000 > 64000", False),  # 65000 contains 500
+        ("Expected a value <= 128000, but got 150000 instead.", False),  # 150000 contains 500
+        ("limit is 1,500,000 tokens", False),  # grouped digits contain 500
         ("Misc Error", False),  # generic error
         ("overloaded", True),  # overloaded error from anthropic
         (
@@ -886,6 +892,78 @@ def test_typed_provider_http_500_is_retriable(
     assert isinstance(error, (OpenAIInternalServerError, AnthropicInternalServerError))
     assert error.status_code == 500
     assert is_retriable_error(error) is True
+
+
+def _anthropic_max_tokens_error() -> AnthropicBadRequestError:
+    body = {
+        "type": "error",
+        "error": {
+            "type": "invalid_request_error",
+            "message": "max_tokens: 65000 > 64000, which is the maximum allowed number of output tokens for claude-sonnet-4-5-20250929",
+        },
+    }
+    request = httpx.Request("POST", "https://provider.example/v1/messages")
+    response = httpx.Response(400, request=request, json=body)
+    return AnthropicBadRequestError(
+        f"Error code: 400 - {body}", response=response, body=body
+    )
+
+
+def _openai_max_output_tokens_error() -> BadRequestError:
+    body = {
+        "error": {
+            "message": "Invalid 'max_output_tokens': integer above maximum value. Expected a value <= 128000, but got 150000 instead.",
+            "type": "invalid_request_error",
+            "param": "max_output_tokens",
+            "code": "integer_above_max_value",
+        }
+    }
+    request = httpx.Request("POST", "https://provider.example/v1/responses")
+    response = httpx.Response(400, request=request, json=body)
+    return BadRequestError(f"Error code: 400 - {body}", response=response, body=body)
+
+
+_PROVIDER_HTTP_400_ERRORS_WITH_CODE_DIGITS: tuple[Callable[[], Exception], ...] = (
+    _anthropic_max_tokens_error,
+    _openai_max_output_tokens_error,
+)
+
+
+@pytest.mark.parametrize(
+    "error_factory",
+    _PROVIDER_HTTP_400_ERRORS_WITH_CODE_DIGITS,
+    ids=("anthropic", "openai"),
+)
+def test_provider_400_with_status_code_digits_in_message_is_not_retriable(
+    error_factory: Callable[[], Exception],
+):
+    """
+    A 400 whose message contains a number like 65000 or 150000 is not a 500.
+    """
+    error = error_factory()
+
+    assert isinstance(error, (AnthropicBadRequestError, BadRequestError))
+    assert error.status_code == 400
+    assert "500" in str(error)
+    assert is_retriable_error(error) is False
+
+
+@pytest.mark.parametrize(
+    "error_factory",
+    _PROVIDER_HTTP_400_ERRORS_WITH_CODE_DIGITS,
+    ids=("anthropic", "openai"),
+)
+async def test_backoff_retrier_gives_up_on_provider_400_with_status_code_digits(
+    error_factory: Callable[[], Exception],
+):
+    error = error_factory()
+    mock_func = AsyncMock(side_effect=error)
+    retrier = ExponentialBackoffRetrier(MagicMock())
+
+    with pytest.raises(type(error)):
+        await retrier.execute(mock_func)
+
+    assert mock_func.call_count == 1
 
 
 async def test_context_window_error_gives_up(mock_llm: LLM):
