@@ -180,15 +180,14 @@ def _router_capture_valid(result: ProbeValue) -> tuple[bool, str | None]:
     if not isinstance(result, QueryResult):
         return False, _detail(errors)
     metadata = result.metadata
-    upstream_cost = metadata.extra.get("upstream_cost")
     if metadata.served_model is None:
         errors.append("router did not report a served model")
-    if upstream_cost is None:
-        errors.append("router did not report usage.cost (upstream_cost is None)")
+    if metadata.cost is None:
+        errors.append("router did not report a bill (cost is None)")
     detail = (
         f"served_model={metadata.served_model}; "
         f"upstream_provider={metadata.extra.get('upstream_provider')}; "
-        f"upstream_cost={upstream_cost}"
+        f"cost={metadata.cost.total if metadata.cost else None}"
     )
     return not errors, detail if not errors else _detail([*errors, detail])
 
@@ -919,7 +918,6 @@ def _model_info(model_key: str, model: LLM) -> dict[str, object]:
             "files": model.supports_files,
             "audio": model.supports_audio,
             "videos": model.supports_videos,
-            "batch": model.supports_batch,
             "temperature": model.supports_temperature,
             "tools": model.supports_tools,
             "output_schema": model.supports_output_schema,

@@ -39,6 +39,8 @@ def _redshift_staging_arrow_schema() -> Any:
             ("agent_name", pyarrow.string()),
             ("identity_email", pyarrow.string()),
             ("api_key_name", pyarrow.string()),
+            ("outcome", pyarrow.string()),
+            ("error_type", pyarrow.string()),
             ("input_tokens", pyarrow.int64()),
             ("output_tokens", pyarrow.int64()),
             ("reasoning_tokens", pyarrow.int64()),

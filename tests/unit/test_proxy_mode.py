@@ -2077,6 +2077,64 @@ async def test_proxy_query_forwards_pydantic_schema_and_validates_response():
     assert result.output_parsed.value == 7
 
 
+async def test_gateway_failed_query_result_decodes_history_without_schema_validation():
+    class Answer(BaseModel):
+        value: int
+
+    llm = _make_gateway()
+    items = [TextInput(text="hi"), RawResponse(response={"role": "assistant"})]
+    response = httpx.Response(
+        200,
+        json={
+            "error": {
+                "type": "ProviderError",
+                "message": "Model produced invalid structured output",
+                "exception_type": "InvalidStructuredOutputError",
+            },
+            "result": {
+                "output_text": '{"value": "not an integer"}',
+                "output_parsed": {"value": "not an integer"},
+                "signed_history": _make_signed_blob(items),
+                "metadata": {"in_tokens": 17, "out_tokens": 0},
+            },
+        },
+    )
+
+    with (
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
+        patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=response),
+    ):
+        with pytest.raises(GatewayProviderError) as caught:
+            await llm.query([TextInput(text="hi")], output_schema=Answer)
+
+    error = caught.value
+    assert error.exception_type == "InvalidStructuredOutputError"
+    assert error.query_result is not None
+    assert error.query_result.output_parsed == {"value": "not an integer"}
+    assert len(error.query_result.history) == 2
+    assert isinstance(error.query_result.history[1], RawResponse)
+    assert error.usage_metadata is error.query_result.metadata
+    assert error.usage_metadata.in_tokens == 17
+    assert error.usage_metadata.out_tokens == 0
+    assert "cache_read_tokens" not in error.usage_metadata.model_fields_set
+
+
+async def test_gateway_provider_error_without_result_has_no_usage():
+    llm = _make_gateway()
+    response = httpx.Response(
+        200, json={"error": {"type": "ProviderError", "message": "failed"}}
+    )
+    with (
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
+        patch("httpx.AsyncClient.post", new_callable=AsyncMock, return_value=response),
+    ):
+        with pytest.raises(GatewayProviderError) as caught:
+            await llm.query([TextInput(text="hi")])
+
+    assert caught.value.query_result is None
+    assert caught.value.usage_metadata is None
+
+
 async def test_proxy_query_preserves_response_metadata_fields():
     llm = _make_gateway()
     response = httpx.Response(

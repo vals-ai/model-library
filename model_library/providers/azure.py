@@ -1,4 +1,5 @@
 import json
+import re
 from typing import Literal
 
 from openai.lib.azure import AsyncAzureOpenAI
@@ -7,10 +8,25 @@ from typing_extensions import override
 from model_library import model_library_settings
 from model_library.base import (
     LLMConfig,
+    QueryResultCost,
+    QueryResultMetadata,
 )
-from model_library.providers.openai import OpenAIModel
+from model_library.providers.openai import OpenAIModel, completions
 from model_library.register_models import register_provider
+from model_library.registry_utils import compute_model_cost, get_registry_config
 from model_library.utils import default_httpx_client
+
+ROUTING_FEE_PER_M_INPUT_TOKENS = 0.14
+SERVED_MODEL_PROVIDERS = ("azure", "openai", "anthropic", "grok")
+DATE_SUFFIX = re.compile(r"-\d{4}-\d{2}-\d{2}$")
+
+
+def _served_model_key(served_model: str) -> str | None:
+    for name in (served_model, DATE_SUFFIX.sub("", served_model)):
+        for provider in SERVED_MODEL_PROVIDERS:
+            if get_registry_config(key := f"{provider}/{name}"):
+                return key
+    return None
 
 
 @register_provider("azure")
@@ -56,4 +72,27 @@ class AzureOpenAIModel(OpenAIModel):
             provider=provider,
             config=config,
             use_completions=False,
+        )
+        registry_config = get_registry_config(self._registry_key or "")
+        if registry_config and registry_config.metadata.router:
+            self._api = completions
+            self.router_mode = True
+
+    @override
+    async def _calculate_cost(
+        self,
+        metadata: QueryResultMetadata,
+        batch: bool = False,
+        bill_reasoning: bool = True,
+    ) -> QueryResultCost | None:
+        if not self.is_router:
+            return await super()._calculate_cost(metadata, batch, bill_reasoning)
+        served_key = metadata.served_model and _served_model_key(metadata.served_model)
+        if not served_key or not (cost := compute_model_cost(served_key, metadata)):
+            return None
+        routing_fee = (
+            ROUTING_FEE_PER_M_INPUT_TOKENS * metadata.total_input_tokens / 1_000_000
+        )
+        return QueryResultCost(
+            input=0, output=0, total_override=cost.total + routing_fee
         )

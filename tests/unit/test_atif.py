@@ -398,6 +398,26 @@ class TestAgentResultToATIF:
             }
         }
 
+    def test_openai_response_model_names_the_step_without_routing(self):
+        turns: list[AgentTurn | ErrorTurn] = [
+            self._make_turn(
+                "Daybreak response",
+                metadata=QueryResultMetadata(
+                    extra={"openai_response_model": "gpt-6-sol"},
+                ),
+            )
+        ]
+
+        trajectory = ATIFTrajectory.from_agent_result(
+            turns=turns,
+            agent_name="agent",
+            model_name="openai/gpt-daybreak-blue",
+        )
+
+        assert trajectory.agent.model_name == "openai/gpt-daybreak-blue"
+        assert trajectory.steps[0].model_name == "openai/gpt-6-sol"
+        assert trajectory.steps[0].extra is None
+
     def test_routed_step_records_the_served_model(self):
         router = "openrouter/openrouter/auto"
         turns: list[AgentTurn | ErrorTurn] = [

@@ -57,17 +57,6 @@ class TestCustomEndpoint:
         finally:
             OpenAIModel.get_client = _original_get_client  # type: ignore[method-assign]
 
-    def test_custom_endpoint_disables_batch(self):
-        """When custom_endpoint is set, batch support is disabled."""
-        config = LLMConfig(
-            custom_endpoint="https://custom.api.com/v1",
-            custom_api_key=SecretStr("test-key"),
-            supports_batch=True,
-        )
-
-        model = OpenAIModel("gpt-4", config=config)
-        assert model.supports_batch is False
-
     def test_custom_endpoint_without_api_key_uses_default(self):
         """custom_endpoint can be set without custom_api_key — uses provider default."""
         config = LLMConfig(

@@ -7,7 +7,6 @@ base-config:
     images: false
     files: false
     tools: true
-    batch: false
     temperature: true
   properties:
     reasoning_model: false
@@ -111,6 +110,10 @@ v4-models:
       - deepseek/deepseek-v4.1-flash-high:
           default_parameters:
             reasoning_effort: high
+      - deepseek/deepseek-v4.1-flash-low:
+          label: DeepSeek V4.1 Flash (Low)
+          default_parameters:
+            reasoning_effort: low
       - deepseek/deepseek-v4.1-flash-nonthinking:
           supports:
             temperature: true

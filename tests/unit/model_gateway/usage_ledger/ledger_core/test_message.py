@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 import pytest
 
-from model_gateway.types import QueryRequest
+from model_gateway.types import ProviderError, QueryRequest
 from model_gateway.usage_ledger.details import snapshot_usage_request
 from model_gateway.usage_ledger.message import (
     MAX_USAGE_LEDGER_MESSAGE_BYTES,
@@ -12,7 +12,7 @@ from model_gateway.usage_ledger.message import (
     prepare_usage_event_message,
     serialize_usage_event_message,
 )
-from model_gateway.usage_ledger.store import build_success_usage_event
+from model_gateway.usage_ledger.store import build_usage_event
 from model_library.base.input import TextInput
 from model_library.base.output import (
     QueryResult,
@@ -43,12 +43,13 @@ def _usage_event() -> dict[str, object]:
             provider_request_id="provider-request-1",
         ),
     )
-    return build_success_usage_event(
+    return build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
         dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
         result=result,
+        error=None,
         request=snapshot_usage_request(request),
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
         api_key_name="security-testing",
@@ -91,12 +92,13 @@ def test_external_non_finite_request_detail_is_reduced_before_serialization() ->
             '"config":{"temperature":NaN}}'
         )
     )
-    event = build_success_usage_event(
+    event = build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
         dimensions={},
         result=QueryResult(output_text="ok"),
+        error=None,
         request=snapshot_usage_request(request),
         api_key_name="test",
     )
@@ -106,6 +108,38 @@ def test_external_non_finite_request_detail_is_reduced_before_serialization() ->
     envelope = json.loads(message)
     assert envelope["event"]["details"]["request"]["config"]["temperature"] is None
 
+
+
+
+def test_failed_result_round_trips_without_inventing_usage() -> None:
+    request = QueryRequest(model="openai/gpt-4o", inputs=[TextInput(text="hello")])
+    error = ProviderError(
+        message="Invalid structured output",
+        exception_type="InvalidStructuredOutputError",
+    )
+    event = build_usage_event(
+        body=request,
+        config=request.config_dict(),
+        query_params={},
+        dimensions={},
+        result=QueryResult(
+            output_text="partial",
+            metadata=QueryResultMetadata(cache_read_tokens=0),
+        ),
+        error=error,
+        request=snapshot_usage_request(request),
+        api_key_name="test",
+    )
+
+    restored = deserialize_usage_event_message(serialize_usage_event_message(event))
+
+    assert restored["outcome"] == "error"
+    assert restored["error"] == error.model_dump(mode="json")
+    assert restored["cache_read_tokens"] == 0
+    assert "total_input_tokens" not in restored
+    assert "input_tokens" not in restored
+    assert "cost_usd" not in restored
+    assert restored["details"] == event["details"]
 
 @pytest.mark.parametrize(
     ("cost_value", "wire_cost", "decoded_cost"),

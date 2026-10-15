@@ -61,7 +61,6 @@ def _fake_model(
         supports_reasoning=False,
         reasoning=False,
         supports_prompt_caching=False,
-        supports_batch=False,
         supports_temperature=True,
         supports_output_schema=False,
         provider="test-provider",

@@ -179,6 +179,44 @@ async def test_rate_limit_cache_reprobes_after_ttl():
     assert _load_json(refreshed.body)["rate_limit"]["requests"][0]["limit"] == 2
 
 
+@pytest.mark.asyncio
+async def test_rate_limit_cache_reprobes_when_runtime_namespace_changes():
+    probes = 0
+    runtime_namespace = "models=1:credentials=1"
+
+    class FakeLLM:
+        async def get_rate_limit(self):
+            nonlocal probes
+            probes += 1
+            return RateLimit(
+                unix_timestamp=1_700_000_000.0,
+                requests=(RequestRateLimit(limit=probes),),
+            )
+
+    service = rate_limit_route.RateLimitProbeService(ModelCache())
+    body = RateLimitRequest.model_validate({"model": "openai/gpt-4o", "config": {}})
+    with (
+        patch.object(
+            rate_limit_route,
+            "runtime_cache_namespace",
+            side_effect=lambda: runtime_namespace,
+        ),
+        patch.object(
+            model_helpers,
+            "get_registry_model",
+            side_effect=lambda model, config: FakeLLM(),
+        ),
+    ):
+        first = await service.get_rate_limit(body)
+        cached = await service.get_rate_limit(body)
+        runtime_namespace = "models=2:credentials=2"
+        refreshed = await service.get_rate_limit(body)
+
+    assert probes == 2
+    assert _load_json(first.body) == _load_json(cached.body)
+    assert _load_json(refreshed.body)["rate_limit"]["requests"][0]["limit"] == 2
+
+
 def test_rate_limit_serves_repeat_no_data_requests_from_cache():
     probes = 0
 

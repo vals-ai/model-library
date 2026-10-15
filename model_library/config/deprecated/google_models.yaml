@@ -7,7 +7,6 @@ base-config:
     images: false
     videos: false
     files: false
-    batch: false
     temperature: false
     tools: false
     output_schema: false
@@ -39,7 +38,6 @@ deprecated:
       images: true
       videos: true
       files: true
-      batch: true
       temperature: true
       tools: true
       output_schema: true
@@ -87,7 +85,6 @@ deprecated:
       images: true
       videos: true
       files: true
-      batch: true
       temperature: true
       tools: true
       output_schema: true
@@ -127,7 +124,6 @@ deprecated:
       images: true
       videos: true
       files: true
-      batch: true
       temperature: true
       tools: true
       output_schema: true
@@ -173,7 +169,6 @@ deprecated:
       files: true
       videos: true
       tools: true
-      batch: true
       temperature: true
       output_schema: true
     properties:
@@ -201,7 +196,6 @@ deprecated:
       files: true
       videos: true
       tools: true
-      batch: true
       temperature: true
       output_schema: true
     properties:
@@ -229,7 +223,6 @@ deprecated:
       files: true
       videos: true
       tools: true
-      batch: true
       temperature: true
       output_schema: true
     properties:
@@ -257,7 +250,6 @@ deprecated:
       files: true
       videos: true
       tools: true
-      batch: false
       temperature: true
       output_schema: true
     properties:
@@ -284,7 +276,6 @@ deprecated:
       files: true
       videos: true
       tools: true
-      batch: true
       temperature: true
       output_schema: true
     properties:
@@ -309,7 +300,6 @@ deprecated:
       files: true
       videos: true
       tools: true
-      batch: true
       temperature: true
       output_schema: true
     properties:
@@ -339,7 +329,6 @@ deprecated:
       files: true
       videos: true
       tools: true
-      batch: true
       temperature: true
       output_schema: true
     properties:
@@ -366,7 +355,6 @@ deprecated:
       files: true
       videos: true
       tools: true
-      batch: true
       temperature: true
       output_schema: true
     properties:

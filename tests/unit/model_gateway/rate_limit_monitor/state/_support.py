@@ -1,16 +1,13 @@
-from itertools import count
 import json
 import time
+from itertools import count
 
 from fakeredis import aioredis
 
 from model_gateway.rate_limit_monitor.state import (
-    ACTIVE_KEY,
-    RETAINED_KEY,
     RETENTION_SECONDS,
     MonitorSourceUpdate,
     RateLimitMonitorStore,
-    snapshot_key,
 )
 from model_gateway.rate_limit_monitor.types import MonitorSourceName
 from model_library.rate_limits import (
@@ -20,11 +17,19 @@ from model_library.rate_limits import (
     TokenRateLimit,
 )
 
+ACTIVE_KEY = "model_gateway:rate_limit_monitor:test:active"
+RETAINED_KEY = "model_gateway:rate_limit_monitor:test:retained"
 MODEL = "openai/gpt-4o"
-
 ANTHROPIC_MODEL = "anthropic/claude-sonnet-4-5"
-
 _ATTEMPTED_AT_OFFSETS = count(1)
+
+
+def owner_key(model: str) -> str:
+    return f"model_gateway:rate_limit_monitor:test:owner:{model}"
+
+
+def snapshot_key(model: str) -> str:
+    return f"model_gateway:rate_limit_monitor:test:snapshot:{model}"
 
 
 def _attempted_at() -> float:

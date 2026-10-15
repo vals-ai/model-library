@@ -112,12 +112,17 @@ def _build_active_payload(
     image_block = _configured_image(alert_status=alert_status, candidate=candidate)
     if image_block is not None:
         blocks.append(image_block)
+    recorded_count = candidate.total_current_cost_recorded_count
+    average_cost = _format_cost_per_recorded_result(
+        candidate.total_current_cost_usd, recorded_count
+    )
     blocks.extend(
         [
             _section_fields(
                 [
-                    f"*Traffic*\n{candidate.total_current_request_count:,} reqs",
-                    f"*Cost / req*\n{_format_cost_per_request(candidate.total_current_cost_usd, candidate.total_current_eligible_request_count)}",
+                    f"*Recorded traffic*\n{candidate.total_current_request_count:,} successes"
+                    f" · {candidate.total_current_error_count:,} errors",
+                    f"*Average cost*\n{average_cost} ({recorded_count:,} recorded)",
                 ]
             ),
             _section(f"*Window:* {_format_window(candidate)}"),
@@ -368,14 +373,16 @@ def _contributors_text(
             f"{index}. *{_escape_mrkdwn(contributor.display_value)}* — "
             f"*{_format_usd(contributor.current_cost_usd)}*"
         )
+        activity = (
+            f"{contributor.current_request_count:,} successes, "
+            f"{contributor.current_error_count:,} errors"
+        )
         if contributor.ignored_for_cost:
-            lines.append(
-                f"{prefix} · {contributor.current_request_count:,} reqs [Ignored]"
-            )
+            lines.append(f"{prefix} · {activity} [Ignored]")
             continue
         lines.append(
-            f"{prefix} ({_format_share(contributor.current_cost_usd, total_cost)}) · "
-            f"{contributor.current_request_count:,} reqs"
+            f"{prefix} ({_format_share(contributor.current_cost_usd, total_cost)})"
+            f" · {activity}"
         )
     return "\n".join(lines)
 
@@ -426,10 +433,9 @@ def _format_signed_usd(value: Decimal) -> str:
     return f"-{amount}"
 
 
-def _format_cost_per_request(cost: Decimal, request_count: int) -> str:
-    if request_count <= 0:
-        return "n/a"
-    return f"${(cost / Decimal(request_count)).quantize(Decimal('0.000'))}/req"
+def _format_cost_per_recorded_result(cost: Decimal, recorded_count: int) -> str:
+    average = (cost / Decimal(recorded_count)).quantize(Decimal("0.000"))
+    return f"${average}/recorded result"
 
 
 def _format_share(cost: Decimal, total_cost: Decimal) -> str:

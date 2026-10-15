@@ -27,7 +27,6 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
 )
-from model_library.providers.google.batch import parse_predictions_jsonl
 from model_library.providers.google.google import GoogleModel
 from model_library.providers.mistral import MistralModel
 from model_library.providers.openai import OpenAIModel
@@ -394,17 +393,6 @@ async def test_google_tool_only_query_keeps_unobserved_output_text_none():
     assert result.output_text is None
     assert result.reasoning is None
     assert result.tool_calls[0].name == "ping"
-
-
-def test_google_batch_empty_text_normalizes_to_none_with_reasoning():
-    results = parse_predictions_jsonl(
-        '{"key":"request-1","response":{"responseId":"google-batch-1",'
-        '"candidates":[{"content":{"parts":['
-        '{"thought":true,"text":"thinking"},{"text":""}]}}]}}'
-    )
-
-    assert results[0].output.output_text is None
-    assert results[0].output.reasoning == "thinking"
 
 
 async def test_mistral_tool_only_query_keeps_unobserved_output_text_none():

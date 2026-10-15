@@ -23,14 +23,16 @@ from model_gateway.telemetry_helpers import (
     query_telemetry_attributes,
 )
 from model_gateway.types import (
+    FailedQueryResponse,
     GatewayResponse,
     ProviderError,
     QueryRequest,
     query_result_response_body,
 )
 from model_gateway.usage_ledger.details import snapshot_usage_request
-from model_gateway.usage_ledger.store import build_success_usage_event
+from model_gateway.usage_ledger.store import build_usage_event
 from model_library.base import LLM, dump_gateway_config, dump_llm_config
+from model_library.base.output import QueryResult
 
 _T = TypeVar("_T")
 
@@ -145,6 +147,44 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
             operation.record_phase(phase, outcome="success", start=phase_start)
             return result
 
+        async def result_payload_and_ledger(
+            result: QueryResult, *, error: ProviderError | None
+        ) -> dict[str, object]:
+            operation.add_event("sign_history_start")
+
+            async def sign_result_history() -> str:
+                return sign_history(result.history, secret=secret or None)
+
+            signed_history = await run_phase("sign_history", sign_result_history)
+            operation.add_event("sign_history_done")
+            result_payload = query_result_response_body(
+                result, signed_history=signed_history, failed=error is not None
+            )
+
+            if request.app.state.usage_ledger.enabled and not _is_local_startup_canary(
+                request, body
+            ):
+
+                async def write_usage_event() -> None:
+                    usage_event = build_usage_event(
+                        body=body,
+                        config=config,
+                        query_params=query_params,
+                        dimensions=dimensions,
+                        result=result,
+                        error=error,
+                        request=usage_request,
+                        api_key_name=request.state.gateway_api_key_name,
+                    )
+                    telemetry.set_attributes(
+                        {"gateway.usage_event_id": usage_event["usage_event_id"]}
+                    )
+                    await request.app.state.usage_ledger.write_event(usage_event)
+
+                await run_phase("usage_ledger", write_usage_event)
+
+            return result_payload
+
         try:
             operation.add_event("model_cache_lookup")
             llm = await run_phase(
@@ -184,6 +224,15 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 span_attrs=query_attrs,
             )
             if isinstance(result_or_error, ProviderError):
+                if operation.failed_query_result is not None:
+                    return ok_response(
+                        FailedQueryResponse(
+                            error=result_or_error,
+                            result=await result_payload_and_ledger(
+                                operation.failed_query_result, error=result_or_error
+                            ),
+                        )
+                    )
                 return ok_response(GatewayResponse(error=result_or_error))
             result = result_or_error
             operation.add_event(
@@ -199,38 +248,7 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 },
             )
 
-            operation.add_event("sign_history_start")
-
-            async def sign_result_history() -> str:
-                return sign_history(result.history, secret=secret or None)
-
-            signed_history = await run_phase("sign_history", sign_result_history)
-            operation.add_event("sign_history_done")
-            result_payload = query_result_response_body(
-                result, signed_history=signed_history
-            )
-
-            if request.app.state.usage_ledger.enabled and not _is_local_startup_canary(
-                request, body
-            ):
-
-                async def write_usage_event() -> None:
-                    usage_event = build_success_usage_event(
-                        body=body,
-                        config=config,
-                        query_params=query_params,
-                        dimensions=dimensions,
-                        result=result,
-                        request=usage_request,
-                        api_key_name=request.state.gateway_api_key_name,
-                    )
-                    telemetry.set_attributes(
-                        {"gateway.usage_event_id": usage_event["usage_event_id"]}
-                    )
-                    await request.app.state.usage_ledger.write_success(usage_event)
-
-                await run_phase("usage_ledger", write_usage_event)
-
+            result_payload = await result_payload_and_ledger(result, error=None)
             extra_metrics: dict[str, tuple[int | float, str]] = {
                 "InputTokens": (result.metadata.total_input_tokens, "Count"),
                 "OutputTokens": (result.metadata.total_output_tokens, "Count"),

@@ -11,10 +11,16 @@ def test_model_cache_reuses_same_config_regardless_of_key_order():
         return object()
 
     first = cache.get_or_create(
-        "openai/gpt-4o-mini", {"temperature": 0, "max_tokens": 16}, factory
+        "openai/gpt-4o-mini",
+        {"temperature": 0, "max_tokens": 16},
+        factory,
+        namespace="test",
     )
     second = cache.get_or_create(
-        "openai/gpt-4o-mini", {"max_tokens": 16, "temperature": 0}, factory
+        "openai/gpt-4o-mini",
+        {"max_tokens": 16, "temperature": 0},
+        factory,
+        namespace="test",
     )
 
     assert first is second
@@ -25,10 +31,10 @@ def test_model_cache_separates_different_configs():
     cache = ModelCache()
 
     first = cache.get_or_create(
-        "openai/gpt-4o-mini", {"max_tokens": 16}, lambda *_: object()
+        "openai/gpt-4o-mini", {"max_tokens": 16}, lambda *_: object(), namespace="test"
     )
     second = cache.get_or_create(
-        "openai/gpt-4o-mini", {"max_tokens": 64}, lambda *_: object()
+        "openai/gpt-4o-mini", {"max_tokens": 64}, lambda *_: object(), namespace="test"
     )
 
     assert first is not second
@@ -43,12 +49,12 @@ def test_model_cache_evicts_least_recently_used_entry():
         created.append(instance)
         return instance
 
-    first = cache.get_or_create("model/a", {}, factory)
-    second = cache.get_or_create("model/b", {}, factory)
-    assert cache.get_or_create("model/a", {}, factory) is first
+    first = cache.get_or_create("model/a", {}, factory, namespace="test")
+    second = cache.get_or_create("model/b", {}, factory, namespace="test")
+    assert cache.get_or_create("model/a", {}, factory, namespace="test") is first
 
-    cache.get_or_create("model/c", {}, factory)
-    assert cache.get_or_create("model/b", {}, factory) is not second
+    cache.get_or_create("model/c", {}, factory, namespace="test")
+    assert cache.get_or_create("model/b", {}, factory, namespace="test") is not second
 
 
 def test_model_cache_expires_idle_entries(monkeypatch):
@@ -62,9 +68,9 @@ def test_model_cache_expires_idle_entries(monkeypatch):
         created.append(instance)
         return instance
 
-    first = cache.get_or_create("model/a", {}, factory)
+    first = cache.get_or_create("model/a", {}, factory, namespace="test")
     now += 60
-    second = cache.get_or_create("model/a", {}, factory)
+    second = cache.get_or_create("model/a", {}, factory, namespace="test")
 
     assert second is not first
     assert created == [first, second]
@@ -81,11 +87,11 @@ def test_model_cache_ttl_extends_on_access(monkeypatch):
         created.append(instance)
         return instance
 
-    first = cache.get_or_create("model/a", {}, factory)
+    first = cache.get_or_create("model/a", {}, factory, namespace="test")
     now += 59
-    assert cache.get_or_create("model/a", {}, factory) is first
+    assert cache.get_or_create("model/a", {}, factory, namespace="test") is first
     now += 59
-    assert cache.get_or_create("model/a", {}, factory) is first
+    assert cache.get_or_create("model/a", {}, factory, namespace="test") is first
 
     assert created == [first]
 
@@ -103,9 +109,9 @@ def test_model_cache_starts_ttl_after_factory_returns(monkeypatch):
         created.append(instance)
         return instance
 
-    first = cache.get_or_create("model/a", {}, factory)
+    first = cache.get_or_create("model/a", {}, factory, namespace="test")
 
-    assert cache.get_or_create("model/a", {}, factory) is first
+    assert cache.get_or_create("model/a", {}, factory, namespace="test") is first
     assert created == [first]
 
 
@@ -122,13 +128,13 @@ def test_model_cache_prunes_expired_lru_entries_without_dropping_refreshed_entri
         created.append(instance)
         return instance
 
-    first = cache.get_or_create("model/a", {}, factory)
-    second = cache.get_or_create("model/b", {}, factory)
+    first = cache.get_or_create("model/a", {}, factory, namespace="test")
+    second = cache.get_or_create("model/b", {}, factory, namespace="test")
     now += 59
-    assert cache.get_or_create("model/a", {}, factory) is first
+    assert cache.get_or_create("model/a", {}, factory, namespace="test") is first
 
     now += 2
-    cache.get_or_create("model/c", {}, factory)
+    cache.get_or_create("model/c", {}, factory, namespace="test")
 
-    assert cache.get_or_create("model/a", {}, factory) is first
-    assert cache.get_or_create("model/b", {}, factory) is not second
+    assert cache.get_or_create("model/a", {}, factory, namespace="test") is first
+    assert cache.get_or_create("model/b", {}, factory, namespace="test") is not second

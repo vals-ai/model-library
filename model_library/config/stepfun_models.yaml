@@ -10,3 +10,22 @@ base-config:
     temperature: true
   properties:
     reasoning_model: true
+
+step-5-models:
+  stepfun/step-5-preview:
+    label: Step 5 Preview
+    release_date: 2026-09-28
+    open_source: true
+    supports:
+      images: true
+    properties:
+      context_window: 1_024_000
+      max_tokens: 1_024_000
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    costs_per_million_token:
+      input: 1.00
+      output: 2.70
+      cache:
+        read: 0.05

@@ -50,6 +50,7 @@ def _config() -> RedshiftExportJobConfig:
         shards=1,
         redshift_workgroup_name="usage-workgroup",
         redshift_database_name="usage",
+        redshift_secret_arn="arn:aws:secretsmanager:us-east-1:123456789012:secret:usage-loader",
         landing_bucket_name="usage-landing",
         copy_role_arn="arn:aws:iam::123456789012:role/copy",
         redshift_schema_name="gateway_usage_dev",
@@ -143,11 +144,6 @@ def test_explicit_backfill_event_replays_current_schema_separately() -> None:
     )
 
     assert loaded == {"loaded": True, "rows": 1}
-    expression_values = cast(
-        dict[str, dict[str, str]],
-        dynamodb.calls[0]["ExpressionAttributeValues"],
-    )
-    assert expression_values[":schema_version"] == {"N": "3"}
     assert [put["Key"] for put in s3.puts] == [
         "gateway-usage/dev/raw/backfill/"
         "window=20260529T120000Z-20260529T120500Z/shard=00/part-000.parquet",

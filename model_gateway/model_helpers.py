@@ -22,6 +22,7 @@ from model_library.registry_utils import (
 
 from model_gateway.benchmark_admission_types import BenchmarkAcquireRequest
 from model_gateway.cache import ModelCache
+from model_gateway.runtime_config import runtime_cache_namespace
 from model_gateway.types import GatewayRequestBase, QueryRequest, TokenCountRequest
 
 
@@ -44,6 +45,7 @@ def get_cached_llm(
         body.model,
         config,
         lambda m, _c: build(m, normalize_llm_config_for_model(m, effective_config)),
+        namespace=runtime_cache_namespace(),
     )
 
 

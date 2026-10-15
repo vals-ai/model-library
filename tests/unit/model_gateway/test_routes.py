@@ -20,8 +20,7 @@ from starlette.testclient import TestClient  # pyright: ignore[reportMissingImpo
 import model_gateway.app as gateway_app
 import model_gateway.model_helpers as model_helpers
 import model_gateway.route_helpers as route_helpers
-from model_gateway import startup_canary
-from model_gateway import telemetry_helpers
+from model_gateway import startup_canary, telemetry_helpers
 from model_library.base import (
     LLM,
     LLMConfig,
@@ -31,12 +30,17 @@ from model_library.base import (
     TranscriptionResult,
     dump_gateway_config,
 )
+from model_library.base.gateway import _decode_gateway_success
+from model_library.base.output import QueryResultCost
+from model_library.exceptions import GatewayProviderError
 from model_library.register_models import (
     get_model_registry,
     get_transcription_registry,
     model_config_from_json,
 )
+from model_library.registry_utils import get_registry_model
 from tests.unit.model_gateway._support import HEADERS, _load_json, _make_client
+from tests.unit.test_structured_output_errors import InvalidJsonLLM
 
 
 def _transcription_body(**overrides: object) -> dict[str, object]:
@@ -66,7 +70,7 @@ def test_query_result_response_body_renames_history_to_signed_history():
 
     result = QueryResult(output_text="ok", history=[TextInput(text="hi")])
 
-    body = query_result_response_body(result, signed_history="signed")
+    body = query_result_response_body(result, signed_history="signed", failed=False)
 
     assert body == {
         **QueryResult.model_dump(
@@ -75,6 +79,16 @@ def test_query_result_response_body_renames_history_to_signed_history():
         "signed_history": "signed",
     }
     assert "history" not in body
+
+
+def test_failed_query_result_wire_preserves_known_zero_without_default_counts():
+    from model_gateway.types import query_result_response_body
+    from model_library.base.output import QueryResult, QueryResultMetadata
+
+    result = QueryResult(metadata=QueryResultMetadata(out_tokens=0))
+    body = query_result_response_body(result, signed_history="signed", failed=True)
+
+    assert body == {"metadata": {"out_tokens": 0}, "signed_history": "signed"}
 
 
 @pytest.mark.parametrize(
@@ -274,8 +288,8 @@ def test_create_app_requires_gateway_keys_and_hmac_secret(
 
 
 def test_lifespan_survives_malformed_otel_env():
-    from model_library import telemetry
     from model_gateway import main
+    from model_library import telemetry
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -530,7 +544,6 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     }
     assert set(response_config["supports"]) == {
         "audio",
-        "batch",
         "files",
         "images",
         "output_schema",
@@ -902,7 +915,7 @@ def test_lifespan_starts_and_closes_usage_ledger():
         async def close(self) -> None:
             self.closed += 1
 
-        async def write_success(self, event: dict[str, object]) -> None:
+        async def write_event(self, event: dict[str, object]) -> None:
             _ = event
 
     fake_ledger = FakeUsageLedger()
@@ -951,7 +964,7 @@ def test_lifespan_close_continues_after_usage_ledger_close_failure():
         async def close(self) -> None:
             raise RuntimeError("ledger close failed")
 
-        async def write_success(self, event: dict[str, object]) -> None:
+        async def write_event(self, event: dict[str, object]) -> None:
             _ = event
 
     class FakeRedis:
@@ -1115,6 +1128,7 @@ def test_lifespan_closes_owned_redis_client():
 
 def test_auth_failure_trace_paths_match_protected_routes():
     from fastapi.routing import APIRoute  # pyright: ignore[reportMissingImports]
+
     from model_gateway import auth
 
     client = _make_client()
@@ -1130,8 +1144,9 @@ def test_auth_failure_trace_paths_match_protected_routes():
 
 def test_http_trace_allowed_routes_match_protected_routes():
     from fastapi.routing import APIRoute  # pyright: ignore[reportMissingImports]
-    from model_library import telemetry
+
     from model_gateway import auth
+    from model_library import telemetry
 
     client = _make_client()
     app = cast(Any, client.app)
@@ -1193,8 +1208,8 @@ def test_query_invalid_model_returns_400():
 
 
 def test_query_request_config_is_llm_config():
-    from model_library.base import LLMConfig
     from model_gateway.types import QueryRequest
+    from model_library.base import LLMConfig
 
     request = QueryRequest.model_validate(
         {
@@ -1208,6 +1223,20 @@ def test_query_request_config_is_llm_config():
     assert request.config.max_tokens == 7
     assert request.config.custom_api_key is not None
     assert request.config.custom_api_key.get_secret_value() == "provider-key"
+
+
+def test_query_request_config_ignores_removed_supports_batch():
+    from model_gateway.types import QueryRequest
+
+    request = QueryRequest.model_validate(
+        {
+            "model": "openai/gpt-4o",
+            "inputs": [{"kind": "text", "text": "hi"}],
+            "config": {"supports_batch": True},
+        }
+    )
+
+    assert isinstance(request.config, LLMConfig)
 
 
 def test_query_request_config_rejects_unknown_fields():
@@ -1456,11 +1485,19 @@ def test_query_returns_invalid_structured_output_provider_exception_envelope():
                 f"Model produced invalid structured output: output={secret_output!r}"
             )
 
-    client = _make_client()
+    ledger = MagicMock(enabled=True)
+    ledger.start = AsyncMock()
+    ledger.close = AsyncMock()
+    ledger.write_event = AsyncMock()
     with (
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+        patch.object(
+            gateway_app, "create_usage_ledger_from_env", return_value=ledger
+        ),
         patch.object(gateway_app.telemetry, "record_exception") as record_exception,
+        patch.object(route_helpers, "emit_model_success") as emit_success,
     ):
+        client = _make_client()
         resp = client.post(
             "/query",
             json={
@@ -1486,6 +1523,8 @@ def test_query_returns_invalid_structured_output_provider_exception_envelope():
             "exception_type": "InvalidStructuredOutputError",
         }
     }
+    ledger.write_event.assert_not_awaited()
+    emit_success.assert_not_called()
     assert secret_output not in resp.text
     captured_exc = record_exception.call_args.args[0]
     assert secret_output not in str(captured_exc)
@@ -1767,8 +1806,8 @@ def test_query_returns_429_when_gateway_capacity_is_full(capsys):
 
 
 def test_query_metrics_param_group_uses_bounded_config_and_request_context(capsys):
-    from model_library.base.output import QueryResult
     from model_gateway import metrics
+    from model_library.base.output import QueryResult
 
     class FakeLLM:
         async def query(self, inputs: Any, **kwargs: Any):
@@ -1929,9 +1968,9 @@ def _decode_otlp_payloads(
 
 
 def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
+    from model_gateway import main
     from model_library import telemetry
     from model_library.base.output import QueryResult
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -2667,7 +2706,7 @@ def test_query_sign_history_failure_does_not_write_usage_ledger():
         async def close(self) -> None:
             return
 
-        async def write_success(self, event: dict[str, object]) -> None:
+        async def write_event(self, event: dict[str, object]) -> None:
             self.events.append(event)
 
     class FakeLLM:
@@ -2701,6 +2740,52 @@ def test_query_sign_history_failure_does_not_write_usage_ledger():
     assert resp.status_code == 500
     assert resp.json()["code"] == "internal_error"
     assert fake_ledger.events == []
+
+
+@pytest.mark.parametrize(
+    ("client_host", "run_id", "expected_writes"),
+    [("testclient", "normal-run", 1), ("127.0.0.1", "gateway-startup-canary", 0)],
+)
+def test_query_success_ledger_gate_preserves_success_wire(
+    client_host: str, run_id: str, expected_writes: int
+):
+    from model_library.base.output import QueryResult, QueryResultMetadata
+
+    class FakeLLM:
+        async def query(self, inputs, **kwargs):
+            return QueryResult(
+                output_text="ok",
+                history=[],
+                metadata=QueryResultMetadata(in_tokens=1, out_tokens=2),
+            )
+
+    ledger = MagicMock(enabled=True)
+    ledger.start = AsyncMock()
+    ledger.close = AsyncMock()
+    ledger.write_event = AsyncMock()
+    with (
+        patch.object(gateway_app, "create_usage_ledger_from_env", return_value=ledger),
+        patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+    ):
+        client = _make_client(client=(client_host, 50000))
+        response = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+                "run_id": run_id,
+            },
+            headers=HEADERS,
+        )
+
+    assert response.status_code == 200
+    assert response.json()["output_text"] == "ok"
+    assert "result" not in response.json()
+    assert "error" not in response.json()
+    assert ledger.write_event.await_count == expected_writes
+    if expected_writes:
+        assert ledger.write_event.await_args.args[0]["outcome"] == "success"
+        assert "error" not in ledger.write_event.await_args.args[0]
 
 
 def test_query_success_uses_config_restores_raw_history_and_returns_metadata():
@@ -2770,3 +2855,99 @@ def test_query_success_uses_config_restores_raw_history_and_returns_metadata():
     )
     assert isinstance(restored_history[0], RawInput)
     assert isinstance(restored_history[1], TextInput)
+
+
+def test_actual_query_parse_error_transports_result_and_writes_usage(caplog):
+    class FakeUsageLedger:
+        enabled = True
+
+        def __init__(self) -> None:
+            self.events: list[dict[str, object]] = []
+
+        async def start(self) -> None:
+            return
+
+        async def close(self) -> None:
+            return
+
+        async def write_event(self, event: dict[str, object]) -> None:
+            self.events.append(event)
+
+    fake_ledger = FakeUsageLedger()
+    model = InvalidJsonLLM()
+    with (
+        patch.object(model_helpers, "get_registry_model", return_value=model),
+        patch.object(
+            gateway_app, "create_usage_ledger_from_env", return_value=fake_ledger
+        ),
+        patch.object(
+            model,
+            "_calculate_cost",
+            AsyncMock(
+                return_value=QueryResultCost(input=0.25, output=0, cache_read=0.05)
+            ),
+        ),
+        patch.object(route_helpers, "emit_model_success") as emit_success,
+    ):
+        client = _make_client()
+        response = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "private request"}],
+                "output_schema": {"type": "object"},
+            },
+            headers=HEADERS,
+        )
+    emit_success.assert_not_called()
+    assert response.status_code == 200 and model.calls == 1
+    payload = response.json()
+    assert model.output_text not in str(payload["error"])
+    assert model.output_text not in caplog.text
+    assert set(payload) == {"error", "result"}
+    assert payload["result"]["output_text"] == model.output_text
+    assert "cache_write_tokens" not in payload["result"]["metadata"]
+    assert payload["result"]["metadata"]["out_tokens"] == 0
+    assert "total_input_tokens" not in payload["result"]["metadata"]
+    with pytest.raises(GatewayProviderError) as caught:
+        _decode_gateway_success(response)
+    metadata = caught.value.usage_metadata
+    assert metadata.in_tokens == 17 and metadata.out_tokens == 0
+    assert metadata.cache_read_tokens == 5
+    assert metadata.cost.input == 0.25 and metadata.cost.cache_read == 0.05
+    assert "cache_write_tokens" not in metadata.model_fields_set
+    assert caught.value.query_result.output_text == model.output_text
+    assert caught.value.query_result.history
+    assert len(fake_ledger.events) == 1
+    event = fake_ledger.events[0]
+    assert event["outcome"] == "error"
+    assert cast(dict[str, object], event["error"])["exception_type"] == (
+        "InvalidStructuredOutputError"
+    )
+    assert event["output_tokens"] == 0
+    details = cast(dict[str, object], event["details"])
+    stored_result = cast(dict[str, object], details["result"])
+    assert stored_result["output_text_length"] == len(model.output_text)
+    assert "output_text" not in stored_result
+    assert "history" not in stored_result
+    assert model.output_text not in str(caught.value)
+
+
+
+
+def test_invalid_decision_request_is_not_a_retriable_5xx():
+    client = _make_client()
+    model = get_registry_model("decision/jev-1.13.0")
+
+    with patch.object(model_helpers, "get_registry_model", return_value=model):
+        resp = client.post(
+            "/query",
+            json={
+                "model": "decision/jev-1.13.0",
+                "inputs": [{"kind": "text", "text": "not json"}],
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code < 500
+    assert "not valid JSON" in resp.text

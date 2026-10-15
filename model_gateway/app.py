@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from functools import partial
 from typing import Literal, cast
@@ -14,6 +15,7 @@ from redis.exceptions import TimeoutError as RedisTimeoutError
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from starlette.responses import Response
 
 import model_library.telemetry as telemetry
 from model_library import model_library_settings
@@ -52,6 +54,10 @@ from model_gateway.routes.rate_limit import (
 from model_gateway.routes.query import register_query_routes
 from model_gateway.routes.run_tokens import register_run_token_routes
 from model_gateway.routes.token_retry import register_token_retry_routes
+from model_gateway.runtime_config import (
+    RuntimeConfigState,
+    runtime_config_manager_from_env,
+)
 from model_gateway.startup_canary import run_startup_canary, startup_canary_state
 from model_gateway.telemetry_helpers import error_telemetry_attributes
 from model_gateway.usage_ledger.store import (
@@ -108,6 +114,8 @@ def create_app() -> FastAPI:
         raise RuntimeError("MODEL_GATEWAY_HMAC_SECRET must be set")
     hmac_secret = hmac_secret_value.encode()
     cache = ModelCache()
+    runtime_config_state = RuntimeConfigState.bootstrap()
+    runtime_config_manager = runtime_config_manager_from_env(runtime_config_state)
     capacity_limiter = GatewayCapacityLimiter()
     startup_canary_enabled = query_enabled and env_flag(
         "GATEWAY_STARTUP_CANARY_ENABLED"
@@ -125,10 +133,6 @@ def create_app() -> FastAPI:
 
         loop = asyncio.get_running_loop()
         previous_exception_handler = install_loop_exception_handler(loop)
-        model_count = len(get_model_names())
-        logger.info("Loaded gateway model registry with %s models", model_count)
-        log_process_lifecycle("gateway.process.startup")
-
         redis_client: async_redis.Redis | None = None
         if redis_url:
             redis_client = async_redis.from_url(  # pyright: ignore[reportUnknownMemberType]
@@ -153,13 +157,31 @@ def create_app() -> FastAPI:
         usage_ledger_started = False
         canary_task: asyncio.Task[None] | None = None
         rate_limit_monitor: RateLimitMonitor | None = None
+        runtime_refresh_stop: asyncio.Event | None = None
+        runtime_refresh_task: asyncio.Task[None] | None = None
         delivery_metric_handler = install_telemetry_delivery_metric_handler()
         try:
+            if runtime_config_manager is not None:
+                initial_refresh = await runtime_config_manager.refresh_once()
+                if initial_refresh.failed or initial_refresh.rejected:
+                    raise RuntimeError("Initial runtime configuration refresh failed")
+                runtime_refresh_stop = asyncio.Event()
+                runtime_refresh_task = asyncio.create_task(
+                    runtime_config_manager.run(runtime_refresh_stop)
+                )
+            with runtime_config_state.capture():
+                model_count = len(get_model_names())
+            logger.info("Loaded gateway model registry with %s models", model_count)
+            log_process_lifecycle("gateway.process.startup")
             telemetry.configure_telemetry(app)
             if control_enabled:
                 assert redis_client is not None
                 rate_limit_monitor = RateLimitMonitor(
-                    RateLimitMonitorStore(cast(MonitorRedis, redis_client))
+                    RateLimitMonitorStore(
+                        cast(MonitorRedis, redis_client),
+                        stage=os.environ.get("GATEWAY_STAGE", "local"),
+                    ),
+                    runtime_capture=runtime_config_state.capture,
                 )
                 app.state.rate_limit_monitor = rate_limit_monitor
                 rate_limit_monitor.start()
@@ -178,6 +200,12 @@ def create_app() -> FastAPI:
             yield
         finally:
             log_process_lifecycle("gateway.process.shutdown_start")
+            if runtime_refresh_stop is not None:
+                runtime_refresh_stop.set()
+            if runtime_refresh_task is not None:
+                await runtime_refresh_task
+            if runtime_config_manager is not None:
+                await runtime_config_manager.aclose()
             if canary_task is not None and not canary_task.done():
                 canary_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -233,12 +261,22 @@ def create_app() -> FastAPI:
         openapi_url=None if runtime_role == "control" else "/openapi.json",
     )
     app.state.cache = cache
+    app.state.runtime_config_state = runtime_config_state
     app.state.hmac_secret = hmac_secret
     app.state.runtime_role = runtime_role
     app.state.capacity_limiter = capacity_limiter
     app.state.usage_ledger = usage_ledger
     app.state.rate_limit_monitor = None
     app.state.startup_canary = startup_canary_state(startup_canary_enabled)
+
+    @app.middleware("http")
+    async def capture_runtime_configuration(
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        with runtime_config_state.capture():
+            return await call_next(request)
+
     if query_enabled:
         app.middleware("http")(create_capacity_middleware())
     app.middleware("http")(create_metrics_middleware())

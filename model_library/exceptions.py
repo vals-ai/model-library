@@ -4,22 +4,17 @@ import re
 from typing import TYPE_CHECKING, Any, NoReturn
 
 if TYPE_CHECKING:
-    from model_library.base.output import FinishReasonInfo
+    from model_library.base.output import (
+        FinishReasonInfo,
+        QueryResult,
+        QueryResultMetadata,
+    )
 
-from ai21 import TooManyRequestsError as AI21RateLimitError
 from aiohttp import ClientPayloadError
-from anthropic import InternalServerError
-from anthropic import RateLimitError as AnthropicRateLimitError
 from httpcore import ReadError as HTTPCoreReadError
 from httpx import ConnectError as HTTPXConnectError
 from httpx import ReadError as HTTPXReadError
 from httpx import RemoteProtocolError
-from openai import APIConnectionError as OpenAIAPIConnectionError
-from openai import APITimeoutError as OpenAIAPITimeoutError
-from openai import InternalServerError as OpenAIInternalServerError
-from openai import RateLimitError as OpenAIRateLimitError
-from openai import UnprocessableEntityError as OpenAIUnprocessableEntityError
-
 
 ProviderErrorPayload = dict[str, str | int]
 
@@ -271,9 +266,15 @@ class InvalidStructuredOutputError(ImmediateRetryException):
         message: str | None = None,
         *,
         parser_error_type: str | None = None,
+        query_result: QueryResult | None = None,
     ):
+        self.query_result = query_result
         self.parser_error_type = parser_error_type
         super().__init__(InvalidStructuredOutputError.DEFAULT_MESSAGE)
+
+    @property
+    def usage_metadata(self) -> QueryResultMetadata | None:
+        return self.query_result.metadata if self.query_result is not None else None
 
 
 class ToolCallingNotSupportedError(ModelLibraryException):
@@ -337,7 +338,9 @@ class GatewayProviderError(NoRetryException):
         raw_error: object,
         exception_type: str | None = None,
         status_code: int | None = None,
+        query_result: QueryResult | None = None,
     ):
+        self.query_result = query_result
         self.error_type = error_type
         self.code = code
         self.message = message
@@ -349,6 +352,10 @@ class GatewayProviderError(NoRetryException):
             super().__init__(f"{error_type}: {message}")
         else:
             super().__init__(f"{error_type} ({code}): {message}")
+
+    @property
+    def usage_metadata(self) -> QueryResultMetadata | None:
+        return self.query_result.metadata if self.query_result is not None else None
 
 
 class NoMatchingToolCallError(ModelLibraryException):
@@ -365,21 +372,18 @@ class NoMatchingToolCallError(ModelLibraryException):
 # Add more retriable exceptions as needed
 # Providers that don't have an explicit rate limit error are handled manually
 # by wrapping errored Http/gRPC requests with a BackoffRetryException
-RETRIABLE_EXCEPTIONS = [
-    OpenAIRateLimitError,
-    OpenAIInternalServerError,
-    OpenAIAPITimeoutError,
-    OpenAIUnprocessableEntityError,
-    OpenAIAPIConnectionError,
-    AnthropicRateLimitError,
-    InternalServerError,
-    AI21RateLimitError,
+RETRIABLE_EXCEPTIONS: list[type[Exception]] = [
     ClientPayloadError,
     RemoteProtocolError,  # httpx connection closing when running models from sdk
     HTTPXReadError,
     HTTPXConnectError,
     HTTPCoreReadError,
 ]
+
+
+def register_retryable_exceptions(*exception_types: type[Exception]) -> None:
+    RETRIABLE_EXCEPTIONS.extend(exception_types)
+
 
 RETRIABLE_EXCEPTION_CODES = [
     "429",  # rate limit / too many requests

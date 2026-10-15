@@ -13,6 +13,7 @@ from xai_sdk.chat import image as xai_image
 from xai_sdk.chat import tool as xai_tool
 from xai_sdk.proto.v6.chat_pb2 import Message, Tool, ToolCallType
 from xai_sdk.tools import get_tool_call_type, web_search
+import model_library.base.serialize as init_serialize_opts
 
 from model_library import model_library_settings
 from model_library.failure_capture.core import current_capture
@@ -57,6 +58,7 @@ from model_library.rate_limits.probe import probe_chat_completions_rate_limit
 from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 
+_ = init_serialize_opts
 
 _XAI_KEEPALIVE_CHANNEL_OPTIONS = (
     ("grpc.keepalive_time_ms", 30_000),
@@ -162,6 +164,7 @@ class XAIModel(LLM):
                 model_name=self.model_name,
                 provider=provider,
                 config=config,
+                use_completions=False,
             )
             config.native = False
 
@@ -257,7 +260,7 @@ class XAIModel(LLM):
     ) -> Content:
         match image:
             case FileWithBase64():
-                image_url = f"data:image/{image.mime};base64,{image.base64}"
+                image_url = f"data:{image.mime};base64,{image.base64}"
                 return xai_image(image_url=image_url, detail="high")
             case FileWithUrl():
                 return xai_image(image_url=image.url, detail="high")

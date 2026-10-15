@@ -26,7 +26,8 @@ result.output_dir          # Path to per-question output directory
 
 ## AgentResult
 
-Returns lean summaries in memory — full raw data is written to disk per-turn.
+Returns lean summaries in memory. The agent attempts to write raw per-turn data
+to disk; capture and serialization failures are logged and may leave artifacts incomplete.
 
 | Field                              | Type                             | Description                                                                                                                      |
 | ---------------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
@@ -45,7 +46,7 @@ Returns lean summaries in memory — full raw data is written to disk per-turn.
 | `final_retry_overhead_seconds`     | `float`                          | Sum of retry/backoff time                                                                                                        |
 | `final_effective_duration_seconds` | `float`                          | Wall clock minus retry overhead                                                                                                  |
 | `final_aggregated_metadata`        | `QueryResultMetadata`            | Sum of query `metadata` across agent turns only — task cost (tool sub-LLM metadata available per `ToolCallSummary.metadata`)     |
-| `final_compaction_metadata`        | `QueryResultMetadata`            | Sum of query `metadata` across history compaction calls — overhead. Sum with `final_aggregated_metadata` for the true bill.      |
+| `final_compaction_metadata`        | `QueryResultMetadata`            | Sum of available query `metadata` across history compaction calls — overhead; metadata can be absent on failed attempts. |
 
 Query-level metadata, including `QueryResultMetadata.performance`, is documented in [Query Results](result.md).
 
@@ -88,10 +89,13 @@ Lean per-turn metadata (content replaced with lengths).
 
 ### CompactionSummary
 
-One record per compaction attempt. Successful compactions write the previous
-history as JSON text to `compactions/compaction_NNN/previous_history.bin`
-(relative to `AgentResult.output_dir`; the `.bin` suffix is a legacy name);
-failed compactions have `artifacts_subdir=None`.
+Each returned compaction attempt has an in-memory record. The agent also tries
+to write `compactions/compaction_NNN/result.json` after the attempt, logging
+write failures without failing the run. For successful default LLM-summary
+compactions, the hook writes the previous history as serialized JSON text to
+`compactions/compaction_NNN/previous_history.bin` (relative to
+`AgentResult.output_dir`; the `.bin` suffix is a legacy name). Failed
+default attempts have `artifacts_subdir=None`; custom hooks own their artifacts.
 Compaction itself does not increment the agent loop turn counter — `turn_number`
 is the turn during which the compaction ran (i.e. the turn whose LLM query
 consumed the compacted history).
@@ -102,7 +106,7 @@ consumed the compacted history).
 | `input_token_estimate` | `int \| None`                   | Estimated input-token size of the next turn that triggered compaction |
 | `threshold_tokens`     | `int \| None`                   | Threshold active when this attempt fired                              |
 | `summary`              | `str \| None`                   | Compaction summary returned by the LLM                                |
-| `artifacts_subdir`     | `str \| None`                   | Subpath under `output_dir` for JSON-text `previous_history.bin`       |
+| `artifacts_subdir`     | `str \| None`                   | Default successful compaction's subpath for `previous_history.bin`; custom hooks choose their own artifacts |
 | `metadata`             | `QueryResultMetadata \| None`   | Token / cost / duration of the compaction LLM call                    |
 | `error`                | `SerializableException \| None` | Error if the attempt failed                                           |
 | `success`              | `bool`                          | `error is None`                                                       |
@@ -135,6 +139,7 @@ The loop stops when any of these occur:
 - `time_limit.max_seconds` exceeded → `MaxTimeExceeded` error
 - `before_query` hook re-raises a query error (default behavior)
 - Unhandled exception
+- Task cancellation (e.g. an outer `asyncio.wait_for`) → `CancelledError` error. If finalization reaches the artifact writes, the agent attempts ATIF only when `atif_export=True` and then `result.json`; either write can fail and be logged. Cancellation is then re-raised.
 
 After the loop, `determine_answer` runs with full raw turns.
 
@@ -328,10 +333,10 @@ agent = Agent(
 )
 ```
 
-The agent always appends the returned `CompactionSummary` to
-`AgentResult.compactions` (success or failure) and reports compaction
-cost separately in `final_compaction_metadata`. The hook is otherwise a
-black box from the agent's perspective.
+The agent appends each returned `CompactionSummary` to
+`AgentResult.compactions` (success or failure) and aggregates available
+compaction metadata separately in `final_compaction_metadata`. A hook can
+also opt out by returning no summary; it otherwise owns its compaction policy.
 
 ## Logging & Output
 
@@ -344,11 +349,22 @@ The agent builds a timestamped run directory: `log_dir/<name>/<model_name>/<time
 
 ### Directory Structure
 
+This is an illustrative run with a successful default compaction and helper
+query. The compaction directory appears only for recorded attempts; its
+`previous_history.bin` appears on successful default compaction. The agent
+attempts these writes and logs failures rather than guaranteeing all files.
+`trajectory_atif.json` is attempted only with `agent.run(..., atif_export=True)`;
+ATIF export failures are logged without failing the run.
+
 ```text
 logs/finance_agent/gpt-4o/2024-01-01_12-00-00_abc123/
 ├── question_1/
 │   ├── agent.log              # full text log (turns, hooks, errors)
 │   ├── result.json            # AgentResult with TurnSummary list
+│   ├── compactions/
+│   │   └── compaction_001/
+│   │       ├── result.json         # CompactionSummary (incl. token/cost metadata)
+│   │       └── previous_history.bin
 │   └── turns/
 │       ├── init/
 │       │   ├── config.json    # tool definitions, LLM config

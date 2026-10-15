@@ -300,7 +300,7 @@ async def test_anthropic_keeps_interleaved_tool_results_in_separate_user_message
 
 class TestStreamingToolCallAccumulation:
     """
-    Tests for streaming tool call chunk accumulation in OpenAI _query_completions.
+    Tests for streaming tool call chunk accumulation in OpenAI Chat Completions.
     """
 
     @staticmethod
@@ -366,7 +366,7 @@ class TestStreamingToolCallAccumulation:
 
     @staticmethod
     async def _run_query(model: OpenAIModel, chunks: list):
-        """Run _query_completions with mocked stream."""
+        """Run Chat Completions with mocked stream."""
         from unittest.mock import AsyncMock, MagicMock, patch
 
         async def mock_stream():
@@ -380,13 +380,13 @@ class TestStreamingToolCallAccumulation:
             with patch.object(
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
-                return await model._query_completions(
+                return await model._query_impl(
                     [], tools=[], query_logger=logging.getLogger("test")
                 )
 
     async def test_openai_multiple_tool_calls_different_ids(self):
         """OpenAI: different IDs should create separate tool calls."""
-        model = OpenAIModel("gpt-4o-mini")
+        model = OpenAIModel("gpt-4o-mini", use_completions=True)
         chunks = [
             self._make_chunk("call_1", "get_weather", '{"location": "SF"}'),
             self._make_chunk("call_2", "get_time", '{"tz": "PST"}'),
@@ -403,7 +403,7 @@ class TestStreamingToolCallAccumulation:
 
     async def test_openai_same_id_accumulates(self):
         """OpenAI: same ID should accumulate (NOT create new call)."""
-        model = OpenAIModel("gpt-4o-mini")
+        model = OpenAIModel("gpt-4o-mini", use_completions=True)
         chunks = [
             self._make_chunk("call_1", "get_weather", '{"location":'),
             self._make_chunk("call_1", None, ' "SF"}'),  # same ID, no name = accumulate
@@ -419,7 +419,7 @@ class TestStreamingToolCallAccumulation:
         assert _require_performance(result.metadata).timeline[0].channel == "tool_call"
 
     async def test_openai_interleaved_tool_call_chunks_accumulate_by_index(self):
-        model = OpenAIModel("gpt-4o-mini")
+        model = OpenAIModel("gpt-4o-mini", use_completions=True)
         chunks = [
             self._make_chunk("call_1", "get_weather", "", index=0),
             self._make_chunk("call_2", "get_time", "", index=1),
@@ -458,7 +458,7 @@ class TestStreamingToolCallAccumulation:
         ]
 
     async def test_openai_pre_id_tool_call_arguments_accumulate_by_index(self):
-        model = OpenAIModel("gpt-4o-mini")
+        model = OpenAIModel("gpt-4o-mini", use_completions=True)
         chunks = [
             self._make_chunk(None, None, '{"location":', index=0),
             self._make_chunk("call_1", "get_weather", ' "SF"}', index=0),
@@ -487,7 +487,7 @@ class TestStreamingToolCallAccumulation:
         ]
 
     async def test_openai_pre_id_tool_calls_keep_stream_index_order(self):
-        model = OpenAIModel("gpt-4o-mini")
+        model = OpenAIModel("gpt-4o-mini", use_completions=True)
         chunks = [
             self._make_chunk(None, "first", None, index=0),
             self._make_chunk(None, "second", None, index=1),
@@ -510,7 +510,7 @@ class TestStreamingToolCallAccumulation:
         ]
 
     async def test_openai_pre_id_tool_call_name_accumulates_by_index(self):
-        model = OpenAIModel("gpt-4o-mini")
+        model = OpenAIModel("gpt-4o-mini", use_completions=True)
         chunks = [
             self._make_chunk(None, "get_weather", None, index=0),
             self._make_chunk("call_1", None, '{"location": "SF"}', index=0),
@@ -617,7 +617,7 @@ class TestStreamingToolCallAccumulation:
         assert _require_performance(result.metadata).timeline[0].channel == "tool_call"
 
     async def test_openai_streaming_content_populates_performance_timeline(self):
-        model = OpenAIModel("gpt-4o-mini")
+        model = OpenAIModel("gpt-4o-mini", use_completions=True)
         chunks = [self._make_chunk(None, None, None, content="hello")]
 
         result = await self._run_query(model, chunks)
@@ -630,7 +630,7 @@ class TestStreamingToolCallAccumulation:
         assert _require_performance(result.metadata).timeline[0].channel == "content"
 
     async def test_openai_completion_builder_starts_before_stream_open(self):
-        model = OpenAIModel("gpt-4o-mini")
+        model = OpenAIModel("gpt-4o-mini", use_completions=True)
         chunks = [self._make_chunk(None, None, None, content="hello")]
         order: list[str] = []
 
@@ -654,10 +654,10 @@ class TestStreamingToolCallAccumulation:
                 model, "build_body", new_callable=AsyncMock, return_value={}
             ):
                 with patch(
-                    "model_library.providers.openai.openai.QueryResultBuilder",
+                    "model_library.providers.openai.completions.QueryResultBuilder",
                     side_effect=make_builder,
                 ):
-                    result = await model._query_completions(
+                    result = await model._query_impl(
                         [], tools=[], query_logger=logging.getLogger("test")
                     )
 

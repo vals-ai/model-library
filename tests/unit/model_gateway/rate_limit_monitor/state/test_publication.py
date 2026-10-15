@@ -6,12 +6,8 @@ import pytest
 from fakeredis import aioredis
 
 from model_gateway.rate_limit_monitor.state import (
-    ACTIVE_KEY,
-    RETAINED_KEY,
     MonitorSourceUpdate,
     RateLimitMonitorStore,
-    owner_key,
-    snapshot_key,
 )
 from model_gateway.rate_limit_monitor.types import (
     MonitorSourceState,
@@ -22,16 +18,19 @@ from model_library.rate_limits import (
     RequestRateLimit,
     TokenRateLimit,
 )
-
 from tests.unit.model_gateway.rate_limit_monitor.state._support import (
-    MODEL,
+    ACTIVE_KEY,
     ANTHROPIC_MODEL,
+    MODEL,
+    RETAINED_KEY,
     _attempted_at,
     _claim_generation,
-    _success,
-    _scoped_success,
     _error,
     _expire_activation,
+    _scoped_success,
+    _success,
+    owner_key,
+    snapshot_key,
 )
 
 
@@ -84,6 +83,29 @@ async def test_renewal_redis_timestamp_becomes_publication_timestamp(store):
     assert source.last_success_at == attempted_at
     assert source.rate_limit is not None
     assert source.rate_limit.unix_timestamp == activated.server_time - 1
+
+
+async def test_running_poll_does_not_extend_activation_or_retention(store, redis):
+    activated = await store.activate(MODEL, ("default",))
+    active_before = await redis.zscore(ACTIVE_KEY, MODEL)
+    retained_before = await redis.zscore(RETAINED_KEY, MODEL)
+    generation = await _claim_generation(store, MODEL, "owner")
+    renewal = await store.renew_owner(MODEL, "owner")
+    assert renewal is not None
+
+    assert await store.publish_source(
+        MODEL,
+        "owner",
+        generation,
+        renewal[1],
+        _error("default"),
+    )
+
+    assert await redis.zscore(ACTIVE_KEY, MODEL) == active_before
+    assert await redis.zscore(RETAINED_KEY, MODEL) == retained_before
+    state = (await store.list_states()).states[0]
+    assert state.active_until == activated.state.active_until
+    assert state.retention_until == activated.state.retention_until
 
 
 @pytest.mark.parametrize("replay_status", ["ok", "error"])

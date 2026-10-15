@@ -1,0 +1,48 @@
+[project]
+name = "model-library-client"
+authors = [{ name = "Vals AI, Inc.", email = "contact@vals.ai" }]
+dynamic = ["version"]
+description = "SDK-free Gateway client for model-library"
+license = { text = "MIT" }
+readme = { text = "Install model-library-client to use the model_library Gateway client without provider SDK dependencies. Install model-library for the full provider distribution.", content-type = "text/plain" }
+requires-python = ">=3.11"
+dependencies = [
+  "typing-extensions>=4.15.0,<5.0",
+  "pydantic>=2.12.5,<3.0",
+  "pyyaml>=6.0.3,<7.0",
+  "rich>=14.3.3,<15.0",
+  "httpx[http2]>=0.28.0,<1.0",
+  "backoff>=2.2.1,<3.0",
+  "redis>=6.4.0,<7.0",
+  "tiktoken>=0.12.0,<1.0",
+  "pillow>=12.1.1,<13.0",
+  "python-dotenv>=1.0.0,<2.0",
+  "aiohttp>=3.13.5,<4.0",
+]
+
+[build-system]
+requires = ["setuptools>=64", "setuptools-scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["model_library*", "model_gateway*"]
+
+[tool.setuptools.package-data]
+"model_library" = [
+  "py.typed",
+  "_licenses/*.txt",
+  "config/*.yaml",
+  "config/voice/*.yaml",
+  "config/defaults/*.yaml",
+  "config/deprecated/*.yaml",
+  "config/icons/*",
+  "config/defaults/*.json",
+  "config/all_models.json",
+]
+
+[tool.setuptools_scm]
+root = "../.."
+fallback_root = "."
+version_scheme = "guess-next-dev"
+local_scheme = "node-and-date"
+tag_regex = "^v(?P<version>.*)$"

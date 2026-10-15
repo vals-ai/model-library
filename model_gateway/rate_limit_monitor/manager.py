@@ -7,6 +7,7 @@ import logging
 import secrets
 import time
 from collections.abc import Awaitable, Callable
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -14,6 +15,7 @@ from anthropic import APIError as AnthropicAPIError
 from httpx import HTTPError as HttpxHTTPError
 from openai import APIError as OpenAIAPIError
 from pydantic import SecretStr
+from redis.exceptions import RedisError
 
 from model_gateway.metrics import (
     RateLimitMonitorPollOutcome,
@@ -29,11 +31,14 @@ from model_gateway.rate_limit_monitor.types import (
     MonitorListResponse,
     MonitorSourceName,
 )
+from model_gateway.runtime_config import RuntimeView
 from model_library import model_library_settings
 from model_library.base import LLM, LLMConfig
+from model_library.settings import MissingManagedSettingError
 from model_library.registry_utils import get_registry_config, get_registry_model
 
 DISCOVERY_SECONDS = 1.0
+DISCOVERY_FAILURE_GRACE_SECONDS = 30.0
 OWNERSHIP_RETRY_SECONDS = 5.0
 HEARTBEAT_SECONDS = 10.0
 POLL_INTERVAL_SECONDS = 5.0
@@ -89,7 +94,7 @@ class _SourceSpec:
 class _SourceProbe:
     source: MonitorSourceName
     provider: str
-    probe: LLM
+    probe: LLM | None
 
 
 def _source_specs(model: str) -> tuple[_SourceSpec, ...]:
@@ -105,12 +110,20 @@ def _source_specs(model: str) -> tuple[_SourceSpec, ...]:
 class RateLimitMonitor:
     """Own shared activation and one process's leased background poll tasks."""
 
-    def __init__(self, store: _MonitorStore):
+    def __init__(
+        self,
+        store: _MonitorStore,
+        *,
+        runtime_capture: Callable[[], AbstractContextManager[RuntimeView | None]]
+        | None = None,
+    ):
         self._store = store
+        self._runtime_capture = runtime_capture or (lambda: nullcontext(None))
         self._model_tasks: dict[str, asyncio.Task[None]] = {}
         self._discovery_task: asyncio.Task[None] | None = None
         self._sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
         self._monotonic: Callable[[], float] = time.monotonic
+        self._discovery_failing_since: float | None = None
         self._closed = False
 
     def start(self) -> None:
@@ -128,6 +141,12 @@ class RateLimitMonitor:
             raise RuntimeError("rate-limit monitor is not running")
         if discovery_task.done():
             discovery_task.result()
+        failing_since = self._discovery_failing_since
+        if (
+            failing_since is not None
+            and self._monotonic() - failing_since > DISCOVERY_FAILURE_GRACE_SECONDS
+        ):
+            raise RuntimeError("rate-limit monitor discovery is failing")
 
     async def close(self) -> None:
         if self._closed:
@@ -159,7 +178,21 @@ class RateLimitMonitor:
 
     async def _discovery_loop(self) -> None:
         while True:
-            active = await self._store.discover_active()
+            try:
+                active = await self._store.discover_active()
+            except RedisError as exc:
+                if self._discovery_failing_since is None:
+                    self._discovery_failing_since = self._monotonic()
+                    log_gateway_event(
+                        "gateway.rate_limit_monitor.discovery_failure",
+                        level=logging.WARNING,
+                        exception_type=exc.__class__.__name__,
+                    )
+                await self._sleep(DISCOVERY_SECONDS)
+                continue
+            if self._discovery_failing_since is not None:
+                self._discovery_failing_since = None
+                log_gateway_event("gateway.rate_limit_monitor.discovery_recovered")
             for model, task in list(self._model_tasks.items()):
                 if task.done():
                     if self._model_tasks.get(model) is task:
@@ -217,15 +250,36 @@ class RateLimitMonitor:
 
                 claimed = True
                 record_rate_limit_monitor_ownership("acquired")
-                local_source_names = tuple(spec.source for spec in _source_specs(model))
-                if source_names == local_source_names:
+                with self._runtime_capture() as runtime_view:
+                    sources_namespace = (
+                        None if runtime_view is None else runtime_view.cache_namespace
+                    )
+                    if (
+                        runtime_view is not None
+                        and runtime_view.credentials is not None
+                    ):
+                        sources = self._build_sources(
+                            model,
+                            source_names,
+                            allow_missing=True,
+                        )
+                    else:
+                        local_source_names = tuple(
+                            spec.source for spec in _source_specs(model)
+                        )
+                        sources = (
+                            self._build_sources(model, source_names)
+                            if source_names == local_source_names
+                            else None
+                        )
+                if sources is not None:
                     break
 
                 record_rate_limit_monitor_ownership("lost")
                 clean_exit = True
                 return
 
-            sources = self._build_sources(model, source_names)
+            # Each poll rebuilds its probe only when the runtime view has changed.
             children = [
                 asyncio.create_task(
                     self._heartbeat(model, token),
@@ -233,7 +287,13 @@ class RateLimitMonitor:
                 ),
                 *[
                     asyncio.create_task(
-                        self._source_loop(model, token, source),
+                        self._source_loop(
+                            model,
+                            token,
+                            source,
+                            source_names,
+                            source_namespace=sources_namespace,
+                        ),
                         name=f"rate-limit-monitor-{model}-{source.source}",
                     )
                     for source in sources
@@ -285,7 +345,14 @@ class RateLimitMonitor:
         model: str,
         token: str,
         source: _SourceProbe,
+        expected_sources: tuple[MonitorSourceName, ...] | None = None,
+        *,
+        source_namespace: str | None = None,
     ) -> None:
+        source_name = source.source
+        current_source = source
+        provider = source.provider
+        expected_sources = expected_sources or (source_name,)
         next_poll_at = self._monotonic()
         while True:
             while (delay := next_poll_at - self._monotonic()) > 0:
@@ -297,38 +364,62 @@ class RateLimitMonitor:
             generation, attempted_at = renewal
 
             poll_started = time.perf_counter()
-            try:
-                async with asyncio.timeout(PROVIDER_TIMEOUT_SECONDS):
-                    rate_limit = await source.probe.get_rate_limit()
-            except (
-                TimeoutError,
-                HttpxHTTPError,
-                OpenAIAPIError,
-                AnthropicAPIError,
-            ) as exc:
-                poll_outcome: RateLimitMonitorPollOutcome = "provider_error"
-                self._log_provider_failure(model, source.source, exc)
-                result = MonitorSourceUpdate(
-                    source=source.source,
-                    status="error",
+            with self._runtime_capture() as runtime_view:
+                namespace = (
+                    None if runtime_view is None else runtime_view.cache_namespace
                 )
-            else:
-                if rate_limit is None:
-                    poll_outcome = "unsupported"
+                if namespace != source_namespace:
+                    [current_source] = self._build_sources(
+                        model,
+                        expected_sources,
+                        allow_missing=(
+                            runtime_view is not None
+                            and runtime_view.credentials is not None
+                        ),
+                        only=source_name,
+                        provider=provider,
+                    )
+                    source_namespace = namespace
+                provider = current_source.provider
+                if current_source.probe is None:
+                    poll_outcome: RateLimitMonitorPollOutcome = "provider_error"
                     result = MonitorSourceUpdate(
-                        source=source.source,
-                        status="unsupported",
+                        source=current_source.source,
+                        status="error",
                     )
                 else:
-                    poll_outcome = "ok"
-                    result = MonitorSourceUpdate(
-                        source=source.source,
-                        status="ok",
-                        rate_limit=rate_limit,
-                    )
+                    try:
+                        async with asyncio.timeout(PROVIDER_TIMEOUT_SECONDS):
+                            rate_limit = await current_source.probe.get_rate_limit()
+                    except (
+                        TimeoutError,
+                        HttpxHTTPError,
+                        OpenAIAPIError,
+                        AnthropicAPIError,
+                    ) as exc:
+                        poll_outcome = "provider_error"
+                        self._log_provider_failure(model, current_source.source, exc)
+                        result = MonitorSourceUpdate(
+                            source=current_source.source,
+                            status="error",
+                        )
+                    else:
+                        if rate_limit is None:
+                            poll_outcome = "unsupported"
+                            result = MonitorSourceUpdate(
+                                source=current_source.source,
+                                status="unsupported",
+                            )
+                        else:
+                            poll_outcome = "ok"
+                            result = MonitorSourceUpdate(
+                                source=current_source.source,
+                                status="ok",
+                                rate_limit=rate_limit,
+                            )
             record_rate_limit_monitor_poll(
-                provider=source.provider,
-                source=source.source,
+                provider=current_source.provider,
+                source=current_source.source,
                 outcome=poll_outcome,
                 latency_ms=(time.perf_counter() - poll_started) * 1000,
             )
@@ -350,17 +441,33 @@ class RateLimitMonitor:
         self,
         model: str,
         expected_sources: tuple[MonitorSourceName, ...],
+        *,
+        allow_missing: bool = False,
+        only: MonitorSourceName | None = None,
+        provider: str = "unknown",
     ) -> list[_SourceProbe]:
         specs = _source_specs(model)
-        if tuple(spec.source for spec in specs) != expected_sources:
+        if (
+            not allow_missing
+            and tuple(spec.source for spec in specs) != expected_sources
+        ):
             raise ValueError(
                 "monitor source configuration does not match persisted state"
             )
+        source_names = expected_sources if only is None else (only,)
         config = get_registry_config(model)
         if config is None:
-            raise MonitorInvalidModel("monitored model is not configured")
+            if not allow_missing:
+                raise MonitorInvalidModel("monitored model is not configured")
+            # A live model update removed this model; report its sources
+            # unavailable like removed credentials.
+            return [_SourceProbe(source, provider, None) for source in source_names]
+        specs_by_source = {spec.source: spec for spec in specs}
         return [
-            self._construct_source(model, config.provider_name, spec) for spec in specs
+            self._construct_source(model, config.provider_name, specs_by_source[source])
+            if source in specs_by_source
+            else _SourceProbe(source, config.provider_name, None)
+            for source in source_names
         ]
 
     def _construct_source(
@@ -370,9 +477,17 @@ class RateLimitMonitor:
         spec: _SourceSpec,
     ) -> _SourceProbe:
         if spec.key_setting is None:
-            probe = get_registry_model(model)
+            try:
+                probe = get_registry_model(model)
+            except MissingManagedSettingError:
+                return _SourceProbe(spec.source, provider, None)
         else:
-            api_key = model_library_settings.get(spec.key_setting)
+            try:
+                api_key = getattr(model_library_settings, spec.key_setting)
+            except MissingManagedSettingError:
+                return _SourceProbe(spec.source, provider, None)
+            except AttributeError:
+                api_key = None
             if not api_key:
                 raise RuntimeError(
                     f"rate-limit monitor API key is not configured: {spec.key_setting}"

@@ -2,6 +2,12 @@
 
 Remote proxy server that routes model calls through a centralized FastAPI service. Clients send inputs over HTTP; the server holds provider API keys and returns results with HMAC-signed history blobs.
 
+## Client distribution
+
+The Gateway server and native provider callers use the default, provider-full `model-library` distribution. For a separate Gateway-only client environment, install `model-library-client` from this checkout (`python -m pip install -e packages/client`) or a locally built wheel. The client distribution uses the same `model_library` import paths but does not require provider SDKs. It is an alternative, not an add-on: the two distributions install overlapping files and must not share an environment. A dependency on the full library elsewhere in the environment still brings its provider SDK requirements; the client does not uninstall SDKs required by other packages. For release-dependent availability of PyPI installation, see the [README installation instructions](../README.md).
+
+The client supports ordinary Gateway entrypoints: registry-backed `GatewayLLM` construction, queries including tools and structured outputs, signed raw history, and Gateway utility routes. Native provider calls and public native SDK helpers require the full distribution. Gateway moderation returns a library-owned typed response preserving fields, nested attributes, aliases, and JSON output, but not the provider SDK response class; native moderation retains its SDK response. SDK exception aliases are no longer re-exported from `model_library.exceptions` in either distribution; native provider imports register SDK retry types when loaded, rather than making SDK-class retry matching available before provider load. Normal native provider calls and library serialization remain supported in the full distribution.
+
 ## Quick start
 
 ```env
@@ -65,9 +71,9 @@ keeps `/health/ready` at `503` until it passes.
 
 #### Usage ledger
 
-- `GATEWAY_USAGE_LEDGER_MODE` (**optional**): successful-query usage ledger mode: `disabled`, `shadow`, or `enforced`. Defaults to `shadow`. In current SQS mode, `/query` locally queues the usage event before returning and SQS send/retry runs in the background, every 10 seconds for up to 20 minutes. Synchronous SQS durable acceptance is intentionally not implemented; see the usage-ledger rationale below.
-- `GATEWAY_USAGE_LEDGER_QUEUE_URL` (**required when gateway ledger is enabled**): SQS queue for successful completed `/query` usage events. When set, the gateway sends successful usage events through SQS and a consumer can write the ledger row asynchronously.
-- `GATEWAY_USAGE_LEDGER_TABLE_NAME` (**required when DynamoDB writer is enabled**): DynamoDB table for successful completed `/query` usage events. Set this for DynamoDB writers; local/direct gateway DynamoDB mode can also set it when no queue URL is configured.
+- `GATEWAY_USAGE_LEDGER_MODE` (**optional**): usage-ledger mode for successful queries and structured-output failures with a result: `disabled`, `shadow`, or `enforced`. Defaults to `shadow`. In current SQS mode, `/query` locally queues the usage event before returning and SQS send/retry runs in the background, every 10 seconds for up to 20 minutes. Synchronous SQS durable acceptance is intentionally not implemented; see the usage-ledger rationale below.
+- `GATEWAY_USAGE_LEDGER_QUEUE_URL` (**required when gateway ledger is enabled**): SQS queue for captured `/query` usage events. When set, the gateway sends usage events through SQS and a consumer writes the ledger row asynchronously.
+- `GATEWAY_USAGE_LEDGER_TABLE_NAME` (**required when DynamoDB writer is enabled**): DynamoDB table for captured `/query` usage events. Set this for DynamoDB writers; local/direct gateway DynamoDB mode can also set it when no queue URL is configured.
 - `GATEWAY_USAGE_LEDGER_SHARDS` (**optional**): number of write shards for day-partitioned DynamoDB usage events and run/key/benchmark/agent GSIs. Readers and the Redshift export Lambda must use the configured shard count.
 - `GATEWAY_USAGE_LEDGER_MAX_POOL_CONNECTIONS` (**optional**): aiobotocore HTTP connection pool size for the per-process async ledger client. Increase only with matching request concurrency and AWS account limits.
 
@@ -79,6 +85,7 @@ usage-ledger section.
 
 - `GATEWAY_USAGE_REDSHIFT_WORKGROUP_NAME`: shared Redshift Serverless workgroup for Data API COPY, MERGE, and aggregate refresh.
 - `GATEWAY_USAGE_REDSHIFT_DATABASE_NAME`: shared Redshift database name.
+- `GATEWAY_USAGE_REDSHIFT_SECRET_ARN` (**required**): stage-specific loader credentials secret ARN for Redshift Data API batch submissions.
 - `GATEWAY_USAGE_REDSHIFT_SCHEMA_NAME`: destination schema, for example `gateway_usage`.
 - `GATEWAY_USAGE_REDSHIFT_LANDING_BUCKET_NAME`: shared S3 bucket where the export Lambda writes Parquet parts and COPY manifests.
 - `GATEWAY_USAGE_REDSHIFT_EXPORT_PREFIX`: S3 prefix for exported usage data, for example `gateway-usage/{stage}/raw`.
@@ -95,7 +102,7 @@ usage-ledger section.
 - `GATEWAY_FAILED_EXCHANGE_CAPTURE_ENABLED` (**deployed query runtime**): deployed query runtimes set this to `true` so failed user-facing provider exchanges can be attached to Sentry. Control and rate-limit paths do not enable capture.
 One capture spans the complete provider operation and all retries. It records HTTPX request/response entity bytes, aiohttp entity bytes as exposed by the configured client path, Bedrock serialized request bodies and raw AWS event-stream bytes, or native xAI protobuf messages. Typed inline query and token-count image and file payloads are replaced with same-length, compressible omission markers while the rest of each serialized request is retained. If a registered payload cannot be removed, that attempt records only the request length. File-upload and transcription attempts always record request lengths without payloads. Responses are unchanged. These are diagnostic representations, not TLS, HTTP/2, or gRPC framing. Successful captures are discarded without compression. Final failures and cancellations produce `provider-failed-exchange.ndjson.gz` with MIME `application/gzip` on the canonical Sentry event when Gateway telemetry and Sentry are enabled; otherwise the capture is discarded after metrics are emitted. Attachments may retain request data and unchanged provider response bodies, so Sentry access and retention must remain restricted.
 
-Capture starts in a 1 MiB memory spool and rolls larger NDJSON to local disk. The local application cap allows gzip artifacts up to 20 MiB to be added as attachments; oversized artifacts produce an event without an attachment. Metrics report attempts, payload/chunk and artifact bytes, compression time, capture errors, and transport. Changes to capture enablement take effect only after new query tasks deploy.
+Capture starts in a 1 MiB memory spool and rolls larger NDJSON to local disk. Retained NDJSON records and pending request buffers share a 128 MiB raw-capture budget across retries; this is not a maximum request size, and pending buffers can still use memory beyond the spool's rollover threshold. At the limit, capture adds a truncation marker and drops further records while payload counters continue. Compression runs in a worker thread, but capture recording still runs on the request path; cancellation cleanup waits for that worker before closing the spool. Gzip artifacts over the unchanged 20 MiB attachment limit are not attached. Metrics report attempts, payload/chunk and artifact bytes, compression time, capture errors, and transport. Changes to capture enablement take effect only after new query tasks deploy.
 
 ### Client
 
@@ -157,8 +164,11 @@ Gateway client HTTP retry policy:
 - Provider-call failures from `/query`, `/tokens/count`, `/files/upload`, `/audio/transcriptions`, `/embeddings`, and `/moderation` return HTTP `200` with a top-level `error` envelope such as `{"error":{"type":"ProviderError","message":"...","exception_type":"RateLimitError"}}`.
 - The client raises HTTP `200` error envelopes as `GatewayProviderError` without retrying, including provider-operation deadline errors, except normalized context-window and content-filter errors.
 - An envelope becomes terminal `ContentFilterError` when `code`, `type`, `error_type`, or `exception_type` identifies `content_filter`, `ContentFilterError`, `cyber_policy`, `safety_policy`, `blocked_prompt`, or `content_policy_violation`, when the message contains `output blocked by content filtering policy`, or when the message is only the model's refusal sentence (`I'm sorry, but I can't help with that request.`, nothing more), as some Responses endpoints return in a code-less stream `error` event.
-- Provider-error envelopes include the provider-operation exception type and sanitized message. They include `code` and `status_code` only when the provider/library exception already exposes those fields; the gateway does not synthesize mapped provider codes or mapped provider status codes for the response body.
-- Provider-error responses do not include `signed_history`, pickled exception objects, tracebacks, or raw provider exception transport.
+- Provider-error envelopes include the provider-operation exception type and message. They include `code` and `status_code` only when the provider/library exception already exposes those fields; the gateway does not synthesize mapped provider codes or mapped provider status codes for the response body.
+- Error objects do not include pickled exception objects, tracebacks, or raw provider exception transport.
+- Structured-output failures can include a sibling `result` containing the actual failed `QueryResult`, with `signed_history` nested in that result rather than a top-level error history. The client raises `GatewayProviderError` with `.query_result`; `.usage_metadata` derives from its metadata.
+- Failed results are decoded without rerunning the requested output schema. Available output, reasoning, tools, and history can therefore be inspected even when parsing failed.
+- Result availability depends on the error producer: many errors occur before a result exists. The optional shape supports future producers; it does not promise complete failed output or usage from earlier retry attempts.
 - The client retries gateway HTTP transport failures, actual HTTP `429`, and actual HTTP `5xx` responses.
 - The client does not retry actual HTTP `4xx` responses except `429`.
 
@@ -172,7 +182,7 @@ For deployed environments, keep server and client Secrets Manager entries separa
 | Method | Path                  | Auth | Description                                                                |
 | ------ | --------------------- | ---- | -------------------------------------------------------------------------- |
 | GET    | `/health/live`        | No   | Liveness check                                                             |
-| GET    | `/health/ready`       | No   | Readiness check (verifies gateway auth/signing config and startup canary)  |
+| GET    | `/health/ready`       | No   | Readiness check (auth/signing config; control/combined Redis ping and monitor health; query startup canary when enabled)  |
 | GET    | `/models`             | Yes  | List available models with capability flags                                |
 | GET    | `/registry`           | Yes  | Return the model registry snapshot                                         |
 | POST   | `/query`              | Yes  | Execute an LLM query                                                       |
@@ -218,6 +228,8 @@ The gateway returns HTTP 429 when probe admission is full. A probe timeout retur
 
 ### Shared rate-limit monitor
 
+Monitor indexes, ownership leases, and snapshots are shared only within one `GATEWAY_STAGE`. Dev, Prod, and each preview use separate Redis keys. The stage defaults to `local` outside deployed runtimes. Old unscoped snapshots are not read; activate monitoring again after the upgrade.
+
 Start or extend monitoring with `POST /rate-limit-monitor/activate` and `{"model": "<model-key>"}`. The key must be registered and have rate-limit monitoring enabled; alternative keys are valid.
 
 Successful responses are:
@@ -226,6 +238,8 @@ Successful responses are:
 - `POST /rate-limit-monitor/activate`: `{"server_time": <timestamp>, "state": <state>}`
 
 Each state contains `model`, `active`, `active_until`, `retention_until`, `status`, and `sources`. Each source contains `source`, `status`, nullable `last_attempt_at`, `last_success_at`, `rate_limit`, and `error_code`. State and source statuses are `starting`, `ok`, `stale`, `unsupported`, or `error`. Provider poll failures use the generic `provider_error` code and are retried only by the next scheduled poll.
+
+Live credential updates refresh the values used to poll activated source IDs. Adding or removing a credential pool does not change monitor membership or extend its active period. Activate the model again to update membership. A removed source stops provider polling and retains its last successful value as `stale`; a source without a previous successful value reports `error`. Other activated sources continue polling.
 
 Invalid activation returns HTTP 400 with `{"code": "invalid_model", "message": "Invalid model activation request"}`. Redis, persisted-state, and monitor timeout failures use the gateway's normal server-error boundary rather than a monitor-specific response. `control` and `combined` runtimes require Redis and become unready if monitor supervision stops.
 
@@ -270,8 +284,6 @@ Client (get_model_registry / get_registry_model)
    - Provider-specific overrides live under `config.provider_config`, not as top-level fields. For example, a `google/*` request selects Vertex with `config.provider_config.use_vertex=true`; the gateway supplies the server-side GCP credentials.
    - `model.metadata` is a copy of the registry entry used at construction.
    - Existing model instances retain that construction snapshot; newly constructed models use the refreshed registry.
-   - Gateway batch capability metadata is preserved.
-   - Client-side gateway batch calls raise until gateway batch endpoints exist.
    - Client-side custom retriers are rejected in gateway mode because provider retries run on the gateway server.
 
 3. **Client sends full input list**
@@ -298,8 +310,10 @@ Client (get_model_registry / get_registry_model)
      - model
      - override config
      - token retry params, when token retry is active
-   - Registry/config changes are not hot-reloaded into existing cached provider models.
-   - Restart or cache invalidation is required to pick up registry/config changes.
+   - Existing cached provider models remain immutable. With live runtime snapshots,
+     a revision change selects a new cache namespace for later requests while
+     in-flight requests retain the object they captured. Without live runtime
+     snapshots, a restart or explicit cache invalidation is required.
    - Provider-call failures are surfaced as HTTP `200` `ProviderError` envelopes with provider/library exception information instead of gateway-mapped error codes.
 
 5. **Server restores Raw fields**
@@ -311,19 +325,21 @@ Client (get_model_registry / get_registry_model)
 
 6. **Server returns signed history**
 
-   - After each query, the server serializes the full `result.history` via `LLM.serialize_input(secret=hmac_secret)`.
+   - For a query with a result, the server serializes the full `result.history` via `LLM.serialize_input(secret=hmac_secret)`.
    - `RawResponse` and `RawInput` fields are serialized, base64-encoded, and HMAC-signed inline.
-   - The gateway returns this JSON string as `signed_history` in the response.
+   - The gateway returns this JSON string as `signed_history` at the response top level on success, or inside the sibling `result` on a structured-output failure; the top-level `error` has no history.
    - The client parses `signed_history` into `InputItem` objects.
    - Raw fields stay as blobs on the client.
    - The client uses parsed history as the base for the next turn's input.
+
+To save client-returned Gateway history locally without provider SDKs, use `LLM.serialize_input(result.history)` and later `LLM.deserialize_input(saved_json)`. Its raw fields remain opaque signed blobs inside the locally serialized history. This is not native SDK object unpickling, and the server's raw `signed_history` JSON is not the input to this local round trip. Deserialization uses pickle; only load trusted local data.
 
 ### Security boundaries
 
 - **Client → Server**: Bearer token auth with constant-time comparison (pre-hashed keys)
 - **Server → Client**: Raw fields in history are HMAC-signed when returned
 - **Server input validation**: Serialized raw blobs in client inputs are HMAC-verified before restoring — tampered or unsigned blobs are rejected. Caller-built `RawInput` values that are not blobs are never unpickled
-- **Client never deserializes**: The client only echoes opaque blobs; all deserialization happens server-side
+- **Client query path never deserializes**: It only echoes opaque blobs; server-side history restoration happens on the server. Explicit local `LLM.deserialize_input` is separate from the query path.
 - **custom_api_key**: Passed only in per-request provider config so clients can use BYOK without using it as the gateway bearer token
 - **custom_endpoint, registry_key**: Rejected on every request; they would serve the named model from another endpoint or registry entry
 

@@ -38,7 +38,7 @@ class DelegateOnly(LLM):
     @override
     def get_client(
         self, api_key: str | None = None, base_url: str | None = None
-    ) -> None:
+    ) -> Any:
         assert self.delegate
         return self.delegate.get_client()
 

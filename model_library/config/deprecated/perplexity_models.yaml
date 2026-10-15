@@ -6,7 +6,6 @@ base-config:
   supports:
     images: false
     files: false
-    batch: false
     temperature: true
     tools: false
   properties:
@@ -37,7 +36,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: false
       output_schema: false
@@ -72,7 +70,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: false
       output_schema: false
@@ -107,7 +104,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: false
       output_schema: false
@@ -142,7 +138,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: false
       output_schema: false

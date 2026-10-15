@@ -7,10 +7,8 @@ from model_library.base.input import TextInput
 from model_library.providers.openai import OpenAIConfig, OpenAIModel
 
 
-async def test_check_deep_research_args_raises_without_web_search():
-    """
-    Test that check for web search tool raises an exception if not present
-    """
+async def test_deep_research_body_raises_without_web_search():
+    """A deep research request requires a web search tool."""
 
     model = OpenAIModel(
         "gpt-4o-deep-research",
@@ -18,14 +16,12 @@ async def test_check_deep_research_args_raises_without_web_search():
     )
     tools = [Mock(body={"type": "non_search_tool"})]
 
-    with pytest.raises(Exception):
-        await model._check_deep_research_args(tools)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(Exception, match="Deep research models require web search tools"):
+        await model.build_body([TextInput(text="research")], tools=tools)
 
 
-async def test_check_deep_research_args_warns_low_tokens_and_missing_background():
-    """
-    Test that checks for low tokens and background flag are logged as warnings
-    """
+async def test_deep_research_body_warns_low_tokens_and_missing_background():
+    """Deep research request recommendations are logged without rejecting the request."""
 
     model = OpenAIModel(
         "gpt-4o-deep-research",
@@ -36,7 +32,7 @@ async def test_check_deep_research_args_warns_low_tokens_and_missing_background(
 
     tools = [Mock(body={"type": "web_search"})]
 
-    await model._check_deep_research_args(tools)  # pyright: ignore[reportPrivateUsage]
+    await model.build_body([TextInput(text="research")], tools=tools)
 
     logged_messages = [
         call.args[0] for call in model.instance_logger.warning.call_args_list

@@ -9,7 +9,7 @@ if __package__ in {None, ""}:
 import argparse
 import asyncio
 
-from model_library.registry_utils import get_registry_model
+from model_library.registry_utils import get_transcription_model
 
 from examples.data.audio import speech_wav
 from examples.setup import console_log, setup
@@ -19,7 +19,7 @@ async def transcribe(model_str: str) -> None:
     """Transcribe a short clip with a registry-configured model."""
     console_log("\n--- Transcription ---\n")
 
-    model = get_registry_model(model_str)
+    model = get_transcription_model(model_str)
     console_log(
         f"Supports transcription: {model.supports_transcription}, "
         f"temperature: {model.supports_temperature}"

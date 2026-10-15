@@ -147,6 +147,16 @@ async def apply_compaction(
     )
     if summary is not None:
         compactions.append(summary)
+        compaction_dir = (
+            output_dir / "compactions" / f"compaction_{len(compactions):03d}"
+        )
+        try:
+            compaction_dir.mkdir(parents=True, exist_ok=True)
+            (compaction_dir / "result.json").write_text(
+                summary.model_dump_json(indent=2)
+            )
+        except Exception:
+            logger.exception(f"Failed to write compaction {len(compactions)}")
     return new_history, summary
 
 

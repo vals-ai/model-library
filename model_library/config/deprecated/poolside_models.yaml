@@ -30,7 +30,6 @@ deprecated:
       audio: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: true
       output_schema: false
@@ -67,7 +66,6 @@ deprecated:
       audio: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: true
       output_schema: false

@@ -2,7 +2,7 @@ import io
 import logging
 from typing import Any, Literal, Sequence
 
-from ai21 import AsyncAI21Client
+from ai21 import AsyncAI21Client, TooManyRequestsError
 from ai21.models.chat import AssistantMessage, ChatMessage, ToolMessage
 from ai21.models.chat.chat_completion_response import ChatCompletionResponse
 from pydantic import BaseModel
@@ -33,10 +33,13 @@ from model_library.exceptions import (
     ModelNoOutputError,
     UnexpectedSystemInputError,
     handle_empty_response,
+    register_retryable_exceptions,
 )
 from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
+
+register_retryable_exceptions(TooManyRequestsError)
 
 
 def map_ai21_finish_reason(

@@ -48,7 +48,6 @@ from model_library.base import (
     FileWithUrl,
     FinishReasonInfo,
     InputItem,
-    LLMBatchMixin,
     LLMConfig,
     ProviderConfig,
     PydanticT,
@@ -82,7 +81,6 @@ from model_library.exceptions import (
     UnexpectedSystemInputError,
     handle_empty_response,
 )
-from model_library.providers.google.batch import GoogleBatchMixin
 from model_library.providers.google.transcribe import (
     transcribe_interactions,
     transcribe_live,
@@ -137,6 +135,10 @@ class GoogleConfig(ProviderConfig):
     use_vertex: bool = False
     use_interactions: bool = False
     service_tier: Literal["standard", "flex"] | None = None
+    # Gemini <=2.5 models still take thinking_budget and the sampling
+    # parameters (temperature/top_p/top_k); Gemini 3+ (the default) uses
+    # thinking_level and rejects them
+    uses_thinking_budget: bool = False
 
 
 @register_provider("google")
@@ -225,12 +227,6 @@ class GoogleModel(LLM):
     ):
         super().__init__(model_name, provider, config=config)
 
-        if self.provider_config.use_vertex:
-            self.supports_batch = False
-
-        if not getattr(model_library_settings, "GCP_CREDS", None):
-            self.supports_batch = False
-
         # https://ai.google.dev/gemini-api/docs/openai
         if self.native:
             self.delegate = None
@@ -249,6 +245,9 @@ class GoogleModel(LLM):
             # flip native back on for the delegate so it initializes its own
             # client registry; the outer model stays non-native.
             config.native = True
+            if not self.provider_config.uses_thinking_budget:
+                # upcoming Gemini models reject sampling params
+                config.supports_temperature = False
             self.delegate = OpenAIModel(
                 model_name=self.model_name,
                 provider=self.provider,
@@ -257,12 +256,16 @@ class GoogleModel(LLM):
             )
             config.native = False
 
-        self.supports_batch = (
-            self.supports_batch and self.native and not self.custom_endpoint
-        )
-        self.batch: LLMBatchMixin | None = (
-            GoogleBatchMixin(self) if self.supports_batch else None
-        )
+    def _drop_deprecated_params(self, kwargs: dict[str, object]) -> None:
+        dropped = [
+            name
+            for name in ("temperature", "top_p", "top_k", "thinking_budget")
+            if kwargs.pop(name, getattr(self, name, None)) is not None
+        ]
+        if dropped:
+            self.instance_logger.warning(
+                f"{self.model_name}: ignoring deprecated parameter(s) {dropped}"
+            )
 
     @override
     async def parse_input(
@@ -326,14 +329,12 @@ class GoogleModel(LLM):
         match file:
             case FileWithBase64():
                 # allows call from parse_image
-                mime = f"image/{file.mime}" if file.type == "image" else file.mime
                 return Part.from_bytes(
-                    mime_type=mime,
+                    mime_type=file.mime,
                     data=base64.b64decode(file.base64),
                 )
             case FileWithBytes():
-                mime = f"image/{file.mime}" if file.type == "image" else file.mime
-                return Part.from_bytes(mime_type=mime, data=file.data)
+                return Part.from_bytes(mime_type=file.mime, data=file.data)
             case FileWithId():
                 return Part.from_uri(file_uri=file.file_id, mime_type=file.mime)
             case FileWithUrl():
@@ -425,7 +426,9 @@ class GoogleModel(LLM):
         generation_config = GenerateContentConfig(
             max_output_tokens=self.max_tokens,
         )
-        if self.supports_temperature:
+        if not self.provider_config.uses_thinking_budget:
+            self._drop_deprecated_params(kwargs)
+        elif self.supports_temperature:
             if self.temperature is not None:
                 generation_config.temperature = self.temperature
             if self.top_p is not None:
@@ -446,7 +449,14 @@ class GoogleModel(LLM):
 
         if self.reasoning:
             reasoning_config = ThinkingConfig(include_thoughts=True)
-            if self.reasoning_effort:
+            if not self.provider_config.uses_thinking_budget:
+                thinking_level = cast(
+                    str | None,
+                    kwargs.pop("thinking_level", self.reasoning_effort),
+                )
+                if thinking_level:
+                    reasoning_config.thinking_level = ThinkingLevel(thinking_level)
+            elif self.reasoning_effort:
                 reasoning_config.thinking_level = ThinkingLevel(self.reasoning_effort)
             else:
                 reasoning_config.thinking_budget = cast(
@@ -490,6 +500,8 @@ class GoogleModel(LLM):
         **kwargs: object,
     ) -> QueryResult:
         if self.delegate:
+            if not self.provider_config.uses_thinking_budget:
+                self._drop_deprecated_params(kwargs)
             return await self.delegate_query(
                 input,
                 tools=tools,

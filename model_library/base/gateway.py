@@ -9,27 +9,18 @@ import json
 import logging
 import random
 from collections.abc import Generator, Mapping, Sequence
-from typing import Any, Literal, NoReturn, cast
+from typing import Any, Literal, cast
 
 import httpx
-import model_library
-import model_library.telemetry as telemetry
-from openai.lib._pydantic import to_strict_json_schema
-from openai.types.moderation_create_response import ModerationCreateResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 from typing_extensions import override
 
+import model_library
+import model_library.telemetry as telemetry
 from model_library.base.base import (
     LLM,
     LLMConfig,
     TokenRetryParams,
-)
-from model_library.base.query_deadline import query_deadline_scope
-from model_library.base.query_ids import resolve_query_ids
-from model_library.base.query_logging import (
-    log_query_completed,
-    log_query_started,
-    scoped_query_logger,
 )
 from model_library.base.input import (
     FileInput,
@@ -40,7 +31,20 @@ from model_library.base.input import (
     ToolDefinition,
     normalize_query_input,
 )
-from model_library.base.output import QueryResult, TranscriptionResult
+from model_library.base.json_schema import to_strict_json_schema
+from model_library.base.output import (
+    QueryResult,
+    QueryResultMetadata,
+    TranscriptionResult,
+)
+from model_library.base.output.moderation import GatewayModerationResult
+from model_library.base.query_deadline import query_deadline_scope
+from model_library.base.query_ids import resolve_query_ids
+from model_library.base.query_logging import (
+    log_query_completed,
+    log_query_started,
+    scoped_query_logger,
+)
 from model_library.exceptions import (
     ContentFilterError,
     GatewayMethodNotSupported,
@@ -50,7 +54,6 @@ from model_library.exceptions import (
 )
 from model_library.rate_limits import RateLimit
 from model_library.utils import gateway_httpx_client
-
 
 GATEWAY_HTTP_MAX_ATTEMPTS = 8
 GATEWAY_HTTP_RETRY_INITIAL_SECONDS = 0.5
@@ -176,6 +179,9 @@ def _raise_for_gateway_error_envelope(data: dict[str, Any]) -> None:
         if isinstance(raw_status_code, int) and not isinstance(raw_status_code, bool)
         else None
     )
+    query_result = (
+        _parse_query_result(data["result"], None) if "result" in data else None
+    )
     gateway_error = GatewayProviderError(
         error_type=error_type,
         code=code,
@@ -184,6 +190,7 @@ def _raise_for_gateway_error_envelope(data: dict[str, Any]) -> None:
         raw_error=error,
         exception_type=exception_type,
         status_code=status_code,
+        query_result=query_result,
     )
     if exception_type == MaxContextWindowExceededError.__name__:
         raise MaxContextWindowExceededError(message) from gateway_error
@@ -232,14 +239,21 @@ def _parse_query_result(
         history_items = list(adapter.validate_json(history_json))
     result_data["history"] = history_items
 
-    output_parsed: dict[str, Any] | BaseModel | None = result_data.get("output_parsed")
+    output_parsed = result_data.get("output_parsed")
     if schema_model is not None:
-        if output_parsed is not None:
-            result_data["output_parsed"] = schema_model.model_validate(output_parsed)
-        elif result_data.get("output_text"):
-            result_data["output_parsed"] = schema_model.model_validate_json(
-                result_data["output_text"]
-            )
+        try:
+            if output_parsed is not None:
+                result_data["output_parsed"] = schema_model.model_validate(
+                    output_parsed
+                )
+            elif result_data.get("output_text"):
+                result_data["output_parsed"] = schema_model.model_validate_json(
+                    result_data["output_text"]
+                )
+        except ValidationError as exc:
+            metadata = QueryResultMetadata.model_validate(result_data["metadata"])
+            setattr(exc, "usage_metadata", metadata)
+            raise
 
     finish_reason = result_data.get("finish_reason")
     if finish_reason is None:
@@ -271,13 +285,6 @@ async def _sleep_before_gateway_retry(
         else delay_seconds
     )
     await asyncio.sleep(delay)
-
-
-class GatewayUnsupportedBatch:
-    def __getattr__(self, name: str) -> NoReturn:
-        raise GatewayMethodNotSupported(
-            "batch is not supported in gateway mode; use the gateway query API instead."
-        )
 
 
 class GatewayLLM(LLM):
@@ -330,8 +337,6 @@ class GatewayLLM(LLM):
         )
         super().__init__(model_name, provider, config=config)
         self.provider_config = self.gateway_config.provider_config
-        if self.supports_batch:
-            self.batch = cast(Any, GatewayUnsupportedBatch())
 
     @property
     def gateway_model_key(self) -> str:
@@ -732,7 +737,7 @@ class GatewayLLM(LLM):
         )
         return TranscriptionResult.model_validate(data)
 
-    async def moderate_content(self, text: str) -> ModerationCreateResponse:
+    async def moderate_content(self, text: str) -> GatewayModerationResult:
         from model_gateway.types import ModerationRequest
 
         data = await self.post_gateway(
@@ -743,4 +748,4 @@ class GatewayLLM(LLM):
                 config=self.gateway_config,
             ),
         )
-        return ModerationCreateResponse.model_validate(data["response"])
+        return GatewayModerationResult.model_validate(data["response"])

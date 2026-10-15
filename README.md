@@ -8,6 +8,20 @@ Requires Python 3.11+.
 pip install model-library
 ```
 
+For a Gateway-only client, install the separate `model-library-client` distribution instead of `model-library` in a fresh environment. From this repository checkout:
+
+```bash
+python -m pip install -e packages/client
+```
+
+Or install a locally built client wheel into that environment:
+
+```bash
+uv pip install --python /path/to/client-venv/bin/python "/path/to/model_library_client-<version>-py3-none-any.whl"
+```
+
+Both distributions expose the same `model_library` imports and overlap on installed files; do not install them together. The full `model-library` install remains the default for native provider calls. The client has no provider-SDK requirements of its own, but cannot remove SDKs required by other packages or override a transitive requirement for the full library. For a published client version, install `model-library-client` from PyPI; otherwise use a checkout or local wheel. See [Gateway](docs/gateway.md) for supported client usage and limitations.
+
 **Note:** This library is undergoing rapid development. Expect breaking changes.
 
 ## Start here
@@ -65,7 +79,6 @@ print(get_model_names_by_provider("chosen-provider"))
 - Images
 - Files
 - Tools with full history
-- Batch
 - Reasoning
 - Custom parameters
 

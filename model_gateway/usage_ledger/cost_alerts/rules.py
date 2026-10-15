@@ -83,10 +83,11 @@ class ComparisonRow:
     watermark_utc: datetime
     dimension_value: str
     current_request_count: int
-    current_eligible_request_count: int
+    current_error_count: int
+    current_cost_recorded_count: int
     current_cost_usd: Decimal
-    previous_cost_usd: Decimal
-    absolute_increase_usd: Decimal
+    previous_cost_usd: Decimal | None
+    absolute_increase_usd: Decimal | None
     percent_increase: Decimal | None
 
 
@@ -94,6 +95,7 @@ class ComparisonRow:
 class AlertContributor:
     display_value: str
     current_request_count: int
+    current_error_count: int
     current_cost_usd: Decimal
     ignored_for_cost: bool = False
 
@@ -117,7 +119,8 @@ class AlertCandidate:
     threshold_usd: Decimal
     total_current_cost_usd: Decimal
     total_current_request_count: int
-    total_current_eligible_request_count: int
+    total_current_error_count: int
+    total_current_cost_recorded_count: int
     breakdowns: tuple[AlertBreakdown, ...] = ()
     image: CostAlertImageConfig | None = None
 
@@ -154,6 +157,7 @@ def build_rule_query(
     dimension_sql = _alert_dimension_sql(rule.group_by)
     dimension_filter = _dimension_filter_sql(rule)
     cost_usd_sql = _cost_usd_sql(ignored_model_keys)
+    cost_recorded_count_sql = _cost_recorded_count_sql(ignored_model_keys)
     eligible_request_count_sql = _eligible_request_count_sql(ignored_model_keys)
     dimension_anchor_sql = _dimension_anchor_sql(rule)
     data_through_aggregate = (
@@ -161,6 +165,9 @@ def build_rule_query(
         if rule.grain == "1d"
         else "min(source_data_through_utc)"
     )
+    comparable_cost_sql = """current_window.current_cost_recorded_count = current_window.current_eligible_request_count
+    and previous_window.current_cost_recorded_count = previous_window.current_eligible_request_count
+    and previous_window.current_cost_recorded_count > 0"""
     return f"""with watermark as (
   select max(agg.data_through_utc) as watermark_utc
   from {table_name} as agg
@@ -173,6 +180,8 @@ def build_rule_query(
     {bucket_end_sql} as alert_bucket_end_utc,
     {dimension_sql} as alert_dimension_value,
     agg.request_count as source_request_count,
+    agg.error_count as source_error_count,
+    {cost_recorded_count_sql} as source_cost_recorded_count,
     {eligible_request_count_sql} as source_eligible_request_count,
     {cost_usd_sql} as source_cost_usd,
     agg.data_through_utc as source_data_through_utc,
@@ -189,6 +198,8 @@ def build_rule_query(
     alert_bucket_end_utc as bucket_end_utc,
     alert_dimension_value as dimension_value,
     sum(source_request_count) as current_request_count,
+    sum(source_error_count) as current_error_count,
+    sum(source_cost_recorded_count) as current_cost_recorded_count,
     sum(source_eligible_request_count) as current_eligible_request_count,
     sum(source_cost_usd) as current_cost_usd,
     {data_through_aggregate} as data_through_utc,
@@ -223,16 +234,13 @@ select
   evaluation_window.watermark_utc as watermark_utc,
   dimensions.dimension_value as dimension_value,
   coalesce(current_window.current_request_count, 0) as current_request_count,
-  coalesce(current_window.current_eligible_request_count, 0) as current_eligible_request_count,
-  coalesce(current_window.current_cost_usd, 0) as current_cost_usd,
-  coalesce(previous_window.current_cost_usd, 0) as previous_cost_usd,
-  coalesce(current_window.current_cost_usd, 0) - coalesce(previous_window.current_cost_usd, 0) as absolute_increase_usd,
-  case
-    when coalesce(previous_window.current_cost_usd, 0) = 0 then null
-    else (
-      (coalesce(current_window.current_cost_usd, 0) - coalesce(previous_window.current_cost_usd, 0))
-      / coalesce(previous_window.current_cost_usd, 0)
-    ) * 100
+  coalesce(current_window.current_error_count, 0) as current_error_count,
+  current_window.current_cost_recorded_count as current_cost_recorded_count,
+  current_window.current_cost_usd as current_cost_usd,
+  case when {comparable_cost_sql} then previous_window.current_cost_usd end as previous_cost_usd,
+  case when {comparable_cost_sql} then current_window.current_cost_usd - previous_window.current_cost_usd end as absolute_increase_usd,
+  case when {comparable_cost_sql} and previous_window.current_cost_usd <> 0 then
+    ((current_window.current_cost_usd - previous_window.current_cost_usd) / previous_window.current_cost_usd) * 100
   end as percent_increase
 from dimensions
 cross join evaluation_window
@@ -240,6 +248,7 @@ left join current_window
   on current_window.dimension_value = dimensions.dimension_value
 left join previous_window
   on previous_window.dimension_value = dimensions.dimension_value
+where current_window.current_cost_recorded_count > 0
 order by current_cost_usd desc, dimension_value asc;"""
 
 
@@ -279,6 +288,7 @@ def build_breakdown_query(
     {_normalized_dimension_sql("agg.agent_name")} as agent_name,
     {_normalized_dimension_sql("agg.identity_email")} as identity_email,
     agg.request_count,
+    agg.error_count,
     agg.cost_usd_sum as actual_cost_usd_sum,
     {cost_usd_sql} as cost_usd_sum,
     {ignored_for_cost_sql} as ignored_for_cost
@@ -305,6 +315,7 @@ select
   group_by,
   dimension_value,
   current_request_count,
+  current_error_count,
   current_cost_usd,
   ignored_for_cost
 from ranked
@@ -456,7 +467,8 @@ def _candidate_from_row(
         threshold_usd=rule.threshold_usd,
         total_current_cost_usd=row.current_cost_usd,
         total_current_request_count=row.current_request_count,
-        total_current_eligible_request_count=row.current_eligible_request_count,
+        total_current_error_count=row.current_error_count,
+        total_current_cost_recorded_count=row.current_cost_recorded_count,
         image=rule.image,
     )
 
@@ -482,6 +494,7 @@ def _breakdown_aggregate_sql(source_name: str) -> str:
     {redshift_schema.sql_literal(group_by)} as group_by,
     {column_sql} as dimension_value,
     sum(request_count) as current_request_count,
+    sum(error_count) as current_error_count,
     {current_cost_sql} as current_cost_usd,
     {ignored_for_cost_sql} as ignored_for_cost
   from {source_name}
@@ -681,13 +694,24 @@ def _cost_usd_sql(ignored_model_keys: Sequence[str]) -> str:
     end"""
 
 
-def _eligible_request_count_sql(ignored_model_keys: Sequence[str]) -> str:
+def _cost_recorded_count_sql(ignored_model_keys: Sequence[str]) -> str:
     ignored_condition = _ignored_model_condition_sql(ignored_model_keys)
     if ignored_condition is None:
-        return "agg.request_count"
+        return "agg.cost_recorded_count"
     return f"""case
       when {ignored_condition} then 0
-      else agg.request_count
+      else agg.cost_recorded_count
+    end"""
+
+
+def _eligible_request_count_sql(ignored_model_keys: Sequence[str]) -> str:
+    eligible_count = "agg.request_count + agg.error_count"
+    ignored_condition = _ignored_model_condition_sql(ignored_model_keys)
+    if ignored_condition is None:
+        return eligible_count
+    return f"""case
+      when {ignored_condition} then 0
+      else {eligible_count}
     end"""
 
 
@@ -747,12 +771,11 @@ def _comparison_row_from_values(values: Mapping[str, object]) -> ComparisonRow:
         watermark_utc=_datetime_value(values, "watermark_utc"),
         dimension_value=_string_value(values, "dimension_value"),
         current_request_count=_int_value(values, "current_request_count"),
-        current_eligible_request_count=_int_value(
-            values, "current_eligible_request_count"
-        ),
+        current_error_count=_int_value(values, "current_error_count"),
+        current_cost_recorded_count=_int_value(values, "current_cost_recorded_count"),
         current_cost_usd=_decimal_value(values, "current_cost_usd"),
-        previous_cost_usd=_decimal_value(values, "previous_cost_usd"),
-        absolute_increase_usd=_decimal_value(values, "absolute_increase_usd"),
+        previous_cost_usd=_optional_decimal_value(values, "previous_cost_usd"),
+        absolute_increase_usd=_optional_decimal_value(values, "absolute_increase_usd"),
         percent_increase=_optional_decimal_value(values, "percent_increase"),
     )
 
@@ -804,13 +827,14 @@ def _row_matches_rule(rule: CostAlertRule, row: ComparisonRow) -> bool:
         return False
     if rule.percent_increase is None:
         return True
-    if rule.min_previous_usd is None or row.previous_cost_usd < rule.min_previous_usd:
+    previous_cost = row.previous_cost_usd
+    if (
+        rule.min_previous_usd is None
+        or previous_cost is None
+        or previous_cost < rule.min_previous_usd
+    ):
         return False
     percent_increase = row.percent_increase
-    if percent_increase is None and row.previous_cost_usd > 0:
-        percent_increase = (
-            row.absolute_increase_usd / row.previous_cost_usd
-        ) * Decimal("100")
     if percent_increase is None:
         return False
     return percent_increase >= rule.percent_increase
@@ -821,6 +845,7 @@ def _contributor_from_values(values: Mapping[str, object]) -> AlertContributor:
     return AlertContributor(
         display_value=display_dimension_value(dimension_value),
         current_request_count=_int_value(values, "current_request_count"),
+        current_error_count=_int_value(values, "current_error_count"),
         current_cost_usd=_decimal_value(values, "current_cost_usd"),
         ignored_for_cost=_int_value(values, "ignored_for_cost") == 1,
     )

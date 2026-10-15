@@ -1162,7 +1162,7 @@ async def test_native_web_search_openai_parse_tools():
     from model_library.agent.tool import NativeWebSearch
     from model_library.providers.openai import OpenAIModel
 
-    model = OpenAIModel("gpt-5.5")  # use_completions=False by default
+    model = OpenAIModel("gpt-5.5")  # Responses by default
     tool = NativeWebSearch()
     result = await model.parse_tools([tool.definition])
 
@@ -1239,15 +1239,17 @@ async def test_mistral_preserves_raw_provider_tool_passthrough():
 
 
 async def test_openai_deep_research_accepts_native_web_search_sentinel():
-    """_check_deep_research_args does not raise when NativeWebSearch sentinel is present."""
+    """Deep research accepts the native search tool in a Responses request."""
     from model_library.agent.tool import NativeWebSearch
 
     model = OpenAIModel("openai/o3-pro")
     model.deep_research = True
     tool = NativeWebSearch()
 
-    # Should not raise — sentinel matches is_native_web_search check
-    await model._check_deep_research_args([tool.definition])  # pyright: ignore[reportPrivateUsage]
+    body = await model.build_body(
+        [TextInput(text="research")], tools=[tool.definition], background=True
+    )
+    assert body["tools"] == [{"type": "web_search_preview"}]
 
 
 async def test_unsupported_provider_preserves_raw_provider_tool_passthrough():

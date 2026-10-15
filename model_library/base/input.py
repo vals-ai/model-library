@@ -5,7 +5,13 @@ from typing import Annotated, Any, Literal, cast
 
 from typing_extensions import TypeAlias, override
 
-from pydantic import Field, computed_field, field_serializer, field_validator
+from pydantic import (
+    Field,
+    ValidationInfo,
+    computed_field,
+    field_serializer,
+    field_validator,
+)
 
 from model_library.utils import ValsModel, content_length, content_preview
 
@@ -30,6 +36,18 @@ class FileBase(ValsModel):
     type: Literal["image", "file"]
     name: str
     mime: str
+
+    @property
+    def image_format(self) -> str:
+        return self.mime.removeprefix("image/")
+
+    @field_validator("mime")
+    @classmethod
+    def normalize_image_mime(cls, mime: str, info: ValidationInfo) -> str:
+        """Store full MIME types for image inputs."""
+        if info.data.get("type") == "image" and not mime.startswith("image/"):
+            return f"image/{mime}"
+        return mime
 
     @override
     def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:

@@ -206,14 +206,13 @@ model = get_registry_model(args.model, override_config=config)
 - [ ] BYOK migrations explicitly account for `custom_api_key` as a caller-supplied provider credential; `custom_endpoint` paths stay off the gateway.
 - [ ] `query()` calls do not pass provider-specific kwargs.
 - [ ] Code that reads metadata constructs the model with `get_registry_model()` first.
-- [ ] Code does not use client-side batch or custom retrier paths.
+- [ ] Code does not use custom retrier paths.
 
 ## Gateway feature support
 
 | Feature | Gateway behavior |
 | --- | --- |
 | Custom retriers | Do not migrate client-side retriers. The gateway applies retries server-side. |
-| Batch calls | Not supported. They raise until gateway batch endpoints exist. |
 | `/tokens/count` | Supported through the gateway model. |
 | `/rate-limit` / `get_rate_limit()` | Supported. `get_rate_limit()` returns `None` when the provider has no data. |
 | Raw provider responses/history | The gateway signs them and the client returns them unchanged. Treat them as opaque. |

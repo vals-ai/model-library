@@ -1,3 +1,4 @@
+import json
 import logging
 from collections.abc import AsyncIterator, Sequence
 from types import SimpleNamespace
@@ -43,7 +44,9 @@ from model_library.exceptions import (
     ContentFilterError,
     MaxOutputTokensExceededError,
     ModelNoOutputError,
+    NoMatchingToolCallError,
 )
+from model_library.providers.azure import AzureOpenAIModel
 from model_library.providers.delegates.alibaba import AlibabaModel
 from model_library.providers.delegates.baseten import BasetenModel
 from model_library.providers.delegates.cohere import CohereModel
@@ -53,8 +56,10 @@ from model_library.providers.delegates.kimi import KimiModel
 from model_library.providers.delegates.nvidia import NvidiaModel
 from model_library.providers.delegates.openrouter import OpenRouterModel
 from model_library.providers.openai import OpenAIConfig, OpenAIModel
-from model_library.providers.openai.openai import _safe_search_results
+from model_library.providers.openai.responses import _safe_search_results
 from model_library.registry_utils import get_registry_model
+
+_original_azure_get_client = AzureOpenAIModel.get_client
 
 _INPUT = [TextInput(text="")]
 
@@ -297,6 +302,37 @@ async def test_reasoning_context_added_to_body():
     assert body["include"] == ["reasoning.encrypted_content"]
 
 
+async def test_access_programs_added_to_extra_body():
+    """access_programs is not an SDK parameter, so it is sent in extra_body."""
+    model = OpenAIModel(
+        "public-test-responses-model",
+        config=LLMConfig(
+            provider_config=OpenAIConfig(access_programs={"cyber": "daybreak_blue"}),
+        ),
+    )
+
+    body = await model.build_body(_INPUT, tools=[])
+
+    assert body["extra_body"] == {"access_programs": {"cyber": "daybreak_blue"}}
+    assert "access_programs" not in body
+
+
+async def test_access_programs_kept_when_caller_passes_extra_body():
+    model = OpenAIModel(
+        "public-test-responses-model",
+        config=LLMConfig(
+            provider_config=OpenAIConfig(access_programs={"cyber": "daybreak_blue"}),
+        ),
+    )
+
+    body = await model.build_body(_INPUT, tools=[], extra_body={"foo": "bar"})
+
+    assert body["extra_body"] == {
+        "access_programs": {"cyber": "daybreak_blue"},
+        "foo": "bar",
+    }
+
+
 async def test_reasoning_context_omitted_when_none():
     """reasoning.context is not added when unconfigured, leaving default behavior."""
     model = OpenAIModel(
@@ -471,6 +507,49 @@ async def test_service_tier_added_to_body(use_completions: bool):
     assert body["service_tier"] == "flex"
 
 
+async def test_access_programs_added_to_responses_body():
+    model = OpenAIModel(
+        "gpt-4o",
+        config=LLMConfig(
+            provider_config=OpenAIConfig(access_programs={"cyber": "daybreak_blue"})
+        ),
+    )
+
+    body = await model.build_body(_INPUT, tools=[])
+
+    assert body["extra_body"]["access_programs"] == {"cyber": "daybreak_blue"}
+
+
+@pytest.mark.parametrize(
+    ("access_programs", "expected"), [({"cyber": "daybreak_blue"}, "gpt-4o-mini"), (None, None)]
+)
+async def test_access_programs_records_served_model(
+    access_programs: dict[str, str] | None, expected: str | None
+):
+    response = _responses_response(response_id="resp_served", text_block_text="ok")
+    model = OpenAIModel(
+        "gpt-4o",
+        config=LLMConfig(provider_config=OpenAIConfig(access_programs=access_programs)),
+    )
+    mock_client = MagicMock()
+    mock_client.responses.create = AsyncMock(return_value=response)
+
+    with patch.object(model, "get_client", return_value=mock_client):
+        result = await model._query_impl(  # pyright: ignore[reportPrivateUsage]
+            [TextInput(text="hi")], tools=[], stream=False, query_logger=MagicMock()
+        )
+
+    assert result.metadata.served_model == expected
+
+
+async def test_access_programs_omitted_from_body_by_default():
+    model = OpenAIModel("gpt-4o", config=LLMConfig())
+
+    body = await model.build_body(_INPUT, tools=[])
+
+    assert "access_programs" not in body.get("extra_body", {})
+
+
 async def test_service_tier_omitted_from_body_by_default():
     model = OpenAIModel("gpt-4o", config=LLMConfig())
 
@@ -616,7 +695,7 @@ async def _async_iter(items: Sequence[object]) -> AsyncIterator[object]:
         yield item
 
 
-async def _query_completions(model: OpenAIModel, completion: object):
+async def _query_chat_completion(model: OpenAIModel, completion: object):
     mock_client = MagicMock()
     mock_client.chat.completions.create = AsyncMock(return_value=completion)
 
@@ -624,7 +703,7 @@ async def _query_completions(model: OpenAIModel, completion: object):
         patch.object(model, "get_client", return_value=mock_client),
         patch.object(model, "build_body", new_callable=AsyncMock, return_value={}),
     ):
-        return await model._query_completions(
+        return await model._query_impl(
             _INPUT, tools=[], query_logger=logging.getLogger("test")
         )
 
@@ -691,7 +770,7 @@ async def test_streaming_completions_google_tool_call_preserves_extra_content():
         ),
     ]
 
-    result = await _query_completions(model, _async_iter(chunks))
+    result = await _query_chat_completion(model, _async_iter(chunks))
 
     assert result.tool_calls[0].id == "call_1"
     assert result.tool_calls[0].name == "lookup"
@@ -733,7 +812,7 @@ async def test_streaming_completions_poolside_reuses_existing_indexed_tool_call(
         ),
     ]
 
-    result = await _query_completions(model, _async_iter(chunks))
+    result = await _query_chat_completion(model, _async_iter(chunks))
 
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0].id == "call_1"
@@ -768,7 +847,7 @@ async def test_streaming_completions_deepseek_same_id_named_chunk_starts_new_too
         ),
     ]
 
-    result = await _query_completions(model, _async_iter(chunks))
+    result = await _query_chat_completion(model, _async_iter(chunks))
 
     assert [(tool.id, tool.name, tool.args) for tool in result.tool_calls] == [
         ("call_1", "first", "{}"),
@@ -849,7 +928,7 @@ async def test_non_streaming_completions_query_parses_response(
 
     with patch.object(model, "get_client", return_value=mock_client):
         with patch.object(model, "build_body", new_callable=AsyncMock, return_value={}):
-            result = await model._query_completions(
+            result = await model._query_impl(
                 _INPUT, tools=[], query_logger=logging.getLogger("test")
             )
 
@@ -900,7 +979,7 @@ async def test_non_streaming_kimi_parses_top_level_cached_tokens():
         usage=usage,
     )
 
-    result = await _query_completions(model, response)
+    result = await _query_chat_completion(model, response)
 
     assert result.metadata.in_tokens == 6
     assert result.metadata.out_tokens == 5
@@ -931,7 +1010,7 @@ async def test_non_streaming_parses_top_level_reasoning_tokens():
         usage=usage,
     )
 
-    result = await _query_completions(model, response)
+    result = await _query_chat_completion(model, response)
 
     assert result.metadata.reasoning_tokens == 7
     assert result.metadata.out_tokens == 3
@@ -964,7 +1043,7 @@ async def test_non_streaming_reasoning_above_completion_tokens_clamps_out_tokens
         ),
     )
 
-    result = await _query_completions(model, response)
+    result = await _query_chat_completion(model, response)
 
     assert result.metadata.out_tokens == 0
     assert result.metadata.reasoning_tokens == 8
@@ -1045,7 +1124,7 @@ async def test_non_streaming_inception_parses_cached_input_tokens(
         usage=usage,
     )
 
-    result = await _query_completions(model, response)
+    result = await _query_chat_completion(model, response)
 
     assert result.metadata.in_tokens == expected_in_tokens
     assert result.metadata.out_tokens == 5
@@ -1075,7 +1154,7 @@ async def test_non_streaming_completions_empty_output_text_raises_no_output():
         usage=None,
     )
     with pytest.raises(ModelNoOutputError):
-        await _query_completions(model, response)
+        await _query_chat_completion(model, response)
 
 
 @pytest.mark.parametrize(
@@ -1109,7 +1188,7 @@ async def test_non_streaming_completions_empty_non_success_raises_mapped_error(
         usage=None,
     )
     with pytest.raises(expected_error):
-        await _query_completions(model, response)
+        await _query_chat_completion(model, response)
 
 
 async def test_non_streaming_completions_empty_text_with_reasoning_keeps_reasoning_only():
@@ -1133,7 +1212,7 @@ async def test_non_streaming_completions_empty_text_with_reasoning_keeps_reasoni
 
     with patch.object(model, "get_client", return_value=mock_client):
         with patch.object(model, "build_body", new_callable=AsyncMock, return_value={}):
-            result = await model._query_completions(
+            result = await model._query_impl(
                 _INPUT, tools=[], query_logger=logging.getLogger("test")
             )
 
@@ -1175,7 +1254,7 @@ async def test_non_streaming_completions_tool_only_uses_none_for_absent_or_empty
         ],
         usage=None,
     )
-    result = await _query_completions(model, response)
+    result = await _query_chat_completion(model, response)
 
     assert result.output_text is None
     assert result.reasoning is None
@@ -1212,7 +1291,7 @@ async def test_null_assistant_history_field_normalization_is_capability_gated():
         usage=None,
     )
 
-    result = await _query_completions(model, response)
+    result = await _query_chat_completion(model, response)
 
     assert result.reasoning == "considered"
     final_message = result.history[-1]
@@ -1260,7 +1339,7 @@ async def test_null_assistant_history_field_normalization_preserves_tool_calls()
         usage=None,
     )
 
-    result = await _query_completions(model, response)
+    result = await _query_chat_completion(model, response)
 
     assert len(result.tool_calls) == 1
     assert result.tool_calls[0].id == "call_1"
@@ -1341,7 +1420,7 @@ async def test_kimi_k3_only_preserves_empty_reasoning_content(
         usage=None,
     )
 
-    result = await _query_completions(model, response)
+    result = await _query_chat_completion(model, response)
 
     final_message = result.history[-1]
     assert isinstance(final_message, RawResponse)
@@ -1368,7 +1447,7 @@ async def test_streaming_completions_empty_output_text_raises_no_output():
     ]
 
     with pytest.raises(ModelNoOutputError):
-        await _query_completions(model, _async_iter(chunks))
+        await _query_chat_completion(model, _async_iter(chunks))
 
 
 @pytest.mark.parametrize(
@@ -1396,7 +1475,7 @@ async def test_streaming_completions_empty_non_success_raises_mapped_error(
         )
     ]
     with pytest.raises(expected_error):
-        await _query_completions(model, _async_iter(chunks))
+        await _query_chat_completion(model, _async_iter(chunks))
 
 
 async def test_reasoning_delegate_tag_only_output_raises_no_output():
@@ -1422,7 +1501,7 @@ async def test_reasoning_delegate_tag_only_output_raises_no_output():
         usage=CompletionUsage(completion_tokens=1, prompt_tokens=6, total_tokens=7),
     )
     with pytest.raises(ModelNoOutputError):
-        await _query_completions(model, _async_iter([chunk]))
+        await _query_chat_completion(model, _async_iter([chunk]))
 
 
 async def test_non_streaming_reasoning_delegate_tag_only_non_success_raises_mapped_error():
@@ -1452,7 +1531,7 @@ async def test_non_streaming_reasoning_delegate_tag_only_non_success_raises_mapp
         usage=None,
     )
     with pytest.raises(MaxOutputTokensExceededError):
-        await _query_completions(model, response)
+        await _query_chat_completion(model, response)
 
 
 @pytest.mark.parametrize(
@@ -1489,7 +1568,7 @@ async def test_streaming_reasoning_delegate_tag_only_non_success_raises_mapped_e
     )
 
     with pytest.raises(expected_error):
-        await _query_completions(model, _async_iter([chunk]))
+        await _query_chat_completion(model, _async_iter([chunk]))
 
 
 @pytest.mark.parametrize(
@@ -1560,7 +1639,7 @@ async def test_completions_stream_usage_only_chunk_preserves_zero_input_and_time
             usage=usage,
         ),
     ]
-    result = await _query_completions(model, _async_iter(chunks))
+    result = await _query_chat_completion(model, _async_iter(chunks))
 
     assert result.reasoning == "why"
     assert result.output_text == "OK"
@@ -1604,7 +1683,7 @@ async def test_reasoning_delegate_with_tags_keeps_streamed_content_timing():
         ],
         usage=usage,
     )
-    result = await _query_completions(model, _async_iter([chunk]))
+    result = await _query_chat_completion(model, _async_iter([chunk]))
 
     assert result.output_text == "OK"
     assert result.reasoning == "why"
@@ -1689,7 +1768,7 @@ async def test_reasoning_delegate_split_thought_tags_replay_visible_history():
             usage=CompletionUsage(completion_tokens=3, prompt_tokens=6, total_tokens=9),
         ),
     ]
-    result = await _query_completions(model, _async_iter(chunks))
+    result = await _query_chat_completion(model, _async_iter(chunks))
 
     parsed_followup = await model.parse_input(
         [*result.history, TextInput(text="follow up")]
@@ -1786,7 +1865,7 @@ async def test_reasoning_delegate_tag_only_tool_call_keeps_tool_only_output_text
             usage=None,
         )
 
-    result = await _query_completions(model, response)
+    result = await _query_chat_completion(model, response)
 
     assert result.output_text is None
     assert result.reasoning is None
@@ -1821,7 +1900,7 @@ async def test_reasoning_delegate_without_tags_keeps_streamed_content_timing():
         ],
         usage=usage,
     )
-    result = await _query_completions(model, _async_iter([chunk]))
+    result = await _query_chat_completion(model, _async_iter([chunk]))
 
     assert result.output_text == "OK"
     assert result.reasoning is None
@@ -2115,6 +2194,43 @@ async def test_non_streaming_responses_usage_populates_normalized_metadata(
     assert result.extras.provider_request_id == "openai-request-usage"
 
 
+async def test_non_streaming_responses_records_response_model():
+    """A model without access_programs records no served_model."""
+    response = _responses_response(response_id="resp_served", text_block_text="ok")
+    response.model = "gpt-6-sol"
+    model = OpenAIModel("gpt-daybreak-blue-latest")
+    mock_client = MagicMock()
+    mock_client.responses.create = AsyncMock(return_value=response)
+
+    with patch.object(model, "get_client", return_value=mock_client):
+        result = await model._query_impl(  # pyright: ignore[reportPrivateUsage]
+            [TextInput(text="compute")],
+            tools=[],
+            stream=False,
+            query_logger=MagicMock(),
+        )
+
+    assert result.metadata.served_model is None
+
+
+async def test_non_streaming_responses_skips_response_model_for_other_providers():
+    """Delegated providers such as xAI would be mislabeled openai/ in ATIF."""
+    response = _responses_response(response_id="resp_xai", text_block_text="ok")
+    model = OpenAIModel("grok-test", provider="xai")
+    mock_client = MagicMock()
+    mock_client.responses.create = AsyncMock(return_value=response)
+
+    with patch.object(model, "get_client", return_value=mock_client):
+        result = await model._query_impl(  # pyright: ignore[reportPrivateUsage]
+            [TextInput(text="compute")],
+            tools=[],
+            stream=False,
+            query_logger=MagicMock(),
+        )
+
+    assert "openai_response_model" not in result.metadata.extra
+
+
 async def test_non_streaming_responses_usage_without_cache_write_tokens():
     response = _responses_response(
         response_id="resp_usage_no_cache_write",
@@ -2329,3 +2445,73 @@ def test_safe_search_results_drops_non_json_values(caplog: pytest.LogCaptureFixt
 
     assert result is None
     assert "Dropping non-JSON-serializable search results" in caplog.text
+
+
+@pytest.mark.parametrize(
+    ("use_completions", "system_role", "text_type"),
+    [(False, "developer", "input_text"), (True, "system", "text")],
+)
+async def test_openai_groups_adjacent_user_text_for_both_apis(
+    use_completions: bool, system_role: str, text_type: str
+):
+    model = OpenAIModel("gpt-4o", use_completions=use_completions)
+
+    parsed = await model.parse_input(
+        [SystemInput(text="instructions"), TextInput(text="first"), TextInput(text="second")]
+    )
+
+    assert len(parsed) == 2
+    assert parsed[0]["role"] == system_role
+    assert parsed[1] == {
+        "role": "user",
+        "content": [
+            {"type": text_type, "text": "first"},
+            {"type": text_type, "text": "second"},
+        ],
+    }
+
+
+@pytest.mark.parametrize("use_completions", [False, True])
+async def test_openai_rejects_orphaned_tool_result_for_both_apis(
+    use_completions: bool,
+):
+    model = OpenAIModel("gpt-4o", use_completions=use_completions)
+    result = ToolResult(
+        tool_call=ToolCall(id="absent", name="lookup", args={}), result="value"
+    )
+
+    with pytest.raises(NoMatchingToolCallError):
+        await model.parse_input([TextInput(text="question"), result])
+
+
+async def test_azure_responses_query_uses_owner_client_override():
+    credentials = json.dumps(
+        {
+            "AZURE_API_KEY": "test-key",
+            "AZURE_ENDPOINT": "https://test.openai.azure.com",
+            "AZURE_API_VERSION": "2025-04-01-preview",
+        }
+    )
+    response = _responses_response(
+        response_id="resp_azure", text_block_text="from Azure"
+    )
+    client = MagicMock()
+    client.responses.create = AsyncMock(return_value=response)
+
+    with (
+        patch.object(AzureOpenAIModel, "get_client", _original_azure_get_client),
+        patch("model_library.providers.azure.AsyncAzureOpenAI", return_value=client) as create,
+    ):
+        model = AzureOpenAIModel(
+            "deployment", config=LLMConfig(custom_api_key=SecretStr(credentials))
+        )
+        result = await model._query_impl(
+            [TextInput(text="question")],
+            tools=[],
+            query_logger=logging.getLogger("test"),
+            stream=False,
+        )
+
+    assert create.call_args.kwargs["azure_endpoint"] == "https://test.openai.azure.com"
+    client.responses.create.assert_awaited_once()
+    assert result.output_text == "from Azure"

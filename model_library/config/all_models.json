@@ -1,4 +1,573 @@
 {
+    "decision/microsoft-decision-1": {
+        "company": "Microsoft",
+        "country": "United States",
+        "label": "Microsoft-Decision-1",
+        "release_date": "2026-10-09",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/microsoft/microsoft-decision-1",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "microsoft/microsoft-decision-1-20261009",
+        "properties": {
+            "context_window": 32768,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.042,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/microsoft-decision-1",
+        "slug": "decision_microsoft-decision-1"
+    },
+    "anthropic/claude-haiku-5-5-xhigh": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Haiku 5.5 (Extra High Effort)",
+        "release_date": "2026-10-07",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "xhigh"
+        },
+        "provider_endpoint": "claude-haiku-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read": 0.01,
+                "write": 0.125,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 100000.0,
+                "input": 0.5,
+                "output": 2.5,
+                "cache": {
+                    "read": 0.05,
+                    "write": 0.625,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-haiku-5-5-xhigh",
+        "slug": "anthropic_claude-haiku-5-5-xhigh"
+    },
+    "anthropic/claude-haiku-5-5-medium": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Haiku 5.5 (Medium Effort)",
+        "release_date": "2026-10-07",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "medium"
+        },
+        "provider_endpoint": "claude-haiku-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read": 0.01,
+                "write": 0.125,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 100000.0,
+                "input": 0.5,
+                "output": 2.5,
+                "cache": {
+                    "read": 0.05,
+                    "write": 0.625,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-haiku-5-5-medium",
+        "slug": "anthropic_claude-haiku-5-5-medium"
+    },
+    "anthropic/claude-haiku-5-5-max": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Haiku 5.5 (Max Effort)",
+        "release_date": "2026-10-07",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-haiku-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read": 0.01,
+                "write": 0.125,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 100000.0,
+                "input": 0.5,
+                "output": 2.5,
+                "cache": {
+                    "read": 0.05,
+                    "write": 0.625,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-haiku-5-5-max",
+        "slug": "anthropic_claude-haiku-5-5-max"
+    },
+    "anthropic/claude-haiku-5-5-low": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Haiku 5.5 (Low Effort)",
+        "release_date": "2026-10-07",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "low"
+        },
+        "provider_endpoint": "claude-haiku-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read": 0.01,
+                "write": 0.125,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 100000.0,
+                "input": 0.5,
+                "output": 2.5,
+                "cache": {
+                    "read": 0.05,
+                    "write": 0.625,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-haiku-5-5-low",
+        "slug": "anthropic_claude-haiku-5-5-low"
+    },
+    "anthropic/claude-haiku-5-5-high": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Haiku 5.5 (High Effort)",
+        "release_date": "2026-10-07",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "high"
+        },
+        "provider_endpoint": "claude-haiku-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read": 0.01,
+                "write": 0.125,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 100000.0,
+                "input": 0.5,
+                "output": 2.5,
+                "cache": {
+                    "read": 0.05,
+                    "write": 0.625,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-haiku-5-5-high",
+        "slug": "anthropic_claude-haiku-5-5-high"
+    },
+    "anthropic/claude-haiku-5-5": {
+        "company": "Anthropic",
+        "country": "United States",
+        "label": "Claude Haiku 5.5",
+        "release_date": "2026-10-07",
+        "open_source": false,
+        "documentation_url": "https://docs.claude.com/en/docs/about-claude/models/overview",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "supports_compute_effort": true,
+            "supports_auto_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": false
+        },
+        "alternative_keys": [
+            {
+                "anthropic/claude-haiku-5-5-low": {
+                    "label": "Claude Haiku 5.5 (Low Effort)",
+                    "default_parameters": {
+                        "compute_effort": "low"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-haiku-5-5-medium": {
+                    "label": "Claude Haiku 5.5 (Medium Effort)",
+                    "default_parameters": {
+                        "compute_effort": "medium"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-haiku-5-5-high": {
+                    "label": "Claude Haiku 5.5 (High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "high"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-haiku-5-5-xhigh": {
+                    "label": "Claude Haiku 5.5 (Extra High Effort)",
+                    "default_parameters": {
+                        "compute_effort": "xhigh"
+                    }
+                }
+            },
+            {
+                "anthropic/claude-haiku-5-5-max": {
+                    "label": "Claude Haiku 5.5 (Max Effort)",
+                    "default_parameters": {
+                        "compute_effort": "max"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 128000,
+            "temperature": 1.0,
+            "compute_effort": "max"
+        },
+        "provider_endpoint": "claude-haiku-5-5",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read": 0.01,
+                "write": 0.125,
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 100000.0,
+                "input": 0.5,
+                "output": 2.5,
+                "cache": {
+                    "read": 0.05,
+                    "write": 0.625,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "anthropic",
+        "full_key": "anthropic/claude-haiku-5-5",
+        "slug": "anthropic_claude-haiku-5-5"
+    },
+    "decision/mercury-decide": {
+        "company": "Inception",
+        "country": "United States",
+        "label": "Mercury Decide",
+        "release_date": "2026-09-30",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/inception/mercury-decide",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "inception/mercury-decide-20260930",
+        "properties": {
+            "context_window": 65536,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.02,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/mercury-decide",
+        "slug": "decision_mercury-decide"
+    },
     "openai/gpt-6.1-sol-xhigh": {
         "company": "OpenAI",
         "country": "United States",
@@ -12,7 +581,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -81,7 +649,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -150,7 +717,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -219,7 +785,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -288,7 +853,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -357,7 +921,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -454,6 +1017,56 @@
         "full_key": "openai/gpt-6.1-sol",
         "slug": "openai_gpt-6.1-sol"
     },
+    "stepfun/step-5-preview": {
+        "company": "StepFun",
+        "country": "China",
+        "label": "Step 5 Preview",
+        "release_date": "2026-09-28",
+        "open_source": true,
+        "documentation_url": "https://platform.stepfun.ai/docs",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "step-5-preview",
+        "properties": {
+            "context_window": 1024000,
+            "max_tokens": 1024000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 2.7,
+            "cache": {
+                "read": 0.05,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "stepfun",
+        "full_key": "stepfun/step-5-preview",
+        "slug": "stepfun_step-5-preview"
+    },
     "anthropic/claude-sonnet-5-5-xhigh": {
         "company": "Anthropic",
         "country": "United States",
@@ -467,7 +1080,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -508,7 +1120,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read": 0.2,
+                "read": 0.1,
                 "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -535,7 +1147,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -574,7 +1185,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read": 0.2,
+                "read": 0.1,
                 "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -601,7 +1212,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -642,7 +1252,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read": 0.2,
+                "read": 0.1,
                 "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -669,7 +1279,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -710,7 +1319,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read": 0.2,
+                "read": 0.1,
                 "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -737,7 +1346,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -778,7 +1386,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read": 0.2,
+                "read": 0.1,
                 "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -805,7 +1413,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -846,7 +1453,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read": 0.2,
+                "read": 0.1,
                 "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -873,7 +1480,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -963,7 +1569,7 @@
             "input": 2.0,
             "output": 10.0,
             "cache": {
-                "read": 0.2,
+                "read": 0.1,
                 "write": 2.5,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -990,7 +1596,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1059,7 +1664,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1128,7 +1732,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1197,7 +1800,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1266,7 +1868,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1322,6 +1923,77 @@
         "full_key": "openai/gpt-6-sol-high",
         "slug": "openai_gpt-6-sol-high"
     },
+    "openai/gpt-6-sol-daybreak": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Sol (Daybreak Blue)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns",
+            "access_programs": {
+                "cyber": "daybreak_blue"
+            }
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6-sol",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-04",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-sol-daybreak",
+        "slug": "openai_gpt-6-sol-daybreak"
+    },
     "openai/gpt-6-sol": {
         "company": "OpenAI",
         "country": "United States",
@@ -1335,7 +2007,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1395,6 +2066,19 @@
                         "reasoning_effort": "max"
                     }
                 }
+            },
+            {
+                "openai/gpt-6-sol-daybreak": {
+                    "label": "GPT-6 Sol (Daybreak Blue)",
+                    "metadata": {
+                        "available_for_everyone": false
+                    },
+                    "provider_properties": {
+                        "access_programs": {
+                            "cyber": "daybreak_blue"
+                        }
+                    }
+                }
             }
         ],
         "default_parameters": {
@@ -1445,7 +2129,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1514,7 +2197,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1583,7 +2265,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1652,7 +2333,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1721,7 +2401,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1777,6 +2456,77 @@
         "full_key": "openai/gpt-6-luna-high",
         "slug": "openai_gpt-6-luna-high"
     },
+    "openai/gpt-6-luna-daybreak": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Luna (Daybreak)",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6-luna",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns",
+            "access_programs": {
+                "cyber": "daybreak_blue"
+            }
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6-luna",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-05",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.5,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 0.2,
+                "output": 0.75,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6-luna-daybreak",
+        "slug": "openai_gpt-6-luna-daybreak"
+    },
     "openai/gpt-6-luna": {
         "company": "OpenAI",
         "country": "United States",
@@ -1790,7 +2540,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -1811,6 +2560,16 @@
             "cache_read_counts_toward_limit": true
         },
         "alternative_keys": [
+            {
+                "openai/gpt-6-luna-daybreak": {
+                    "label": "GPT-6 Luna (Daybreak)",
+                    "provider_properties": {
+                        "access_programs": {
+                            "cyber": "daybreak_blue"
+                        }
+                    }
+                }
+            },
             {
                 "openai/gpt-6-luna-low": {
                     "label": "GPT-6 Luna (Low)",
@@ -1900,7 +2659,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -1943,6 +2701,55 @@
         "full_key": "fireworks/ember-1",
         "slug": "fireworks_ember-1"
     },
+    "decision/gpt-6-luna": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6 Luna Decisions",
+        "release_date": "2026-09-22",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/guides/decisions",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "decision_api": "openai"
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "gpt-6-luna",
+        "properties": {
+            "context_window": 921600,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.0,
+            "context": {
+                "threshold": 272000.0,
+                "input": 0.2,
+                "output": 0.0
+            }
+        },
+        "provider_name": "decision",
+        "full_key": "decision/gpt-6-luna",
+        "slug": "decision_gpt-6-luna"
+    },
     "anthropic/claude-opus-5-5-xhigh": {
         "company": "Anthropic",
         "country": "United States",
@@ -1956,7 +2763,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -1997,7 +2803,7 @@
             "input": 4.0,
             "output": 20.0,
             "cache": {
-                "read": 0.4,
+                "read": 0.2,
                 "write": 5.0,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -2024,7 +2830,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -2062,7 +2867,7 @@
             "input": 4.0,
             "output": 20.0,
             "cache": {
-                "read": 0.4,
+                "read": 0.2,
                 "write": 5.0,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -2089,7 +2894,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -2130,7 +2934,7 @@
             "input": 4.0,
             "output": 20.0,
             "cache": {
-                "read": 0.4,
+                "read": 0.2,
                 "write": 5.0,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -2157,7 +2961,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -2198,7 +3001,7 @@
             "input": 4.0,
             "output": 20.0,
             "cache": {
-                "read": 0.4,
+                "read": 0.2,
                 "write": 5.0,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -2225,7 +3028,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -2266,7 +3068,7 @@
             "input": 4.0,
             "output": 20.0,
             "cache": {
-                "read": 0.4,
+                "read": 0.2,
                 "write": 5.0,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -2293,7 +3095,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -2334,7 +3135,7 @@
             "input": 4.0,
             "output": 20.0,
             "cache": {
-                "read": 0.4,
+                "read": 0.2,
                 "write": 5.0,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -2361,7 +3162,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -2451,7 +3251,7 @@
             "input": 4.0,
             "output": 20.0,
             "cache": {
-                "read": 0.4,
+                "read": 0.2,
                 "write": 5.0,
                 "read_discount": 0.1,
                 "write_markup": 1.25
@@ -2478,7 +3278,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -2533,7 +3332,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -2588,7 +3386,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -2654,7 +3451,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -2720,7 +3516,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -2786,7 +3581,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -2852,7 +3646,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -2938,6 +3731,47 @@
         "full_key": "grok/grok-4.7",
         "slug": "grok_grok-4.7"
     },
+    "decision/jev-1.13.0": {
+        "company": "TypeSafe",
+        "label": "Jev 1.13.0",
+        "release_date": "2026-09-17",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/typesafe/jev-1.13",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "typesafe/jev-1.13-20260917",
+        "properties": {
+            "context_window": 64000,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.042,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/jev-1.13.0",
+        "slug": "decision_jev-1.13.0"
+    },
     "google/gemini-3.8-flash-cyber-medium": {
         "company": "Google",
         "country": "United States",
@@ -2951,8 +3785,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -2968,7 +3801,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "medium"
         },
         "provider_endpoint": "gemini-3.8-flash-cyber",
@@ -3008,8 +3840,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -3025,7 +3856,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "low"
         },
         "provider_endpoint": "gemini-3.8-flash-cyber",
@@ -3065,8 +3895,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -3082,7 +3911,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.8-flash-cyber",
@@ -3122,8 +3950,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -3164,7 +3991,6 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.8-flash-cyber",
@@ -3204,7 +4030,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -3256,7 +4081,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -3316,7 +4140,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -3359,6 +4182,62 @@
         "full_key": "deepseek/deepseek-v4.1-flash-nonthinking",
         "slug": "deepseek_deepseek-v4.1-flash-nonthinking"
     },
+    "deepseek/deepseek-v4.1-flash-low": {
+        "company": "DeepSeek",
+        "country": "China",
+        "label": "DeepSeek V4.1 Flash (Low)",
+        "release_date": "2026-09-10",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "deepseek-flash",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.006,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4.1-flash-low",
+        "slug": "deepseek_deepseek-v4.1-flash-low"
+    },
     "deepseek/deepseek-v4.1-flash-high": {
         "company": "DeepSeek",
         "country": "China",
@@ -3372,7 +4251,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -3429,7 +4307,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -3451,6 +4328,14 @@
                 "deepseek/deepseek-v4.1-flash-high": {
                     "default_parameters": {
                         "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "deepseek/deepseek-v4.1-flash-low": {
+                    "label": "DeepSeek V4.1 Flash (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
                     }
                 }
             },
@@ -3508,7 +4393,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -3562,7 +4446,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -3612,7 +4495,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -3668,7 +4550,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -3726,7 +4607,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -3795,7 +4675,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -3864,7 +4743,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -3933,7 +4811,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -4002,7 +4879,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -4071,7 +4947,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -4181,7 +5056,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -4239,7 +5113,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -4297,7 +5170,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -4355,7 +5227,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -4413,7 +5284,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -4471,7 +5341,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -4570,8 +5439,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4589,7 +5457,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "medium"
         },
         "provider_endpoint": "gemini-3.8-flash",
@@ -4629,8 +5496,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4648,7 +5514,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "low"
         },
         "provider_endpoint": "gemini-3.8-flash",
@@ -4688,8 +5553,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4707,7 +5571,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.8-flash",
@@ -4747,8 +5610,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4791,7 +5653,6 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.8-flash",
@@ -4831,7 +5692,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -4899,7 +5759,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -4964,7 +5823,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -5032,7 +5890,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -5100,7 +5957,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -5168,7 +6024,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -5236,7 +6091,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -5353,7 +6207,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -5404,7 +6257,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -5463,7 +6315,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -5511,7 +6362,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -5602,7 +6452,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -5652,7 +6501,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -5712,7 +6560,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -5772,7 +6619,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -5849,7 +6695,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -5909,7 +6754,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -5969,7 +6813,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -6029,7 +6872,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -6113,8 +6955,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -6132,7 +6973,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "medium"
         },
         "provider_endpoint": "gemini-3.7-flash",
@@ -6172,8 +7012,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -6200,7 +7039,6 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.7-flash",
@@ -6240,7 +7078,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -6296,7 +7133,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -6352,7 +7188,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -6408,7 +7243,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -6464,7 +7298,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -6559,7 +7392,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -6615,7 +7447,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -6671,7 +7502,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -6727,7 +7557,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -6783,7 +7612,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -6872,7 +7700,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -6931,7 +7758,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -6987,7 +7813,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -7001,7 +7826,10 @@
         },
         "provider_properties": {
             "verbosity": "medium",
-            "reasoning_context": "all_turns"
+            "reasoning_context": "all_turns",
+            "access_programs": {
+                "cyber": "daybreak_blue"
+            }
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -7056,7 +7884,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -7070,7 +7897,10 @@
         },
         "provider_properties": {
             "verbosity": "medium",
-            "reasoning_context": "all_turns"
+            "reasoning_context": "all_turns",
+            "access_programs": {
+                "cyber": "daybreak_blue"
+            }
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -7134,7 +7964,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -7192,7 +8021,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -7252,7 +8080,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -7309,7 +8136,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -7365,7 +8191,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -7435,7 +8260,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -7486,7 +8310,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -7540,7 +8363,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -7607,7 +8429,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -7674,7 +8495,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -7739,7 +8559,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -7806,7 +8625,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -7873,7 +8691,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -7940,7 +8757,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -8007,7 +8823,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -8132,8 +8947,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -8151,7 +8965,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.6-flash",
@@ -8191,8 +9004,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -8210,7 +9022,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.5-flash-lite",
@@ -8250,7 +9061,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8304,7 +9114,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8345,7 +9154,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8438,7 +9246,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8497,7 +9304,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8556,7 +9362,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8615,7 +9420,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8674,7 +9478,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8759,7 +9562,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8825,7 +9627,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8891,7 +9692,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -8960,7 +9760,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -9016,6 +9815,77 @@
         "full_key": "openai/gpt-5.6-terra-high",
         "slug": "openai_gpt-5.6-terra-high"
     },
+    "openai/gpt-5.6-terra-daybreak": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-5.6 Terra (Daybreak)",
+        "release_date": "2026-07-09",
+        "open_source": false,
+        "documentation_url": "",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns",
+            "access_programs": {
+                "cyber": "daybreak_blue"
+            }
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-5.6-terra",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 12.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 18.0,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.6-terra-daybreak",
+        "slug": "openai_gpt-5.6-terra-daybreak"
+    },
     "openai/gpt-5.6-terra": {
         "company": "OpenAI",
         "country": "United States",
@@ -9029,7 +9899,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -9050,6 +9919,16 @@
             "cache_read_counts_toward_limit": true
         },
         "alternative_keys": [
+            {
+                "openai/gpt-5.6-terra-daybreak": {
+                    "label": "GPT-5.6 Terra (Daybreak)",
+                    "provider_properties": {
+                        "access_programs": {
+                            "cyber": "daybreak_blue"
+                        }
+                    }
+                }
+            },
             {
                 "openai/gpt-5.6-terra-high": {
                     "label": "GPT-5.6 Terra (High)",
@@ -9107,7 +9986,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -9163,6 +10041,77 @@
         "full_key": "openai/gpt-5.6-sol-high",
         "slug": "openai_gpt-5.6-sol-high"
     },
+    "openai/gpt-5.6-sol-daybreak": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-5.6 Sol (Daybreak)",
+        "release_date": "2026-07-09",
+        "open_source": false,
+        "documentation_url": "",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns",
+            "access_programs": {
+                "cyber": "daybreak_blue"
+            }
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-5.6-sol",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 4.0,
+            "output": 20.0,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 8.0,
+                "output": 30.0,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.6-sol-daybreak",
+        "slug": "openai_gpt-5.6-sol-daybreak"
+    },
     "openai/gpt-5.6-sol": {
         "company": "OpenAI",
         "country": "United States",
@@ -9176,7 +10125,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -9197,6 +10145,16 @@
             "cache_read_counts_toward_limit": true
         },
         "alternative_keys": [
+            {
+                "openai/gpt-5.6-sol-daybreak": {
+                    "label": "GPT-5.6 Sol (Daybreak)",
+                    "provider_properties": {
+                        "access_programs": {
+                            "cyber": "daybreak_blue"
+                        }
+                    }
+                }
+            },
             {
                 "openai/gpt-5.6-sol-high": {
                     "label": "GPT-5.6 Sol (High)",
@@ -9254,7 +10212,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -9310,6 +10267,77 @@
         "full_key": "openai/gpt-5.6-luna-high",
         "slug": "openai_gpt-5.6-luna-high"
     },
+    "openai/gpt-5.6-luna-daybreak": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-5.6 Luna (Daybreak)",
+        "release_date": "2026-07-09",
+        "open_source": false,
+        "documentation_url": "",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns",
+            "access_programs": {
+                "cyber": "daybreak_blue"
+            }
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-5.6-luna",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 1.2,
+            "cache": {
+                "read_discount": 0.1,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 0.4,
+                "output": 1.8,
+                "cache": {
+                    "read_discount": 0.1,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.6-luna-daybreak",
+        "slug": "openai_gpt-5.6-luna-daybreak"
+    },
     "openai/gpt-5.6-luna": {
         "company": "OpenAI",
         "country": "United States",
@@ -9323,7 +10351,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -9344,6 +10371,16 @@
             "cache_read_counts_toward_limit": true
         },
         "alternative_keys": [
+            {
+                "openai/gpt-5.6-luna-daybreak": {
+                    "label": "GPT-5.6 Luna (Daybreak)",
+                    "provider_properties": {
+                        "access_programs": {
+                            "cyber": "daybreak_blue"
+                        }
+                    }
+                }
+            },
             {
                 "openai/gpt-5.6-luna-high": {
                     "label": "GPT-5.6 Luna (High)",
@@ -9401,7 +10438,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -9465,7 +10501,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -9529,7 +10564,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -9593,7 +10627,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -9657,7 +10690,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -9721,7 +10753,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -9827,7 +10858,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -9883,7 +10913,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -9939,7 +10968,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -9990,7 +11018,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -10049,7 +11076,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -10095,7 +11121,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10160,7 +11185,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10227,7 +11251,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10311,7 +11334,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10365,7 +11387,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10424,7 +11445,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10492,7 +11512,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -10557,7 +11576,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10621,7 +11639,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10685,7 +11702,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10749,7 +11765,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -10839,7 +11854,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -10888,7 +11902,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -10927,7 +11940,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -10976,7 +11988,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -11041,7 +12052,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -11087,7 +12097,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -11144,8 +12153,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -11163,7 +12171,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.5-flash",
@@ -11203,7 +12210,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -11251,7 +12257,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -11299,7 +12304,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -11365,7 +12369,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -11420,7 +12423,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -11474,7 +12476,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -11506,6 +12507,73 @@
         "full_key": "poolside/laguna-m.1",
         "slug": "poolside_laguna-m.1"
     },
+    "openai/gpt-5.5-pro-daybreak": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT 5.5 Pro (Daybreak)",
+        "release_date": "2026-04-23",
+        "open_source": false,
+        "documentation_url": "",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "prompt_cache_retention": "24h",
+            "access_programs": {
+                "cyber": "daybreak_blue"
+            }
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-5.5-pro",
+        "properties": {
+            "context_window": 400000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 30.0,
+            "output": 180.0,
+            "cache": {
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 60.0,
+                "output": 270.0
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.5-pro-daybreak",
+        "slug": "openai_gpt-5.5-pro-daybreak"
+    },
     "openai/gpt-5.5-pro": {
         "company": "OpenAI",
         "country": "United States",
@@ -11519,7 +12587,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -11539,7 +12606,18 @@
             "supports_live_monitoring": true,
             "cache_read_counts_toward_limit": true
         },
-        "alternative_keys": [],
+        "alternative_keys": [
+            {
+                "openai/gpt-5.5-pro-daybreak": {
+                    "label": "GPT 5.5 Pro (Daybreak)",
+                    "provider_properties": {
+                        "access_programs": {
+                            "cyber": "daybreak_blue"
+                        }
+                    }
+                }
+            }
+        ],
         "default_parameters": {
             "reasoning_effort": "xhigh"
         },
@@ -11584,7 +12662,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -11655,7 +12732,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -11713,6 +12789,79 @@
         "full_key": "openai/gpt-5.5-high",
         "slug": "openai_gpt-5.5-high"
     },
+    "openai/gpt-5.5-daybreak": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT 5.5 (Daybreak)",
+        "release_date": "2026-04-23",
+        "open_source": false,
+        "documentation_url": "",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "prompt_cache_retention": "24h",
+            "access_programs": {
+                "cyber": "daybreak_blue"
+            }
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-5.5",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 5.0,
+            "output": 30.0,
+            "cache": {
+                "read": 0.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 10.0,
+                "output": 45.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-5.5-daybreak",
+        "slug": "openai_gpt-5.5-daybreak"
+    },
     "openai/gpt-5.5": {
         "company": "OpenAI",
         "country": "United States",
@@ -11726,7 +12875,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -11747,6 +12895,16 @@
             "cache_read_counts_toward_limit": true
         },
         "alternative_keys": [
+            {
+                "openai/gpt-5.5-daybreak": {
+                    "label": "GPT 5.5 (Daybreak)",
+                    "provider_properties": {
+                        "access_programs": {
+                            "cyber": "daybreak_blue"
+                        }
+                    }
+                }
+            },
             {
                 "openai/gpt-5.5-high": {
                     "default_parameters": {
@@ -11813,7 +12971,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -11869,7 +13026,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -11925,7 +13081,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -12004,7 +13159,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -12060,7 +13214,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -12131,7 +13284,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -12186,7 +13338,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -12241,7 +13392,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -12294,7 +13444,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -12350,7 +13499,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -12404,72 +13552,6 @@
         "full_key": "kimi/kimi-k2.6",
         "slug": "kimi_kimi-k2.6"
     },
-    "alibaba/qwen3.6-max-preview": {
-        "company": "Alibaba",
-        "country": "China",
-        "label": "Qwen 3.6 Max Preview",
-        "release_date": "2026-04-20",
-        "open_source": false,
-        "documentation_url": "https://modelstudio.console.alibabacloud.com/ap-southeast-1?tab=doc#/doc/?type=model&url=2840914_2&modelId=qwen3.6-max-preview&serviceSite=international",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7
-        },
-        "provider_endpoint": "qwen3.6-max-preview",
-        "properties": {
-            "context_window": 262144,
-            "max_tokens": 65536,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.3,
-            "output": 7.8,
-            "cache": {
-                "read": 0.13,
-                "write": 1.625,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 128000.0,
-                "input": 2.0,
-                "output": 12.0,
-                "cache": {
-                    "read": 0.2,
-                    "write": 2.5,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "provider_name": "alibaba",
-        "full_key": "alibaba/qwen3.6-max-preview",
-        "slug": "alibaba_qwen3.6-max-preview"
-    },
     "anthropic/claude-opus-4-7-range": {
         "company": "Anthropic",
         "country": "United States",
@@ -12483,7 +13565,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -12546,7 +13627,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -12609,7 +13689,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -12690,8 +13769,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -12709,7 +13787,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemma-4-31b-it",
@@ -12750,7 +13827,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -12810,7 +13886,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -12861,7 +13936,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -12919,7 +13993,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -12979,7 +14052,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -13037,7 +14109,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -13093,7 +14164,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -13147,7 +14217,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -13212,7 +14281,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -13277,7 +14345,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -13335,7 +14402,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -13403,7 +14469,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -13471,7 +14536,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -13539,7 +14603,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -13630,8 +14693,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -13649,7 +14711,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.1-flash-lite",
@@ -13688,7 +14749,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -13746,7 +14806,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -13800,8 +14859,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -13819,7 +14877,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "medium"
         },
         "provider_endpoint": "gemini-3.1-pro-preview",
@@ -13869,8 +14926,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -13897,7 +14953,6 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3.1-pro-preview",
@@ -13947,7 +15002,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -14010,7 +15064,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -14076,7 +15129,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -14153,7 +15205,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -14209,7 +15260,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -14265,7 +15315,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -14329,7 +15378,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -14392,7 +15440,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -14450,54 +15497,6 @@
         "full_key": "anthropic/claude-opus-4-6",
         "slug": "anthropic_claude-opus-4-6"
     },
-    "alibaba/qwen3-max-2026-01-23": {
-        "company": "Alibaba",
-        "country": "China",
-        "label": "Qwen 3 Max Thinking",
-        "release_date": "2026-01-23",
-        "open_source": false,
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7
-        },
-        "provider_endpoint": "qwen3-max-2026-01-23",
-        "properties": {
-            "context_window": 256000,
-            "max_tokens": 32000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.2,
-            "output": 6.0
-        },
-        "provider_name": "alibaba",
-        "full_key": "alibaba/qwen3-max-2026-01-23",
-        "slug": "alibaba_qwen3-max-2026-01-23"
-    },
     "minimax/MiniMax-M2.1": {
         "company": "MiniMax",
         "country": "China",
@@ -14511,7 +15510,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -14567,7 +15565,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -14618,8 +15615,7 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -14637,7 +15633,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "reasoning_effort": "high"
         },
         "provider_endpoint": "gemini-3-flash-preview",
@@ -14676,7 +15671,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -14731,7 +15725,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -14784,7 +15777,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -14844,7 +15836,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -14902,7 +15893,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -14955,7 +15945,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -15017,7 +16006,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -15079,7 +16067,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -15158,7 +16145,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -15218,7 +16204,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -15278,7 +16263,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -15336,7 +16320,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -15379,7 +16362,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -15435,7 +16417,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -15494,7 +16475,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -15561,7 +16541,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -15611,7 +16590,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -15661,7 +16639,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -15731,7 +16708,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -15801,7 +16777,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -15875,102 +16850,6 @@
         "full_key": "anthropic/claude-sonnet-4-5-20250929",
         "slug": "anthropic_claude-sonnet-4-5-20250929"
     },
-    "alibaba/qwen3-max-2025-09-23": {
-        "company": "Alibaba",
-        "country": "China",
-        "label": "Qwen 3 Max 2025-09-23",
-        "release_date": "2025-09-23",
-        "open_source": false,
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7
-        },
-        "provider_endpoint": "qwen3-max-2025-09-23",
-        "properties": {
-            "context_window": 262144,
-            "max_tokens": 65536,
-            "training_cutoff": "",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.2,
-            "output": 6.0
-        },
-        "provider_name": "alibaba",
-        "full_key": "alibaba/qwen3-max-2025-09-23",
-        "slug": "alibaba_qwen3-max-2025-09-23"
-    },
-    "alibaba/qwen3-max": {
-        "company": "Alibaba",
-        "country": "China",
-        "label": "Qwen 3 Max",
-        "release_date": "2025-09-23",
-        "open_source": false,
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7
-        },
-        "provider_endpoint": "qwen3-max",
-        "properties": {
-            "context_window": 262144,
-            "max_tokens": 65536,
-            "training_cutoff": "",
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 1.2,
-            "output": 6.0
-        },
-        "provider_name": "alibaba",
-        "full_key": "alibaba/qwen3-max",
-        "slug": "alibaba_qwen3-max"
-    },
     "grok/grok-4-fast-reasoning-latest": {
         "company": "xAI",
         "country": "United States",
@@ -15984,7 +16863,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -16044,7 +16922,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -16107,7 +16984,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -16167,7 +17043,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -16229,7 +17104,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -16276,54 +17150,6 @@
         "full_key": "grok/grok-4-fast",
         "slug": "grok_grok-4-fast"
     },
-    "alibaba/qwen3-max-preview": {
-        "company": "Alibaba",
-        "country": "China",
-        "label": "Qwen 3 Max Preview",
-        "release_date": "2025-09-05",
-        "open_source": false,
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "batch": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7
-        },
-        "provider_endpoint": "qwen3-max-preview",
-        "properties": {
-            "context_window": 262144,
-            "max_tokens": 65536,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.2,
-            "output": 6.0
-        },
-        "provider_name": "alibaba",
-        "full_key": "alibaba/qwen3-max-preview",
-        "slug": "alibaba_qwen3-max-preview"
-    },
     "grok/grok-code-fast-1-0825": {
         "company": "xAI",
         "country": "United States",
@@ -16337,7 +17163,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -16392,7 +17217,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -16450,7 +17274,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -16505,7 +17328,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -16571,7 +17393,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -16637,7 +17458,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -16703,7 +17523,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -16761,7 +17580,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -16819,7 +17637,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -16877,7 +17694,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -16932,7 +17748,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -16944,7 +17759,9 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "uses_thinking_budget": true
+        },
         "rate_limit": {
             "supports_live_monitoring": false,
             "cache_read_counts_toward_limit": true
@@ -16990,7 +17807,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -17002,7 +17818,9 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "uses_thinking_budget": true
+        },
         "rate_limit": {
             "supports_live_monitoring": false,
             "cache_read_counts_toward_limit": true
@@ -17056,7 +17874,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -17068,7 +17885,9 @@
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "uses_thinking_budget": true
+        },
         "rate_limit": {
             "supports_live_monitoring": false,
             "cache_read_counts_toward_limit": true
@@ -17124,7 +17943,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -17136,7 +17954,9 @@
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "uses_thinking_budget": true
+        },
         "rate_limit": {
             "supports_live_monitoring": false,
             "cache_read_counts_toward_limit": true
@@ -17182,7 +18002,6 @@
             "transcription": false,
             "videos": true,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -17194,7 +18013,9 @@
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "uses_thinking_budget": true
+        },
         "rate_limit": {
             "supports_live_monitoring": false,
             "cache_read_counts_toward_limit": true
@@ -17248,7 +18069,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -17308,7 +18128,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -17371,7 +18190,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -17431,7 +18249,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -17491,7 +18308,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -17551,7 +18367,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -17611,7 +18426,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": false
@@ -17671,7 +18485,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -17728,7 +18541,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -17794,7 +18606,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -17868,7 +18679,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -17923,7 +18733,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -17986,7 +18795,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -18052,7 +18860,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -18118,7 +18925,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -18176,7 +18982,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -18234,7 +19039,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -18301,7 +19105,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -18368,7 +19171,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -18435,7 +19237,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -18494,7 +19295,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -18553,7 +19353,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -18612,7 +19411,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -18667,7 +19465,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -18722,7 +19519,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -18777,7 +19573,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -18832,7 +19627,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -18887,7 +19681,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -18948,7 +19741,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -18997,7 +19789,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -19063,7 +19854,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -19121,7 +19911,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -19179,7 +19968,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -19226,7 +20014,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -19293,7 +20080,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -19351,7 +20137,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": false,
             "tools": true,
             "output_schema": true
@@ -19409,7 +20194,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -19458,7 +20242,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -19510,7 +20293,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -19562,7 +20344,6 @@
             "transcription": false,
             "videos": true,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -19614,7 +20395,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -19681,7 +20461,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -19740,7 +20519,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -19799,7 +20577,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -19858,7 +20635,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -19918,14 +20694,13 @@
         "label": "GPT 4o Mini",
         "release_date": "2024-07-18",
         "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-4o-mini",
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-4o-mini",
         "supports": {
             "images": true,
             "audio": false,
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -19984,7 +20759,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": true
@@ -20043,7 +20817,6 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "batch": true,
             "temperature": true,
             "tools": true,
             "output_schema": false
@@ -20100,7 +20873,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": true,
             "temperature": true,
             "tools": false,
             "output_schema": false
@@ -20147,7 +20919,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": true,
             "temperature": true,
             "tools": false,
             "output_schema": false
@@ -20193,7 +20964,6 @@
             "transcription": false,
             "videos": false,
             "files": false,
-            "batch": false,
             "temperature": true,
             "tools": true,
             "output_schema": true

@@ -62,7 +62,8 @@ def _row(
         watermark_utc=datetime(2026, 7, 10, 20, tzinfo=UTC),
         dimension_value=dimension,
         current_request_count=requests,
-        current_eligible_request_count=(
+        current_error_count=0,
+        current_cost_recorded_count=(
             requests if eligible_requests is None else eligible_requests
         ),
         current_cost_usd=current,

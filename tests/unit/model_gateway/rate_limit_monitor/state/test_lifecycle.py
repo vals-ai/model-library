@@ -9,16 +9,12 @@ from fakeredis import aioredis
 from pydantic import ValidationError
 
 from model_gateway.rate_limit_monitor.state import (
-    ACTIVE_KEY,
     MONITOR_KEY_PREFIX,
-    RETAINED_KEY,
     RETENTION_SECONDS,
     MonitorRedis,
     MonitorSourceUpdate,
     MonitorStateCorrupt,
     RateLimitMonitorStore,
-    owner_key,
-    snapshot_key,
 )
 from model_gateway.rate_limit_monitor.types import (
     MonitorFacts,
@@ -31,14 +27,17 @@ from model_library.rate_limits import (
     RateLimitCapacity,
     TokenRateLimit,
 )
-
 from tests.unit.model_gateway.rate_limit_monitor.state._support import (
-    MODEL,
+    ACTIVE_KEY,
     ANTHROPIC_MODEL,
+    MODEL,
+    RETAINED_KEY,
     _attempted_at,
     _claim_generation,
-    _success,
     _expire_activation,
+    _success,
+    owner_key,
+    snapshot_key,
 )
 
 

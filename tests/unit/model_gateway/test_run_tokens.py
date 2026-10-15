@@ -314,10 +314,11 @@ def test_sandbox_token_cannot_enter_control_or_model_catalog() -> None:
 
 
 def test_registry_exposes_only_assigned_models_to_sandbox() -> None:
+    """Sandbox tokens see only assigned models; full auth sees additional models."""
     client = _make_client()
     token = _mint(client)["token"]
     visible = client.get("/registry", headers=_bearer(token))
     full = client.get("/registry", headers=HEADERS)
     assert visible.status_code == full.status_code == 200
     assert set(visible.json()["models"]) == {MODEL}
-    assert "alibaba/qwen3-max" in full.json()["models"]
+    assert set(full.json()["models"]) > {MODEL}

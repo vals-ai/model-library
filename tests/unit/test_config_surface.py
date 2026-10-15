@@ -126,7 +126,6 @@ def test_active_registry_defaults_round_trip_to_llm_config() -> None:
             llm_config.supports_transcription is registry_config.supports.transcription
         )
         assert llm_config.supports_videos is registry_config.supports.videos
-        assert llm_config.supports_batch is registry_config.supports.batch
         assert llm_config.supports_temperature is registry_config.supports.temperature
         assert llm_config.supports_tools is registry_config.supports.tools
         assert (
@@ -148,10 +147,7 @@ def test_transcription_registry_omits_llm_properties() -> None:
         assert registry_config.properties is None
         assert registry_config.transcription_language is not None
         assert registry_config.transcription_streaming is not None
-        if (
-            registry_config.supports.batch is False
-            and registry_config.costs_per_million_token is not None
-        ):
+        if registry_config.costs_per_million_token is not None:
             assert registry_config.costs_per_million_token.batch is None
 
         llm_config = create_config(registry_config, override_config=None)

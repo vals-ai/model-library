@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import pickle
+import sys
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Generator, Mapping
@@ -13,11 +14,11 @@ from math import ceil
 from pathlib import Path
 from time import perf_counter
 from typing import (
+    TYPE_CHECKING,
     Any,
     Callable,
     Literal,
     Sequence,
-    TYPE_CHECKING,
     TypedDict,
     TypeVar,
     cast,
@@ -32,16 +33,11 @@ from pydantic import (
     ValidationError,
     model_serializer,
 )
-
 from rich.pretty import pretty_repr
 from tiktoken.core import Encoding
 from typing_extensions import deprecated
 
-import model_library.base.serialize as init_serialize_opts
 import model_library.telemetry as telemetry
-from model_library.base.batch import (
-    LLMBatchMixin,
-)
 from model_library.base.input import (
     FileInput,
     FileWithId,
@@ -59,17 +55,17 @@ from model_library.base.output import (
     TranscriptionResult,
 )
 from model_library.base.query_deadline import query_deadline_scope
-from model_library.base.transcription import (
-    TranscriptionRequest,
-    finalize_transcription_result,
-    resolve_language,
-    single_exception_from_group,
-)
 from model_library.base.query_ids import resolve_query_ids, scoped_query_ids
 from model_library.base.query_logging import (
     log_query_completed,
     log_query_started,
     scoped_query_logger,
+)
+from model_library.base.transcription import (
+    TranscriptionRequest,
+    finalize_transcription_result,
+    resolve_language,
+    single_exception_from_group,
 )
 from model_library.base.utils import serialize_for_tokenizing
 from model_library.exceptions import InvalidStructuredOutputError
@@ -84,7 +80,6 @@ from model_library.utils import (
 if TYPE_CHECKING:
     from model_library.register_models import ModelConfig
 
-_ = init_serialize_opts
 
 PydanticT = TypeVar("PydanticT", bound=BaseModel)
 
@@ -159,7 +154,6 @@ class LLMConfig(ValsModel):
     supports_transcription: bool = False
     supports_streaming_transcription: bool = False
     supports_videos: bool = False
-    supports_batch: bool = False
     supports_temperature: bool = True
     supports_tools: bool = False
     supports_output_schema: bool = False
@@ -375,14 +369,12 @@ class LLM(ABC):
         )
         self.supports_videos: bool = config.supports_videos
         self.supports_images: bool = config.supports_images
-        self.supports_batch: bool = config.supports_batch
         self.supports_temperature: bool = config.supports_temperature
         self.supports_tools: bool = config.supports_tools
         self.supports_output_schema: bool = config.supports_output_schema
 
         self.native: bool = config.native
         self.delegate: "LLM | None" = None
-        self.batch: LLMBatchMixin | None = None
         self.custom_endpoint = config.custom_endpoint
 
         current_provider_config = getattr(self, "provider_config", None)
@@ -703,14 +695,17 @@ class LLM(ABC):
         )
         output.metadata.duration_seconds = round_to_milliseconds(duration)
         try:
-            if self.is_router:
-                bill = output.metadata.extra.get("upstream_cost")
-                output.metadata.cost = (
-                    None
-                    if bill is None
-                    else QueryResultCost(input=0, output=0, total_override=bill)
+            bill = (
+                output.metadata.extra.get("upstream_cost") if self.is_router else None
+            )
+            if bill is not None:
+                output.metadata.cost = QueryResultCost(
+                    input=0, output=0, total_override=bill
                 )
-            else:
+            elif output.metadata.cost is None and (
+                "in_tokens" in output.metadata.model_fields_set
+                and "out_tokens" in output.metadata.model_fields_set
+            ):
                 output.metadata.cost = await self._calculate_cost(output.metadata)
         except Exception as exc:
             telemetry.record_exception(exc, {"cost_calculation.phase": "calculate"})
@@ -729,7 +724,9 @@ class LLM(ABC):
             except (json.JSONDecodeError, ValidationError) as exc:
                 parser_error_type = type(exc).__name__
             if parser_error_type is not None:
-                raise InvalidStructuredOutputError(parser_error_type=parser_error_type)
+                raise InvalidStructuredOutputError(
+                    parser_error_type=parser_error_type, query_result=output
+                )
 
         log_query_completed(
             query_logger,
@@ -1161,6 +1158,10 @@ class LLM(ABC):
     @staticmethod
     def _pickle_field(value: Any, secret: bytes | None) -> str | SignedPickle:
         """Pickle a value to base64. If secret is given, attach an HMAC tag."""
+        if "xai_sdk.proto.v6.chat_pb2" in sys.modules:
+            import model_library.base.serialize as init_serialize_opts
+
+            _ = init_serialize_opts
         pickled = base64.b64encode(pickle.dumps(value)).decode()
         if secret:
             tag = hmac.new(secret, pickled.encode(), hashlib.sha256).hexdigest()

@@ -323,6 +323,32 @@ def test_details_preserve_compressed_performance_over_generic_string_limit() -> 
     assert details["result"]["metadata"]["performance"] == performance.model_dump()
 
 
+@pytest.mark.parametrize(
+    "metadata",
+    [
+        QueryResultMetadata(cache_read_tokens=4),
+        QueryResultMetadata(reasoning_tokens=3),
+    ],
+)
+def test_details_do_not_promote_component_only_usage_into_totals(
+    metadata: QueryResultMetadata,
+) -> None:
+    stored = _details(result=_result(metadata=metadata))["result"]["metadata"]
+
+    assert "total_input_tokens" not in stored
+    assert "total_output_tokens" not in stored
+
+
+def test_details_keep_measured_zero_totals_with_components() -> None:
+    metadata = QueryResultMetadata(
+        in_tokens=0, cache_read_tokens=4, out_tokens=0, reasoning_tokens=3
+    )
+    stored = _details(result=_result(metadata=metadata))["result"]["metadata"]
+
+    assert stored["total_input_tokens"] == 4
+    assert stored["total_output_tokens"] == 3
+
+
 def test_details_replace_only_oversized_strings_and_lists_with_length() -> None:
     ordinary = "x" * 1_000
     boundary = "x" * (MAX_LEDGER_VALUE_JSON_CHARS - 2)

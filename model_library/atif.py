@@ -366,12 +366,18 @@ def _model_routing(
         return metadata.served_model, {"vals": {"model_routing": routing}}
 
     if metadata.fallback is None:
-        response_model = metadata.extra.get("anthropic_response_model")
-        if not isinstance(response_model, str) or not response_model:
-            return requested_model, None
-        return (
-            response_model if "/" in response_model else f"anthropic/{response_model}"
-        ), None
+        for provider, key in (
+            ("anthropic", "anthropic_response_model"),
+            ("openai", "openai_response_model"),
+        ):
+            response_model = metadata.extra.get(key)
+            if isinstance(response_model, str) and response_model:
+                return (
+                    response_model
+                    if "/" in response_model
+                    else f"{provider}/{response_model}"
+                ), None
+        return requested_model, None
 
     resolved_model = metadata.fallback.served_model
     return resolved_model, {

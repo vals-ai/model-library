@@ -83,11 +83,6 @@ COMMANDS = [
     ),
     Command(
         "One-off feature examples",
-        "uv run python examples/extras/batch.py",
-        "batch API",
-    ),
-    Command(
-        "One-off feature examples",
         "uv run python examples/extras/deep_research_openai.py",
         "OpenAI deep research",
     ),

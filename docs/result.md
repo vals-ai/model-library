@@ -24,6 +24,8 @@ For compatibility, if only one of `extras.response_id` or `extras.provider_respo
 
 `fallback` is `None` unless a provider-side fallback model served the response. It is a `FallbackInfo` with `requested_model`, `served_model`, and `hops` (one `FallbackHop` per model attempt: `model`, `served`, `trigger`/`category` for hops that declined, and `usage` as a token-only `QueryResultMetadata`). Top-level token counts and cost are the served hop's, priced at `served_model`. If cost calculation fails (for example `served_model` is not in the registry), the query still succeeds with `cost=None` and a warning is logged.
 
+Direct OpenAI Responses and Anthropic calls record the model the provider reports in `extra["openai_response_model"]` and `extra["anthropic_response_model"]`. ATIF uses it as the step model.
+
 `QueryResultMetadata` values can be summed for aggregate token, cost, and duration totals. Per-query `extra` values, `fallback`, and performance telemetry are not aggregated when metadata values are summed.
 
 ## Performance metadata

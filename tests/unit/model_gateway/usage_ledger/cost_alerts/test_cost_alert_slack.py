@@ -15,7 +15,9 @@ def _candidate(
     *,
     scope_value: str,
     current_cost: str,
-    eligible_requests: int = 140,
+    cost_recorded_count: int = 140,
+    requests: int = 140,
+    errors: int = 0,
     group_by: cost_alerts.CostAlertGroupBy = "identity_email",
     breakdowns: tuple[cost_alerts.AlertBreakdown, ...] = (),
 ) -> cost_alerts.AlertCandidate:
@@ -29,8 +31,9 @@ def _candidate(
         data_through_utc=datetime(2026, 7, 10, 20, tzinfo=UTC),
         threshold_usd=Decimal("1000"),
         total_current_cost_usd=Decimal(current_cost),
-        total_current_request_count=140,
-        total_current_eligible_request_count=eligible_requests,
+        total_current_request_count=requests,
+        total_current_error_count=errors,
+        total_current_cost_recorded_count=cost_recorded_count,
         breakdowns=breakdowns,
     )
 
@@ -105,6 +108,7 @@ def test_active_payload_renders_current_breakdown() -> None:
                     cost_alerts.AlertContributor(
                         display_value="anthropic/model",
                         current_request_count=70,
+                        current_error_count=0,
                         current_cost_usd=Decimal("700"),
                     ),
                 ),
@@ -120,26 +124,46 @@ def test_active_payload_renders_current_breakdown() -> None:
     assert "50%" in json.dumps(payload)
 
 
-def test_cost_per_request_excludes_ignored_model_requests() -> None:
+def test_cost_per_recorded_result_excludes_ignored_and_unknown_costs() -> None:
     candidate = _candidate(
         scope_value="connor@example.com",
         current_cost="1400",
-        eligible_requests=70,
+        cost_recorded_count=70,
     )
 
     payload_text = json.dumps(
         slack.build_alert_payload(stage="dev", candidate=candidate)
     )
 
-    assert "140 reqs" in payload_text
-    assert "$20.000/req" in payload_text
-    assert "$10.000/req" not in payload_text
+    assert "140 successes" in payload_text
+    assert "0 errors" in payload_text
+    assert "70 recorded" in payload_text
+    assert "$20.000/recorded result" in payload_text
+    assert "$10.000/recorded result" not in payload_text
+
+
+def test_failure_cost_label_uses_recorded_results_not_successes() -> None:
+    candidate = _candidate(
+        scope_value="connor@example.com",
+        current_cost="1200",
+        cost_recorded_count=1,
+        requests=0,
+        errors=3,
+    )
+
+    payload = slack.build_alert_payload(stage="dev", candidate=candidate)
+    text = json.dumps(payload, ensure_ascii=False)
+
+    assert "0 successes · 3 errors" in text
+    assert "1 recorded" in text
+    assert "$1200.000/recorded result" in text
 
 
 def test_active_payload_keeps_ignored_model_in_rank_and_labels_it() -> None:
     ignored_contributor = cost_alerts.AlertContributor(
         display_value="openai/gpt-4o",
         current_request_count=21_231,
+        current_error_count=0,
         current_cost_usd=Decimal("14931.68"),
         ignored_for_cost=True,
     )
@@ -155,6 +179,7 @@ def test_active_payload_keeps_ignored_model_in_rank_and_labels_it() -> None:
                     cost_alerts.AlertContributor(
                         display_value="anthropic/model",
                         current_request_count=70,
+                        current_error_count=0,
                         current_cost_usd=Decimal("1200"),
                     ),
                 ),
@@ -167,8 +192,8 @@ def test_active_payload_keeps_ignored_model_in_rank_and_labels_it() -> None:
         text for text in _section_texts(payload) if text.startswith("*Top models*")
     )
 
-    assert "1. *openai/gpt-4o* — *$14931.68* · 21,231 reqs [Ignored]" in breakdown
-    assert "2. *anthropic/model* — *$1200.00* (60%) · 70 reqs" in breakdown
+    assert "1. *openai/gpt-4o* — *$14931.68* · 21,231 successes, 0 errors [Ignored]" in breakdown
+    assert "2. *anthropic/model* — *$1200.00* (60%) · 70 successes, 0 errors" in breakdown
     ignored_line = breakdown.splitlines()[1]
     assert "%" not in ignored_line
     assert "openai/gpt-4o $14931.68 [Ignored]" in _fallback_text(payload)
@@ -244,6 +269,7 @@ def test_breakdown_section_respects_slack_text_limit() -> None:
         cost_alerts.AlertContributor(
             display_value=f"{index}{'m' * 2047}",
             current_request_count=10,
+            current_error_count=0,
             current_cost_usd=Decimal("100"),
         )
         for index in range(3)

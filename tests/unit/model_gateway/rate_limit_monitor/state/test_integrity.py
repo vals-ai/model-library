@@ -5,27 +5,26 @@ import pytest
 from fakeredis import aioredis
 
 from model_gateway.rate_limit_monitor.state import (
-    ACTIVE_KEY,
-    RETAINED_KEY,
     MonitorStateCorrupt,
     RateLimitMonitorStore,
-    owner_key,
-    snapshot_key,
 )
 from model_gateway.rate_limit_monitor.types import (
     MonitorFacts,
     MonitorSourceFacts,
 )
-
 from tests.unit.model_gateway.rate_limit_monitor.state._support import (
-    MODEL,
+    ACTIVE_KEY,
     ANTHROPIC_MODEL,
+    MODEL,
+    RETAINED_KEY,
     _attempted_at,
     _claim_generation,
-    _success,
     _expire_retention,
     _invalid_source_set_snapshot,
     _persist_invalid_snapshot,
+    _success,
+    owner_key,
+    snapshot_key,
 )
 
 

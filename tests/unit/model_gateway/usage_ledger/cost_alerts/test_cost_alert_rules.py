@@ -1,6 +1,9 @@
+from contextlib import closing
+from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 import json
+import sqlite3
 
 import pytest
 
@@ -29,12 +32,13 @@ def _row(
     dimension_value: str,
     *,
     current_cost: str,
-    previous_cost: str = "0",
+    previous_cost: str | None = "0",
     current_requests: int = 1,
-    current_eligible_requests: int | None = None,
+    current_errors: int = 0,
+    current_cost_recorded: int | None = None,
 ) -> cost_alerts.ComparisonRow:
     current = Decimal(current_cost)
-    previous = Decimal(previous_cost)
+    previous = Decimal(previous_cost) if previous_cost is not None else None
     return cost_alerts.ComparisonRow(
         bucket_start_utc=datetime(2026, 3, 8, 8, tzinfo=UTC),
         bucket_end_utc=datetime(2026, 3, 9, 7, tzinfo=UTC),
@@ -42,16 +46,15 @@ def _row(
         watermark_utc=datetime(2026, 3, 8, 20, tzinfo=UTC),
         dimension_value=dimension_value,
         current_request_count=current_requests,
-        current_eligible_request_count=(
-            current_requests
-            if current_eligible_requests is None
-            else current_eligible_requests
+        current_error_count=current_errors,
+        current_cost_recorded_count=(
+            current_requests if current_cost_recorded is None else current_cost_recorded
         ),
         current_cost_usd=current,
         previous_cost_usd=previous,
-        absolute_increase_usd=current - previous,
+        absolute_increase_usd=current - previous if previous is not None else None,
         percent_increase=None
-        if previous == 0
+        if previous is None or previous == 0
         else ((current - previous) / previous) * 100,
     )
 
@@ -205,11 +208,13 @@ def test_queries_zero_ignored_model_cost_without_excluding_activity() -> None:
         "when agg.provider_model in ('provider/ignored', "
         "'provider/model''quoted') then 0"
     )
-    assert comparison_sql.count(ignored_condition) == 2
+    assert comparison_sql.count(ignored_condition) == 3
     assert breakdown_sql.count(ignored_condition) == 1
     assert "agg.request_count as source_request_count" in comparison_sql
-    assert "end as source_eligible_request_count" in comparison_sql
+    assert "agg.error_count as source_error_count" in comparison_sql
+    assert "end as source_cost_recorded_count" in comparison_sql
     assert "agg.request_count," in breakdown_sql
+    assert "agg.error_count," in breakdown_sql
     assert "end as source_cost_usd" in comparison_sql
     assert "end as cost_usd_sum" in breakdown_sql
     assert "where current_cost_usd > 0" in breakdown_sql
@@ -225,9 +230,7 @@ def test_queries_zero_ignored_model_cost_without_excluding_activity() -> None:
         scope_values=("user@example.com",),
         schema=_SCHEMA,
     )
-    assert "agg.request_count as source_eligible_request_count" in (
-        unmasked_comparison_sql
-    )
+    assert "agg.cost_recorded_count as source_cost_recorded_count" in unmasked_comparison_sql
     assert "agg.cost_usd_sum as source_cost_usd" in unmasked_comparison_sql
     assert "agg.cost_usd_sum as cost_usd_sum" in unmasked_breakdown_sql
     assert "when agg.provider_model in" not in unmasked_comparison_sql
@@ -348,7 +351,7 @@ def test_global_evaluation_returns_one_global_candidate() -> None:
         "all",
         current_cost="1400",
         current_requests=140,
-        current_eligible_requests=40,
+        current_cost_recorded=40,
     )
     candidates = cost_alerts.evaluate_rule_rows(
         _rule(group_by="global"),
@@ -358,7 +361,7 @@ def test_global_evaluation_returns_one_global_candidate() -> None:
     assert len(candidates) == 1
     assert candidates[0].scope_value is None
     assert candidates[0].total_current_cost_usd == Decimal("1400")
-    assert candidates[0].total_current_eligible_request_count == 40
+    assert candidates[0].total_current_cost_recorded_count == 40
 
 
 @pytest.mark.parametrize(
@@ -375,6 +378,227 @@ def test_threshold_boundary_is_inclusive(
     )
 
     assert len(candidates) == expected_count
+
+
+def test_percent_rule_does_not_treat_unknown_baseline_as_zero() -> None:
+    rule = cost_alerts.CostAlertRule(
+        name="percent",
+        grain="1h",
+        group_by="provider_model",
+        threshold_usd=Decimal("100"),
+        min_previous_usd=Decimal("50"),
+        percent_increase=Decimal("20"),
+    )
+
+    assert cost_alerts.evaluate_rule_rows(
+        rule, (_row("model", current_cost="120", previous_cost=None),)
+    ) == ()
+
+
+def _query_hourly_comparison_rows(
+    rule: cost_alerts.CostAlertRule,
+    observations: tuple[tuple[str, str, int, int, int, int | None], ...],
+    *,
+    ignored_model_keys: tuple[str, ...],
+) -> tuple[cost_alerts.ComparisonRow, ...]:
+    sql = cost_alerts.build_rule_query(
+        rule, ignored_model_keys=ignored_model_keys, schema="main"
+    )
+    # SQLite lacks Redshift's interval syntax; retain the generated aggregation and joins.
+    sql = sql.replace(
+        "watermark_utc - interval '2 hours'", "datetime(watermark_utc, '-2 hours')"
+    ).replace(
+        "watermark_utc - interval '1 hour'", "datetime(watermark_utc, '-1 hour')"
+    )
+    watermark = "2026-03-08 12:30:00"
+    with closing(sqlite3.connect(":memory:")) as connection:
+        connection.create_function(
+            "date_trunc", 2, lambda _grain, value: value[:13] + ":00:00"
+        )
+        connection.execute(
+            """create table usage_agg_1h (
+                bucket_start_utc text, bucket_end_utc text, provider_model text,
+                request_count integer, error_count integer, cost_recorded_count integer,
+                cost_usd_sum real, data_through_utc text
+            )"""
+        )
+        connection.executemany(
+            "insert into usage_agg_1h values (?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                (
+                    f"2026-03-08 {hour}:00:00",
+                    f"2026-03-08 {int(hour) + 1}:00:00",
+                    model,
+                    requests,
+                    errors,
+                    recorded,
+                    cost,
+                    watermark,
+                )
+                for hour, model, requests, errors, recorded, cost in observations
+            ),
+        )
+        cursor = connection.execute(sql)
+        columns = [item[0] for item in cursor.description]
+        records = cursor.fetchall()
+    return cost_alerts.parse_comparison_rows(
+        {
+            "ColumnMetadata": [{"name": column} for column in columns],
+            "Records": [
+                [
+                    {"isNull": True}
+                    if value is None
+                    else {"longValue": value}
+                    if isinstance(value, int)
+                    else {"stringValue": str(value)}
+                    for value in record
+                ]
+                for record in records
+            ],
+        }
+    )
+
+
+def _percent_rule() -> cost_alerts.CostAlertRule:
+    return cost_alerts.CostAlertRule(
+        name="percent",
+        grain="1h",
+        group_by="global",
+        threshold_usd=Decimal("100"),
+        min_previous_usd=Decimal("50"),
+        percent_increase=Decimal("20"),
+    )
+
+
+@pytest.mark.parametrize("partial_period", ["previous", "current"])
+def test_partial_cost_coverage_has_no_comparison_evidence(partial_period: str) -> None:
+    previous = (
+        ("10", "provider/model", 1, 1, 1, 100)
+        if partial_period == "previous"
+        else ("10", "provider/model", 1, 0, 1, 100)
+    )
+    current = (
+        ("11", "provider/model", 1, 1, 1, 120)
+        if partial_period == "current"
+        else ("11", "provider/model", 1, 0, 1, 120)
+    )
+    rows = _query_hourly_comparison_rows(
+        _percent_rule(), (previous, current), ignored_model_keys=()
+    )
+
+    assert len(rows) == 1
+    assert rows[0].previous_cost_usd is None
+    assert rows[0].absolute_increase_usd is None
+    assert rows[0].percent_increase is None
+    assert cost_alerts.evaluate_rule_rows(_percent_rule(), rows) == ()
+
+
+def test_complete_zero_baseline_has_no_percent_increase() -> None:
+    rows = _query_hourly_comparison_rows(
+        _percent_rule(),
+        (
+            ("10", "provider/model", 1, 0, 1, 0),
+            ("11", "provider/model", 1, 0, 1, 120),
+        ),
+        ignored_model_keys=(),
+    )
+
+    assert rows[0].previous_cost_usd == Decimal("0")
+    assert rows[0].absolute_increase_usd == Decimal("120")
+    assert rows[0].percent_increase is None
+    assert cost_alerts.evaluate_rule_rows(_percent_rule(), rows) == ()
+
+
+def test_no_previous_observations_are_not_a_zero_baseline() -> None:
+    rule = _percent_rule()
+    rows = _query_hourly_comparison_rows(
+        rule,
+        (("11", "provider/model", 1, 0, 1, 120),),
+        ignored_model_keys=(),
+    )
+
+    assert rows[0].previous_cost_usd is None
+    assert rows[0].absolute_increase_usd is None
+    assert rows[0].percent_increase is None
+    assert cost_alerts.evaluate_rule_rows(rule, rows) == ()
+
+
+def test_complete_cost_coverage_qualifies_percent_increase() -> None:
+    rows = _query_hourly_comparison_rows(
+        _percent_rule(),
+        (
+            ("10", "provider/model", 0, 1, 1, 100),
+            ("11", "provider/model", 0, 1, 1, 120),
+        ),
+        ignored_model_keys=(),
+    )
+
+    assert rows[0].previous_cost_usd == Decimal("100")
+    assert rows[0].absolute_increase_usd == Decimal("20")
+    assert rows[0].percent_increase == Decimal("20")
+    assert len(cost_alerts.evaluate_rule_rows(_percent_rule(), rows)) == 1
+
+
+def test_ignored_model_activity_does_not_make_cost_coverage_partial() -> None:
+    rows = _query_hourly_comparison_rows(
+        _percent_rule(),
+        (
+            ("10", "provider/model", 1, 0, 1, 100),
+            ("10", "provider/ignored", 0, 1, 0, None),
+            ("11", "provider/model", 1, 0, 1, 120),
+            ("11", "provider/ignored", 3, 0, 0, None),
+        ),
+        ignored_model_keys=("provider/ignored",),
+    )
+
+    assert rows[0].current_request_count == 4
+    assert rows[0].current_cost_recorded_count == 1
+    assert rows[0].percent_increase == Decimal("20")
+    assert len(cost_alerts.evaluate_rule_rows(_percent_rule(), rows)) == 1
+
+
+def test_absolute_threshold_still_qualifies_with_partial_current_cost() -> None:
+    rule = _rule(grain="1h", group_by="global", threshold_usd="100")
+    rows = _query_hourly_comparison_rows(
+        rule,
+        (
+            ("10", "provider/model", 1, 1, 1, 100),
+            ("11", "provider/model", 1, 1, 1, 120),
+        ),
+        ignored_model_keys=(),
+    )
+
+    assert rows[0].current_cost_usd == Decimal("120")
+    assert rows[0].current_request_count == 1
+    assert rows[0].current_error_count == 1
+    assert rows[0].current_cost_recorded_count == 1
+    assert rows[0].previous_cost_usd is None
+    assert len(cost_alerts.evaluate_rule_rows(rule, rows)) == 1
+
+
+def test_cost_alert_query_uses_recorded_failure_cost_and_preserves_unknowns() -> None:
+    sql = cost_alerts.build_rule_query(_rule(group_by="global"), schema=_SCHEMA)
+
+    assert "agg.error_count as source_error_count" in sql
+    assert "agg.cost_recorded_count as source_cost_recorded_count" in sql
+    assert "sum(source_cost_usd) as current_cost_usd" in sql
+    assert "where current_window.current_cost_recorded_count > 0" in sql
+    assert "coalesce(current_window.current_cost_usd, 0)" not in sql
+    assert "coalesce(previous_window.current_cost_usd, 0)" not in sql
+
+
+def test_failure_cost_qualifies_without_successful_requests() -> None:
+    row = _row(
+        "all", current_cost="1000", current_requests=0,
+        current_errors=2, current_cost_recorded=1,
+    )
+
+    candidates = cost_alerts.evaluate_rule_rows(_rule(group_by="global"), (row,))
+
+    assert len(candidates) == 1
+    assert candidates[0].total_current_request_count == 0
+    assert candidates[0].total_current_error_count == 2
+    assert candidates[0].total_current_cost_recorded_count == 1
 
 
 def test_percent_rule_requires_minimum_baseline_and_percent_increase() -> None:
@@ -460,6 +684,7 @@ def test_breakdown_parser_keeps_scopes_independent() -> None:
         {"name": "group_by"},
         {"name": "dimension_value"},
         {"name": "current_request_count"},
+        {"name": "current_error_count"},
         {"name": "current_cost_usd"},
         {"name": "ignored_for_cost"},
     ]
@@ -476,6 +701,7 @@ def test_breakdown_parser_keeps_scopes_independent() -> None:
             "provider_model",
             model,
             10,
+            2,
             cost,
             1 if ignored_for_cost else 0,
         ]
@@ -530,7 +756,8 @@ def test_comparison_parser_decodes_data_api_values() -> None:
         "watermark_utc",
         "dimension_value",
         "current_request_count",
-        "current_eligible_request_count",
+        "current_error_count",
+        "current_cost_recorded_count",
         "current_cost_usd",
         "previous_cost_usd",
         "absolute_increase_usd",
@@ -543,10 +770,11 @@ def test_comparison_parser_decodes_data_api_values() -> None:
         "2026-07-10 20:05:00+00:00",
         "anthropic/model",
         42,
+        7,
         30,
         "12.50",
-        "0",
-        "12.50",
+        None,
+        None,
         None,
     )
     record = [
@@ -573,10 +801,11 @@ def test_comparison_parser_decodes_data_api_values() -> None:
             watermark_utc=datetime(2026, 7, 10, 20, 5, tzinfo=UTC),
             dimension_value="anthropic/model",
             current_request_count=42,
-            current_eligible_request_count=30,
+            current_error_count=7,
+            current_cost_recorded_count=30,
             current_cost_usd=Decimal("12.50"),
-            previous_cost_usd=Decimal("0"),
-            absolute_increase_usd=Decimal("12.50"),
+            previous_cost_usd=None,
+            absolute_increase_usd=None,
             percent_increase=None,
         ),
     )

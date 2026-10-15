@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import re
 import secrets
 from dataclasses import dataclass
 from typing import Any, Literal, Protocol, cast
@@ -23,10 +24,6 @@ from model_gateway.rate_limit_monitor.types import (
 from model_library.rate_limits import RateLimit
 
 MONITOR_KEY_PREFIX = "model_gateway:rate_limit_monitor"
-ACTIVE_KEY = f"{MONITOR_KEY_PREFIX}:active"
-RETAINED_KEY = f"{MONITOR_KEY_PREFIX}:retained"
-OWNER_KEY_PREFIX = f"{MONITOR_KEY_PREFIX}:owner:"
-SNAPSHOT_KEY_PREFIX = f"{MONITOR_KEY_PREFIX}:snapshot:"
 ACTIVATION_SECONDS = 10 * 60
 RETENTION_SECONDS = 24 * 60 * 60
 OWNER_TTL_MILLISECONDS = 60 * 1000
@@ -243,14 +240,6 @@ if redis.call("GET", KEYS[1]) == ARGV[1] then redis.call("DEL", KEYS[1]) end
 """
 
 
-def owner_key(model: str) -> str:
-    return f"{OWNER_KEY_PREFIX}{model}"
-
-
-def snapshot_key(model: str) -> str:
-    return f"{SNAPSHOT_KEY_PREFIX}{model}"
-
-
 def _redis_float(value: str) -> float:
     try:
         number = float(value)
@@ -360,8 +349,22 @@ def _state_from_snapshot(
 
 
 class RateLimitMonitorStore:
-    def __init__(self, redis_client: MonitorRedis):
+    def __init__(self, redis_client: MonitorRedis, *, stage: str):
+        if re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", stage) is None:
+            raise ValueError("Invalid gateway stage for rate-limit monitor")
+
         self.redis = redis_client
+        prefix = f"{MONITOR_KEY_PREFIX}:{stage}"
+        self._active_key = f"{prefix}:active"
+        self._retained_key = f"{prefix}:retained"
+        self._owner_key_prefix = f"{prefix}:owner:"
+        self._snapshot_key_prefix = f"{prefix}:snapshot:"
+
+    def _owner_key(self, model: str) -> str:
+        return f"{self._owner_key_prefix}{model}"
+
+    def _snapshot_key(self, model: str) -> str:
+        return f"{self._snapshot_key_prefix}{model}"
 
     async def _read_snapshot(self, model: str) -> _StoredSnapshot | None:
         now_raw, active_score_raw, retained_score_raw, snapshot_raw = cast(
@@ -369,9 +372,9 @@ class RateLimitMonitorStore:
             await self.redis.eval(
                 _READ_SCRIPT,
                 3,
-                ACTIVE_KEY,
-                RETAINED_KEY,
-                snapshot_key(model),
+                self._active_key,
+                self._retained_key,
+                self._snapshot_key(model),
                 model,
             ),
         )
@@ -461,10 +464,10 @@ class RateLimitMonitorStore:
                 await self.redis.eval(
                     _ACTIVATE_COMMIT_SCRIPT,
                     4,
-                    ACTIVE_KEY,
-                    RETAINED_KEY,
-                    owner_key(model),
-                    snapshot_key(model),
+                    self._active_key,
+                    self._retained_key,
+                    self._owner_key(model),
+                    self._snapshot_key(model),
                     model,
                     stored.raw if stored is not None else "",
                     stored.active_score if stored is not None else "",
@@ -501,7 +504,11 @@ class RateLimitMonitorStore:
         now_raw, *rows = cast(
             list[str],
             await self.redis.eval(
-                _LIST_SCRIPT, 2, ACTIVE_KEY, RETAINED_KEY, SNAPSHOT_KEY_PREFIX
+                _LIST_SCRIPT,
+                2,
+                self._active_key,
+                self._retained_key,
+                self._snapshot_key_prefix,
             ),
         )
         if now_raw == "corrupt":
@@ -528,9 +535,9 @@ class RateLimitMonitorStore:
                 await self.redis.eval(
                     _DISCOVER_SCRIPT,
                     2,
-                    ACTIVE_KEY,
-                    RETAINED_KEY,
-                    SNAPSHOT_KEY_PREFIX,
+                    self._active_key,
+                    self._retained_key,
+                    self._snapshot_key_prefix,
                 ),
             )
         )
@@ -550,10 +557,10 @@ class RateLimitMonitorStore:
                 await self.redis.eval(
                     script,
                     4,
-                    ACTIVE_KEY,
-                    owner_key(model),
-                    snapshot_key(model),
-                    RETAINED_KEY,
+                    self._active_key,
+                    self._owner_key(model),
+                    self._snapshot_key(model),
+                    self._retained_key,
                     model,
                     token,
                     OWNER_TTL_MILLISECONDS,
@@ -590,7 +597,7 @@ class RateLimitMonitorStore:
         return stored.facts.generation, server_time
 
     async def release_owner(self, model: str, token: str) -> None:
-        await self.redis.eval(_RELEASE_SCRIPT, 1, owner_key(model), token)
+        await self.redis.eval(_RELEASE_SCRIPT, 1, self._owner_key(model), token)
 
     async def publish_source(
         self,
@@ -648,10 +655,10 @@ class RateLimitMonitorStore:
                 await self.redis.eval(
                     _PUBLISH_COMMIT_SCRIPT,
                     4,
-                    ACTIVE_KEY,
-                    RETAINED_KEY,
-                    owner_key(model),
-                    snapshot_key(model),
+                    self._active_key,
+                    self._retained_key,
+                    self._owner_key(model),
+                    self._snapshot_key(model),
                     model,
                     token,
                     stored.raw,

@@ -24,7 +24,7 @@ from tests.unit.model_gateway.rate_limit_monitor.state._support import (
 async def test_redis_transport_failures_are_not_remapped(operation):
     redis = AsyncMock()
     redis.eval.side_effect = RedisConnectionError("unavailable")
-    store = RateLimitMonitorStore(cast(MonitorRedis, redis))
+    store = RateLimitMonitorStore(cast(MonitorRedis, redis), stage="test")
 
     with pytest.raises(RedisConnectionError):
         if operation == "activate":

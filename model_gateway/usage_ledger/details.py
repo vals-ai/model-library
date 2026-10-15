@@ -48,6 +48,21 @@ def build_usage_event_details(
     _replace_with_length(extras, "search_results")
 
     metadata = cast(dict[str, object], result_data["metadata"])
+    for field in ("in_tokens", "out_tokens"):
+        if field not in result.metadata.model_fields_set:
+            metadata.pop(field)
+    for field in (
+        "reasoning_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "duration_seconds",
+    ):
+        if metadata[field] is None:
+            metadata.pop(field)
+    if "in_tokens" not in metadata:
+        metadata.pop("total_input_tokens")
+    if "out_tokens" not in metadata:
+        metadata.pop("total_output_tokens")
     performance = metadata.pop("performance")
     bounded_result = cast(dict[str, object], _bounded_value(result_data))
     bounded_metadata = cast(dict[str, object], bounded_result["metadata"])

@@ -39,6 +39,8 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
                 "agent_name": None,
                 "identity_email": None,
                 "api_key_name": None,
+                "outcome": "success",
+                "error_type": None,
                 "input_tokens": Decimal("100"),
                 "output_tokens": Decimal("20"),
                 "reasoning_tokens": Decimal("0"),
@@ -82,9 +84,27 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
     assert row["schema_version"] == 3
     assert row["metadata_schema_version"] == 3
     assert row["cost_usd"] == Decimal("0.123456789012")
+    assert row["outcome"] == "success"
+    assert row["error_type"] is None
     assert not row["performance_truncated"]
     assert len(row["performance"]) > 65_535
     assert row["performance"] == performance
+    sparse = dict(row)
+    sparse.update(
+        schema_version=4,
+        input_tokens=0,
+        output_tokens=None,
+        total_input_tokens=0,
+        total_output_tokens=None,
+        cost_usd=None,
+        outcome="error",
+        error_type="InvalidStructuredOutputError",
+    )
+    sparse_table = pq.read_table(pa.BufferReader(parquet_bytes_from_rows([sparse])))
+    sparse_row = sparse_table.to_pylist()[0]
+    assert sparse_row["input_tokens"] == 0
+    assert sparse_row["output_tokens"] is None
+    assert sparse_row["cost_usd"] is None
 
 
 def test_window_and_artifact_identity_are_deterministic() -> None:

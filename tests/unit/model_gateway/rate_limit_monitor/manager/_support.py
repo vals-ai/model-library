@@ -268,7 +268,11 @@ def _stub_sources(
     )
     monkeypatch.setattr(monitor_module, "_source_specs", lambda model: specs)
     monkeypatch.setattr(
-        monitor, "_build_sources", lambda model, expected: list(sources)
+        monitor,
+        "_build_sources",
+        lambda model, expected, *, only=None, **_: [
+            source for source in sources if only is None or source.source == only
+        ],
     )
 
 

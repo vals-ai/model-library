@@ -43,21 +43,21 @@ async def test_stream_requires_terminal_state(status: str):
     client.responses.with_streaming_response.create.return_value.__aenter__ = AsyncMock(
         return_value=raw
     )
-    model = MagicMock(use_completions=False)
-    model.build_body = AsyncMock(return_value={})
-    model.get_client.return_value = client
+    model = OpenAIModel("gpt-5.5")
+    model.build_body = AsyncMock(return_value={})  # type: ignore[method-assign]
+    model.get_client = MagicMock(return_value=client)  # type: ignore[method-assign]
 
     if status == "in_progress":
         with pytest.raises(
             ImmediateRetryException,
             match="resp_partial",
         ):
-            await OpenAIModel._query_impl(
-                model, [], tools=[], query_logger=logging.getLogger(__name__)
+            await model._query_impl(
+                [], tools=[], query_logger=logging.getLogger(__name__)
             )
         return
-    result = await OpenAIModel._query_impl(
-        model, [], tools=[], query_logger=logging.getLogger(__name__)
+    result = await model._query_impl(
+        [], tools=[], query_logger=logging.getLogger(__name__)
     )
     assert result.finish_reason.reason.value == (
         "stop" if status == "completed" else "max_tokens"
@@ -88,15 +88,11 @@ async def test_nonstream_background_response_does_not_trigger_stream_retry():
     )
     client = MagicMock()
     client.responses.create = AsyncMock(return_value=response)
-    model = MagicMock(use_completions=False)
-    model.build_body = AsyncMock(return_value={"background": True})
-    model.get_client.return_value = client
-    result = await OpenAIModel._query_impl(
-        model,
-        [],
-        tools=[],
-        query_logger=logging.getLogger(__name__),
-        stream=False,
+    model = OpenAIModel("gpt-5.5")
+    model.build_body = AsyncMock(return_value={"background": True})  # type: ignore[method-assign]
+    model.get_client = MagicMock(return_value=client)  # type: ignore[method-assign]
+    result = await model._query_impl(
+        [], tools=[], query_logger=logging.getLogger(__name__), stream=False
     )
     assert result.output_text == "Working"
     assert result.finish_reason.raw == "in_progress"

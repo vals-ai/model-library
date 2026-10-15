@@ -27,7 +27,6 @@ claude-4-models:                    # model block
       training_cutoff: "2025-03"
       reasoning_model: false
     supports:
-      batch: true
       temperature: true
     costs_per_million_token:
       input: 15.0
@@ -43,7 +42,7 @@ claude-4-models:                    # model block
 |-------|-------------|
 | `country` | Country of origin of `company`, declared wherever `company` is |
 | `properties` | Required `context_window`, `max_tokens`, `reasoning_model`, optional `training_cutoff`; transcription-only models may omit the whole block |
-| `supports` | Boolean flags: `images`, `audio`, `videos`, `files`, `batch`, `temperature`, `tools`, `output_schema`, `transcription` |
+| `supports` | Boolean flags: `images`, `audio`, `videos`, `files`, `temperature`, `tools`, `output_schema`, `transcription` |
 | `transcription_streaming` | Whether this entry uses a streaming transcription transport, including complete-file uploads with streamed transcript responses |
 | `costs_per_million_token` | `input`, `output`, optional `cache`, `batch`, `context` pricing. Set to `null` for models without known pricing |
 | `transcription_cost` | Duration STT pricing: `usd_per_minute`, `billing_basis`, and optional `minimum_billable_seconds` and `increment_seconds` |

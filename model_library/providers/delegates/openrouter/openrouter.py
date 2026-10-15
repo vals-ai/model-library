@@ -19,6 +19,8 @@ from model_library.register_models import register_provider
 
 class OpenRouterConfig(ProviderConfig):
     openrouter_allowed_models: list[str] | None = None
+    openrouter_cost_tier: Literal["low", "medium", "high", "xhigh", "max"] | None = None
+    openrouter_min_coding_score: float | None = None
 
 
 @register_provider("openrouter")
@@ -28,7 +30,7 @@ class OpenRouterModel(DelegateOnly):
     def __init__(
         self,
         model_name: str,
-        provider: Literal["openrouter"] = "openrouter",
+        provider: str = "openrouter",
         *,
         config: LLMConfig | None = None,
     ):
@@ -69,15 +71,25 @@ class OpenRouterModel(DelegateOnly):
         extra_body = self._get_extra_body()
         if self.is_router:
             self.enable_router_mode()
-            allowed_models = self.provider_config.openrouter_allowed_models
-            if allowed_models is not None:
-                extra_body["plugins"] = [
-                    {"id": "auto-router", "allowed_models": allowed_models}
-                ]
+            config = self.provider_config
+            if self.model_name.startswith("openrouter/pareto-code"):
+                plugin_id = "pareto-router"
+                settings = {"min_coding_score": config.openrouter_min_coding_score}
+            else:
+                plugin_id = "auto-router"
+                settings = {
+                    "allowed_models": config.openrouter_allowed_models,
+                    "cost_tier": config.openrouter_cost_tier,
+                }
+            settings = {k: v for k, v in settings.items() if v is not None}
+            if settings:
+                extra_body["plugins"] = [{"id": plugin_id, **settings}]
             # One session per task attempt, so the served model sticks within it.
             extra_body["session_id"] = prompt_cache_key_from_query_ids(
                 model_name=self._registry_key or f"openrouter/{self.model_name}"
             )
+            # Claude upstreams cache only with a breakpoint; others cache on their own.
+            extra_body["cache_control"] = {"type": "ephemeral"}
             # Auto may pick a host that silently ignores response_format or tools;
             # require_parameters makes it pick one that supports them (or fail).
             if output_schema is not None or tools:

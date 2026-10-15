@@ -170,19 +170,74 @@ async def test_check_health_tracks_monitor_lifecycle(monkeypatch):
         monitor.check_health()
 
 
-async def test_check_health_reraises_terminal_discovery_failure(monkeypatch):
+async def test_discovery_retries_redis_failure_and_readiness_recovers(monkeypatch):
     store = FakeStore()
-    store.discover_error = RedisError("discovery failed")
+    store.active = set()
+    store.discover_error = RedisError("Timeout connecting to server")
     monitor = _monitor(monkeypatch, store)
+    sleep = ControlledSleep()
+    monitor._sleep = sleep
+    now = [100.0]
+    monitor._monotonic = lambda: now[0]
+    log_event = Mock()
+    monkeypatch.setattr(monitor_module, "log_gateway_event", log_event)
 
     monitor.start()
-    await _wait_until(
-        lambda: monitor._discovery_task is not None and monitor._discovery_task.done()
-    )
-
-    with pytest.raises(RedisError, match="discovery failed"):
+    try:
+        seconds, future = await sleep.next()
+        assert seconds == monitor_module.DISCOVERY_SECONDS
+        assert store.discover_calls == 1
         monitor.check_health()
-    await monitor.close()
+        assert log_event.call_count == 1
+        assert log_event.call_args.args == (
+            "gateway.rate_limit_monitor.discovery_failure",
+        )
+
+        future.set_result(None)
+        seconds, future = await sleep.next()
+        assert seconds == monitor_module.DISCOVERY_SECONDS
+        assert store.discover_calls == 2
+        assert log_event.call_count == 1
+
+        now[0] += monitor_module.DISCOVERY_FAILURE_GRACE_SECONDS + 1
+        with pytest.raises(RuntimeError, match="discovery is failing"):
+            monitor.check_health()
+
+        store.discover_error = None
+        future.set_result(None)
+        _, future = await sleep.next()
+        assert store.discover_calls == 3
+        monitor.check_health()
+        assert [call.args[0] for call in log_event.call_args_list] == [
+            "gateway.rate_limit_monitor.discovery_failure",
+            "gateway.rate_limit_monitor.discovery_recovered",
+        ]
+
+        future.set_result(None)
+        _, future = await sleep.next()
+        assert store.discover_calls == 4
+        assert log_event.call_count == 2
+
+        store.discover_error = RedisError("Timeout connecting to server")
+        future.set_result(None)
+        _, future = await sleep.next()
+        assert store.discover_calls == 5
+        assert [call.args[0] for call in log_event.call_args_list] == [
+            "gateway.rate_limit_monitor.discovery_failure",
+            "gateway.rate_limit_monitor.discovery_recovered",
+            "gateway.rate_limit_monitor.discovery_failure",
+        ]
+
+        store.discover_error = None
+        future.set_result(None)
+        await sleep.next()
+        assert store.discover_calls == 6
+        assert log_event.call_args.args == (
+            "gateway.rate_limit_monitor.discovery_recovered",
+        )
+        assert log_event.call_count == 4
+    finally:
+        await monitor.close()
 
 
 async def test_discovery_reaps_exceptional_worker_without_restart(monkeypatch):

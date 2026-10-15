@@ -42,7 +42,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: false
       output_schema: false

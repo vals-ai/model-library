@@ -110,20 +110,17 @@ def run_token_authorized(model: type[_BodyT]) -> Callable[..., Any]:
         # Retry params reconfigure provider budgets shared across runs.
         if getattr(body, "token_retry_params", None) is not None:
             raise RunTokenAuthorizationError("Run tokens cannot set token_retry_params")
-        # A request provider_config replaces the entry's whole one, which would drop a
-        # YAML openrouter_allowed_models pool and let the sandbox reach other models.
+        # A request provider_config replaces the entry's whole one, dropping a router
+        # variant's YAML settings (pool, tier, preference).
         if body.config.provider_config is not None:
             entry = get_registry_config(body.model)
             if (
                 entry is not None
-                and getattr(
-                    entry.provider_properties, "openrouter_allowed_models", None
-                )
-                is not None
+                and entry.metadata.router
+                and entry.provider_properties.model_dump(exclude_none=True)
             ):
                 raise RunTokenAuthorizationError(
-                    "Run tokens cannot set provider_config on models with a fixed "
-                    "allowed_models pool"
+                    "Run tokens cannot set provider_config on router variants"
                 )
 
         fields = type(body).model_fields

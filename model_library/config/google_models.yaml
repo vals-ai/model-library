@@ -7,7 +7,6 @@ base-config:
     images: false
     videos: false
     files: false
-    batch: false
     temperature: false
     tools: false
     output_schema: false
@@ -59,14 +58,11 @@ gemini-3-models:
       audio: true
       videos: true
       tools: true
-      batch: true
-      temperature: true
       output_schema: true
     costs_per_million_token:
       cache:
         read_discount: 0.1
     default_parameters:
-      temperature: 1
       reasoning_effort: "high"
 
   google/gemini-3.1-pro-preview:
@@ -248,7 +244,6 @@ gemma-4-models:
     supports:
       images: true
       files: true
-      temperature: true
       tools: true
       output_schema: true
     costs_per_million_token:
@@ -256,7 +251,6 @@ gemma-4-models:
         read: 0.0
         write: 0.0
     default_parameters:
-      temperature: 1
       reasoning_effort: "high"
 
   google/gemma-4-31b-it:
@@ -279,9 +273,10 @@ gemini-2.5-models:
       audio: true
       videos: true
       tools: true
-      batch: true
       temperature: true
       output_schema: true
+    provider_properties:
+      uses_thinking_budget: true
     properties:
       context_window: 1_048_576
       training_cutoff: "2024-05"

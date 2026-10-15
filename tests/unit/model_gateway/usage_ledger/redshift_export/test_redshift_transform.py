@@ -89,6 +89,8 @@ def test_redshift_rows_from_usage_event_maps_v3_fact_and_performance_rows() -> N
         "agent_name": "swe-agent",
         "identity_email": "user@example.com",
         "api_key_name": "security-testing",
+        "outcome": "success",
+        "error_type": None,
         "input_tokens": 100,
         "output_tokens": 25,
         "reasoning_tokens": 5,
@@ -182,3 +184,31 @@ def test_redshift_rows_from_usage_event_rejects_reserved_dimension_values() -> N
             _usage_event(benchmark_name=redshift_schema.MISSING_DIMENSION_VALUE),
             batch_id="batch-1",
         )
+
+
+def test_v4_failed_result_preserves_unknown_measurements_and_explicit_zero() -> None:
+    event = _usage_event(
+        schema_version=4,
+        outcome="error",
+        error={"exception_type": "InvalidStructuredOutputError"},
+        input_tokens=0,
+        cost_usd=Decimal("0"),
+    )
+    for field in (
+        "output_tokens", "reasoning_tokens", "cache_read_tokens",
+        "cache_write_tokens", "total_input_tokens", "total_output_tokens",
+        "duration_seconds",
+    ):
+        del event[field]
+
+    rows = redshift_rows_from_usage_event(event, batch_id="batch-1")
+
+    assert rows.fact["outcome"] == "error"
+    assert rows.fact["error_type"] == "InvalidStructuredOutputError"
+    assert rows.fact["input_tokens"] == 0
+    assert rows.fact["cost_usd"] == Decimal("0")
+    assert all(rows.fact[field] is None for field in (
+        "output_tokens", "reasoning_tokens", "cache_read_tokens",
+        "cache_write_tokens", "total_input_tokens", "total_output_tokens",
+        "duration_seconds",
+    ))

@@ -13,6 +13,7 @@ from model_library.base import LLMConfig, dump_llm_config
 
 from model_gateway import model_helpers
 from model_gateway.cache import ModelCache
+from model_gateway.runtime_config import runtime_cache_namespace
 from model_gateway.metrics import model_dimensions
 from model_gateway.route_helpers import GatewayOperation, ok_response
 from model_gateway.run_tokens import run_token_authorized
@@ -102,7 +103,11 @@ class RateLimitProbeService:
             return ok_response(RateLimitResponse())
 
         config = dump_llm_config(LLMConfig())
-        key = self._cache.make_key(body.model, config)
+        key = self._cache.make_key(
+            body.model,
+            config,
+            namespace=runtime_cache_namespace(),
+        )
         cached = self._rate_limits.get(key)
         if cached is not None and time.monotonic() < cached[0]:
             return ok_response(cached[1])

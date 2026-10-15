@@ -3,7 +3,8 @@ import concurrent.futures
 import sys
 import time
 from collections import defaultdict
-from typing import Any, Awaitable, Coroutine
+from dataclasses import dataclass
+from typing import Any, Awaitable, Callable, Coroutine
 
 from pydantic import SecretStr
 from rich.console import Console
@@ -14,8 +15,12 @@ from rich.tree import Tree
 from examples.setup import setup
 from model_gateway.model_helpers import managed_api_keys
 from model_library import model_library_settings
-from model_library.base import LLMConfig
+from model_library.base import LLMConfig, QueryResult
 from model_library.exceptions import exception_message
+from model_library.providers.delegates.openrouter.decision import (
+    decision_request,
+    parse_decision_output,
+)
 from model_library.register_models import ModelConfig, get_model_registry
 from model_library.registry_utils import (
     CLI_ONLY_PROVIDERS,
@@ -28,6 +33,21 @@ CONCURRENCY_PER_PROVIDER = 10
 MAX_RETRIES = 5
 DEFAULT_TIMEOUT = 240
 DEEP_RESEARCH_TIMEOUT = 600  # 10 minutes for deep research models
+
+SMOKE_PROMPT = "What is the capital of France?"
+
+
+@dataclass(frozen=True)
+class SmokeCase:
+    """How a provider that cannot answer free text is smoke-tested."""
+
+    prompt: str
+    validate: Callable[[QueryResult], None]
+    # The provider's answers are typed, so a call may report no output tokens.
+    allow_zero_output_tokens: bool = False
+
+
+smoke_cases: dict[str, SmokeCase] = {}
 
 # registry
 model_registry = dict(get_model_registry())
@@ -60,13 +80,12 @@ def smoke_model_config(model: str) -> LLMConfig:
     """Build the direct-smoke config, including a pinned managed key if needed."""
     managed_keys = managed_api_keys(model)
     if len(managed_keys) != 1 or managed_keys[0].key_setting == "META_API_KEY":
-        return LLMConfig(supports_batch=False)
+        return LLMConfig()
 
     api_key = model_library_settings.get(managed_keys[0].key_setting)
     if not isinstance(api_key, str) or not api_key:
-        return LLMConfig(supports_batch=False)
+        return LLMConfig()
     return LLMConfig(
-        supports_batch=False,
         custom_api_key=SecretStr(api_key),
     )
 
@@ -169,24 +188,29 @@ async def process_model(model_str: str, provider_name: str):
             running_models[provider_name][model_str] = (start_time, 0)
 
             # handle blocking providers
+            case = smoke_cases.get(provider_name)
+            prompt = case.prompt if case else SMOKE_PROMPT
+
             def query() -> Awaitable[Any]:
                 return (
                     asyncio.get_event_loop().run_in_executor(
                         sync_executor,
-                        lambda: asyncio.run(
-                            model.query("What is the capital of France?")
-                        ),
+                        lambda: asyncio.run(model.query(prompt)),
                     )
                     if provider_name in BLOCKING_PROVIDERS
-                    else model.query("What is the capital of France?")
+                    else model.query(prompt)
                 )
 
             output = await asyncio.wait_for(query(), timeout=timeout)
 
             if not output.metadata.total_input_tokens:
                 raise Exception("No in tokens")
-            if not output.metadata.total_output_tokens:
+            if not (case and case.allow_zero_output_tokens) and not (
+                output.metadata.total_output_tokens
+            ):
                 raise Exception("No out tokens")
+            if case:
+                case.validate(output)
 
             completed_models[provider_name] += 1
 
@@ -202,6 +226,37 @@ MODEL_OVERRIDES: list[str] = [
     "poolside/laguna-xs.2",
 ]
 ignored_models: list[str] = []
+# Typed-decision models (docs/decision-models.md): one request that every one of them can answer, and a check that the
+# answer has the right shape.
+_DECISION_OPTIONS = {
+    "billing": "Charges, invoices, and refunds",
+    "engineering": "Bugs, errors, and outages",
+    "support": "How-to and account questions",
+}
+
+
+def _check_decision_answer(output: QueryResult) -> None:
+    answer = parse_decision_output(output.output_text or "").get("team")
+    if answer is None or answer.get("choice") not in _DECISION_OPTIONS:
+        raise Exception(f"decision answer is not one of the options: {answer!r}")
+    if set(answer.get("probabilities") or {}) != set(_DECISION_OPTIONS):
+        raise Exception(f"decision answer has no probability per option: {answer!r}")
+
+
+smoke_cases["decision"] = SmokeCase(
+    prompt=decision_request(
+        "The API returns 500 on every call.",
+        {
+            "team": {
+                "type": "choice",
+                "instructions": "Which team should handle this ticket?",
+                "criteria": _DECISION_OPTIONS,
+            }
+        },
+    ),
+    validate=_check_decision_answer,
+    allow_zero_output_tokens=True,
+)
 ERROR_OVERRIDES = [
     "overloaded",
     "rate limit",

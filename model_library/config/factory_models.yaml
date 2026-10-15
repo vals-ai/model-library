@@ -7,7 +7,6 @@ base-config:
     images: false
     videos: false
     files: true
-    batch: false
     temperature: false
     tools: true
     output_schema: false

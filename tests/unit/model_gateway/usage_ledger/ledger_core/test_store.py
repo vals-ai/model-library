@@ -17,6 +17,7 @@ from starlette.testclient import TestClient
 from model_gateway import app as gateway_app
 from model_gateway import metrics
 from model_gateway import model_helpers
+from model_gateway.runtime_config import CredentialSnapshot, RuntimeConfigState
 from model_gateway.usage_ledger import store as ledger_store
 from model_gateway.usage_ledger import schema as ledger_schema
 from model_gateway.usage_ledger.details import snapshot_usage_request
@@ -29,10 +30,10 @@ from model_gateway.usage_ledger.store import (
     NoopUsageLedger,
     SqsUsageLedger,
     UsageLedgerWriteError,
-    build_success_usage_event,
+    build_usage_event,
     create_usage_ledger_from_env,
 )
-from model_gateway.types import QueryRequest
+from model_gateway.types import ProviderError, QueryRequest
 from model_library.base.input import TextInput, ToolBody, ToolDefinition
 from model_library.base.output import (
     ProviderToolEvent,
@@ -136,7 +137,7 @@ class FakeUsageLedger:
     async def close(self) -> None:
         return
 
-    async def write_success(self, event: dict[str, object]) -> None:
+    async def write_event(self, event: dict[str, object]) -> None:
         self.events.append(event)
 
 
@@ -317,10 +318,11 @@ def _identity_with_compact_json_size(size: int) -> dict[str, str]:
     return identity
 
 
-def _build_success_usage_event(**kwargs: Any) -> dict[str, object]:
+def _build_usage_event(**kwargs: Any) -> dict[str, object]:
     request = cast(QueryRequest, kwargs["body"])
     kwargs.setdefault("api_key_name", "test")
-    return build_success_usage_event(
+    kwargs.setdefault("error", None)
+    return build_usage_event(
         **kwargs,
         request=snapshot_usage_request(request),
     )
@@ -334,7 +336,7 @@ def _basic_usage_event() -> dict[str, object]:
         question_id="question-1",
         query_id="query-1",
     )
-    return _build_success_usage_event(
+    return _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -353,7 +355,7 @@ class FailingUsageLedger:
     async def close(self) -> None:
         return
 
-    async def write_success(self, event: dict[str, object]) -> None:
+    async def write_event(self, event: dict[str, object]) -> None:
         _ = event
         raise RuntimeError("ledger unavailable")
 
@@ -444,7 +446,7 @@ def test_query_request_rejects_over_depth_identity():
         )
 
 
-def test_build_success_usage_event_owns_each_value_once_in_root_or_details():
+def test_build_usage_event_owns_each_value_once_in_root_or_details():
     request = QueryRequest.model_validate(
         {
             "model": "openai/gpt-4o",
@@ -534,7 +536,7 @@ def test_build_success_usage_event_owns_each_value_once_in_root_or_details():
         ),
     )
 
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -552,7 +554,7 @@ def test_build_success_usage_event_owns_each_value_once_in_root_or_details():
     assert "api_key_fingerprint" not in event
     assert event["finish_reason"] == "unknown"
     assert not event["finish_reason_raw"]
-    assert event["schema_version"] == 3
+    assert event["schema_version"] == 4
     assert event["input_tokens"] == 100
     assert event["cache_read_tokens"] == 10
     assert event["total_input_tokens"] == 113
@@ -631,14 +633,152 @@ def test_build_success_usage_event_owns_each_value_once_in_root_or_details():
         assert secret not in message
 
 
-def test_build_success_usage_event_preserves_absent_performance_as_null():
+def test_build_usage_event_preserves_absent_performance_as_null():
     event = _basic_usage_event()
 
     details = cast(dict[str, Any], event[ledger_schema.DETAILS_FIELD])
     assert details["result"]["metadata"]["performance"] is None
 
 
-def test_build_success_usage_event_normalizes_float_artifact_cost_total():
+
+def test_failed_event_preserves_error_result_and_unknown_measurements():
+    request = QueryRequest(model="openai/gpt-4o", inputs=[TextInput(text="hello")])
+    result = QueryResult(
+        output_text="partial",
+        metadata=QueryResultMetadata(cache_read_tokens=0, out_tokens=0),
+    )
+    error = ProviderError(
+        message="Invalid structured output",
+        exception_type="InvalidStructuredOutputError",
+    )
+    event = _build_usage_event(
+        body=request,
+        config=request.config_dict(),
+        query_params={},
+        dimensions={},
+        result=result,
+        error=error,
+    )
+
+    assert event["outcome"] == "error"
+    assert event["error"] == error.model_dump(mode="json")
+    assert event["cache_read_tokens"] == 0
+    assert "total_input_tokens" not in event
+    assert event["output_tokens"] == 0
+    assert event["total_output_tokens"] == 0
+    for field in (
+        "input_tokens",
+        "reasoning_tokens",
+        "cache_write_tokens",
+        "duration_seconds",
+        "cost_usd",
+    ):
+        assert field not in event
+    details = cast(dict[str, Any], event["details"])
+    metadata = details["result"]["metadata"]
+    assert "in_tokens" not in metadata
+    assert "total_input_tokens" not in metadata
+    assert metadata["cache_read_tokens"] == 0
+    assert metadata["out_tokens"] == 0
+    assert details["result"]["output_text_length"] == len("partial")
+
+
+@pytest.mark.parametrize(
+    ("metadata", "component"),
+    [
+        (QueryResultMetadata(cache_read_tokens=4), "cache_read_tokens"),
+        (QueryResultMetadata(cache_write_tokens=4), "cache_write_tokens"),
+        (QueryResultMetadata(reasoning_tokens=4), "reasoning_tokens"),
+    ],
+)
+def test_component_only_usage_does_not_create_complete_totals(
+    metadata: QueryResultMetadata, component: str
+):
+    request = QueryRequest(model="openai/gpt-4o", inputs=[TextInput(text="hello")])
+    event = _build_usage_event(
+        body=request,
+        config=request.config_dict(),
+        query_params={},
+        dimensions={},
+        result=QueryResult(metadata=metadata),
+        error=None,
+    )
+
+    assert event[component] == 4
+    assert "total_input_tokens" not in event
+    assert "total_output_tokens" not in event
+    details = cast(dict[str, Any], event["details"])
+    snapshot = details["result"]["metadata"]
+    assert snapshot[component] == 4
+    assert "total_input_tokens" not in snapshot
+    assert "total_output_tokens" not in snapshot
+
+
+def test_success_event_omits_absent_measurements():
+    event = _basic_usage_event()
+    assert event["outcome"] == "success"
+    assert "error" not in event
+    assert not any(field in event for field in ledger_schema.NUMERIC_LEDGER_FIELDS)
+    details = cast(dict[str, Any], event["details"])
+    assert "total_input_tokens" not in details["result"]["metadata"]
+    assert "total_output_tokens" not in details["result"]["metadata"]
+
+def test_build_usage_event_records_worker_and_runtime_namespace(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    monkeypatch.setattr(
+        ledger_store,
+        "worker_id",
+        lambda: "gateway-task-a:123",
+    )
+    state = RuntimeConfigState.bootstrap()
+    model_a = state.current.models
+    model_a = type(model_a)(
+        revision=12,
+        originated_at=model_a.originated_at,
+        digest="models-a",
+        registries=model_a.registries,
+    )
+    credential_a = CredentialSnapshot(
+        version="credential-a",
+        generation=1,
+        digest="credentials-a",
+        managed_fields=frozenset(),
+        values={},
+    )
+    state.install(models=model_a, credentials=credential_a)
+    model_b = type(model_a)(
+        revision=13,
+        originated_at=model_a.originated_at,
+        digest="models-b",
+        registries=model_a.registries,
+    )
+    credential_b = CredentialSnapshot(
+        version="credential-b",
+        generation=2,
+        digest="credentials-b",
+        managed_fields=frozenset(),
+        values={},
+    )
+
+    with state.capture():
+        state.install(models=model_b, credentials=credential_b)
+        event_a = _basic_usage_event()
+    with state.capture():
+        event_b = _basic_usage_event()
+
+    assert state.current.models is model_b
+    assert state.current.credentials is credential_b
+    assert event_a["worker_id"] == "gateway-task-a:123"
+    assert event_a["runtime_cache_namespace"] == (
+        "models=12:credentials=credential-a:1"
+    )
+    assert event_b["runtime_cache_namespace"] == (
+        "models=13:credentials=credential-b:2"
+    )
+
+
+def test_build_usage_event_normalizes_float_artifact_cost_total():
     request = QueryRequest(
         model="openai/gpt-4o",
         inputs=[TextInput(text="hello")],
@@ -654,7 +794,7 @@ def test_build_success_usage_event_normalizes_float_artifact_cost_total():
         ),
     )
 
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -666,7 +806,7 @@ def test_build_success_usage_event_normalizes_float_artifact_cost_total():
     assert event["cost_usd"] == Decimal("1.3")
 
 
-def test_build_success_usage_event_preserves_subcent_cost_precision_at_root():
+def test_build_usage_event_preserves_subcent_cost_precision_at_root():
     request = QueryRequest(
         model="openai/gpt-4o",
         inputs=[TextInput(text="hello")],
@@ -682,7 +822,7 @@ def test_build_success_usage_event_preserves_subcent_cost_precision_at_root():
         ),
     )
 
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -694,7 +834,7 @@ def test_build_success_usage_event_preserves_subcent_cost_precision_at_root():
     assert event["cost_usd"] == Decimal("0.000000000001")
 
 
-def test_build_success_usage_event_serializes_integral_cost_without_exponent():
+def test_build_usage_event_serializes_integral_cost_without_exponent():
     request = QueryRequest(
         model="openai/gpt-4o",
         inputs=[TextInput(text="hello")],
@@ -710,7 +850,7 @@ def test_build_success_usage_event_serializes_integral_cost_without_exponent():
         ),
     )
 
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -740,7 +880,7 @@ def test_usage_event_extracts_canonical_identity_email(
         identity=identity,
     )
 
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -778,7 +918,7 @@ def test_usage_event_omits_invalid_or_absent_identity_email(
         identity=identity,
     )
 
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -805,7 +945,7 @@ def test_usage_event_skips_dimension_indexes_for_non_string_or_blank_identity_va
         query_id="query-1",
         identity={"benchmark_name": "   ", "agent_name": 123},
     )
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -839,7 +979,7 @@ async def test_dynamodb_usage_ledger_writes_only_event_row():
             cost=QueryResultCost(input=0.001, output=0.002),
         ),
     )
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -854,7 +994,7 @@ async def test_dynamodb_usage_ledger_writes_only_event_row():
     ledger._serializer = TypeSerializer()
     ledger._client = client
 
-    await ledger._write_success(event)
+    await ledger._write_event(event)
 
     assert len(client.calls) == 1
     put_item = client.calls[0]
@@ -884,7 +1024,7 @@ async def test_dynamodb_usage_ledger_writes_canonical_details_without_rewriting(
     ledger._table_name = "usage-table"
     ledger._client = client
 
-    await ledger._write_success(event)
+    await ledger._write_event(event)
 
     item = cast(dict[str, Any], client.calls[0]["Item"])
     details = cast(dict[str, Any], item["details"]["M"])
@@ -901,7 +1041,7 @@ async def test_dynamodb_usage_ledger_treats_duplicate_same_usage_event_as_succes
         inputs=[TextInput(text="hello")],
         query_id="query-1",
     )
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -922,7 +1062,7 @@ async def test_dynamodb_usage_ledger_treats_duplicate_same_usage_event_as_succes
     ledger._serializer = TypeSerializer()
     ledger._client = client
 
-    await ledger._write_success(event)
+    await ledger._write_event(event)
 
     assert len(client.calls) == 1
     assert len(client.get_calls) == 1
@@ -943,7 +1083,7 @@ async def test_dynamodb_usage_ledger_reraises_conditional_failure_for_different_
         inputs=[TextInput(text="hello")],
         query_id="query-1",
     )
-    event = _build_success_usage_event(
+    event = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -963,7 +1103,7 @@ async def test_dynamodb_usage_ledger_reraises_conditional_failure_for_different_
     ledger._client = client
 
     with pytest.raises(ClientError):
-        await ledger._write_success(event)
+        await ledger._write_event(event)
 
 
 def test_reused_query_id_records_distinct_completed_usage_events():
@@ -976,7 +1116,7 @@ def test_reused_query_id_records_distinct_completed_usage_events():
     )
     result = QueryResult(output_text="ok", history=[])
 
-    first = _build_success_usage_event(
+    first = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -985,7 +1125,7 @@ def test_reused_query_id_records_distinct_completed_usage_events():
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
         api_key_name="security-testing",
     )
-    second = _build_success_usage_event(
+    second = _build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
@@ -1101,7 +1241,7 @@ async def test_sqs_usage_ledger_sends_serialized_usage_event_message_in_batch(
     ledger._register_sqs_event_handlers(client)
     event = _basic_usage_event()
 
-    await ledger.write_success(event)
+    await ledger.write_event(event)
     await _drain_sqs_flush(ledger)
 
     assert len(client.batch_calls) == 1
@@ -1144,7 +1284,7 @@ async def test_sqs_usage_ledger_sends_serialized_usage_event_message_in_batch(
         assert _metric_number(phase_payload, "UsageLedgerSqsPhaseLatencyMs") >= 0
 
     write_payload = _payload_with_metric(payloads, "UsageLedgerSqsWriteCount")
-    assert write_payload["Operation"] == "write_success"
+
     assert write_payload["Outcome"] == "success"
     assert write_payload["ErrorType"] == "none"
     assert write_payload["UsageLedgerSqsWriteCount"] == 1
@@ -1163,7 +1303,7 @@ async def test_sqs_usage_ledger_compacts_oversized_details_before_enqueue():
     event = _basic_usage_event()
     event["details"] = {"large": "x" * MAX_USAGE_LEDGER_MESSAGE_BYTES}
 
-    await ledger.write_success(event)
+    await ledger.write_event(event)
     await _drain_sqs_flush(ledger)
 
     entries = cast(list[dict[str, object]], client.batch_calls[0]["Entries"])
@@ -1186,7 +1326,7 @@ async def test_sqs_usage_ledger_shadow_returns_before_sqs_send_completes():
     )
     ledger._client = client
 
-    await ledger.write_success(_basic_usage_event())
+    await ledger.write_event(_basic_usage_event())
 
     assert len(client.batch_calls) == 0
     await asyncio.wait_for(client.batch_started.wait(), timeout=1)
@@ -1207,7 +1347,7 @@ async def test_sqs_usage_ledger_enforced_currently_uses_background_handoff():
     )
     ledger._client = client
 
-    await ledger.write_success(_basic_usage_event())
+    await ledger.write_event(_basic_usage_event())
 
     assert len(client.batch_calls) == 0
     await asyncio.wait_for(client.batch_started.wait(), timeout=1)
@@ -1231,7 +1371,7 @@ async def test_sqs_usage_ledger_splits_eleven_concurrent_events_by_count():
         event["usage_event_id"] = f"usg_{index}"
         events.append(event)
 
-    await asyncio.gather(*(ledger.write_success(event) for event in events))
+    await asyncio.gather(*(ledger.write_event(event) for event in events))
     await _drain_sqs_flush(ledger)
 
     assert sorted(
@@ -1287,7 +1427,7 @@ async def test_sqs_usage_ledger_batches_by_aggregate_message_bytes():
         )
         events.append(event)
 
-    await asyncio.gather(*(ledger.write_success(event) for event in events))
+    await asyncio.gather(*(ledger.write_event(event) for event in events))
     await _drain_sqs_flush(ledger)
 
     assert sorted(
@@ -1333,7 +1473,7 @@ async def test_sqs_usage_ledger_bounds_concurrent_batch_sends(
         event["usage_event_id"] = f"usg_{index}"
         events.append(event)
 
-    writes = [asyncio.create_task(ledger.write_success(event)) for event in events]
+    writes = [asyncio.create_task(ledger.write_event(event)) for event in events]
     await asyncio.wait_for(client.batch_started.wait(), timeout=1)
     await asyncio.sleep(0)
 
@@ -1366,7 +1506,7 @@ async def test_sqs_usage_ledger_retries_transient_batch_send_failure(
         "model_gateway.usage_ledger.store.SQS_SEND_RETRY_DELAY_SECONDS", 0
     )
 
-    await ledger.write_success(_basic_usage_event())
+    await ledger.write_event(_basic_usage_event())
     await _drain_sqs_flush(ledger)
 
     assert len(client.batch_calls) == 2
@@ -1428,7 +1568,7 @@ async def test_sqs_usage_ledger_requeues_partial_batch_failure_after_immediate_r
         "model_gateway.usage_ledger.store.SQS_SEND_RETRY_DELAY_SECONDS", 0
     )
     results = await asyncio.gather(
-        *(ledger.write_success(event) for event in events), return_exceptions=True
+        *(ledger.write_event(event) for event in events), return_exceptions=True
     )
     await _drain_sqs_flush(ledger)
 
@@ -1468,7 +1608,7 @@ async def test_sqs_usage_ledger_requeues_batch_exception_after_immediate_retries
         "model_gateway.usage_ledger.store.SQS_SEND_RETRY_DELAY_SECONDS", 0
     )
 
-    await ledger.write_success(_basic_usage_event())
+    await ledger.write_event(_basic_usage_event())
     await _drain_sqs_flush(ledger)
 
     assert len(client.batch_calls) == 3
@@ -1489,7 +1629,7 @@ async def test_sqs_usage_ledger_close_does_not_cancel_low_volume_flush_in_progre
     )
     ledger._client = client
 
-    write_task = asyncio.create_task(ledger.write_success(_basic_usage_event()))
+    write_task = asyncio.create_task(ledger.write_event(_basic_usage_event()))
     await asyncio.wait_for(client.batch_started.wait(), timeout=1)
     close_task = asyncio.create_task(ledger.close())
     await asyncio.sleep(0)
@@ -1513,12 +1653,12 @@ async def test_sqs_usage_ledger_shadow_logs_write_started_after_close_begins(
     )
     ledger._client = client
 
-    first_write = asyncio.create_task(ledger.write_success(_basic_usage_event()))
+    first_write = asyncio.create_task(ledger.write_event(_basic_usage_event()))
     await asyncio.wait_for(client.batch_started.wait(), timeout=1)
     close_task = asyncio.create_task(ledger.close())
     await asyncio.sleep(0)
 
-    await ledger.write_success(_basic_usage_event())
+    await ledger.write_event(_basic_usage_event())
 
     assert any(
         "Gateway usage ledger SQS enqueue failed in shadow mode" in record.message
@@ -1547,13 +1687,13 @@ async def test_sqs_usage_ledger_delayed_retries_count_toward_pending_bound(
         "model_gateway.usage_ledger.store.SQS_SEND_RETRY_DELAY_SECONDS", 60
     )
 
-    await ledger.write_success(_basic_usage_event())
+    await ledger.write_event(_basic_usage_event())
     await _drain_ready_sqs_flush(ledger)
 
     assert len(ledger._retry_pending) == 1
     dropped_event = _basic_usage_event()
     dropped_event["usage_event_id"] = "usg_dropped_while_retry_pending"
-    await ledger.write_success(dropped_event)
+    await ledger.write_event(dropped_event)
 
     metrics.flush_metrics()
     payloads = _emf_payloads(capsys)
@@ -1581,12 +1721,12 @@ async def test_sqs_usage_ledger_delayed_retries_do_not_block_fresh_messages(
 
     retry_event = _basic_usage_event()
     retry_event["usage_event_id"] = "usg_retry_later"
-    await ledger.write_success(retry_event)
+    await ledger.write_event(retry_event)
     await _drain_ready_sqs_flush(ledger)
 
     fresh_event = _basic_usage_event()
     fresh_event["usage_event_id"] = "usg_fresh"
-    await ledger.write_success(fresh_event)
+    await ledger.write_event(fresh_event)
     await _drain_ready_sqs_flush(ledger)
 
     assert len(client.batch_calls) == 2
@@ -1613,7 +1753,7 @@ async def test_sqs_usage_ledger_close_flushes_delayed_retries_without_backoff_wa
         "model_gateway.usage_ledger.store.SQS_SEND_RETRY_DELAY_SECONDS", 60
     )
 
-    await ledger.write_success(_basic_usage_event())
+    await ledger.write_event(_basic_usage_event())
     await _drain_ready_sqs_flush(ledger)
 
     assert len(ledger._retry_pending) == 1
@@ -1643,7 +1783,7 @@ async def test_sqs_usage_ledger_shadow_logs_background_send_failure_after_retry_
         "model_gateway.usage_ledger.store.SQS_MAX_SEND_RETRY_AGE_SECONDS", 60
     )
 
-    await ledger.write_success(_basic_usage_event())
+    await ledger.write_event(_basic_usage_event())
     await _drain_ready_sqs_flush(ledger)
 
     assert len(client.batch_calls) == 1
@@ -1694,8 +1834,8 @@ async def test_sqs_usage_ledger_shadow_drops_when_pending_backlog_is_full(
     first_event = _basic_usage_event()
     second_event = _basic_usage_event()
     second_event["usage_event_id"] = "usg_dropped"
-    await ledger.write_success(first_event)
-    await ledger.write_success(second_event)
+    await ledger.write_event(first_event)
+    await ledger.write_event(second_event)
 
     assert len(ledger._pending) == 1
     assert any(
@@ -1706,7 +1846,7 @@ async def test_sqs_usage_ledger_shadow_drops_when_pending_backlog_is_full(
     metrics.flush_metrics()
     payloads = _emf_payloads(capsys)
     drop_payload = _payload_with_metric(payloads, "UsageLedgerSqsDroppedMessageCount")
-    assert drop_payload["Operation"] == "write_success"
+
     assert drop_payload["Outcome"] == "dropped"
     assert drop_payload["ErrorType"] == "PendingQueueCountFull"
     assert drop_payload["UsageLedgerSqsDroppedMessageCount"] == 1
@@ -1737,8 +1877,8 @@ async def test_sqs_usage_ledger_shadow_drops_when_pending_bytes_are_full(
         ledger_store, "SQS_MAX_PENDING_BYTES", first_event_bytes, raising=False
     )
 
-    await ledger.write_success(first_event)
-    await ledger.write_success(second_event)
+    await ledger.write_event(first_event)
+    await ledger.write_event(second_event)
 
     assert len(ledger._pending) == 1
     assert any(
@@ -1751,7 +1891,7 @@ async def test_sqs_usage_ledger_shadow_drops_when_pending_bytes_are_full(
     pending_payload = _payload_with_metric(payloads, "UsageLedgerSqsPendingBytes")
     assert pending_payload["UsageLedgerSqsPendingBytes"] == first_event_bytes
     drop_payload = _payload_with_metric(payloads, "UsageLedgerSqsDroppedMessageCount")
-    assert drop_payload["Operation"] == "write_success"
+
     assert drop_payload["Outcome"] == "dropped"
     assert drop_payload["ErrorType"] == "PendingQueueBytesFull"
     assert drop_payload["UsageLedgerSqsDroppedMessageCount"] == 1
@@ -1782,12 +1922,12 @@ async def test_sqs_usage_ledger_inflight_bytes_count_toward_pending_budget(
         ledger_store, "SQS_MAX_PENDING_BYTES", first_event_bytes, raising=False
     )
 
-    await ledger.write_success(first_event)
+    await ledger.write_event(first_event)
     await asyncio.wait_for(client.batch_started.wait(), timeout=1)
     assert len(ledger._pending) == 0
     assert ledger._inflight_messages == 1
 
-    await ledger.write_success(second_event)
+    await ledger.write_event(second_event)
 
     metrics.flush_metrics()
     payloads = _emf_payloads(capsys)
@@ -1820,12 +1960,12 @@ async def test_sqs_usage_ledger_delayed_retry_bytes_count_toward_pending_budget(
     monkeypatch.setattr(ledger_store, "SQS_SEND_RETRY_DELAY_SECONDS", 60)
     monkeypatch.setattr(ledger_store, "SQS_MAX_PENDING_BYTES", retry_event_bytes)
 
-    await ledger.write_success(retry_event)
+    await ledger.write_event(retry_event)
     await _drain_ready_sqs_flush(ledger)
 
     assert len(ledger._retry_pending) == 1
     assert ledger._pending_message_bytes == retry_event_bytes
-    await ledger.write_success(fresh_event)
+    await ledger.write_event(fresh_event)
 
     metrics.flush_metrics()
     payloads = _emf_payloads(capsys)
@@ -1851,7 +1991,7 @@ async def test_sqs_usage_ledger_close_does_not_double_count_retry_bytes(
 
     retry_event = _basic_usage_event()
     retry_event_bytes = _usage_event_body_bytes(retry_event)
-    await ledger.write_success(retry_event)
+    await ledger.write_event(retry_event)
     await _drain_ready_sqs_flush(ledger)
 
     assert len(ledger._retry_pending) == 1
@@ -1891,8 +2031,8 @@ async def test_sqs_usage_ledger_partial_failure_releases_successful_message_byte
     retry_event["usage_event_id"] = "usg_retry_entry"
     retry_event_bytes = _usage_event_body_bytes(retry_event)
 
-    await ledger.write_success(successful_event)
-    await ledger.write_success(retry_event)
+    await ledger.write_event(successful_event)
+    await ledger.write_event(retry_event)
     await _drain_ready_sqs_flush(ledger)
 
     assert len(ledger._retry_pending) == 1
@@ -1935,9 +2075,9 @@ async def test_dynamodb_usage_ledger_shadow_mode_swallows_write_failures():
 
     ledger = cast(Any, object.__new__(DynamoDbUsageLedger))
     ledger._mode = "shadow"
-    ledger._write_success = fail
+    ledger._write_event = fail
 
-    await ledger.write_success({})
+    await ledger.write_event({})
 
 
 @pytest.mark.asyncio
@@ -1947,10 +2087,10 @@ async def test_dynamodb_usage_ledger_enforced_mode_raises_on_write_failure():
 
     ledger = cast(Any, object.__new__(DynamoDbUsageLedger))
     ledger._mode = "enforced"
-    ledger._write_success = fail
+    ledger._write_event = fail
 
     with pytest.raises(UsageLedgerWriteError):
-        await ledger.write_success({})
+        await ledger.write_event({})
 
 
 def test_query_writes_success_usage_event_when_ledger_is_configured():

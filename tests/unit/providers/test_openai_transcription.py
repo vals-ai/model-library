@@ -231,7 +231,6 @@ async def test_openai_file_transcription_tracks_usage_and_registry_cost() -> Non
     client = MagicMock()
     client.audio.transcriptions.create = AsyncMock(return_value=response)
     model = _file_model()
-    assert not model.supports_batch
 
     with patch.object(model, "get_client", return_value=client):
         result = await model.transcribe_audio(

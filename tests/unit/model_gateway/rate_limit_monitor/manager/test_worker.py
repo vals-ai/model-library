@@ -1,9 +1,12 @@
 import asyncio
+from types import MappingProxyType
 from unittest.mock import Mock, call
 
 import pytest
-
+from pydantic import SecretStr
 import model_gateway.rate_limit_monitor.manager as monitor_module
+from model_gateway.rate_limit_monitor.types import MonitorSourceName
+from model_gateway.runtime_config import CredentialSnapshot, RuntimeConfigState
 from model_gateway.rate_limit_monitor.manager import (
     OWNERSHIP_RETRY_SECONDS,
     POLL_INTERVAL_SECONDS,
@@ -24,6 +27,20 @@ from tests.unit.model_gateway.rate_limit_monitor.manager._support import (
     _wait_until,
     _isolate_monitor_metrics as _isolate_monitor_metrics,
 )
+def _managed_runtime_state(values: dict[str, str]) -> RuntimeConfigState:
+    state = RuntimeConfigState.bootstrap()
+    state.install(
+        credentials=CredentialSnapshot(
+            version="test-version",
+            generation=1,
+            digest="test-digest",
+            managed_fields=frozenset({"ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY_2"}),
+            values=MappingProxyType(
+                {key: SecretStr(value) for key, value in values.items()}
+            ),
+        )
+    )
+    return state
 
 
 async def test_contended_worker_retries_after_five_seconds_and_acquires(
@@ -118,6 +135,25 @@ async def test_worker_releases_stale_claim_without_migrating_persisted_sources(
     assert all(probe.calls == 0 for probe in probes)
 
 
+async def test_bootstrap_runtime_view_keeps_static_stale_claim_behavior(monkeypatch):
+    store = FakeStore()
+    store.leases[ANTHROPIC_MODEL] = ("pool_1",)
+    state = RuntimeConfigState.bootstrap()
+    monitor = _monitor(monkeypatch, store, {ANTHROPIC_MODEL: "anthropic"})
+    monitor._runtime_capture = state.capture
+    probes = [FakeProbe([_rate_limit()]), FakeProbe([_rate_limit()])]
+    _stub_sources(
+        monkeypatch,
+        monitor,
+        _SourceProbe("pool_1", "anthropic", probes[0]),
+        _SourceProbe("pool_2", "anthropic", probes[1]),
+    )
+
+    await monitor._model_worker(ANTHROPIC_MODEL)
+
+    assert len(store.release_calls) == 1
+    assert store.publications == []
+    assert all(probe.calls == 0 for probe in probes)
 async def test_ownership_loss_is_recorded_when_renewal_is_lost(monkeypatch):
     store = FakeStore()
     store.renew_results = [None]
@@ -192,6 +228,43 @@ async def test_probe_is_immediate_non_overlapping_and_uses_fixed_targets(
     await asyncio.gather(task, return_exceptions=True)
 
 
+async def test_poll_reuses_its_probe_while_the_runtime_view_is_unchanged(
+    monkeypatch,
+):
+    store = FakeStore()
+    state = _managed_runtime_state({"ANTHROPIC_API_KEY": "test-provider-key-one"})
+    monitor = monitor_module.RateLimitMonitor(store, runtime_capture=state.capture)
+    clock = _control_clock(monitor)
+    probe = FakeProbe([_rate_limit(), _rate_limit()])
+    built: list[MonitorSourceName] = []
+
+    def build_sources(model, expected_sources, *, only=None, **_):
+        built.append(only)
+        return [_SourceProbe("default", "openai", probe)]
+
+    with state.capture() as runtime_view:
+        namespace = runtime_view.cache_namespace
+    monkeypatch.setattr(monitor, "_build_sources", build_sources)
+    task = asyncio.create_task(
+        monitor._source_loop(
+            MODEL,
+            "owner",
+            _SourceProbe("default", "openai", probe),
+            ("default",),
+            source_namespace=namespace,
+        )
+    )
+    await _wait_until(lambda: len(store.publications) == 1)
+    seconds, future = await clock.next_sleep()
+    assert seconds == POLL_INTERVAL_SECONDS
+
+    future.set_result(None)
+    await _wait_until(lambda: len(store.publications) == 2)
+
+    assert built == []
+    assert probe.calls == 2
+    task.cancel()
+    await asyncio.gather(task, return_exceptions=True)
 async def test_rejected_generation_refreshes_at_next_scheduled_poll(monkeypatch):
     store = FakeStore()
     store.publish_results = [False, True]
@@ -346,3 +419,69 @@ async def test_cancel_model_tasks_removes_task_cancelled_before_start(monkeypatc
 
     assert monitor._model_tasks == {}
     assert store.claim_calls == []
+
+
+async def test_model_removed_from_live_snapshot_publishes_unavailable_and_keeps_polling(
+    monkeypatch,
+):
+    model = "anthropic/claude-sonnet-4-5-20250929"
+    store = FakeStore()
+    store.leases[model] = ("pool_1",)
+    store.generations[model] = GENERATION_A
+    state = _managed_runtime_state({"ANTHROPIC_API_KEY": "test-provider-key-one"})
+    monitor = monitor_module.RateLimitMonitor(store, runtime_capture=state.capture)
+    clock = _control_clock(monitor)
+    probe = FakeProbe([_rate_limit()])
+    with state.capture() as view:
+        assert view is not None
+        namespace = view.cache_namespace
+    task = asyncio.create_task(
+        monitor._source_loop(
+            model,
+            "owner",
+            _SourceProbe("pool_1", "anthropic", probe),
+            ("pool_1",),
+            source_namespace=namespace,
+        )
+    )
+    try:
+        await _wait_until(lambda: len(store.publications) == 1)
+        monkeypatch.setattr(monitor_module, "get_registry_config", lambda _model: None)
+        monkeypatch.setattr(
+            monitor_module.RuntimeView,
+            "cache_namespace",
+            property(lambda _view: "models=removed"),
+        )
+        _, future = await clock.next_sleep()
+        future.set_result(None)
+        await _wait_until(lambda: len(store.publications) == 2 or task.done())
+
+        assert not task.done(), task.exception()
+        assert store.publications[1][4].source == "pool_1"
+        assert store.publications[1][4].status == "error"
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def test_takeover_of_removed_model_publishes_unavailable_and_keeps_running(
+    monkeypatch,
+):
+    model = "anthropic/claude-sonnet-4-5-20250929"
+    store = FakeStore()
+    store.active = {model}
+    store.leases[model] = ("pool_1",)
+    store.generations[model] = GENERATION_A
+    state = _managed_runtime_state({"ANTHROPIC_API_KEY": "test-provider-key-one"})
+    monitor = monitor_module.RateLimitMonitor(store, runtime_capture=state.capture)
+    monkeypatch.setattr(monitor_module, "get_registry_config", lambda _model: None)
+    task = asyncio.create_task(monitor._model_worker(model))
+    try:
+        await _wait_until(lambda: len(store.publications) == 1 or task.done())
+
+        assert not task.done(), task.exception()
+        assert store.publications[0][4].source == "pool_1"
+        assert store.publications[0][4].status == "error"
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)

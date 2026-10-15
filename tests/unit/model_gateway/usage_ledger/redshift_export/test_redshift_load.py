@@ -87,7 +87,7 @@ def test_direct_prepare_copy_and_finalize_use_batch_ids() -> None:
     sql = "\n".join([*prepare, *copy, *finalize])
 
     assert prepare == [
-        "delete from gateway_usage_dev.usage_events_staging_v2\n"
+        "delete from gateway_usage_dev.usage_events_staging_v4\n"
         "where batch_id in ('window-s00', 'window-s01');"
     ]
     assert "from 's3://bucket/window/manifest.json'" in copy[0]
@@ -99,7 +99,7 @@ def test_direct_prepare_copy_and_finalize_use_batch_ids() -> None:
     assert "source.performance" in sql
     assert "usage_event_debug" not in sql
     assert "payload" not in sql
-    assert "delete from gateway_usage_dev.usage_events_staging_v2" in finalize[-1]
+    assert "delete from gateway_usage_dev.usage_events_staging_v4" in finalize[-1]
     assert "load_batches" not in sql
     assert "export_control" not in sql
     assert "accept_export_fence" not in sql
@@ -116,7 +116,7 @@ def test_finalize_can_defer_analytics_refresh_for_backfill() -> None:
 
     assert "merge into gateway_usage.usage_events" in sql
     assert "merge into gateway_usage.usage_event_performance_v2" in sql
-    assert "delete from gateway_usage.usage_events_staging_v2" in sql
+    assert "delete from gateway_usage.usage_events_staging_v4" in sql
     assert "usage_agg_" not in sql
     assert "usage_dimension_values" not in sql
 
@@ -136,6 +136,8 @@ def test_finalize_refreshes_aggregates_and_dimension_values() -> None:
     assert sql.count("insert into gateway_usage.usage_agg_") == 3
     assert "delete from gateway_usage.usage_dimension_values;" in sql
     assert "insert into gateway_usage.usage_dimension_values" in sql
+    assert "outcome = 'success' and completed_at" in sql
+    assert "sum(case when completed_at >= dateadd(day, -30, getdate()) then cost_usd end)" in sql
 
 
 def test_finalize_refreshes_complete_coarser_buckets() -> None:

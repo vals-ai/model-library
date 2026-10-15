@@ -4,8 +4,10 @@ import gzip
 import io
 import json
 import logging
+import threading
 from contextlib import contextmanager, nullcontext
 from dataclasses import asdict
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -629,3 +631,215 @@ async def test_concurrent_captures_are_isolated() -> None:
     assert _payload(_records(first_data), "response.bytes") == b"first"
     assert _payload(_records(second_data), "response.bytes") == b"second"
     assert core.current_capture() is None
+
+
+@pytest.mark.parametrize("chunk_size", [128, 4096])
+def test_capture_bounds_retained_records_across_retries(
+    chunk_size: int, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(core, "CAPTURE_LIMIT_BYTES", 1024, raising=False)
+    monkeypatch.setattr(core, "SPOOL_MEMORY_LIMIT_BYTES", 128)
+
+    with core.capture(enabled=True) as active:
+        assert active is not None
+        for _ in range(8):
+            attempt = active.attempt("test")
+            attempt.request_bytes(b"request", representation="test")
+            attempt.response_bytes(b"x" * chunk_size, representation="test")
+            attempt.fail(RuntimeError("retry"))
+        artifact = active.finalize()
+        assert artifact is not None
+        data = gzip.decompress(artifact.path.read_bytes())
+        stats = active.stats()
+
+    assert len(data) <= 1024
+    records = [json.loads(line) for line in data.splitlines()]
+    assert records[-1] == {"event": "capture.truncated", "reason": "size_limit"}
+    assert stats.raw_bytes == len(data)
+    assert stats.attempts == 8
+    assert stats.request_bytes == 56
+    assert stats.response_bytes == chunk_size * 8
+    assert stats.response_chunks == 8
+
+
+def test_capture_bounds_pending_redaction_before_request_completion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(core, "CAPTURE_LIMIT_BYTES", 1024, raising=False)
+
+    with core.capture(enabled=True) as active:
+        assert active is not None
+        active.register_request_payload(b"secret", "file")
+        attempts = [active.attempt("test") for _ in range(4)]
+        for _ in range(8):
+            for attempt in attempts:
+                attempt.request_bytes(b"secret" * 40, representation="test")
+        retained = sum(
+            len(attempt._request_body)
+            for attempt in attempts
+        )
+        assert retained <= 1024
+        for attempt in attempts:
+            attempt.fail(RuntimeError("retry"))
+        artifact = active.finalize()
+        assert artifact is not None
+        data = gzip.decompress(artifact.path.read_bytes())
+        stats = active.stats()
+
+    assert len(data) <= 1024
+    assert b"secret" not in data
+    assert stats.request_bytes == 7680
+    assert stats.errors == 0
+
+
+@pytest.mark.parametrize("encoded", [False, True])
+def test_redaction_skips_file_values_that_cannot_fit_the_captured_request(
+    encoded: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    file_value = b"secret-file" * 4096
+    registered = base64.b64encode(file_value).decode() if encoded else file_value
+    converted_sizes: list[int] = []
+    original_patterns = core._request_patterns
+
+    def measured_patterns(value):
+        converted_sizes.append(len(value))
+        yield from original_patterns(value)
+
+    monkeypatch.setattr(core, "_request_patterns", measured_patterns)
+    with core.capture(enabled=True) as active:
+        assert active is not None
+        active.register_request_payload(registered, "file")
+        attempt = active.attempt("test")
+        attempt.request_bytes(b"small request", representation="test")
+        attempt.finish()
+        artifact = active.finalize()
+        assert artifact is not None
+        records = _records(artifact.path.read_bytes())
+
+    request = next(record for record in records if record["event"] == "request.bytes")
+    assert request["payload_omitted"] == "file_redaction_unverified"
+    assert "bytes_base64" not in request
+    assert converted_sizes == []
+
+
+async def test_failure_compression_allows_event_loop_progress(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: tuple[_Sentry, list[core.CaptureStats]],
+) -> None:
+    monkeypatch.setenv("GATEWAY_FAILED_EXCHANGE_CAPTURE_ENABLED", "true")
+    loop = asyncio.get_running_loop()
+    progress = threading.Event()
+    progressed_during_compression: list[bool] = []
+    original_copy = core.shutil.copyfileobj
+
+    def copy_with_event_loop_probe(source, destination) -> None:
+        loop.call_soon_threadsafe(progress.set)
+        progressed_during_compression.append(progress.wait(timeout=1))
+        original_copy(source, destination)
+
+    monkeypatch.setattr(core.shutil, "copyfileobj", copy_with_event_loop_probe)
+    error = RuntimeError("provider failed")
+    result = await _operation().provider_call(_captured_failure(error, []), span_attrs={})
+
+    assert isinstance(result, ProviderError)
+    assert progressed_during_compression == [True]
+    assert runtime[0].exceptions == [error]
+    assert len(runtime[0].attachments) == 1
+
+
+@pytest.mark.parametrize("provider_cancelled", [False, True])
+async def test_repeated_cancellation_waits_for_compression_before_cleanup(
+    provider_cancelled: bool,
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: tuple[_Sentry, list[core.CaptureStats]],
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("GATEWAY_FAILED_EXCHANGE_CAPTURE_ENABLED", "true")
+    monkeypatch.setattr(core.tempfile, "tempdir", str(tmp_path))
+    spool = io.BytesIO()
+    monkeypatch.setattr(core.tempfile, "SpooledTemporaryFile", lambda **_kwargs: spool)
+    started = threading.Event()
+    release = threading.Event()
+    original_copy = core.shutil.copyfileobj
+
+    def copy_after_release(source, destination) -> None:
+        started.set()
+        release.wait(timeout=2)
+        original_copy(source, destination)
+
+    monkeypatch.setattr(core.shutil, "copyfileobj", copy_after_release)
+
+    async def fail() -> None:
+        await _captured_success()
+        if provider_cancelled:
+            raise asyncio.CancelledError
+        raise RuntimeError("provider failed")
+
+    task = asyncio.create_task(_operation().provider_call(fail(), span_attrs={}))
+    try:
+        assert await asyncio.to_thread(started.wait, 1)
+        task.cancel()
+        await asyncio.sleep(0)
+        task.cancel()
+        await asyncio.sleep(0)
+        assert not task.done()
+        assert not spool.closed
+    finally:
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert spool.closed
+    assert list(tmp_path.iterdir()) == []
+    assert core.current_capture() is None
+    assert runtime[1][0].errors == 0
+
+
+def test_shutdown_cancellation_waits_for_compression_before_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setattr(core.tempfile, "tempdir", str(tmp_path))
+    spool = io.BytesIO()
+    monkeypatch.setattr(core.tempfile, "SpooledTemporaryFile", lambda **_kwargs: spool)
+    release = threading.Event()
+    original_copy = core.shutil.copyfileobj
+
+    async def exercise_shutdown() -> None:
+        loop = asyncio.get_running_loop()
+        started = asyncio.Event()
+
+        def copy_before_release(source, destination) -> None:
+            original_copy(source, destination)
+            loop.call_soon_threadsafe(started.set)
+            release.wait(timeout=2)
+
+        monkeypatch.setattr(core.shutil, "copyfileobj", copy_before_release)
+
+        async def capture_failure() -> None:
+            with core.capture(enabled=True) as active:
+                assert active is not None
+                attempt = active.attempt("test")
+                attempt.response_bytes(b"response", representation="test")
+                await active.finalize_async()
+
+        request = asyncio.create_task(capture_failure())
+        try:
+            await asyncio.wait_for(started.wait(), timeout=1)
+            pending = asyncio.all_tasks() - {asyncio.current_task()}
+            for task in pending:
+                task.cancel()
+
+            for _ in range(4):
+                await asyncio.sleep(0)
+
+            assert not request.done()
+            assert not spool.closed
+        finally:
+            release.set()
+            await asyncio.gather(request, return_exceptions=True)
+
+    asyncio.run(exercise_shutdown())
+
+    assert spool.closed
+    assert list(tmp_path.iterdir()) == []

@@ -1,18 +1,15 @@
 """Shared route helpers for gateway endpoints."""
 
 import asyncio
-from collections.abc import Awaitable, Mapping
-from dataclasses import dataclass
 import time
+from collections.abc import Awaitable, Mapping
+from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar, cast
 
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel as PydanticBaseModel
 
-from model_library import model_library_settings
-from model_library.failure_capture.core import Artifact, capture
 import model_library.telemetry as telemetry
-
 from model_gateway.errors import map_exception_to_error
 from model_gateway.metrics import (
     MetricSpec,
@@ -23,7 +20,13 @@ from model_gateway.metrics import (
 )
 from model_gateway.telemetry_helpers import error_telemetry_attributes, latency_ms
 from model_gateway.types import ProviderError
-from model_library.exceptions import exception_to_provider_error
+from model_library import model_library_settings
+from model_library.base.output import QueryResult
+from model_library.exceptions import (
+    InvalidStructuredOutputError,
+    exception_to_provider_error,
+)
+from model_library.failure_capture.core import Artifact, capture
 
 T = TypeVar("T")
 
@@ -88,6 +91,7 @@ class GatewayOperation:
     dimensions: Mapping[str, str]
     start: float
     provider: str | None
+    failed_query_result: QueryResult | None = field(default=None, repr=False)
 
     def start_event(self, attrs: Mapping[str, object | None]) -> None:
         telemetry.set_attributes(attrs)
@@ -169,7 +173,7 @@ class GatewayOperation:
                     result = await awaitable
                 except asyncio.CancelledError as exc:
                     artifact = (
-                        active_capture.finalize()
+                        await active_capture.finalize_async()
                         if active_capture is not None
                         else None
                     )
@@ -184,8 +188,10 @@ class GatewayOperation:
                         )
                     raise
                 except Exception as exc:
+                    if isinstance(exc, InvalidStructuredOutputError):
+                        self.failed_query_result = exc.query_result
                     artifact = (
-                        active_capture.finalize()
+                        await active_capture.finalize_async()
                         if active_capture is not None
                         else None
                     )

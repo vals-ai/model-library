@@ -53,6 +53,20 @@ class TestOpenAIBuildBodyOutputSchema:
         assert fmt["strict"] is True
 
 
+    async def test_completions_dict_schema_uses_response_format(self):
+        model = OpenAIModel("gpt-4o", use_completions=True)
+
+        body = await model.build_body(_INPUT, tools=[], output_schema=DICT_SCHEMA)
+
+        fmt = body["response_format"]
+        assert fmt["type"] == "json_schema"
+        assert fmt["json_schema"] == {
+            "name": "structured_output",
+            "schema": DICT_SCHEMA,
+            "strict": True,
+        }
+
+
 class TestGoogleBuildBodyOutputSchema:
     @pytest.fixture
     def model(self):
@@ -103,6 +117,7 @@ UNSUPPORTED_PROVIDER_MODELS = [
     "mistralai/mistral-large-2512",
     "amazon/amazon.nova-pro-v1:0",
     "grok/grok-3",
+    "decision/jev-1.13.0",
 ]
 
 UNSUPPORTED_BIG_THREE_MODELS = [

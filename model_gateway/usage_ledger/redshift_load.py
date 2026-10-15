@@ -160,7 +160,8 @@ def usage_dimension_values_refresh_statements(
         f"""  select {redshift_schema.sql_literal(dimension.dimension_kind)} as dimension_kind,
          cast({dimension.fact_column} as varchar(2048)) as dimension_value,
          completed_at,
-         cost_usd
+         cost_usd,
+         outcome
   from {facts}
   where {dimension.fact_column} is not null"""
         for dimension in redshift_schema.ANALYTICS_DIMENSIONS
@@ -183,9 +184,9 @@ select
   dimension_value,
   min(completed_at) as first_seen_at,
   max(completed_at) as last_seen_at,
-  sum(case when completed_at >= dateadd(day, -7, getdate()) then 1 else 0 end) as request_count_7d,
-  sum(case when completed_at >= dateadd(day, -30, getdate()) then 1 else 0 end) as request_count_30d,
-  coalesce(sum(case when completed_at >= dateadd(day, -30, getdate()) then cost_usd else 0 end), 0) as cost_usd_30d,
+  sum(case when outcome = 'success' and completed_at >= dateadd(day, -7, getdate()) then 1 else 0 end) as request_count_7d,
+  sum(case when outcome = 'success' and completed_at >= dateadd(day, -30, getdate()) then 1 else 0 end) as request_count_30d,
+  sum(case when completed_at >= dateadd(day, -30, getdate()) then cost_usd end) as cost_usd_30d,
   getdate() as updated_at
 from (
 {selects}

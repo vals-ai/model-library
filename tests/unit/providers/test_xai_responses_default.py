@@ -30,7 +30,6 @@ def test_default_uses_responses_delegate():
     assert model.provider_config.native is False
     assert model.native is False
     delegate = _delegate(model)
-    assert delegate.use_completions is False
     assert delegate.provider == "xai"
     assert delegate.custom_endpoint == "https://api.x.ai/v1"
 

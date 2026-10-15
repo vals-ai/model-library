@@ -23,7 +23,6 @@ class TestMetaConfig:
         assert isinstance(model.provider_config, MetaConfig)
         assert model.provider_config.use_responses is True
         assert isinstance(model.delegate, OpenAIModel)
-        assert model.delegate.use_completions is False
         body = await model.build_body(_INPUT, tools=[])
         assert "input" in body
         assert "messages" not in body

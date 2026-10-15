@@ -21,20 +21,22 @@ class ModelCache:
         self._cache: OrderedDict[str, tuple[object, float]] = OrderedDict()
 
     @staticmethod
-    def make_key(model: str, config: dict[str, Any]) -> str:
+    def make_key(model: str, config: dict[str, Any], *, namespace: str) -> str:
         config_json = json.dumps(config, sort_keys=True, default=str)
         config_hash = hashlib.sha256(config_json.encode()).hexdigest()[:16]
-        return f"{model}:{config_hash}"
+        return f"{namespace}:{model}:{config_hash}"
 
     def get_or_create(
         self,
         model: str,
         config: dict[str, Any],
         factory: Callable[[str, dict[str, Any]], T],
+        *,
+        namespace: str,
     ) -> T:
         now = time.monotonic()
         self._prune_expired(now)
-        key = self.make_key(model, config)
+        key = self.make_key(model, config, namespace=namespace)
         entry = self._cache.get(key)
         if entry is not None:
             instance, _last_used = entry

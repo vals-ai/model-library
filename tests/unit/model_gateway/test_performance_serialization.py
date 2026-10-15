@@ -23,7 +23,7 @@ def test_query_result_response_body_compresses_performance_for_client_round_trip
     )
     result = QueryResult(metadata=QueryResultMetadata(performance=performance))
 
-    body = query_result_response_body(result, signed_history="[]")
+    body = query_result_response_body(result, signed_history="[]", failed=False)
 
     envelope = body["metadata"]["performance"]
     assert envelope["encoding"] == "gzip+base64"

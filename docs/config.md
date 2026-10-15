@@ -44,7 +44,7 @@ base-config: # level 1: provider
 claude-sonnet-models: # named block
   base-config: # level 2: block
     supports:
-      batch: true
+      tools: true
 
   anthropic/claude-sonnet-4-6: # level 3: model
     label: Claude Sonnet 4.6
@@ -53,9 +53,11 @@ claude-sonnet-models: # named block
       max_tokens: 65_536
 ```
 
-Result: `claude-sonnet-4-6` gets `company: Anthropic`, `country: United States`, `images: true`, `batch: true`, `reasoning_model: false`, plus its own `context_window` and `max_tokens`.
+Result: `claude-sonnet-4-6` gets `company: Anthropic`, `country: United States`, `images: true`, `tools: true`, `reasoning_model: false`, plus its own `context_window` and `max_tokens`.
 
 ## Provider Properties
+
+OpenAI remains one provider and one `OpenAIModel`. The constructor's `use_completions` selector chooses Chat Completions when true and Responses when false (the default), once per instance. The separate API implementations are internal: public model names and provider configuration do not change.
 
 Provider-specific `provider_properties` are validated by each provider:
 
@@ -63,8 +65,10 @@ Provider-specific `provider_properties` are validated by each provider:
 - **Anthropic**: Set `thinking_off_type: between_tools` on auto-thinking models that reject `{"type": "disabled"}`; a request with `reasoning: false` then sends `between_tools`, and since that setting only accepts low/medium/high effort, `xhigh`/`max` are sent as `high`. `fallback_models` entries on such a request carry `thinking: {"type": "disabled"}` since the API validates each fallback against its own model.
 - **Anthropic**: Set `task_budget_tokens` to send `output_config.task_budget` with the task-budgets beta, an advisory token budget the model paces its agentic loop against. It is not enforced; `max_tokens` remains the hard ceiling.
 - **Anthropic**: Set `returns_thinking_truncated_turns: true` to return a turn that ran out of tokens inside a thinking block as a `max_tokens` result with its reasoning, instead of raising, so the client can continue the turn. On these keys only, replaying such a turn appends a short text block, since Anthropic rejects an assistant message whose final block is thinking.
+- **Google**: Set `uses_thinking_budget: true` on Gemini 2.5 and older models, which still take `thinking_budget` and the sampling parameters (`temperature`, `top_p`, `top_k`). Without the flag (Gemini 3+), reasoning requests send `thinking_level` (from `reasoning_effort` or a `thinking_level` kwarg), and `thinking_budget` plus the sampling parameters are dropped with a warning.
 - **OpenAI-compatible completions**: Set `stream_completions: false` to use non-streaming chat completions. The default is `true`.
 - **OpenAI Responses**: Set `code_mode: true` to add the hosted Code Mode tool. When enabled, function tools without explicit `allowed_callers` are sent with `allowed_callers: ["code_mode", "direct"]`.
+- **OpenAI Responses**: Set `access_programs` (for example `{cyber: daybreak_blue}`) to send OpenAI access programs. Set it in the registry entry, because a request `provider_config` replaces the entry's whole one. The gateway rejects it in a request unless the request has its own `custom_api_key`. `openai/gpt-daybreak-blue` and the `-daybreak` keys set it. A `-daybreak` key pins one model, so OpenAI cannot change it as it can the alias. OpenAI returns a 400 on models the program does not cover, such as `gpt-6.1-sol`.
 - **OpenAI / Google**: Set `service_tier: flex` to request Flex processing (sent as `service_tier`); responses are billed at the model's `batch` discount.
 - **xAI**: Grok requests use the OpenAI-compatible Responses API by default (encrypted reasoning is requested via `include: ["reasoning.encrypted_content"]`). Set `native: true` to use the `xai_sdk` gRPC client instead.
 - **Meta**: Set `use_responses: true` on selected models to route the OpenAI-compatible delegate through the Responses API instead of Chat Completions.
@@ -83,6 +87,8 @@ Company icons live in `model_library/config/icons/`. Name the light asset exactl
 See the [field reference](../model_library/config/README.md#fields) for the `rate_limit` YAML shape. This field stores accounting policy and optional static retry/admission capacity. Live provider observations are separate and never rewrite YAML. Omit `rate_limit` when neither policy nor static capacity is known; public exports strip static capacity and retain policy.
 
 Use `supports.files` only for non-image document or file inputs supported by the provider. For image- or video-only APIs, leave it `false` and set `supports.images` or `supports.videos` instead.
+
+Image inputs (`type="image"`) accept short MIME names (`png`) or full MIME types (`image/png`). All `FileBase` subclasses store and serialize the full form, including inputs decoded from gateway requests. Non-image MIME types and file contents stay unchanged. Providers use the stored MIME type; Bedrock reads `FileBase.image_format` for its required short format. The separate `upload_file()` API keeps its existing MIME requirements.
 
 The validator still runs file examples when `supports.files` is `false`. If one succeeds, validation fails because the registry entry is stale.
 
@@ -231,11 +237,13 @@ Gateway execution is server-authoritative:
 2. Requests send only explicit override config, not registry-derived defaults.
 3. On a provider-model cache miss, the server merges overrides with its loaded
    registry config.
-4. The server caches the provider model by model and override config, plus token
-   retry parameters when active.
+4. The server caches the provider model by model and override configuration,
+   plus token retry parameters when active.
+5. When live runtime snapshots are enabled, the cache key also contains the
+   captured model and credential revisions.
 
-Registry changes are not hot-reloaded into existing cached provider models;
-restart or explicit cache invalidation is required.
+Without live runtime snapshots, registry changes do not replace cached provider
+models. A restart or explicit cache invalidation is required.
 
 ### Single-model metadata
 
@@ -244,8 +252,6 @@ restart or explicit cache invalidation is required.
 - The values come from the client registry snapshot used at construction.
 - `refresh_model_registry()` affects models constructed afterward; existing
   model instances retain their construction snapshot.
-- Gateway batch capability metadata is preserved, but client-side gateway batch
-  calls raise until gateway batch endpoints exist.
 
 ## Custom config overrides
 
@@ -288,6 +294,9 @@ provider files are included automatically.
 | `ARCEE_API_KEY`                    | —       | Arcee AI API key                                                                              |
 | `NVIDIA_API_KEY`                   | —       | NVIDIA API key                                                                                |
 | `POOLSIDE_API_KEY`                 | —       | Poolside API key                                                                              |
+| `RAMP_API_KEY`                     | —       | Ramp Router API key                                                                           |
+| `SAKANA_API_KEY`                   | —       | Sakana Fugu API key                                                                           |
+| `DIGITAL_OCEAN_API_KEY`            | —       | DigitalOcean Inference model access key                                                       |
 | `BASETEN_API_KEY`                  | —       | Baseten API key                                                                               |
 | `BASETEN_API_BASE_URL`             | —       | Full OpenAI-compatible Baseten `/v1` base URL                                                 |
 

@@ -70,7 +70,6 @@ def create_config(
             registry_config.transcription_streaming
         )
         config["supports_videos"] = supports.videos
-        config["supports_batch"] = supports.batch
         config["supports_temperature"] = supports.temperature
         config["supports_tools"] = supports.tools
         config["supports_output_schema"] = supports.output_schema
@@ -95,12 +94,18 @@ def create_config(
 
     # override only with explicitly set fields from override_config
     if override_config:
+        registry_provider_config = loaded_config.provider_config
         loaded_config = loaded_config.model_copy(
             update=override_config.model_dump(exclude_unset=True)
         )
-        # copy provider_config with correct type (model_dump flattens to dict)
-        if override_config.provider_config:
-            loaded_config.provider_config = override_config.provider_config
+        # copy provider_config with correct type (model_dump flattens to dict), keeping the registry's other fields
+        override = override_config.provider_config
+        if isinstance(override, ProviderConfig):
+            if isinstance(registry_provider_config, type(override)):
+                override = registry_provider_config.model_copy(
+                    update={k: getattr(override, k) for k in override.model_fields_set}
+                )
+            loaded_config.provider_config = override
 
     return loaded_config
 

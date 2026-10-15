@@ -34,7 +34,7 @@
 - Config overrides follow the static-key rules: any field except `custom_endpoint` and `registry_key`, which are refused for every caller.
 - The gateway stamps `run_id`, `question_id` (= `task_id`) and `identity` over what the sandbox sends.
 - Run tokens cannot set `token_retry_params`: they reconfigure provider budgets shared across runs.
-- Run tokens cannot set `provider_config` on models with a YAML `openrouter_allowed_models` pool: it replaces the entry's whole config, which would drop the pool.
+- Run tokens cannot set `provider_config` on router entries with YAML settings (pool, tier, preference): it replaces the entry's whole config, which would drop them.
 
 ## Revoke
 

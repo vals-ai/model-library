@@ -21,8 +21,7 @@ from google.genai.types import (
 )
 
 from model_library.providers.ai21labs import AI21LabsModel
-from model_library.providers.anthropic import AnthropicBatchMixin, AnthropicModel
-from model_library.providers.google.batch import parse_predictions_jsonl
+from model_library.providers.anthropic import AnthropicModel
 from model_library.providers.google.google import GoogleModel
 from model_library.providers.mistral import MistralModel
 from model_library.providers.vals import DummyAIModel
@@ -37,15 +36,6 @@ from tests.unit.provider_response_helpers import (
     _query_xai,
     _xai_response,
 )
-
-
-class _AsyncItems:
-    def __init__(self, *items: object):
-        self._items = items
-
-    async def __aiter__(self):
-        for item in self._items:
-            yield item
 
 
 async def test_ai21_query_captures_response_id_metadata():
@@ -113,38 +103,6 @@ async def test_anthropic_query_captures_message_id_metadata():
     assert result.extras.response_id == "anthropic-message-1"
     assert result.extras.provider_response_id == "anthropic-message-1"
     assert result.extras.provider_request_id == "anthropic-request-1"
-
-
-async def test_anthropic_batch_captures_message_id_metadata():
-    model = AnthropicModel("claude-test")
-    client = MagicMock()
-    client.messages.batches.retrieve = AsyncMock(
-        return_value=SimpleNamespace(processing_status="ended")
-    )
-    client.messages.batches.results = AsyncMock(
-        return_value=_AsyncItems(
-            SimpleNamespace(
-                model_dump=lambda: {
-                    "custom_id": "request-1",
-                    "result": {
-                        "type": "succeeded",
-                        "message": {
-                            "id": "anthropic-batch-message-1",
-                            "content": [{"type": "text", "text": "hello"}],
-                            "usage": {"input_tokens": 1, "output_tokens": 2},
-                        },
-                    },
-                }
-            )
-        )
-    )
-
-    with patch.object(model, "get_client", return_value=client):
-        results = await AnthropicBatchMixin(model).get_batch_results("batch-1")
-
-    assert results[0].custom_id == "request-1"
-    assert results[0].output.extras.response_id == "anthropic-batch-message-1"
-    assert results[0].output.extras.provider_response_id == "anthropic-batch-message-1"
 
 
 @pytest.mark.parametrize(
@@ -230,17 +188,6 @@ async def test_google_query_allows_missing_response_id_metadata():
 
     assert result.output_text == "hello"
     assert result.extras.response_id is None
-
-
-def test_google_batch_parse_captures_response_id_metadata():
-    results = parse_predictions_jsonl(
-        '{"key":"request-1","response":{"responseId":"google-batch-1",'
-        '"candidates":[{"content":{"parts":[{"text":"hello"}]}}],'
-        '"usageMetadata":{"promptTokenCount":1,"candidatesTokenCount":2}}}'
-    )
-
-    assert results[0].output.extras.response_id == "google-batch-1"
-    assert results[0].output.extras.provider_response_id == "google-batch-1"
 
 
 async def test_mistral_query_captures_response_id_metadata():

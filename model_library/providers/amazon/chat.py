@@ -228,7 +228,7 @@ class AmazonModel(LLM):
                 image_bytes = base64.b64decode(image.base64)
                 return {
                     "image": {
-                        "format": image.mime,
+                        "format": image.image_format,
                         "source": {"bytes": image_bytes},
                     },
                 }

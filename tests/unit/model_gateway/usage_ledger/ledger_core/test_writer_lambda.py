@@ -13,7 +13,7 @@ from model_gateway.usage_ledger.message import (
     prepare_usage_event_message,
     serialize_usage_event_message,
 )
-from model_gateway.usage_ledger.store import build_success_usage_event
+from model_gateway.usage_ledger.store import build_usage_event
 from model_library.base.input import TextInput
 from model_library.base.output import QueryResult
 
@@ -51,12 +51,13 @@ def _usage_event() -> dict[str, object]:
         output_text="forbidden writer output",
         history=[TextInput(text="preserved writer history")],
     )
-    return build_success_usage_event(
+    return build_usage_event(
         body=request,
         config=request.config_dict(),
         query_params={},
         dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
         result=result,
+        error=None,
         request=snapshot_usage_request(request),
         api_key_name="test",
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),

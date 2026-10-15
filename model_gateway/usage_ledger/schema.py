@@ -12,7 +12,7 @@ import re
 from typing import Final, cast
 
 DEFAULT_SHARD_COUNT: Final = 16
-USAGE_EVENT_SCHEMA_VERSION: Final = 3
+USAGE_EVENT_SCHEMA_VERSION: Final = 4
 MAX_DIMENSION_VALUE_BYTES: Final = 512
 DETAILS_FIELD: Final = "details"
 
@@ -46,6 +46,7 @@ EMAIL_IDENTITY_KEY: Final = "email"
 _EMAIL_RE: Final = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 REQUEST_COUNT_FIELD: Final = "request_count"
+ERROR_COUNT_FIELD: Final = "error_count"
 COST_USD_FIELD: Final = "cost_usd"
 NUMERIC_LEDGER_FIELDS: Final = (
     "input_tokens",
@@ -58,7 +59,7 @@ NUMERIC_LEDGER_FIELDS: Final = (
     "duration_seconds",
     COST_USD_FIELD,
 )
-NUMBER_FIELDS: Final = (REQUEST_COUNT_FIELD, *NUMERIC_LEDGER_FIELDS)
+NUMBER_FIELDS: Final = (REQUEST_COUNT_FIELD, ERROR_COUNT_FIELD, *NUMERIC_LEDGER_FIELDS)
 COST_USD_DECIMAL_PLACES: Final = 12
 COST_USD_DECIMAL_QUANTUM: Final = Decimal("0.000000000001")
 

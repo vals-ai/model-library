@@ -3,13 +3,14 @@ from __future__ import annotations
 # Attempt and capture() are the only collaborators for Capture internals.
 # pyright: reportPrivateUsage=false
 
+import asyncio
 import base64
 import gzip
 import json
 import shutil
 import tempfile
 import time
-from collections.abc import Generator, Iterator, Sequence
+from collections.abc import Generator, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -17,8 +18,10 @@ from pathlib import Path
 from typing import IO
 
 SPOOL_MEMORY_LIMIT_BYTES = 1 * 1024 * 1024
+CAPTURE_LIMIT_BYTES = 128 * 1024 * 1024
 ATTACHMENT_LIMIT_BYTES = 20 * 1024 * 1024
 ATTACHMENT_FILENAME = "provider-failed-exchange.ndjson.gz"
+_TRUNCATION_RECORD = b'{"event":"capture.truncated","reason":"size_limit"}\n'
 
 
 @dataclass(frozen=True)
@@ -69,11 +72,18 @@ class Attempt:
         self._capture = capture
         self.id = attempt_id
         self._ended = False
-        self._request_chunks: list[tuple[bytes, str]] = []
+        self._request_body = bytearray()
+        self._request_representation: str | None = None
 
     def request_bytes(self, payload: bytes, *, representation: str) -> None:
         if self._ended:
             return
+
+        self._capture._request_bytes += len(payload)
+        if self._capture._truncated:
+            self._discard_request()
+            return
+
         if self._capture.omits_request_payload:
             self._capture._write(
                 "request.bytes",
@@ -84,7 +94,15 @@ class Attempt:
             )
             return
         if self._capture.redacts_requests:
-            self._request_chunks.append((payload, representation))
+            if len(payload) > self._capture._remaining_bytes():
+                self._discard_request()
+                self._capture._truncate()
+                return
+
+            self._request_body.extend(payload)
+            self._capture._buffered_request_bytes += len(payload)
+            if self._request_representation is None:
+                self._request_representation = representation
             return
         self._capture._write(
             "request.bytes",
@@ -94,10 +112,22 @@ class Attempt:
         )
 
     def _flush_request(self) -> None:
-        if not self._request_chunks:
+        if self._request_representation is None:
             return
-        chunks, self._request_chunks = self._request_chunks, []
-        self._capture._write_redacted_request(self.id, chunks)
+
+        if self._capture._truncated:
+            self._discard_request()
+            return
+
+        payload = bytes(self._request_body)
+        representation = self._request_representation
+        self._discard_request()
+        self._capture._write_redacted_request(self.id, payload, representation)
+
+    def _discard_request(self) -> None:
+        self._capture._buffered_request_bytes -= len(self._request_body)
+        self._request_body.clear()
+        self._request_representation = None
 
     def response_start(self, status: int) -> None:
         if not self._ended:
@@ -107,6 +137,9 @@ class Attempt:
     def response_bytes(self, payload: bytes, *, representation: str) -> None:
         if self._ended:
             return
+
+        self._capture._response_bytes += len(payload)
+        self._capture._response_chunks += 1
         self._flush_request()
         self._capture._write(
             "response.bytes",
@@ -145,6 +178,8 @@ class Capture:
         self._response_bytes = 0
         self._response_chunks = 0
         self._spool_bytes = 0
+        self._buffered_request_bytes = 0
+        self._truncated = False
         self._errors = 0
         self._transports: set[str] = set()
         self._artifact: Artifact | None = None
@@ -178,6 +213,14 @@ class Capture:
     def _redact_request(self, payload: bytes) -> bytes | None:
         spans: list[tuple[int, int, bytes]] = []
         for value, kind in self._request_payloads:
+            maximum_length = (
+                4 * ((len(payload) + 2) // 3)
+                if isinstance(value, str)
+                else len(payload)
+            )
+            if len(value) > maximum_length:
+                return None
+
             value_spans: list[tuple[int, int, bytes]] = []
             for pattern in _request_patterns(value):
                 if not pattern:
@@ -218,16 +261,11 @@ class Capture:
     def _write_redacted_request(
         self,
         attempt: int,
-        chunks: Sequence[tuple[bytes, str]],
+        payload: bytes,
+        representation: str,
     ) -> None:
-        byte_count = sum(len(chunk) for chunk, _representation in chunks)
-        representation = chunks[0][1]
+        byte_count = len(payload)
         try:
-            payload = (
-                chunks[0][0]
-                if len(chunks) == 1
-                else b"".join(chunk for chunk, _representation in chunks)
-            )
             sanitized = self._redact_request(payload)
         except Exception:
             sanitized = None
@@ -285,6 +323,22 @@ class Capture:
         self._artifact = artifact
         return artifact
 
+    async def finalize_async(self) -> Artifact | None:
+        future = asyncio.get_running_loop().run_in_executor(None, self.finalize)
+        cancelled: asyncio.CancelledError | None = None
+        while not future.done():
+            try:
+                await asyncio.shield(future)
+            except asyncio.CancelledError as exc:
+                # Cleanup must not close the spool while the worker still uses it.
+                cancelled = exc
+
+        artifact = future.result()
+        if cancelled is not None:
+            raise cancelled
+
+        return artifact
+
     def stats(self) -> CaptureStats:
         artifact = self._artifact
         return CaptureStats(
@@ -309,7 +363,15 @@ class Capture:
         byte_count: int | None = None,
         **fields: str | int,
     ) -> None:
+        if self._truncated:
+            return
+
         try:
+            remaining = self._remaining_bytes()
+            if payload is not None and 4 * ((len(payload) + 2) // 3) > remaining:
+                self._truncate()
+                return
+
             event: dict[str, str | int] = {"event": kind, "attempt": attempt, **fields}
             if representation is not None:
                 event["representation"] = representation
@@ -319,14 +381,30 @@ class Capture:
                 byte_count = len(payload)
             if byte_count is not None:
                 event["byte_count"] = byte_count
-                if kind == "request.bytes":
-                    self._request_bytes += byte_count
-                elif kind == "response.bytes":
-                    self._response_bytes += byte_count
-                    self._response_chunks += 1
             encoded = json.dumps(event, separators=(",", ":")).encode() + b"\n"
+            if len(encoded) > remaining:
+                self._truncate()
+                return
+
             self._spool.write(encoded)
             self._spool_bytes += len(encoded)
+        except Exception:
+            self._errors += 1
+
+    def _remaining_bytes(self) -> int:
+        return max(
+            0,
+            CAPTURE_LIMIT_BYTES
+            - self._spool_bytes
+            - self._buffered_request_bytes
+            - len(_TRUNCATION_RECORD),
+        )
+
+    def _truncate(self) -> None:
+        self._truncated = True
+        try:
+            self._spool.write(_TRUNCATION_RECORD)
+            self._spool_bytes += len(_TRUNCATION_RECORD)
         except Exception:
             self._errors += 1
 

@@ -31,7 +31,25 @@ from model_gateway.usage_ledger.redshift_load import (
     prepare_window_statements,
     staging_row_from_redshift_rows,
 )
-from model_gateway.usage_ledger.redshift_transform import redshift_rows_from_usage_event
+from model_gateway.usage_ledger.redshift_transform import (
+    redshift_export_source_paths,
+    redshift_rows_from_usage_event,
+)
+
+_EXPORT_SOURCE_PATHS = redshift_export_source_paths()
+_PROJECTION_SEGMENTS = tuple(
+    dict.fromkeys(segment for path in _EXPORT_SOURCE_PATHS for segment in path)
+)
+_PROJECTION_ATTRIBUTE_NAMES = {
+    f"#p{index}": segment for index, segment in enumerate(_PROJECTION_SEGMENTS)
+}
+_PROJECTION_ALIAS_BY_SEGMENT = {
+    segment: alias for alias, segment in _PROJECTION_ATTRIBUTE_NAMES.items()
+}
+_PROJECTION_EXPRESSION = ", ".join(
+    ".".join(_PROJECTION_ALIAS_BY_SEGMENT[segment] for segment in path)
+    for path in _EXPORT_SOURCE_PATHS
+)
 
 
 class DynamoDbQueryClient(Protocol):
@@ -81,6 +99,7 @@ class RedshiftExportJobConfig:
     shards: int
     redshift_workgroup_name: str
     redshift_database_name: str
+    redshift_secret_arn: str
     landing_bucket_name: str
     copy_role_arn: str
     redshift_schema_name: str
@@ -93,6 +112,7 @@ class RedshiftExportJobConfig:
             shards=int(os.environ["GATEWAY_USAGE_LEDGER_SHARDS"]),
             redshift_workgroup_name=os.environ["GATEWAY_USAGE_REDSHIFT_WORKGROUP_NAME"],
             redshift_database_name=os.environ["GATEWAY_USAGE_REDSHIFT_DATABASE_NAME"],
+            redshift_secret_arn=os.environ["GATEWAY_USAGE_REDSHIFT_SECRET_ARN"],
             landing_bucket_name=os.environ[
                 "GATEWAY_USAGE_REDSHIFT_LANDING_BUCKET_NAME"
             ],
@@ -125,7 +145,7 @@ def extract_export_window(
 ) -> ExportWindowExtraction:
     shards: list[ExportShardExtraction] = []
     for shard in range(config.shards):
-        events = _query_full_raw_events_for_export(
+        events = _query_raw_events_for_export(
             client=dynamodb_client,
             table_name=config.raw_table_name,
             start=window.start,
@@ -337,6 +357,7 @@ def _execute_submission(
     response = redshift_data_client.batch_execute_statement(
         WorkgroupName=config.redshift_workgroup_name,
         Database=config.redshift_database_name,
+        SecretArn=config.redshift_secret_arn,
         Sqls=statements,
         StatementName=statement_name,
     )
@@ -347,7 +368,7 @@ def _isoformat_utc(value: datetime) -> str:
     return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
-def _query_full_raw_events_for_export(
+def _query_raw_events_for_export(
     *,
     client: DynamoDbQueryClient,
     table_name: str,
@@ -365,13 +386,16 @@ def _query_full_raw_events_for_export(
             kwargs: dict[str, object] = {
                 "TableName": table_name,
                 "KeyConditionExpression": "PK = :pk AND SK BETWEEN :start AND :end",
-                "FilterExpression": "schema_version = :schema_version",
+                "FilterExpression": "schema_version IN (:v3, :v4)",
+                "ProjectionExpression": _PROJECTION_EXPRESSION,
+                "ExpressionAttributeNames": _PROJECTION_ATTRIBUTE_NAMES,
                 "ExpressionAttributeValues": serialize_item(
                     {
                         ":pk": schema.usage_day_pk(day, shard),
                         ":start": sk_start,
                         ":end": sk_end,
-                        ":schema_version": schema.USAGE_EVENT_SCHEMA_VERSION,
+                        ":v3": 3,
+                        ":v4": schema.USAGE_EVENT_SCHEMA_VERSION,
                     }
                 ),
                 "ConsistentRead": True,

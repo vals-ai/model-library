@@ -26,10 +26,10 @@ def _local_model_names(provider_name: str | None = None) -> list[str]:
     return get_model_names(provider_name)
 
 
-def is_cli_model(model: str) -> bool:
+def cannot_query_free_text(model: str) -> bool:
     config = get_registry_config(model)
     assert config is not None
-    return config.provider_name in {"cursor", "devin", "factory"}
+    return config.provider_name in {"cursor", "devin", "factory", "decision"}
 
 
 def is_llm_model(model: str) -> bool:
@@ -47,7 +47,7 @@ def parametrize_all_models(func: F) -> F:
         for model in all_models
         if "research" not in model
         and "dumbmar" not in model
-        and not is_cli_model(model)
+        and not cannot_query_free_text(model)
         and is_llm_model(model)
     ]
     return pytest.mark.parametrize("model_key", all_models)(func)

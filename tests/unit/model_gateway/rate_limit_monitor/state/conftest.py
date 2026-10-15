@@ -13,4 +13,4 @@ def redis() -> aioredis.FakeRedis:
 
 @pytest.fixture
 def store(redis: aioredis.FakeRedis) -> RateLimitMonitorStore:
-    return RateLimitMonitorStore(cast(MonitorRedis, redis))
+    return RateLimitMonitorStore(cast(MonitorRedis, redis), stage="test")

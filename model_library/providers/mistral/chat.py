@@ -33,6 +33,7 @@ from model_library.base import (
 )
 from model_library.base.output.builder import QueryResultBuilder
 from model_library.exceptions import (
+    BackoffRetryException,
     BadInputError,
     UnexpectedSystemInputError,
     handle_empty_response,
@@ -231,7 +232,7 @@ class MistralModel(LLM):
             case FileWithBase64():
                 return {
                     "type": "image_url",
-                    "image_url": f"data:image/{image.mime};base64,{image.base64}",
+                    "image_url": f"data:{image.mime};base64,{image.base64}",
                 }
             case _:
                 raise BadInputError("Unsupported image type")
@@ -339,6 +340,7 @@ class MistralModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> QueryResult:
+        from mistralai.client.errors import SDKError
         from mistralai.client.models import (
             AssistantMessage,
             ContentChunk,
@@ -351,9 +353,14 @@ class MistralModel(LLM):
         )
 
         result_builder = QueryResultBuilder()
-        response = await self.get_client().chat.stream_async(
-            **body,  # pyright: ignore[reportAny]
-        )
+        try:
+            response = await self.get_client().chat.stream_async(
+                **body,  # pyright: ignore[reportAny]
+            )
+        except SDKError as e:
+            if e.status_code == 400 and "There was an error parsing the body" in e.body:
+                raise BackoffRetryException(str(e)) from e
+            raise
 
         # Read the content, reasoning, and usage from the streamed chunks.
         # The chunk can be a ThinkChunk (reasoning), TextChunk or str (content), or may contain usage.

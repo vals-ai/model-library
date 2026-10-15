@@ -39,7 +39,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: true
       output_schema: false
@@ -84,7 +83,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: true
       output_schema: false
@@ -129,7 +127,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: true
       output_schema: false
@@ -173,7 +170,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: true
       output_schema: false
@@ -217,7 +213,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: true
       output_schema: false
@@ -229,7 +224,6 @@ deprecated:
     rate_limit:
       supports_live_monitoring: false
       cache_read_counts_toward_limit: true
-      requests: []
     alternative_keys: []
     default_parameters:
       temperature: 0.7
@@ -262,7 +256,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: true
       output_schema: false
@@ -274,7 +267,6 @@ deprecated:
     rate_limit:
       supports_live_monitoring: false
       cache_read_counts_toward_limit: true
-      requests: []
     alternative_keys: []
     default_parameters:
       temperature: 0.7

@@ -349,6 +349,26 @@ def test_record_rate_limit_monitor_publish_contract(capsys, monkeypatch):
     ]
 
 
+def test_record_runtime_config_failure_has_stage_alarm_dimension(capsys, monkeypatch):
+    monkeypatch.setenv("GATEWAY_STAGE", "dev")
+    monkeypatch.setenv("GATEWAY_SERVICE", "Gateway-dev-control")
+
+    metrics.record_runtime_config_refresh(
+        source="credentials",
+        outcome="rejected",
+    )
+
+    assert metrics.flush_metrics() == 1
+    payload = _last_emf(capsys)
+    assert payload["RuntimeConfigRefreshCount"] == 1
+    assert payload["RuntimeConfigRefreshFailureCount"] == 1
+    assert _metric_metadata(payload)["Dimensions"] == [
+        ["Stage"],
+        ["Stage", "Service"],
+        ["Stage", "Service", "Source", "Outcome"],
+    ]
+
+
 def test_record_gateway_phase_emits_without_env_gate(capsys, monkeypatch):
     monkeypatch.delenv("GATEWAY_DIAGNOSTICS_ENABLED", raising=False)
 

@@ -1,0 +1,80 @@
+# Typed-decision models: one call takes a state and typed questions and returns a typed answer for each (a choice
+# with a probability for every option, a probability, or a score). They do not generate text. Served by the
+# `decision` provider (providers/delegates/openrouter/decision.py) through OpenRouter's Decisions API with OPENROUTER_API_KEY, or
+# OpenAI's with OPENAI_API_KEY (`decision_api: openai`); the gateway already holds both. See docs/decision-models.md.
+# Prices are USD per million input tokens, output is free. OpenRouter context windows are from its decision-model
+# catalog.
+base-config:
+  open_source: false
+  supports:
+    images: false
+    videos: false
+    files: false
+    temperature: false
+    tools: false
+    output_schema: false
+  properties:
+    # No free-text output, so there is no output budget.
+    max_tokens: 0
+    reasoning_model: false
+  metadata:
+    available_as_evaluator: false
+  costs_per_million_token:
+    output: 0.0
+
+decision-models:
+  decision/jev-1.13.0:
+    provider_endpoint: typesafe/jev-1.13-20260917  # pinned, dated; never an alias
+    label: Jev 1.13.0
+    company: TypeSafe
+    documentation_url: https://openrouter.ai/typesafe/jev-1.13
+    release_date: 2026-09-17
+    properties:
+      context_window: 64_000
+    costs_per_million_token:
+      input: 0.042
+
+  decision/mercury-decide:
+    provider_endpoint: inception/mercury-decide-20260930  # pinned, dated; never an alias
+    label: Mercury Decide
+    company: Inception
+    country: United States
+    documentation_url: https://openrouter.ai/inception/mercury-decide
+    release_date: 2026-09-30
+    properties:
+      context_window: 65_536
+    costs_per_million_token:
+      input: 0.02
+
+  # Microsoft-Decision-1 is in preview (Foundry catalog, version 1).
+  decision/microsoft-decision-1:
+    provider_endpoint: microsoft/microsoft-decision-1-20261009  # pinned, dated; never an alias
+    label: Microsoft-Decision-1
+    company: Microsoft
+    country: United States
+    documentation_url: https://openrouter.ai/microsoft/microsoft-decision-1
+    release_date: 2026-10-09
+    properties:
+      context_window: 32_768
+    costs_per_million_token:
+      input: 0.042
+
+  # https://developers.openai.com/api/docs/guides/decisions#pricing-and-availability: long-context input multipliers
+  # apply, at the chat model's 2x past 272K. The context window is the largest input /v1/decisions accepted (measured).
+  decision/gpt-6-luna:
+    provider_endpoint: gpt-6-luna  # OpenAI serves no dated snapshot
+    label: GPT-6 Luna Decisions
+    company: OpenAI
+    country: United States
+    documentation_url: https://developers.openai.com/api/docs/guides/decisions
+    release_date: 2026-09-22
+    provider_properties:
+      decision_api: openai
+    properties:
+      context_window: 921_600
+    costs_per_million_token:
+      input: 0.1
+      context:
+        threshold: 272_000
+        input: 0.2
+        output: 0.0

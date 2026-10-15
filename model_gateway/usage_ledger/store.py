@@ -1,4 +1,4 @@
-"""Durable successful-query usage ledger for the gateway."""
+"""Durable query usage ledger for the gateway."""
 
 from __future__ import annotations
 
@@ -31,7 +31,9 @@ from model_gateway.metrics import (
     record_usage_ledger_sqs_sdk_call,
     record_usage_ledger_sqs_write,
 )
-from model_gateway.types import QueryRequest
+from model_gateway.observability import worker_id
+from model_gateway.runtime_config import runtime_cache_namespace
+from model_gateway.types import ProviderError, QueryRequest
 from model_gateway.usage_ledger.details import build_usage_event_details
 from model_gateway.usage_ledger.dynamodb_writer import (
     AsyncDynamoDbClient,
@@ -81,8 +83,8 @@ class UsageLedger(Protocol):
     async def close(self) -> None:
         """Close any app-lifetime resources opened by the ledger."""
 
-    async def write_success(self, event: Mapping[str, object]) -> None:
-        """Persist a successful query usage event."""
+    async def write_event(self, event: Mapping[str, object]) -> None:
+        """Persist a query usage event."""
 
 
 class NoopUsageLedger:
@@ -94,7 +96,7 @@ class NoopUsageLedger:
     async def close(self) -> None:
         return
 
-    async def write_success(self, event: Mapping[str, object]) -> None:
+    async def write_event(self, event: Mapping[str, object]) -> None:
         _ = event
         return
 
@@ -389,10 +391,10 @@ class SqsUsageLedger:
             self._client_context = None
             self._client = None
 
-    async def write_success(self, event: Mapping[str, object]) -> None:
+    async def write_event(self, event: Mapping[str, object]) -> None:
         start = time.perf_counter()
         try:
-            outcome, error_type = await self._write_success(event)
+            outcome, error_type = await self._write_event(event)
         except (ValueError, TypeError) as exc:
             latency_ms = (time.perf_counter() - start) * 1000
             record_usage_ledger_sqs_write(
@@ -416,7 +418,7 @@ class SqsUsageLedger:
             outcome=outcome, latency_ms=latency_ms, error_type=error_type
         )
 
-    async def _write_success(self, event: Mapping[str, object]) -> tuple[str, str]:
+    async def _write_event(self, event: Mapping[str, object]) -> tuple[str, str]:
         if self._client is None:
             raise ValueError("Gateway usage ledger SQS client is not started")
         body = prepare_usage_event_for_write(event).message
@@ -922,9 +924,9 @@ class DynamoDbUsageLedger:
             self._client_context = None
             self._client = None
 
-    async def write_success(self, event: Mapping[str, object]) -> None:
+    async def write_event(self, event: Mapping[str, object]) -> None:
         try:
-            await self._write_success(event)
+            await self._write_event(event)
         except (BotoCoreError, ClientError, ValueError, TypeError) as exc:
             if self._mode == "shadow":
                 logger.warning(
@@ -933,7 +935,7 @@ class DynamoDbUsageLedger:
                 return
             raise UsageLedgerWriteError("Gateway usage ledger write failed") from exc
 
-    async def _write_success(self, event: Mapping[str, object]) -> None:
+    async def _write_event(self, event: Mapping[str, object]) -> None:
         client = self._client
         if client is None:
             raise ValueError("Gateway usage ledger DynamoDB client is not started")
@@ -979,13 +981,14 @@ def create_usage_ledger_from_env() -> UsageLedger:
     )
 
 
-def build_success_usage_event(
+def build_usage_event(
     *,
     body: QueryRequest,
     config: Mapping[str, Any],
     query_params: Mapping[str, object | None],
     dimensions: Mapping[str, str],
     result: QueryResult,
+    error: ProviderError | None,
     request: Mapping[str, object],
     api_key_name: str,
     completed_at: datetime | None = None,
@@ -1028,6 +1031,8 @@ def build_success_usage_event(
         "run_id": run_id,
         "question_id": question_id,
         "query_id": query_id,
+        "worker_id": worker_id(),
+        "runtime_cache_namespace": runtime_cache_namespace(),
         ledger_schema.IDENTITY_BENCHMARK_NAME: benchmark_name,
         ledger_schema.IDENTITY_AGENT_NAME: agent_name,
         ledger_schema.IDENTITY_EMAIL: identity_email,
@@ -1040,6 +1045,7 @@ def build_success_usage_event(
         "config_hash": config_hash,
         "finish_reason": result.finish_reason.reason.value,
         "finish_reason_raw": result.finish_reason.raw,
+        "outcome": "error" if error is not None else "success",
         ledger_schema.DETAILS_FIELD: build_usage_event_details(
             request=request,
             result=result,
@@ -1053,6 +1059,8 @@ def build_success_usage_event(
     }
     if identity_email is None:
         del event[ledger_schema.IDENTITY_EMAIL]
+    if error is not None:
+        event["error"] = error.model_dump(mode="json")
     if run_id:
         event[ledger_schema.RUN_INDEX_PK] = ledger_schema.run_pk(run_id, shard)
         event[ledger_schema.RUN_INDEX_SK] = (
@@ -1133,18 +1141,27 @@ def _sqs_should_retry(message: _PendingSqsMessage, *, now: float) -> bool:
 
 def _metadata_counts(metadata: QueryResultMetadata) -> dict[str, object]:
     cost_total = metadata.cost.total if metadata.cost is not None else None
-    return {
-        "input_tokens": metadata.in_tokens,
-        "output_tokens": metadata.out_tokens,
-        "reasoning_tokens": metadata.reasoning_tokens or 0,
-        "cache_read_tokens": metadata.cache_read_tokens or 0,
-        "cache_write_tokens": metadata.cache_write_tokens or 0,
-        "total_input_tokens": metadata.total_input_tokens,
-        "total_output_tokens": metadata.total_output_tokens,
-        "duration_seconds": metadata.duration_seconds,
-        "cost_usd": (
-            Decimal("0")
-            if cost_total is None
-            else ledger_schema.normalize_cost_usd_decimal(Decimal(str(cost_total)))
-        ),
-    }
+    counts: dict[str, object] = {}
+    if "in_tokens" in metadata.model_fields_set:
+        counts["input_tokens"] = metadata.in_tokens
+    if "out_tokens" in metadata.model_fields_set:
+        counts["output_tokens"] = metadata.out_tokens
+    for name in (
+        "reasoning_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+    ):
+        value = getattr(metadata, name)
+        if value is not None:
+            counts[name] = value
+    if "input_tokens" in counts:
+        counts["total_input_tokens"] = metadata.total_input_tokens
+    if "output_tokens" in counts:
+        counts["total_output_tokens"] = metadata.total_output_tokens
+    if metadata.duration_seconds is not None:
+        counts["duration_seconds"] = metadata.duration_seconds
+    if cost_total is not None:
+        counts["cost_usd"] = ledger_schema.normalize_cost_usd_decimal(
+            Decimal(str(cost_total))
+        )
+    return counts

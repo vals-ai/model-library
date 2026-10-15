@@ -437,6 +437,32 @@ class TestAgentFileOutput:
         assert data["final_answer"] == "done"
         assert data["success"]
 
+    async def test_result_json_written_on_cancel(self, tmp_path: Path):
+        """Outer cancellation still writes result.json and ATIF, then re-raises"""
+        first = make_tool_response([make_tool_call("echo", {"text": "hi"})])
+        llm = mock_llm()
+
+        async def query(*args: Any, **kwargs: Any) -> QueryResult:
+            if llm.query.await_count > 1:
+                await asyncio.Event().wait()
+            return first
+
+        llm.query.side_effect = query
+        agent = make_agent(llm, [EchoTool()])
+
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(
+                agent.run([TextInput(text="go")], question_id="q1", atif_export=True),
+                timeout=0.5,
+            )
+
+        output_dir = tmp_path / "test" / "mock-model" / "run" / "q1"
+        data = _load_json((output_dir / "result.json").read_text())
+        assert data["final_error"]["type"] == "CancelledError"
+        assert data["stop_reason"] == "error"
+        assert data["total_turns"] == 1
+        assert (output_dir / "trajectory_atif.json").exists()
+
 
 # --- Tool execution ---
 
@@ -1435,6 +1461,9 @@ class TestHistoryCompaction:
         assert c.artifacts_subdir == "compactions/compaction_001"
         compaction_dir = result.output_dir / c.artifacts_subdir
         assert (compaction_dir / "previous_history.bin").exists()
+        written = _load_json((compaction_dir / "result.json").read_text())
+        assert written["summary"] == c.summary
+        assert written["metadata"] is not None
 
         compaction_call = llm.query.call_args_list[1].kwargs["input"]
         compaction_tools = llm.query.call_args_list[1].kwargs["tools"]

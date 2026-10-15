@@ -7,7 +7,6 @@ base-config:
     audio: false
     videos: false
     files: false
-    batch: false
     temperature: true
     tools: true
     output_schema: true
@@ -35,7 +34,6 @@ deprecated:
       transcription: false
       videos: false
       files: false
-      batch: false
       temperature: true
       tools: true
       output_schema: true

@@ -4,13 +4,10 @@ import socket
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import aiohttp
 import httpx
-from anthropic import AsyncAnthropic
-from httpx_aiohttp import AiohttpTransport
-from openai import AsyncOpenAI
 from pydantic import AfterValidator, BaseModel
 from rich.pretty import pretty_repr
 
@@ -19,6 +16,10 @@ from model_library.failure_capture.aiohttp import (
     aiohttp_trace_config,
 )
 from model_library.failure_capture.httpx import CapturingAsyncHTTPTransport
+
+if TYPE_CHECKING:
+    from anthropic import AsyncAnthropic
+    from openai import AsyncOpenAI
 
 MAX_LLM_LOG_LENGTH = 100
 MAX_LOG_HISTORY = 20  # number of history items to log
@@ -282,6 +283,8 @@ def default_aiohttp_httpx_client(
     dns_resolve: dict[str, str] | None = None,
 ) -> httpx.AsyncClient:
     """Create an httpx AsyncClient backed by aiohttp with optimized pooling."""
+    from httpx_aiohttp import AiohttpTransport
+
     return httpx.AsyncClient(
         transport=AiohttpTransport(
             client=lambda: make_aiohttp_session(dns_resolve=dns_resolve)
@@ -346,13 +349,15 @@ def create_openai_client_with_defaults(
     api_key: str,
     base_url: str | None = None,
     dns_resolve: dict[str, str] | None = None,
-) -> AsyncOpenAI:
+) -> "AsyncOpenAI":
     """
     OpenAI defaults:
     DEFAULT_TIMEOUT = httpx.Timeout(timeout=600, connect=5.0)
     DEFAULT_MAX_RETRIES = 2
     DEFAULT_CONNECTION_LIMITS = httpx.Limits(max_connections=1000, max_keepalive_connections=100)
     """
+    from openai import AsyncOpenAI
+
     return AsyncOpenAI(
         api_key=api_key,
         base_url=base_url,
@@ -363,7 +368,9 @@ def create_openai_client_with_defaults(
 
 def create_anthropic_client_with_defaults(
     api_key: str, base_url: str | None = None, default_headers: dict[str, str] = {}
-) -> AsyncAnthropic:
+) -> "AsyncAnthropic":
+    from anthropic import AsyncAnthropic
+
     return AsyncAnthropic(
         base_url=base_url,
         api_key=api_key,

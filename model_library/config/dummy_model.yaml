@@ -3,8 +3,7 @@ vals-models:
     company: Vals AI
     country: United States
     documentation_url: ""
-    supports:
-      batch: true
+    supports: {}
     metadata:
       internal_only: true
     properties:

@@ -8,7 +8,6 @@ base-config:
     images: false
     files: false
     tools: true
-    batch: true
     temperature: true
     output_schema: true
   properties:
@@ -115,6 +114,13 @@ gpt-6-models:
           label: GPT-6 Sol (Max)
           default_parameters:
             reasoning_effort: "max"
+      - openai/gpt-6-sol-daybreak:
+          label: GPT-6 Sol (Daybreak Blue)
+          metadata:
+            available_for_everyone: false
+          provider_properties:
+            access_programs:
+              cyber: daybreak_blue
 
   openai/gpt-6.1-sol:
     label: GPT-6.1 Sol
@@ -175,6 +181,11 @@ gpt-6-models:
     provider_properties:
       reasoning_context: all_turns
     alternative_keys:
+      - openai/gpt-6-luna-daybreak:
+          label: GPT-6 Luna (Daybreak)
+          provider_properties:
+            access_programs:
+              cyber: daybreak_blue
       - openai/gpt-6-luna-low:
           label: GPT-6 Luna (Low)
           default_parameters:
@@ -233,6 +244,11 @@ gpt-5.6-models:
     provider_properties:
       reasoning_context: all_turns
     alternative_keys:
+      - openai/gpt-5.6-sol-daybreak:
+          label: GPT-5.6 Sol (Daybreak)
+          provider_properties:
+            access_programs:
+              cyber: daybreak_blue
       - openai/gpt-5.6-sol-high:
           label: GPT-5.6 Sol (High)
           default_parameters:
@@ -252,6 +268,11 @@ gpt-5.6-models:
     provider_properties:
       reasoning_context: all_turns
     alternative_keys:
+      - openai/gpt-5.6-terra-daybreak:
+          label: GPT-5.6 Terra (Daybreak)
+          provider_properties:
+            access_programs:
+              cyber: daybreak_blue
       - openai/gpt-5.6-terra-high:
           label: GPT-5.6 Terra (High)
           default_parameters:
@@ -271,6 +292,11 @@ gpt-5.6-models:
     provider_properties:
       reasoning_context: all_turns
     alternative_keys:
+      - openai/gpt-5.6-luna-daybreak:
+          label: GPT-5.6 Luna (Daybreak)
+          provider_properties:
+            access_programs:
+              cyber: daybreak_blue
       - openai/gpt-5.6-luna-high:
           label: GPT-5.6 Luna (High)
           default_parameters:
@@ -317,6 +343,8 @@ daybreak-models:
       reasoning_effort: "max"
     provider_properties:
       reasoning_context: all_turns
+      access_programs:
+        cyber: daybreak_blue
     alternative_keys:
       - openai/gpt-daybreak-blue-high:
           label: Daybreak Blue (High)
@@ -355,6 +383,12 @@ gpt-5-models:
       prompt_cache_retention: "24h"
     default_parameters:
       reasoning_effort: "xhigh"
+    alternative_keys:
+      - openai/gpt-5.5-pro-daybreak:
+          label: GPT 5.5 Pro (Daybreak)
+          provider_properties:
+            access_programs:
+              cyber: daybreak_blue
 
   openai/gpt-5.5:
 
@@ -379,6 +413,11 @@ gpt-5-models:
     default_parameters:
       reasoning_effort: "xhigh"
     alternative_keys:
+      - openai/gpt-5.5-daybreak:
+          label: GPT 5.5 (Daybreak)
+          provider_properties:
+            access_programs:
+              cyber: daybreak_blue
       - openai/gpt-5.5-high:
           default_parameters:
             reasoning_effort: "high"
@@ -856,7 +895,6 @@ transcription-models:
     documentation_url: https://platform.openai.com/docs/guides/speech-to-text
     costs_per_million_token: null
     supports:
-      batch: false
       files: false
       temperature: false
       tools: false
@@ -999,7 +1037,7 @@ gpt-4o-mini-models:
       output: 0.6
       cache:
         read: 0.075
-    documentation_url: https://platform.openai.com/docs/models/gpt-4o-mini
+    documentation_url: https://developers.openai.com/api/docs/models/gpt-4o-mini
 
   openai/gpt-4o-mini-2024-07-18:
     label: GPT 4o Mini

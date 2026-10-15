@@ -41,6 +41,12 @@ MetricPublisher = Callable[[], Awaitable[None] | None]
 RateLimitMonitorOwnershipOutcome = Literal["acquired", "contended", "lost"]
 RateLimitMonitorPollOutcome = Literal["ok", "unsupported", "provider_error"]
 RateLimitMonitorPublishOutcome = Literal["accepted", "rejected"]
+RuntimeConfigRefreshOutcome = Literal[
+    "applied",
+    "unchanged",
+    "rejected",
+    "failed",
+]
 
 _GAUGE_METRICS = {
     "InFlightRequests",
@@ -52,11 +58,13 @@ _GAUGE_METRICS = {
     "UsageLedgerSqsActiveBatchSends",
     "UsageLedgerSqsPendingBytes",
     "UsageLedgerSqsPendingMessages",
+    "RuntimeConfigPropagationSeconds",
 }
 _HIGH_RESOLUTION_METRICS = {
     "InFlightRequests",
     "ActiveRequests",
     "QueuedRequests",
+    "EventLoopLagMs",
     "GatewayDemand",
     "UsageLedgerSqsActiveBatchSends",
     "UsageLedgerSqsPendingBytes",
@@ -527,6 +535,33 @@ def record_rate_limit_monitor_publish(
     )
 
 
+def record_runtime_config_refresh(
+    *,
+    source: str,
+    outcome: RuntimeConfigRefreshOutcome,
+    propagation_seconds: float | None = None,
+) -> None:
+    refresh_metrics: dict[str, MetricSpec] = {
+        "RuntimeConfigRefreshCount": (1, "Count"),
+    }
+    if outcome in {"failed", "rejected"}:
+        refresh_metrics["RuntimeConfigRefreshFailureCount"] = (1, "Count")
+    if propagation_seconds is not None:
+        refresh_metrics["RuntimeConfigPropagationSeconds"] = (
+            propagation_seconds,
+            "Seconds",
+        )
+    record_metrics(
+        {**service_dimensions(), "Source": source, "Outcome": outcome},
+        refresh_metrics,
+        dimension_sets=[
+            ["Stage"],
+            ["Stage", "Service"],
+            ["Stage", "Service", "Source", "Outcome"],
+        ],
+    )
+
+
 def record_usage_ledger_sqs_pending(
     *, pending_messages: int, pending_bytes: int, active_batch_sends: int
 ) -> None:
@@ -557,7 +592,7 @@ def record_usage_ledger_sqs_write(
         write_metrics["UsageLedgerSqsDroppedMessageCount"] = (1, "Count")
     record_metrics(
         _usage_ledger_sqs_dimensions(
-            Operation="write_success",
+            Operation="write_event",
             Outcome=outcome,
             ErrorType=error_type,
         ),

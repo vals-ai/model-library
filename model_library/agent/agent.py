@@ -487,6 +487,7 @@ class Agent:
         time_limit: TimeLimit | None = self._config.time_limit
         turn_number: int = 0
         retry_overhead = 0.0
+        run_cancelled = False
 
         try:
             for turn_number in takewhile(
@@ -791,6 +792,13 @@ class Agent:
                     context={"max_turns": max_turns},
                 )
                 logger.warning(str(final_error))
+        except asyncio.CancelledError:
+            # Still write result.json/ATIF so callers' outer timeouts leave artifacts.
+            run_cancelled = True
+            final_error = SerializableException(
+                type="CancelledError", message="Agent run cancelled"
+            )
+            logger.warning(str(final_error))
         except Exception as e:
             final_error = SerializableException.from_exception(e)
             logger.error(f"Agent loop failed: {final_error}", exc_info=True)
@@ -894,6 +902,9 @@ class Agent:
             result_path.write_text(result.model_dump_json())
         except Exception:
             logger.exception("Failed to serialize result")
+
+        if run_cancelled:
+            raise asyncio.CancelledError()
 
         return result
 

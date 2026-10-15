@@ -7,6 +7,7 @@ from httpx import ASGITransport, AsyncClient
 import pytest
 
 import model_gateway.app as gateway_app
+from model_gateway.runtime_config import RefreshResult
 from model_library.retriers.token import utils as token_utils
 
 
@@ -100,6 +101,7 @@ def test_query_role_excludes_control_operations(monkeypatch: pytest.MonkeyPatch)
     assert not any(path.startswith("/rate-limit-monitor") for path in paths)
     assert app.state.rate_limit_monitor is None
 
+
 def test_control_role_exposes_only_health_and_control_operations(
     monkeypatch: pytest.MonkeyPatch,
 ):
@@ -126,6 +128,7 @@ def test_control_role_exposes_only_health_and_control_operations(
     }
     assert not app.state.usage_ledger.enabled
     assert app.state.rate_limit_monitor is None
+
 
 async def test_control_monitor_validation_uses_canonical_invalid_request(
     monkeypatch: pytest.MonkeyPatch,
@@ -163,6 +166,7 @@ async def test_control_enabled_lifespan_starts_one_monitor_and_closes_before_red
     role: str,
 ):
     monkeypatch.setenv("REDIS_URL", "redis://monitor.test")
+    monkeypatch.setenv("GATEWAY_STAGE", "test")
     with patch.object(
         gateway_app,
         "create_usage_ledger_from_env",
@@ -206,8 +210,12 @@ async def test_control_enabled_lifespan_starts_one_monitor_and_closes_before_red
         assert app.state.rate_limit_monitor is None
 
     set_redis_client.assert_called_once_with(redis_client)
-    store_factory.assert_called_once_with(redis_client)
-    monitor_factory.assert_called_once_with(store)
+    store_factory.assert_called_once_with(redis_client, stage="test")
+    monitor_factory.assert_called_once()
+    assert monitor_factory.call_args.args == (store,)
+    assert monitor_factory.call_args.kwargs == {
+        "runtime_capture": app.state.runtime_config_state.capture
+    }
     monitor.close.assert_awaited_once_with()
     redis_client.aclose.assert_awaited_once_with()
     assert events == ["monitor", "redis"]
@@ -370,3 +378,32 @@ def test_invalid_runtime_role_is_rejected(monkeypatch: pytest.MonkeyPatch):
         pytest.raises(ValueError, match="GATEWAY_RUNTIME_ROLE"),
     ):
         gateway_app.create_app()
+
+
+@pytest.mark.parametrize("outcome", ["failed", "rejected"])
+async def test_initial_runtime_refresh_failure_closes_manager_and_aborts_startup(
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+):
+    manager = MagicMock(spec=["refresh_once", "run", "aclose"])
+    manager.refresh_once = AsyncMock(
+        return_value=RefreshResult(**{outcome: frozenset({"credentials"})})
+    )
+    manager.aclose = AsyncMock()
+    with patch.object(
+        gateway_app, "runtime_config_manager_from_env", return_value=manager
+    ):
+        app = _create_app(monkeypatch, "query")
+
+    with (
+        _quiet_lifecycle(),
+        pytest.raises(
+            RuntimeError, match="Initial runtime configuration refresh failed"
+        ),
+    ):
+        async with app.router.lifespan_context(app):
+            pass
+
+    manager.refresh_once.assert_awaited_once_with()
+    manager.run.assert_not_called()
+    manager.aclose.assert_awaited_once_with()

@@ -2,7 +2,9 @@ import importlib
 import json
 import pkgutil
 import threading
-from collections.abc import Mapping
+from collections.abc import Generator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from datetime import date, timedelta
 from functools import cache
@@ -57,7 +59,6 @@ class Supports(BaseModel):
     transcription: bool | None = None
     videos: bool | None = None
     files: bool | None = None
-    batch: bool | None = None
     temperature: bool | None = None
     tools: bool | None = None
     output_schema: bool | None = None
@@ -812,6 +813,39 @@ def get_provider_registry() -> dict[str, type[LLM]]:
 _registries: Registries | None = None
 _model_registry_refreshed_at: float | None = None
 _model_registry_lock = threading.Lock()
+_registries_context: ContextVar[Registries | None] = ContextVar(
+    "model_library_registries", default=None
+)
+
+
+@contextmanager
+def registry_snapshot(registries: Registries) -> Generator[None]:
+    """Use one immutable registry pair for lookups in the current context."""
+    token = _registries_context.set(registries)
+    try:
+        yield
+    finally:
+        _registries_context.reset(token)
+
+
+def parse_registry_documents(documents: Mapping[str, str]) -> RegistryEntries:
+    """Parse an ordered, complete set of model YAML documents into fresh entries."""
+    get_provider_registry()
+    registry: RegistryEntries = {}
+    for name, content in documents.items():
+        try:
+            loaded = yaml.safe_load(content)
+        except yaml.YAMLError as error:
+            raise ValueError(f"Invalid model configuration document {name}") from error
+        if loaded is None:
+            continue
+        if not isinstance(loaded, dict):
+            raise ValueError(f"Model configuration document {name} must be a mapping")
+        model_blocks = cast(dict[str, dict[str, dict[str, Any]]], loaded)
+        parse_yaml_blocks(model_blocks, registry)
+    if not registry:
+        raise ValueError("Model configuration snapshot must not be empty")
+    return registry
 
 
 def _load_registry_entries() -> RegistryEntries:
@@ -853,6 +887,9 @@ def get_deprecated_transcription_registry() -> TranscriptionRegistry:
 def get_registries() -> Registries:
     """Thread-safe singleton access to one consistent (chat, transcription) snapshot."""
     global _registries
+    contextual_registries = _registries_context.get()
+    if contextual_registries is not None:
+        return contextual_registries
     if _registries is None:
         with _model_registry_lock:
             if _registries is None:

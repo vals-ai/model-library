@@ -36,6 +36,8 @@ class GatewayRequestBase(BaseModel):
         if not isinstance(raw_config_value, dict):
             return raw_data
         raw_config = cast(dict[str, Any], raw_config_value)
+        # tolerate fields removed from LLMConfig that older clients still send
+        raw_config.pop("supports_batch", None)
         unknown_fields = set(raw_config) - set(LLMConfig.model_fields)
         if unknown_fields:
             fields = ", ".join(sorted(unknown_fields))
@@ -49,6 +51,17 @@ class GatewayRequestBase(BaseModel):
         # These pick another endpoint or registry entry than the named model's.
         if config.custom_endpoint is not None or config.registry_key is not None:
             raise ValueError("custom_endpoint and registry_key cannot be set")
+        # The gateway's own key holds the access programs, so only registry entries send them.
+        provider_config = config.provider_config
+        programs = (
+            provider_config.get("access_programs")
+            if isinstance(provider_config, dict)
+            else getattr(provider_config, "access_programs", None)
+        )
+        if programs is not None and config.custom_api_key is None:
+            raise ValueError(
+                "provider_config.access_programs cannot be set; use a registry key"
+            )
         return config
 
     def config_dict(self) -> dict[str, Any]:
@@ -131,6 +144,11 @@ class GatewayResponse(BaseModel):
         return self
 
 
+class FailedQueryResponse(BaseModel):
+    error: ProviderError
+    result: dict[str, Any]
+
+
 class TokenCountResponse(GatewayResponse):
     tokens: int | None = None
 
@@ -149,13 +167,15 @@ class RateLimitResponse(BaseModel):
 
 
 def query_result_response_body(
-    result: QueryResult, *, signed_history: str
+    result: QueryResult, *, signed_history: str, failed: bool
 ) -> dict[str, Any]:
     data = QueryResult.model_dump(
         result,
         mode="json",
         exclude={"history"},
         exclude_none=True,
+        exclude_unset=failed,
+        exclude_computed_fields=failed,
     )
     data["signed_history"] = signed_history
     return data
