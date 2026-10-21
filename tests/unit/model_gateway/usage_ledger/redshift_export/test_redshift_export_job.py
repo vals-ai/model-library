@@ -26,9 +26,16 @@ from model_gateway.usage_ledger.redshift_export_job import (
 from model_gateway.usage_ledger.redshift_load import staging_row_from_redshift_rows
 from model_gateway.usage_ledger.redshift_transform import redshift_rows_from_usage_event
 
+_TIMELINE = {"encoding": "gzip+base64", "data": "opaque"}
 _COMPRESSED_PERFORMANCE = {
-    "encoding": "gzip+base64",
-    "data": "opaque",
+    "time_to_first_token_ms": {
+        "any": 7,
+        "answer": 11,
+        "reasoning": 7,
+        "content": 11,
+        "tool_call": None,
+    },
+    "timeline": _TIMELINE,
 }
 
 

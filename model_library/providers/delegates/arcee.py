@@ -12,6 +12,8 @@ from model_library.register_models import register_provider
 
 @register_provider("arcee-ai")
 class ArceeModel(DelegateOnly):
+    api_key_setting = "ARCEE_API_KEY"
+
     def __init__(
         self,
         model_name: str,
@@ -25,7 +27,7 @@ class ArceeModel(DelegateOnly):
         config = config or LLMConfig()
         config.custom_endpoint = config.custom_endpoint or "https://api.arcee.ai/api/v1"
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.ARCEE_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(

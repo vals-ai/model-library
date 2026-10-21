@@ -7,21 +7,20 @@ from rich.pretty import pretty_repr
 
 from model_library.base.input import InputItem, ToolDefinition, ToolResult
 from model_library.base.output import QueryResult
+from model_library.base.query_ids import ResolvedQueryIds
 from model_library.base.utils import get_pretty_input_types
 from model_library.utils import MAX_LOG_HISTORY, truncate_str
 
 
 def scoped_query_logger(
     base_logger: logging.Logger,
+    ids: ResolvedQueryIds,
     *,
-    question_id: str,
-    query_id: str,
     in_agent: bool,
 ) -> logging.Logger:
-    child_name = (
-        f"<query={query_id}>"
-        if in_agent
-        else f"<question={question_id}><query={query_id}>"
+    child_name = ("<agent>" if in_agent else "") + (
+        f"<run={ids.run_id}><question={ids.question_id}>"
+        f"<query={ids.query_id}><attempt={ids.attempt_id}>"
     )
     query_logger = base_logger.getChild(child_name)
     if in_agent:

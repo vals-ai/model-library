@@ -1,4 +1,827 @@
 {
+    "openrouter/inception/mercury-3": {
+        "company": "Inception",
+        "country": "United States",
+        "label": "Mercury 3",
+        "release_date": "2026-10-19",
+        "open_source": false,
+        "documentation_url": "https://docs.inceptionlabs.ai/get-started/models",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "openrouter_provider_only": [
+                "inception"
+            ]
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "inception/mercury-3",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 0.7,
+            "cache": {
+                "read": 0.02,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "openrouter",
+        "full_key": "openrouter/inception/mercury-3",
+        "slug": "openrouter_inception_mercury-3"
+    },
+    "inception/mercury-3": {
+        "company": "Inception",
+        "country": "United States",
+        "label": "Mercury 3",
+        "release_date": "2026-10-19",
+        "open_source": false,
+        "documentation_url": "https://docs.inceptionlabs.ai/get-started/models",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [
+            {
+                "openrouter/inception/mercury-3": {
+                    "provider_properties": {
+                        "openrouter_provider_only": [
+                            "inception"
+                        ]
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "mercury-3",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 0.7,
+            "cache": {
+                "read": 0.02,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "inception",
+        "full_key": "inception/mercury-3",
+        "slug": "inception_mercury-3"
+    },
+    "deepseek/deepseek-v4.1-flash-1017-nonthinking": {
+        "company": "DeepSeek",
+        "country": "China",
+        "label": "DeepSeek V4.1 Flash 1017",
+        "release_date": "2026-10-17",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "top_p": 0.95
+        },
+        "provider_endpoint": "deepseek-flash",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.006,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4.1-flash-1017-nonthinking",
+        "slug": "deepseek_deepseek-v4.1-flash-1017-nonthinking"
+    },
+    "deepseek/deepseek-v4.1-flash-1017-low": {
+        "company": "DeepSeek",
+        "country": "China",
+        "label": "DeepSeek V4.1 Flash 1017 (Low)",
+        "release_date": "2026-10-17",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "deepseek-flash",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.006,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4.1-flash-1017-low",
+        "slug": "deepseek_deepseek-v4.1-flash-1017-low"
+    },
+    "deepseek/deepseek-v4.1-flash-1017-high": {
+        "company": "DeepSeek",
+        "country": "China",
+        "label": "DeepSeek V4.1 Flash 1017 (High)",
+        "release_date": "2026-10-17",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "deepseek-flash",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.006,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4.1-flash-1017-high",
+        "slug": "deepseek_deepseek-v4.1-flash-1017-high"
+    },
+    "deepseek/deepseek-v4.1-flash-1017": {
+        "company": "DeepSeek",
+        "country": "China",
+        "label": "DeepSeek V4.1 Flash 1017",
+        "release_date": "2026-10-17",
+        "open_source": true,
+        "documentation_url": "https://api-docs.deepseek.com/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [
+            {
+                "deepseek/deepseek-v4.1-flash-1017-high": {
+                    "label": "DeepSeek V4.1 Flash 1017 (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "deepseek/deepseek-v4.1-flash-1017-low": {
+                    "label": "DeepSeek V4.1 Flash 1017 (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "deepseek/deepseek-v4.1-flash-1017-nonthinking": {
+                    "supports": {
+                        "temperature": true
+                    },
+                    "properties": {
+                        "reasoning_model": false
+                    },
+                    "default_parameters": {
+                        "temperature": 1,
+                        "top_p": 0.95
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 384000,
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "deepseek-flash",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 384000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.3,
+            "output": 1.2,
+            "cache": {
+                "read": 0.006,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "deepseek",
+        "full_key": "deepseek/deepseek-v4.1-flash-1017",
+        "slug": "deepseek_deepseek-v4.1-flash-1017"
+    },
+    "together/reflection/Beam-1.0-501B-A23B": {
+        "company": "Reflection",
+        "country": "United States",
+        "label": "Beam 1.0 (Together)",
+        "release_date": "2026-10-16",
+        "open_source": true,
+        "documentation_url": "https://www.together.ai/models/reflection-beam",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.99
+        },
+        "provider_endpoint": "reflection/Beam-1.0-501B-A23B",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 131072,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.4,
+            "output": 1.2,
+            "cache": {
+                "read": 0.04,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "together",
+        "full_key": "together/reflection/Beam-1.0-501B-A23B",
+        "slug": "together_reflection_Beam-1.0-501B-A23B"
+    },
+    "reflection/Beam-1.0-501B-A23B": {
+        "company": "Reflection",
+        "country": "United States",
+        "label": "Beam 1.0",
+        "release_date": "2026-10-16",
+        "open_source": true,
+        "documentation_url": "https://developers.reflection.ai",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "top_p": 0.99
+        },
+        "provider_endpoint": "Beam-1.0-501B-A23B",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 131072,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "provider_name": "reflection",
+        "full_key": "reflection/Beam-1.0-501B-A23B",
+        "slug": "reflection_Beam-1.0-501B-A23B"
+    },
+    "decision/decider-v1.2": {
+        "company": "Perplexity",
+        "country": "United States",
+        "label": "Decider V1.2",
+        "release_date": "2026-10-16",
+        "open_source": true,
+        "documentation_url": "https://docs.perplexity.ai/docs/decisions/quickstart",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "decision_api": "perplexity"
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "pplx-decider-v1.2",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.02,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/decider-v1.2",
+        "slug": "decision_decider-v1.2"
+    },
+    "decision/decider-flash-v1.2": {
+        "company": "Perplexity",
+        "country": "United States",
+        "label": "Decider Flash V1.2",
+        "release_date": "2026-10-16",
+        "open_source": true,
+        "documentation_url": "https://docs.perplexity.ai/docs/decisions/quickstart",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "decision_api": "perplexity"
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "pplx-decider-flash-v1.2",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.01,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/decider-flash-v1.2",
+        "slug": "decision_decider-flash-v1.2"
+    },
+    "together/muse-spark-open": {
+        "company": "Meta",
+        "country": "United States",
+        "label": "Muse Spark Open",
+        "release_date": "2026-10-15",
+        "open_source": true,
+        "documentation_url": "https://dev.meta.ai/resources/blog/build-with-muse-spark-open",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "meta-models/Muse-Spark-Open-816B-A42B",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.25,
+            "output": 4.25,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "together",
+        "full_key": "together/muse-spark-open",
+        "slug": "together_muse-spark-open"
+    },
+    "fireworks/muse-spark-open": {
+        "company": "Meta",
+        "country": "United States",
+        "label": "Muse Spark Open (Fireworks)",
+        "release_date": "2026-10-15",
+        "open_source": true,
+        "documentation_url": "https://fireworks.ai/models/fireworks/muse-spark-open",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "rate_limit": {
+            "supports_live_monitoring": false,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 1.0,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "muse-spark-open",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 131072,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.25,
+            "output": 4.25,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "fireworks",
+        "full_key": "fireworks/muse-spark-open",
+        "slug": "fireworks_muse-spark-open"
+    },
+    "decision/d1-ultra": {
+        "company": "Liquid AI",
+        "country": "United States",
+        "label": "d1-ultra",
+        "release_date": "2026-10-15",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/liquid/d1-ultra",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "liquid/d1-ultra-20261015",
+        "properties": {
+            "context_window": 32768,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.042,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/d1-ultra",
+        "slug": "decision_d1-ultra"
+    },
+    "decision/jev-1.14": {
+        "company": "TypeSafe",
+        "country": "United States",
+        "label": "Jev 1.14",
+        "release_date": "2026-10-14",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/typesafe/jev-1.14",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "typesafe/jev-1.14-20261014",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.042,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/jev-1.14",
+        "slug": "decision_jev-1.14"
+    },
+    "decision/classify-1": {
+        "company": "ScaleDown",
+        "country": "United States",
+        "label": "Classify-1",
+        "release_date": "2026-10-13",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/scaledown/classify-1",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "scaledown/classify-1-20260928",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.04,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/classify-1",
+        "slug": "decision_classify-1"
+    },
+    "decision/drex-v2.0": {
+        "company": "Nace.AI",
+        "country": "United States",
+        "label": "Drex v2.0",
+        "release_date": "2026-10-12",
+        "open_source": true,
+        "documentation_url": "https://openrouter.ai/nace-ai/drex-v2.0",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "nace-ai/drex-v2.0-20261009",
+        "properties": {
+            "context_window": 131072,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.06,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/drex-v2.0",
+        "slug": "decision_drex-v2.0"
+    },
     "decision/microsoft-decision-1": {
         "company": "Microsoft",
         "country": "United States",
@@ -40,6 +863,90 @@
         "provider_name": "decision",
         "full_key": "decision/microsoft-decision-1",
         "slug": "decision_microsoft-decision-1"
+    },
+    "decision/drex-v1.5": {
+        "company": "Nace.AI",
+        "country": "United States",
+        "label": "Drex v1.5",
+        "release_date": "2026-10-09",
+        "open_source": true,
+        "documentation_url": "https://openrouter.ai/nace-ai/drex-v1.5",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "nace-ai/drex-v1.5-20261009",
+        "properties": {
+            "context_window": 131072,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.04,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/drex-v1.5",
+        "slug": "decision_drex-v1.5"
+    },
+    "decision/clef-omni": {
+        "company": "Cloudflare",
+        "country": "United States",
+        "label": "Clef Omni",
+        "release_date": "2026-10-09",
+        "open_source": true,
+        "documentation_url": "https://openrouter.ai/cloudflare/clef-omni",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "cloudflare/clef-omni-20261009",
+        "properties": {
+            "context_window": 65536,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.15,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/clef-omni",
+        "slug": "decision_clef-omni"
     },
     "anthropic/claude-haiku-5-5-xhigh": {
         "company": "Anthropic",
@@ -526,6 +1433,182 @@
         "full_key": "anthropic/claude-haiku-5-5",
         "slug": "anthropic_claude-haiku-5-5"
     },
+    "decision/d1": {
+        "company": "Liquid AI",
+        "country": "United States",
+        "label": "d1",
+        "release_date": "2026-10-01",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/liquid/d1",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "liquid/d1-20260930",
+        "properties": {
+            "context_window": 65536,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.02,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/d1",
+        "slug": "decision_d1"
+    },
+    "decision/clef-flash": {
+        "company": "Cloudflare",
+        "country": "United States",
+        "label": "Clef Flash",
+        "release_date": "2026-10-01",
+        "open_source": true,
+        "documentation_url": "https://openrouter.ai/cloudflare/clef-flash",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "openrouter_provider_only": [
+                "cloudflare"
+            ]
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "cloudflare/clef-flash",
+        "properties": {
+            "context_window": 24576,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.038,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/clef-flash",
+        "slug": "decision_clef-flash"
+    },
+    "decision/clef": {
+        "company": "Cloudflare",
+        "country": "United States",
+        "label": "Clef",
+        "release_date": "2026-10-01",
+        "open_source": true,
+        "documentation_url": "https://openrouter.ai/cloudflare/clef",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "openrouter_provider_only": [
+                "cloudflare"
+            ]
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "cloudflare/clef",
+        "properties": {
+            "context_window": 65536,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.24,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/clef",
+        "slug": "decision_clef"
+    },
+    "decision/tev1-4b-experimental": {
+        "company": "Together AI",
+        "country": "United States",
+        "label": "Tev1 4B Experimental",
+        "release_date": "2026-09-30",
+        "open_source": true,
+        "documentation_url": "https://openrouter.ai/togethercomputer/tev1-4b-experimental",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "togethercomputer/tev1-4b-experimental-20260923",
+        "properties": {
+            "context_window": 32768,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.042,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/tev1-4b-experimental",
+        "slug": "decision_tev1-4b-experimental"
+    },
     "decision/mercury-decide": {
         "company": "Inception",
         "country": "United States",
@@ -594,6 +1677,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -662,6 +1746,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -730,6 +1815,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -798,6 +1884,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -866,6 +1953,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -934,6 +2022,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -1066,6 +2155,52 @@
         "provider_name": "stepfun",
         "full_key": "stepfun/step-5-preview",
         "slug": "stepfun_step-5-preview"
+    },
+    "decision/solar-decide": {
+        "company": "Upstage",
+        "country": "South Korea",
+        "label": "Solar Decide",
+        "release_date": "2026-09-28",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/upstage/solar-decide",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "openrouter_provider_only": [
+                "upstage/zdr"
+            ]
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "upstage/solar-decide-20260928",
+        "properties": {
+            "context_window": 524288,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.05,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/solar-decide",
+        "slug": "decision_solar-decide"
     },
     "anthropic/claude-sonnet-5-5-xhigh": {
         "company": "Anthropic",
@@ -1583,6 +2718,47 @@
         "full_key": "anthropic/claude-sonnet-5-5",
         "slug": "anthropic_claude-sonnet-5-5"
     },
+    "decision/kev-4b": {
+        "company": "Jared Palmer",
+        "label": "Kev 4B",
+        "release_date": "2026-09-25",
+        "open_source": true,
+        "documentation_url": "https://openrouter.ai/jaredpalmer/kev-4b",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "jaredpalmer/kev-4b-20260924",
+        "properties": {
+            "context_window": 8192,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.042,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/kev-4b",
+        "slug": "decision_kev-4b"
+    },
     "openai/gpt-6-sol-xhigh": {
         "company": "OpenAI",
         "country": "United States",
@@ -1609,6 +2785,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -1677,6 +2854,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -1745,6 +2923,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -1813,6 +2992,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -1881,6 +3061,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -1949,6 +3130,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns",
             "access_programs": {
                 "cyber": "daybreak_blue"
@@ -2020,6 +3202,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -2142,6 +3325,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -2210,6 +3394,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -2278,6 +3463,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -2346,6 +3532,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -2414,6 +3601,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -2482,6 +3670,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns",
             "access_programs": {
                 "cyber": "daybreak_blue"
@@ -2553,6 +3742,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -3733,8 +4923,9 @@
     },
     "decision/jev-1.13.0": {
         "company": "TypeSafe",
+        "country": "United States",
         "label": "Jev 1.13.0",
-        "release_date": "2026-09-17",
+        "release_date": "2026-09-18",
         "open_source": false,
         "documentation_url": "https://openrouter.ai/typesafe/jev-1.13",
         "supports": {
@@ -3759,7 +4950,7 @@
         "default_parameters": {},
         "provider_endpoint": "typesafe/jev-1.13-20260917",
         "properties": {
-            "context_window": 64000,
+            "context_window": 262144,
             "max_tokens": 0,
             "training_cutoff": null,
             "reasoning_model": false
@@ -4457,7 +5648,11 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "openrouter_provider_only": [
+                "inception"
+            ]
+        },
         "alternative_keys": [],
         "default_parameters": {
             "reasoning_effort": "high"
@@ -4512,7 +5707,15 @@
             "cache_read_counts_toward_limit": true
         },
         "alternative_keys": [
-            "openrouter/inception/mercury-2.5"
+            {
+                "openrouter/inception/mercury-2.5": {
+                    "provider_properties": {
+                        "openrouter_provider_only": [
+                            "inception"
+                        ]
+                    }
+                }
+            }
         ],
         "default_parameters": {
             "reasoning_effort": "high"
@@ -4620,6 +5823,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -4688,6 +5892,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -4756,6 +5961,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -4824,6 +6030,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -4892,6 +6099,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -4960,6 +6168,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -6218,7 +7427,11 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "openrouter_provider_only": [
+                "tencent"
+            ]
+        },
         "alternative_keys": [],
         "default_parameters": {
             "temperature": 0.9,
@@ -7428,6 +8641,16 @@
                 "read": 0.5,
                 "read_discount": 1.0,
                 "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
             }
         },
         "provider_name": "grok",
@@ -7483,6 +8706,16 @@
                 "read": 0.5,
                 "read_discount": 1.0,
                 "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
             }
         },
         "provider_name": "grok",
@@ -7538,6 +8771,16 @@
                 "read": 0.5,
                 "read_discount": 1.0,
                 "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
             }
         },
         "provider_name": "grok",
@@ -7593,6 +8836,16 @@
                 "read": 0.5,
                 "read_discount": 1.0,
                 "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
             }
         },
         "provider_name": "grok",
@@ -7681,6 +8934,16 @@
                 "read": 0.5,
                 "read_discount": 1.0,
                 "write_markup": 1.0
+            },
+            "context": {
+                "threshold": 200000.0,
+                "input": 4.0,
+                "output": 12.0,
+                "cache": {
+                    "read": 1.0,
+                    "read_discount": 1.0,
+                    "write_markup": 1.0
+                }
             }
         },
         "provider_name": "grok",
@@ -7800,157 +9063,6 @@
         "full_key": "together/muse-glimmer-30b",
         "slug": "together_muse-glimmer-30b"
     },
-    "openai/gpt-daybreak-blue-high": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "Daybreak Blue (High)",
-        "release_date": "2026-08-10",
-        "open_source": false,
-        "documentation_url": "https://developers.openai.com/api/docs/models/daybreak-blue-latest",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "verbosity": "medium",
-            "reasoning_context": "all_turns",
-            "access_programs": {
-                "cyber": "daybreak_blue"
-            }
-        },
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gpt-daybreak-blue-latest",
-        "properties": {
-            "context_window": 1050000,
-            "max_tokens": 128000,
-            "training_cutoff": "2026-02",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 5.0,
-            "output": 30.0,
-            "cache": {
-                "read_discount": 0.1,
-                "write_markup": 1.25
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            },
-            "context": {
-                "threshold": 272000.0,
-                "input": 10.0,
-                "output": 45.0,
-                "cache": {
-                    "read_discount": 0.1,
-                    "write_markup": 1.25
-                }
-            }
-        },
-        "provider_name": "openai",
-        "full_key": "openai/gpt-daybreak-blue-high",
-        "slug": "openai_gpt-daybreak-blue-high"
-    },
-    "openai/gpt-daybreak-blue": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "Daybreak Blue",
-        "release_date": "2026-08-10",
-        "open_source": false,
-        "documentation_url": "https://developers.openai.com/api/docs/models/daybreak-blue-latest",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "verbosity": "medium",
-            "reasoning_context": "all_turns",
-            "access_programs": {
-                "cyber": "daybreak_blue"
-            }
-        },
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [
-            {
-                "openai/gpt-daybreak-blue-high": {
-                    "label": "Daybreak Blue (High)",
-                    "default_parameters": {
-                        "reasoning_effort": "high"
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "reasoning_effort": "max"
-        },
-        "provider_endpoint": "gpt-daybreak-blue-latest",
-        "properties": {
-            "context_window": 1050000,
-            "max_tokens": 128000,
-            "training_cutoff": "2026-02",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 5.0,
-            "output": 30.0,
-            "cache": {
-                "read_discount": 0.1,
-                "write_markup": 1.25
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5
-            },
-            "context": {
-                "threshold": 272000.0,
-                "input": 10.0,
-                "output": 45.0,
-                "cache": {
-                    "read_discount": 0.1,
-                    "write_markup": 1.25
-                }
-            }
-        },
-        "provider_name": "openai",
-        "full_key": "openai/gpt-daybreak-blue",
-        "slug": "openai_gpt-daybreak-blue"
-    },
     "meta/muse_spark_1_2": {
         "company": "Meta",
         "country": "United States",
@@ -8067,6 +9179,120 @@
         "full_key": "fireworks/qwen3p8-max",
         "slug": "fireworks_qwen3p8-max"
     },
+    "alibaba/qwen3.8-max-medium": {
+        "company": "Alibaba",
+        "country": "China",
+        "label": "Qwen 3.8 Max (Medium)",
+        "release_date": "2026-08-03",
+        "open_source": true,
+        "documentation_url": "https://qwen.ai/blog?id=qwen3.8",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": true,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "preserve_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "qwen3.8-max",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.25,
+                "write": 2.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3.8-max-medium",
+        "slug": "alibaba_qwen3.8-max-medium"
+    },
+    "alibaba/qwen3.8-max-low": {
+        "company": "Alibaba",
+        "country": "China",
+        "label": "Qwen 3.8 Max (Low)",
+        "release_date": "2026-08-03",
+        "open_source": true,
+        "documentation_url": "https://qwen.ai/blog?id=qwen3.8",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": true,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "preserve_thinking": true
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.7,
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "qwen3.8-max",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 6.0,
+            "cache": {
+                "read": 0.25,
+                "write": 2.5,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "alibaba",
+        "full_key": "alibaba/qwen3.8-max-low",
+        "slug": "alibaba_qwen3.8-max-low"
+    },
     "alibaba/qwen3.8-max": {
         "company": "Alibaba",
         "country": "China",
@@ -8098,7 +9324,24 @@
             "supports_live_monitoring": true,
             "cache_read_counts_toward_limit": true
         },
-        "alternative_keys": [],
+        "alternative_keys": [
+            {
+                "alibaba/qwen3.8-max-low": {
+                    "label": "Qwen 3.8 Max (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "alibaba/qwen3.8-max-medium": {
+                    "label": "Qwen 3.8 Max (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            }
+        ],
         "default_parameters": {
             "temperature": 0.7
         },
@@ -9773,6 +11016,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -9841,6 +11085,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns",
             "access_programs": {
                 "cyber": "daybreak_blue"
@@ -9912,6 +11157,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -9999,6 +11245,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -10067,6 +11314,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns",
             "access_programs": {
                 "cyber": "daybreak_blue"
@@ -10138,6 +11386,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -10225,6 +11474,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -10293,6 +11543,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns",
             "access_programs": {
                 "cyber": "daybreak_blue"
@@ -10364,6 +11615,7 @@
         },
         "provider_properties": {
             "verbosity": "medium",
+            "supports_prompt_cache_options": true,
             "reasoning_context": "all_turns"
         },
         "rate_limit": {
@@ -12219,7 +13471,7 @@
             "available_for_everyone": false,
             "internal_only": true,
             "available_as_evaluator": false,
-            "ignored_for_cost": false
+            "ignored_for_cost": true
         },
         "provider_properties": {},
         "alternative_keys": [],
@@ -12266,7 +13518,7 @@
             "available_for_everyone": false,
             "internal_only": true,
             "available_as_evaluator": false,
-            "ignored_for_cost": false
+            "ignored_for_cost": true
         },
         "provider_properties": {},
         "alternative_keys": [],
@@ -13270,114 +14522,6 @@
         "provider_name": "deepseek",
         "full_key": "deepseek/deepseek-v4-flash",
         "slug": "deepseek_deepseek-v4-flash"
-    },
-    "xiaomi/mimo-v2.5-pro": {
-        "company": "Xiaomi",
-        "country": "China",
-        "label": "MiMo V2.5 Pro",
-        "release_date": "2026-04-22",
-        "open_source": true,
-        "documentation_url": "https://platform.xiaomimimo.com/#/docs/",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": false,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "mimo-v2.5-pro",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 128000,
-            "training_cutoff": "December 2024",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 0.435,
-            "output": 0.87,
-            "cache": {
-                "read": 0.0036,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "provider_name": "xiaomi",
-        "full_key": "xiaomi/mimo-v2.5-pro",
-        "slug": "xiaomi_mimo-v2.5-pro"
-    },
-    "xiaomi/mimo-v2.5": {
-        "company": "Xiaomi",
-        "country": "China",
-        "label": "MiMo V2.5",
-        "release_date": "2026-04-22",
-        "open_source": true,
-        "documentation_url": "https://platform.xiaomimimo.com/#/docs/",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": false,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "mimo-v2.5",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 128000,
-            "training_cutoff": "December 2024",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 0.14,
-            "output": 0.28,
-            "cache": {
-                "read": 0.0028,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "provider_name": "xiaomi",
-        "full_key": "xiaomi/mimo-v2.5",
-        "slug": "xiaomi_mimo-v2.5"
     },
     "alibaba/qwen3.6-27b": {
         "company": "Alibaba",
@@ -18528,144 +19672,6 @@
         "full_key": "openai/o3-pro-2025-06-10",
         "slug": "openai_o3-pro-2025-06-10"
     },
-    "bedrock/claude-sonnet-4-20250514-v1-thinking": {
-        "company": "Amazon",
-        "country": "United States",
-        "label": "Claude Sonnet 4 (Thinking)",
-        "release_date": "2025-05-22",
-        "open_source": false,
-        "documentation_url": "https://www.anthropic.com/claude/sonnet",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": true,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": false,
-            "cache_read_counts_toward_limit": false
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "us.anthropic.claude-sonnet-4-20250514-v1:0",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 64000,
-            "training_cutoff": "2025-03",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 3.0,
-            "output": 15.0,
-            "cache": {
-                "read": 0.3,
-                "write": 3.75,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 200000.0,
-                "input": 6.0,
-                "output": 22.5,
-                "cache": {
-                    "read": 0.6,
-                    "write": 7.5,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "provider_name": "bedrock",
-        "full_key": "bedrock/claude-sonnet-4-20250514-v1-thinking",
-        "slug": "bedrock_claude-sonnet-4-20250514-v1-thinking"
-    },
-    "bedrock/claude-sonnet-4-20250514-v1": {
-        "company": "Amazon",
-        "country": "United States",
-        "label": "Claude Sonnet 4 (Nonthinking)",
-        "release_date": "2025-05-22",
-        "open_source": false,
-        "documentation_url": "https://www.anthropic.com/claude/sonnet",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": true,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": false,
-            "cache_read_counts_toward_limit": false
-        },
-        "alternative_keys": [
-            {
-                "bedrock/claude-sonnet-4-20250514-v1-thinking": {
-                    "properties": {
-                        "reasoning_model": true
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "us.anthropic.claude-sonnet-4-20250514-v1:0",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 64000,
-            "training_cutoff": "2025-03",
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 3.0,
-            "output": 15.0,
-            "cache": {
-                "read": 0.3,
-                "write": 3.75,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 200000.0,
-                "input": 6.0,
-                "output": 22.5,
-                "cache": {
-                    "read": 0.6,
-                    "write": 7.5,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "provider_name": "bedrock",
-        "full_key": "bedrock/claude-sonnet-4-20250514-v1",
-        "slug": "bedrock_claude-sonnet-4-20250514-v1"
-    },
     "bedrock/claude-opus-4-20250514-v1-thinking": {
         "company": "Amazon",
         "country": "United States",
@@ -20882,7 +21888,7 @@
             "available_for_everyone": true,
             "internal_only": true,
             "available_as_evaluator": false,
-            "ignored_for_cost": false
+            "ignored_for_cost": true
         },
         "provider_properties": {},
         "alternative_keys": [],
@@ -20928,7 +21934,7 @@
             "available_for_everyone": true,
             "internal_only": true,
             "available_as_evaluator": true,
-            "ignored_for_cost": false
+            "ignored_for_cost": true
         },
         "provider_properties": {},
         "alternative_keys": [],

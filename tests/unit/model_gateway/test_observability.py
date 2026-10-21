@@ -16,6 +16,7 @@ from model_gateway.asgi_observability import GatewayObservabilityMiddleware
 from model_gateway.observability import (
     ALB_TRACE_HEADER,
     install_loop_exception_handler,
+    latest_runtime_snapshot,
     log_gateway_event,
     request_log_fields_from_scope,
     runtime_snapshot,
@@ -116,6 +117,7 @@ def test_request_log_fields_from_scope_uses_alb_trace_and_bounds_values():
             (b"x-run-id", b"r" * 300),
             (b"x-question-id", b"q1"),
             (b"x-query-id", b"query-a"),
+            (b"x-attempt-id", b"attempt-a"),
         ]
     )
 
@@ -126,6 +128,7 @@ def test_request_log_fields_from_scope_uses_alb_trace_and_bounds_values():
     assert len(fields["run_id"]) <= 128
     assert fields["question_id"] == "q1"
     assert fields["query_id"] == "query-a"
+    assert fields["attempt_id"] == "attempt-a"
 
 
 def test_log_gateway_event_is_json_and_excludes_none(caplog: pytest.LogCaptureFixture):
@@ -265,7 +268,11 @@ async def test_loop_exception_handler_logs_bounded_context_message(
 @pytest.mark.asyncio
 async def test_asgi_middleware_logs_pre_response_start_errors(
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        asgi_observability, "latest_runtime_snapshot", lambda: {"pid": 1000}
+    )
     _enable_gateway_observability_logs(caplog)
 
     async def app(
@@ -337,7 +344,11 @@ async def test_asgi_middleware_does_not_log_success_lifecycle_by_default(
 @pytest.mark.asyncio
 async def test_asgi_middleware_logs_non_2xx_query(
     caplog: pytest.LogCaptureFixture,
+    monkeypatch: pytest.MonkeyPatch,
 ):
+    monkeypatch.setattr(
+        asgi_observability, "latest_runtime_snapshot", lambda: {"pid": 1000}
+    )
     _enable_gateway_observability_logs(caplog)
 
     async def app(
@@ -402,7 +413,9 @@ async def test_asgi_middleware_send_error_logs_runtime_data(
     caplog: pytest.LogCaptureFixture,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.setattr(asgi_observability, "runtime_snapshot", lambda: {"pid": 1000})
+    monkeypatch.setattr(
+        asgi_observability, "latest_runtime_snapshot", lambda: {"pid": 1000}
+    )
     _enable_gateway_observability_logs(caplog)
 
     async def app(
@@ -665,6 +678,7 @@ async def test_record_runtime_current_samples_loop_lag_before_snapshot(
     )
 
     assert captured == [{"pid": 123, "event_loop_lag_ms": 250}]
+    assert latest_runtime_snapshot() == {"pid": 123, "event_loop_lag_ms": 250}
 
 
 def test_record_runtime_metrics_emits_low_cardinality_metrics(

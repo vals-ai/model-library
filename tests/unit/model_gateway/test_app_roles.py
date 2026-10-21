@@ -120,6 +120,7 @@ def test_control_role_exposes_only_health_and_control_operations(
         "/models",
         "/service-auth",
         "/service-auth/revoke",
+        "/admin/key-pools",
     }
     assert app.state.startup_canary == {
         "enabled": False,

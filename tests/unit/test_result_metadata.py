@@ -3,7 +3,7 @@ import gzip
 from unittest.mock import patch
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from model_library.base import (
     QueryPerformanceEvent,
@@ -557,14 +557,22 @@ class TestQueryResultPerformance:
         ) as compress:
             json_dump = metadata.model_dump(mode="json")
 
-        compress.assert_called_once_with(
-            performance.model_dump_json().encode(), compresslevel=1, mtime=0
+        timeline_json = TypeAdapter(list[QueryPerformanceTimelineEntry]).dump_json(
+            performance.timeline
         )
+        compress.assert_called_once_with(timeline_json, compresslevel=1, mtime=0)
         assert python_dump["performance"] == performance.model_dump()
         envelope = json_dump["performance"]
-        assert envelope["encoding"] == "gzip+base64"
-        compressed = base64.b64decode(envelope["data"], validate=True)
-        assert gzip.decompress(compressed) == performance.model_dump_json().encode()
+        assert envelope["time_to_first_token_ms"] == {
+            "any": 100,
+            "answer": 100,
+            "reasoning": None,
+            "content": 100,
+            "tool_call": None,
+        }
+        assert envelope["timeline"]["encoding"] == "gzip+base64"
+        compressed = base64.b64decode(envelope["timeline"]["data"], validate=True)
+        assert gzip.decompress(compressed) == timeline_json
 
         reparsed = QueryResultMetadata.model_validate(json_dump)
         assert isinstance(reparsed.performance, CompressedQueryResultPerformance)
@@ -625,13 +633,14 @@ class TestQueryResultPerformance:
         metadata = QueryResultMetadata.model_validate(
             {
                 "performance": {
-                    "encoding": "gzip+base64",
-                    "data": data,
+                    "time_to_first_token_ms": {"any": 5},
+                    "timeline": {"encoding": "gzip+base64", "data": data},
                 }
             }
         )
         assert isinstance(metadata.performance, CompressedQueryResultPerformance)
-        assert metadata.performance.data == data
+        assert metadata.performance.time_to_first_token_ms.any == 5
+        assert metadata.performance.timeline.data == data
 
     async def test_timeline_timing_fields_are_derived_from_events(self):
         entry = QueryPerformanceTimelineEntry(
@@ -849,8 +858,11 @@ class TestQueryResultMetadataAddition:
             {
                 "in_tokens": 100,
                 "performance": {
-                    "encoding": "gzip+base64",
-                    "data": "not-decompressed-during-aggregation",
+                    "time_to_first_token_ms": {},
+                    "timeline": {
+                        "encoding": "gzip+base64",
+                        "data": "not-decompressed-during-aggregation",
+                    },
                 },
             }
         )

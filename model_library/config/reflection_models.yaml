@@ -1,0 +1,26 @@
+base-config:
+  company: Reflection
+  country: United States
+  documentation_url: https://developers.reflection.ai
+  open_source: true
+  supports:
+    images: false
+    files: false
+    tools: true
+
+beam-models:
+  reflection/Beam-1.0-501B-A23B:
+    label: Beam 1.0
+    release_date: 2026-10-16
+    supports:
+      temperature: true
+      output_schema: true
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.99
+    properties:
+      context_window: 1_048_576
+      max_tokens: 131_072
+      reasoning_model: true
+      training_cutoff: "2026-06"
+    costs_per_million_token: null

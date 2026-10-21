@@ -1,6 +1,6 @@
 import io
 import logging
-from typing import Any, Literal, Sequence
+from typing import Any, Literal, Sequence, cast
 
 from pydantic import BaseModel
 from typing_extensions import override
@@ -114,11 +114,12 @@ class DelegateOnly(LLM):
         **kwargs: object,
     ) -> QueryResult:
         assert self.delegate
+        extra_body = cast(dict[str, Any], kwargs.pop("extra_body", {}))
         return await self.delegate_query(
             input,
             tools=tools,
             query_logger=query_logger,
-            extra_body=self._get_extra_body(),
+            extra_body={**self._get_extra_body(), **extra_body},
             output_schema=output_schema,
             **kwargs,
         )

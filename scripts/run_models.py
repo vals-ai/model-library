@@ -4,7 +4,7 @@ import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Coroutine
+from typing import Any, Awaitable, Callable, Coroutine, Mapping
 
 from pydantic import SecretStr
 from rich.console import Console
@@ -13,7 +13,6 @@ from rich.table import Table
 from rich.tree import Tree
 
 from examples.setup import setup
-from model_gateway.model_helpers import managed_api_keys
 from model_library import model_library_settings
 from model_library.base import LLMConfig, QueryResult
 from model_library.exceptions import exception_message
@@ -28,7 +27,6 @@ from model_library.registry_utils import (
 )
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import retry_decorator
-
 CONCURRENCY_PER_PROVIDER = 10
 MAX_RETRIES = 5
 DEFAULT_TIMEOUT = 240
@@ -74,20 +72,12 @@ failed_model_names: dict[str, list[str]] = defaultdict(
 skipped_model_names: dict[str, list[str]] = defaultdict(
     list
 )  # provider -> [cli_only_model_names]
-
-
-def smoke_model_config(model: str) -> LLMConfig:
-    """Build the direct-smoke config, including a pinned managed key if needed."""
-    managed_keys = managed_api_keys(model)
-    if len(managed_keys) != 1 or managed_keys[0].key_setting == "META_API_KEY":
+def smoke_model_config(model: str, pins: Mapping[str, str]) -> LLMConfig:
+    """Build the direct-smoke config, with the key `pins` names for the model."""
+    key_setting = pins.get(model)
+    if key_setting is None:
         return LLMConfig()
-
-    api_key = model_library_settings.get(managed_keys[0].key_setting)
-    if not isinstance(api_key, str) or not api_key:
-        return LLMConfig()
-    return LLMConfig(
-        custom_api_key=SecretStr(api_key),
-    )
+    return LLMConfig(custom_api_key=SecretStr(model_library_settings.get(key_setting)))
 
 
 def create_dashboard(total: int, completed_count: int) -> Table:
@@ -158,10 +148,12 @@ def create_dashboard(total: int, completed_count: int) -> Table:
     return table
 
 
-async def process_model(model_str: str, provider_name: str):
+async def process_model(
+    model_str: str, provider_name: str, pins: Mapping[str, str]
+) -> None:
     try:
         model = get_registry_model(
-            model_str, override_config=smoke_model_config(model_str)
+            model_str, override_config=smoke_model_config(model_str, pins)
         )
 
         # Use longer timeout for deep research models
@@ -308,8 +300,9 @@ async def main():
     for provider_name, model_names in skipped.items():
         skipped_model_names[provider_name].extend(model_names)
 
+    pins: dict[str, str] = {}
     tasks: list[Coroutine[Any, Any, None]] = [
-        process_model(key, model_registry[key].provider_name) for key in runnable
+        process_model(key, model_registry[key].provider_name, pins) for key in runnable
     ]
 
     # start tasks

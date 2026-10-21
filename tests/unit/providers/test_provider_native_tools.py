@@ -1,10 +1,9 @@
-"""Tests for built-in provider web search (OpenAI web_search_call, Anthropic web_search_tool_result, Google grounding, xAI web_search_tool) handling."""
+"""Tests for built-in provider web search (OpenAI and xAI Responses web_search_call, Anthropic web_search_tool_result, Google grounding) handling."""
 
 from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from xai_sdk.tools import web_search
 from google.genai.types import (
     Candidate,
     FinishReason as GoogleFinishReason,
@@ -28,17 +27,15 @@ from openai.types.responses.response_function_web_search import (
 
 from model_library.agent.metadata import TurnSummary
 from model_library.agent.tool import ProviderTool
-from model_library.base import LLMConfig
-from model_library.base.input import TextInput, ToolBody, ToolDefinition
+from model_library.base.input import TextInput
 from model_library.base.output import FinishReason, FinishReasonInfo, QueryResult
 from model_library.base.output.result import ProviderToolEvent
 from model_library.providers.google.google import GoogleModel
 from model_library.providers.openai import OpenAIModel
-from model_library.providers.xai import XAIConfig, XAIModel
+from model_library.providers.xai import XAIModel
 
 from tests.unit.agent.helpers import DoneTool, make_agent, make_metadata, mock_llm
 
-_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 
 def _make_web_search_response(
@@ -181,7 +178,7 @@ async def test_web_search_call_maps_to_provider_tool_events():
 
 
 async def test_web_search_call_event_provider_follows_delegate_provider():
-    """Grok's default Responses delegate must attribute searches to xai, not openai."""
+    """Grok's Responses delegate must attribute searches to xai, not openai."""
     delegate = XAIModel("grok-4.7").delegate
     assert delegate is not None
     mock_client = MagicMock()
@@ -846,224 +843,6 @@ async def test_anthropic_web_search_error_maps_to_provider_tool_event():
 
 
 # ---------------------------------------------------------------------------
-# xAI web search tests
-# ---------------------------------------------------------------------------
-
-
-def _make_xai_web_search_tool_call(query: str = "test query", id: str = "tc_1"):
-    """Minimal xAI proto ToolCall with type WEB_SEARCH_TOOL."""
-    from xai_sdk.proto.v6.chat_pb2 import FunctionCall, ToolCall, ToolCallType
-    import json
-
-    return ToolCall(
-        id=id,
-        type=ToolCallType.TOOL_CALL_TYPE_WEB_SEARCH_TOOL,
-        function=FunctionCall(
-            name="web_search",
-            arguments=json.dumps({"query": query, "num_results": "5"}),
-        ),
-    )
-
-
-def _make_xai_mock_response(
-    content: str = "The answer.",
-    tool_calls=None,
-):
-    """Minimal mock xAI Response object."""
-    usage = MagicMock()
-    usage.prompt_tokens = 10
-    usage.cached_prompt_text_tokens = 0
-    usage.completion_tokens = 20
-    usage.reasoning_tokens = 0
-
-    response = MagicMock()
-    response.id = "resp_1"
-    response.content = content
-    response.reasoning_content = ""
-    response.finish_reason = "REASON_STOP"
-    response.tool_calls = tool_calls or []
-    response.usage = usage
-    return response
-
-
-def _native_web_search_tools() -> list[ToolDefinition]:
-    from model_library.agent.tool import NativeWebSearch
-
-    return [NativeWebSearch().definition]
-
-
-async def _parse_xai_response(
-    mock_response, tools: list[ToolDefinition] | None = None
-) -> QueryResult:
-    from xai_sdk.proto.v6.chat_pb2 import GetCompletionsRequest
-
-    model = XAIModel("grok-3-latest", config=_NATIVE)
-    if tools is None:
-        tools = _native_web_search_tools()
-
-    mock_chunk = MagicMock()
-    mock_chunk.tool_calls = []
-    mock_chunk.reasoning_content = None
-    mock_chunk.content = None
-
-    async def fake_stream():
-        yield mock_response, mock_chunk
-
-    mock_chat = MagicMock()
-    mock_chat.stream = MagicMock(return_value=fake_stream())
-    mock_client = MagicMock()
-
-    def create_chat(*_args: Any, **kwargs: Any):
-        mock_chat.proto = GetCompletionsRequest(**kwargs)
-        return mock_chat
-
-    mock_client.chat.create.side_effect = create_chat
-
-    with patch.object(model, "get_client", return_value=mock_client):
-        return await model._query_impl(
-            [TextInput(text="search for something")],
-            tools=tools,
-            query_logger=MagicMock(),
-        )
-
-
-async def test_xai_web_search_maps_to_provider_tool_events():
-    """web_search_tool calls produce ProviderToolEvents, not ToolCalls."""
-    import json
-
-    tc = _make_xai_web_search_tool_call("test query")
-    result = await _parse_xai_response(_make_xai_mock_response(tool_calls=[tc]))
-
-    assert result.tool_calls == []
-    assert len(result.provider_tool_events) == 1
-    event = result.provider_tool_events[0]
-    assert isinstance(event, ProviderToolEvent)
-    assert event.name == "web_search"
-    assert event.type == "web_search_tool"
-    assert event.provider == "xai"
-    # Raw args string is stored as-is (not json-parsed); the query is nested inside
-    assert event.input == json.dumps({"query": "test query", "num_results": "5"})
-
-
-@pytest.mark.parametrize(
-    "body",
-    [
-        pytest.param(web_search(), id="sdk-tool"),
-        pytest.param({"web_search": {}}, id="raw-mapping"),
-    ],
-)
-async def test_xai_raw_provider_web_search_tool_maps_to_provider_tool_events(
-    body,
-):
-    """ProviderTool web-search bodies request native search."""
-    tc = _make_xai_web_search_tool_call("test query")
-    result = await _parse_xai_response(
-        _make_xai_mock_response(tool_calls=[tc]),
-        tools=[ProviderTool(name="web_search", body=body).definition],
-    )
-
-    assert result.tool_calls == []
-    assert len(result.provider_tool_events) == 1
-    assert result.provider_tool_events[0].type == "web_search_tool"
-
-
-async def test_xai_web_search_finish_reason_is_stop():
-    """Finish reason is STOP when only web search events are present."""
-    tc = _make_xai_web_search_tool_call()
-    result = await _parse_xai_response(_make_xai_mock_response(tool_calls=[tc]))
-
-    assert result.finish_reason.reason == FinishReason.STOP
-
-
-async def test_xai_web_search_only_response_does_not_raise():
-    """A response with only web_search_tool calls (no text) must not raise."""
-    tc = _make_xai_web_search_tool_call()
-    result = await _parse_xai_response(
-        _make_xai_mock_response(content="", tool_calls=[tc])
-    )
-
-    assert len(result.provider_tool_events) == 1
-    assert result.tool_calls == []
-
-
-async def test_xai_web_search_typed_client_tool_call_stays_a_tool_call():
-    """Without a NativeWebSearch tool in the request, a call the API labels
-    WEB_SEARCH_TOOL is the caller's own `web_search` client tool and must be
-    returned as a ToolCall for the agent to execute."""
-    import json
-
-    client_tool = ToolDefinition(
-        name="web_search",
-        body=ToolBody(
-            name="web_search",
-            description="Search the web",
-            properties={"search_query": {"type": "string"}},
-            required=["search_query"],
-        ),
-    )
-    tc = _make_xai_web_search_tool_call("test query")
-    result = await _parse_xai_response(
-        _make_xai_mock_response(content="", tool_calls=[tc]), tools=[client_tool]
-    )
-
-    assert result.provider_tool_events == []
-    assert len(result.tool_calls) == 1
-    assert result.tool_calls[0].name == "web_search"
-    assert result.tool_calls[0].id == "tc_1"
-    assert json.loads(result.tool_calls[0].args)["query"] == "test query"
-
-
-async def test_xai_truly_empty_response_raises():
-    """A response with no text, no tool calls, and no web search must raise."""
-    from model_library.exceptions import ModelNoOutputError
-
-    with pytest.raises(ModelNoOutputError):
-        await _parse_xai_response(_make_xai_mock_response(content="", tool_calls=[]))
-
-
-async def test_xai_mixed_local_and_provider_tool_sequences():
-    """Parsing a mixed turn assigns each list its content-index `sequence`.
-
-    A web_search -> local_tool -> web_search response splits into separate
-    tool_calls / provider_tool_events lists, but each item keeps `sequence` set
-    to its index in the provider's tool-call list. Downstream (the Agent) uses
-    these to merge the two lists back into the original order; here we only
-    assert the parser-level sequence assignment that contract depends on.
-    """
-    import json
-
-    from xai_sdk.proto.v6.chat_pb2 import FunctionCall, ToolCall, ToolCallType
-
-    local_tool_call = ToolCall(
-        id="tc_local",
-        type=ToolCallType.TOOL_CALL_TYPE_CLIENT_SIDE_TOOL,
-        function=FunctionCall(name="get_weather", arguments=json.dumps({"city": "SF"})),
-    )
-    # Interleaved order: web search, local tool, web search
-    tool_calls = [
-        _make_xai_web_search_tool_call("first query", id="tc_ws_1"),
-        local_tool_call,
-        _make_xai_web_search_tool_call("second query", id="tc_ws_2"),
-    ]
-
-    result = await _parse_xai_response(_make_xai_mock_response(tool_calls=tool_calls))
-
-    # Local tool call keeps its interleaved position (index 1)
-    assert len(result.tool_calls) == 1
-    assert result.tool_calls[0].name == "get_weather"
-    assert result.tool_calls[0].sequence == 1
-
-    # Both web searches keep their positions (index 0 and 2)
-    assert len(result.provider_tool_events) == 2
-    assert [e.sequence for e in result.provider_tool_events] == [0, 2]
-    # Raw args stored as-is (not json-parsed); the query is nested inside
-    assert [e.input for e in result.provider_tool_events] == [
-        json.dumps({"query": "first query", "num_results": "5"}),
-        json.dumps({"query": "second query", "num_results": "5"}),
-    ]
-
-
-# ---------------------------------------------------------------------------
 # NativeWebSearch parse_tools mapping tests
 # ---------------------------------------------------------------------------
 
@@ -1141,20 +920,6 @@ async def test_native_web_search_google_build_body_no_tool_config_without_native
 
     config = body["config"]
     assert config.tool_config is None
-
-
-async def test_native_web_search_xai_parse_tools():
-    """xAI parse_tools maps NativeWebSearch to the web_search proto (native path)."""
-    from xai_sdk.proto.v6.chat_pb2 import Tool as XAITool
-
-    from model_library.agent.tool import NativeWebSearch
-
-    model = XAIModel("grok-3-latest", config=_NATIVE)
-    tool = NativeWebSearch()
-    result = await model.parse_tools([tool.definition])
-
-    assert len(result) == 1
-    assert isinstance(result[0], XAITool)
 
 
 async def test_native_web_search_openai_parse_tools():

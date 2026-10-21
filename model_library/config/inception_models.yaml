@@ -9,6 +9,27 @@ base-config:
     files: false
 
 mercury-models:
+  inception/mercury-3:
+    label: Mercury 3
+    release_date: 2026-10-19
+    properties:
+      reasoning_model: true
+      context_window: 1_000_000
+      max_tokens: 131_072
+    supports:
+      output_schema: true
+    default_parameters:
+      reasoning_effort: "high"
+    costs_per_million_token:
+      input: 0.20
+      output: 0.70
+      cache:
+        read: 0.02
+    alternative_keys:
+      - openrouter/inception/mercury-3:
+          provider_properties:
+            openrouter_provider_only: [inception]
+
   inception/mercury-2.5:
     label: Mercury 2.5
     release_date: 2026-09-08
@@ -26,7 +47,9 @@ mercury-models:
       cache:
         read: 0.02
     alternative_keys:
-      - openrouter/inception/mercury-2.5
+      - openrouter/inception/mercury-2.5:
+          provider_properties:
+            openrouter_provider_only: [inception]
 
   inception/mercury:
     label: Mercury

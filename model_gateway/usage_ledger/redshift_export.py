@@ -59,7 +59,11 @@ def _redshift_staging_arrow_schema() -> Any:
             ("source_pk", pyarrow.string()),
             ("source_sk", pyarrow.string()),
             ("loaded_at", pyarrow.timestamp("us", tz="UTC")),
-            ("performance", pyarrow.binary()),
+            *(
+                (column, pyarrow.int32())
+                for column in redshift_schema.TIME_TO_FIRST_TOKEN_COLUMNS.values()
+            ),
+            ("timeline", pyarrow.binary()),
             ("performance_truncated", pyarrow.bool_()),
         ]
     )

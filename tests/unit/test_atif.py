@@ -411,10 +411,10 @@ class TestAgentResultToATIF:
         trajectory = ATIFTrajectory.from_agent_result(
             turns=turns,
             agent_name="agent",
-            model_name="openai/gpt-daybreak-blue",
+            model_name="openai/gpt-6-sol-daybreak",
         )
 
-        assert trajectory.agent.model_name == "openai/gpt-daybreak-blue"
+        assert trajectory.agent.model_name == "openai/gpt-6-sol-daybreak"
         assert trajectory.steps[0].model_name == "openai/gpt-6-sol"
         assert trajectory.steps[0].extra is None
 

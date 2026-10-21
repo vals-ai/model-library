@@ -80,7 +80,7 @@ async def test_mistral_offline_uses_file_transcription() -> None:
             return_value=client,
         ) as constructor,
         patch(
-            "model_library.providers.mistral.transcribe.default_httpx_client",
+            "model_library.providers.mistral.transcribe.default_httpx2_client",
             return_value=async_client,
         ),
     ):

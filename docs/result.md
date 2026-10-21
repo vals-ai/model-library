@@ -18,13 +18,17 @@
 
 For compatibility, if only one of `extras.response_id` or `extras.provider_response_id` is present, the missing field is hydrated with the same value. If both are present, distinct values are preserved.
 
+Anthropic `model_context_window_exceeded` means generation filled the context window and maps to `context_window_exceeded`.
+
+Google disables SDK automatic continuation by default; a model can opt in through its provider config. A surfaced Google `CONTINUATION` maps to `max_tokens` and `TOO_MANY_TOOL_CALLS` remains `unknown`; raw provider reasons are retained.
+
 ## QueryResultMetadata
 
 `QueryResultMetadata` stores token counts, cost, request duration, provider-specific `extra` values, `performance`, and `fallback`.
 
 `fallback` is `None` unless a provider-side fallback model served the response. It is a `FallbackInfo` with `requested_model`, `served_model`, and `hops` (one `FallbackHop` per model attempt: `model`, `served`, `trigger`/`category` for hops that declined, and `usage` as a token-only `QueryResultMetadata`). Top-level token counts and cost are the served hop's, priced at `served_model`. If cost calculation fails (for example `served_model` is not in the registry), the query still succeeds with `cost=None` and a warning is logged.
 
-Direct OpenAI Responses and Anthropic calls record the model the provider reports in `extra["openai_response_model"]` and `extra["anthropic_response_model"]`. ATIF uses it as the step model.
+OpenAI router and `access_programs` calls retain `served_model`. Other direct OpenAI Responses calls record the provider-reported model in `extra["openai_response_model"]`; Anthropic calls use `extra["anthropic_response_model"]`. ATIF uses these fields as the step model.
 
 `QueryResultMetadata` values can be summed for aggregate token, cost, and duration totals. Per-query `extra` values, `fallback`, and performance telemetry are not aggregated when metadata values are summed.
 
@@ -102,29 +106,34 @@ delta. Adapters can finish segments on provider events or channel transitions;
 
 ### JSON serialization
 
-`QueryResultMetadata.model_dump(mode="json")` and Model Gateway responses encode a
-non-null `performance` value as a lossless gzip/base64 envelope:
+`QueryResultMetadata.model_dump(mode="json")` keeps `time_to_first_token_ms`
+readable and encodes `timeline` as a lossless gzip/base64 envelope:
 
 ```json
 {
   "performance": {
-    "encoding": "gzip+base64",
-    "data": "H4sI..."
+    "time_to_first_token_ms": {"any": 760, "answer": 760, "content": 760},
+    "timeline": {
+      "encoding": "gzip+base64",
+      "data": "H4sI..."
+    }
   }
 }
 ```
 
 The envelope uses gzip compression level 1. Its decompressed bytes are the
-compact JSON representation shown above, including every event, timestamp,
+compact JSON timeline list shown above, including every event, timestamp,
 offset, and ordering. This is an application-level field encoding, not HTTP
 `Content-Encoding`.
 
 Model Library validation accepts both representations without implicitly
-changing either one. Historical uncompressed objects validate as
-`QueryResultPerformance`; compressed JSON validates as
-`CompressedQueryResultPerformance`. Gateway responses, clients, usage-ledger
-storage, and the Redshift performance table retain the compressed envelope when
-it is available. Adding `QueryResultMetadata` values discards `performance`
+changing either one. Uncompressed objects validate as `QueryResultPerformance`;
+compressed JSON validates as `CompressedQueryResultPerformance`. Usage-ledger
+storage keeps the compressed timeline. Model Gateway responses send only
+`time_to_first_token_ms`, so clients receive `QueryResultPerformance` with an
+empty `timeline`.
+
+Adding `QueryResultMetadata` values discards `performance`
 because separate query timelines cannot be merged into one coherent clock.
 
 A consumer must explicitly decompress the envelope when it needs the timeline:
@@ -200,6 +209,10 @@ observed.
   attempt. Its clock starts before builder construction and can end after the
   final timeline event. It excludes earlier failed attempts and retry waits, and
   is not caller, agent, or run wall-clock duration.
+- Gateway `/query` success responses include `X-Model-Gateway-Duration-Seconds`,
+  mirroring serialized top-level `metadata.duration_seconds` in seconds. Like
+  that value, it excludes earlier failed attempts and retry waits. Error
+  responses do not include the header.
 - Events are canonical adapter-normalized events, not provider timestamps.
   Provider and SDK buffering remains visible only as local arrival behavior.
 - If postprocessing rewrites streamed text, text offsets are omitted when the

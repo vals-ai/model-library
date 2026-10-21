@@ -321,6 +321,8 @@ def _identity_with_compact_json_size(size: int) -> dict[str, str]:
 def _build_usage_event(**kwargs: Any) -> dict[str, object]:
     request = cast(QueryRequest, kwargs["body"])
     kwargs.setdefault("api_key_name", "test")
+    kwargs.setdefault("provider_key_name", None)
+    kwargs.setdefault("pool_revision", None)
     kwargs.setdefault("error", None)
     return build_usage_event(
         **kwargs,
@@ -391,9 +393,11 @@ def test_query_request_accepts_exact_identity_boundaries():
         ("run_id", " "),
         ("question_id", ""),
         ("question_id", "\t"),
+        ("attempt_id", ""),
+        ("attempt_id", " "),
     ],
 )
-def test_query_request_rejects_blank_run_and_question_ids(field: str, value: str):
+def test_query_request_rejects_blank_ids(field: str, value: str):
     with pytest.raises(ValidationError):
         QueryRequest.model_validate(
             {
@@ -402,6 +406,46 @@ def test_query_request_rejects_blank_run_and_question_ids(field: str, value: str
                 field: value,
             }
         )
+
+
+@pytest.mark.parametrize("field", ["run_id", "question_id", "attempt_id"])
+def test_query_request_accepts_long_ids(field: str):
+    value = "a" * 200
+
+    request = QueryRequest.model_validate(
+        {"model": "openai/gpt-4o", "inputs": [TextInput(text="hello")], field: value}
+    )
+
+    assert getattr(request, field) == value
+
+
+@pytest.mark.parametrize("field", ["run_id", "question_id", "attempt_id"])
+def test_usage_event_records_each_id_on_the_row_and_in_the_request(field: str):
+    present = QueryRequest(
+        model="openai/gpt-4o",
+        inputs=[TextInput(text="hello")],
+        query_id="query-1",
+        **{field: f" {field}-1 "},
+    )
+    absent = present.model_copy(update={field: None})
+
+    events = [
+        _build_usage_event(
+            body=request,
+            config=request.config_dict(),
+            query_params={},
+            dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
+            result=QueryResult(output_text="ok", history=[]),
+            completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
+        )
+        for request in (present, absent)
+    ]
+
+    for event, expected in zip(events, (f"{field}-1", None), strict=True):
+        assert event[field] == expected
+        details = cast(dict[str, Any], event[ledger_schema.DETAILS_FIELD])
+        assert details["request"][field] == expected
+    assert events[0]["config_hash"] == events[1]["config_hash"]
 
 
 @pytest.mark.parametrize("value", ["", " ", "\t"])

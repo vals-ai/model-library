@@ -1,10 +1,13 @@
+import json
 from types import TracebackType
 from unittest.mock import MagicMock
+
+import pytest
 
 from anthropic.types.beta import BetaTextBlock
 from examples.extras.prompt_caching import _run_report
 
-from model_library.base import TextInput
+from model_library.base import LLMConfig, TextInput
 from model_library.base.output import QueryResult, QueryResultMetadata
 from model_library.base.input import SystemInput
 from model_library.registry_utils import get_registry_model
@@ -58,6 +61,38 @@ async def test_anthropic_cache_control_on_tools_when_no_system(model_key: str):
     # No system -> last tool should carry cache_control
     assert body.get("system") is None
     assert body["tools"][-1].get("cache_control", {}).get("type") == "ephemeral"
+
+
+@parametrize_models_for_provider("anthropic")
+async def test_anthropic_prompt_caching_disabled_sends_no_cache_control(
+    model_key: str,
+):
+    model = get_registry_model(model_key, LLMConfig(prompt_caching=False))
+
+    input, system_prompt, tools = get_example_tool_input()
+
+    with_system = await model.build_body(
+        [SystemInput(text=system_prompt), *input], tools=tools
+    )
+    without_system = await model.build_body(input, tools=tools)
+
+    assert "cache_control" not in json.dumps([with_system, without_system])
+
+
+
+@pytest.mark.parametrize("prompt_caching", [True, False])
+async def test_openai_prompt_caching_disabled_sends_explicit_mode(
+    prompt_caching: bool,
+):
+    model = get_registry_model(
+        "openai/gpt-6-luna", LLMConfig(prompt_caching=prompt_caching)
+    )
+
+    body = await model.build_body([TextInput(text="hi")], tools=[])
+
+    assert ("prompt_cache_options" in body) is not prompt_caching
+    if not prompt_caching:
+        assert body["prompt_cache_options"] == {"mode": "explicit"}
 
 
 def test_prompt_caching_report_handles_missing_performance():

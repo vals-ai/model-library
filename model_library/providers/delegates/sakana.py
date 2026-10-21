@@ -9,6 +9,8 @@ from model_library.register_models import register_provider
 
 @register_provider("sakana")
 class SakanaModel(DelegateOnly):
+    api_key_setting = "SAKANA_API_KEY"
+
     def __init__(
         self,
         model_name: str,
@@ -21,7 +23,7 @@ class SakanaModel(DelegateOnly):
         config = config or LLMConfig()
         config.custom_endpoint = config.custom_endpoint or "https://api.sakana.ai/v1"
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.SAKANA_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(

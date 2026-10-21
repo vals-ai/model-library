@@ -8,13 +8,29 @@ import uuid
 from collections.abc import Awaitable, Callable, Generator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Literal, TypeVar
+from typing import Literal, NamedTuple, TypeVar
 
 import model_library
 from model_library.base.input import RawResponse
 
 PromptCacheKeyMode = Literal["hash", "id"]
-ResolvedQueryIds = tuple[str, str, str]
+
+
+class ResolvedQueryIds(NamedTuple):
+    run_id: str
+    question_id: str
+    query_id: str
+    attempt_id: str
+
+    def as_attributes(self) -> dict[str, str]:
+        return {
+            "run_id": self.run_id,
+            "question_id": self.question_id,
+            "query_id": self.query_id,
+            "attempt_id": self.attempt_id,
+        }
+
+
 InputT = TypeVar("InputT")
 _current_query_ids: ContextVar[ResolvedQueryIds | None] = ContextVar(
     "model_library_current_query_ids",
@@ -40,11 +56,12 @@ def resolve_query_ids(
     run_id: object | None,
     question_id: object | None,
     query_id: object | None,
+    attempt_id: object | None,
 ) -> ResolvedQueryIds:
-    """Resolve run, question, and query IDs for LLM query paths."""
+    """Resolve run, question, query, and attempt IDs for LLM query paths."""
     settings = model_library.model_library_settings
 
-    return (
+    return ResolvedQueryIds(
         _explicit_id(run_id, "run_id")
         or _clean_id(settings.get("RUN_ID", None))
         or uuid.uuid4().hex[:8],
@@ -53,17 +70,15 @@ def resolve_query_ids(
         or _clean_id(settings.get("TASK_ID", None))
         or uuid.uuid4().hex[:14],
         _clean_id(query_id) or uuid.uuid4().hex[:14],
+        _explicit_id(attempt_id, "attempt_id")
+        or _clean_id(settings.get("ATTEMPT_ID", None))
+        or uuid.uuid4().hex[:14],
     )
 
 
 @contextmanager
-def scoped_query_ids(
-    *,
-    run_id: str,
-    question_id: str,
-    query_id: str,
-) -> Generator[None, None, None]:
-    token = _current_query_ids.set((run_id, question_id, query_id))
+def scoped_query_ids(ids: ResolvedQueryIds) -> Generator[None, None, None]:
+    token = _current_query_ids.set(ids)
     try:
         yield
     finally:
@@ -72,6 +87,13 @@ def scoped_query_ids(
 
 def get_current_query_ids() -> ResolvedQueryIds | None:
     return _current_query_ids.get()
+
+
+def get_current_query_id_attributes() -> dict[str, str]:
+    query_ids = get_current_query_ids()
+    if query_ids is None:
+        return {}
+    return query_ids.as_attributes()
 
 
 def prompt_cache_key_prefix(input: Sequence[InputT]) -> Sequence[InputT]:
@@ -132,7 +154,8 @@ def prompt_cache_key_from_query_ids(
         query_ids = get_current_query_ids()
         if query_ids is None:
             raise ValueError("prompt_cache_key='id' requires resolved query IDs")
-        run_id, question_id, _ = query_ids
+        run_id = query_ids.run_id
+        question_id = query_ids.question_id
 
     resolved_run_id = _explicit_id(run_id, "run_id")
     resolved_question_id = _explicit_id(question_id, "question_id")

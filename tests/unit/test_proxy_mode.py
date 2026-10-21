@@ -31,6 +31,7 @@ from model_library.registry_utils import (
     get_registry_config,
     get_registry_model,
 )
+from model_library.base.query_ids import resolve_query_ids
 from model_library.base.input import (
     FileWithBytes,
     FileWithId,
@@ -198,7 +199,7 @@ def test_gateway_registry_model_keeps_provider_overrides_out_of_transport():
 async def test_gateway_registry_model_sends_canonical_key_for_provider_alias():
     from model_library.register_models import get_model_registry
 
-    registry_key = "bedrock/claude-sonnet-4-20250514-v1"
+    registry_key = "bedrock/claude-opus-4-20250514-v1"
     registry_config = get_model_registry()[registry_key]
     assert registry_config.provider_endpoint != registry_key.partition("/")[2]
 
@@ -475,6 +476,7 @@ async def test_gateway_query_logs_started_and_completed_locally(caplog):
     )
 
     with (
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
         caplog.at_level(logging.INFO, logger=logger.name),
         patch(
             "httpx.AsyncClient.post",
@@ -483,18 +485,32 @@ async def test_gateway_query_logs_started_and_completed_locally(caplog):
         ) as mock_post,
     ):
         await llm.query(
-            "hi", logger=logger, run_id="run", question_id="q", query_id="qry"
+            "hi", logger=logger, run_id="run", question_id="q", query_id="qry",
+            attempt_id="att", in_agent=True,
+        )
+        await llm.query(
+            "hi", logger=logger, run_id="run", question_id="q", query_id="qry",
+            attempt_id="att",
         )
 
+    assert mock_post.await_count == 2
     body = _load_json(mock_post.call_args[1]["content"])
     messages = [record.getMessage() for record in caplog.records]
     assert "logger" not in body
+    assert {
+        key: body[key] for key in ("run_id", "question_id", "query_id", "attempt_id")
+    } == {
+        "run_id": "run",
+        "question_id": "q",
+        "query_id": "qry",
+        "attempt_id": "att",
+    }
     assert any(
-        record.name == "test.gateway.local.<question=q><query=qry>"
+        record.name == "test.gateway.local.<run=run><question=q><query=qry><attempt=att>"
         for record in caplog.records
     )
-    assert any(message.startswith("Query started:") for message in messages)
-    assert any(message.startswith("Query completed:") for message in messages)
+    assert sum(message.startswith("Query started:") for message in messages) == 1
+    assert sum(message.startswith("Query completed:") for message in messages) == 1
 
 
 @pytest.mark.parametrize(
@@ -554,6 +570,7 @@ async def test_gateway_query_retry_and_recovery_logs_include_correlation(
             run_id="run",
             question_id="q",
             query_id="qry",
+            attempt_id="att",
             identity=identity,
         )
 
@@ -567,10 +584,11 @@ async def test_gateway_query_retry_and_recovery_logs_include_correlation(
     messages = [record.getMessage() for record in gateway_records]
     assert messages == [
         "gateway_http_retry path=/query attempt=1 max_attempts=8 "
-        f"run_id=run question_id=q query_id=qry identity={serialized_identity} "
-        f"{retry_detail} retry_after_s=0.000",
+        "run_id=run question_id=q query_id=qry attempt_id=att "
+        f"identity={serialized_identity} {retry_detail} retry_after_s=0.000",
         "gateway_http_recovered path=/query attempts=2 max_attempts=8 "
-        f"run_id=run question_id=q query_id=qry identity={serialized_identity}",
+        "run_id=run question_id=q query_id=qry attempt_id=att "
+        f"identity={serialized_identity}",
     ]
     assert sentry_info.call_count == 2
     assert sentry_info.call_args_list[0].args == (
@@ -580,6 +598,7 @@ async def test_gateway_query_retry_and_recovery_logs_include_correlation(
             "run_id": "run",
             "question_id": "q",
             "query_id": "qry",
+            "attempt_id": "att",
             "identity": serialized_identity,
             "retry.strategy": "gateway_http",
             "retry.attempt": 1,
@@ -595,6 +614,7 @@ async def test_gateway_query_retry_and_recovery_logs_include_correlation(
             "run_id": "run",
             "question_id": "q",
             "query_id": "qry",
+            "attempt_id": "att",
             "identity": serialized_identity,
             "retry.strategy": "gateway_http",
             "retry.attempts": 1,
@@ -1288,7 +1308,7 @@ async def test_proxy_query_uses_instance_identity_unless_query_overrides_it():
     assert bodies[1]["identity"] == explicit_identity
 
 
-async def test_proxy_query_generates_run_question_and_query_ids_without_env_ids():
+async def test_proxy_query_generates_run_question_query_and_attempt_ids_without_env_ids():
     llm = GatewayLLM("gpt-4o", "openai")
     response = httpx.Response(
         200,
@@ -1312,6 +1332,94 @@ async def test_proxy_query_generates_run_question_and_query_ids_without_env_ids(
     assert len(body["question_id"]) == 14
     assert isinstance(body["query_id"], str)
     assert len(body["query_id"]) == 14
+    assert isinstance(body["attempt_id"], str)
+    assert len(body["attempt_id"]) == 14
+    assert mock_post.call_args[1]["headers"]["X-Attempt-Id"] == body["attempt_id"]
+
+
+@pytest.mark.parametrize(
+    ("field", "setting", "header"),
+    [
+        ("run_id", "RUN_ID", "X-Run-Id"),
+        ("question_id", "QUESTION_ID", "X-Question-Id"),
+        ("attempt_id", "ATTEMPT_ID", "X-Attempt-Id"),
+    ],
+)
+async def test_proxy_query_forwards_each_id_from_settings_or_explicit(
+    field: str, setting: str, header: str
+):
+    llm = GatewayLLM("gpt-4o", "openai")
+    response = httpx.Response(
+        200,
+        json={"output_text": "ok", "tool_calls": [], "metadata": {}},
+    )
+
+    with (
+        patch(
+            "model_library.model_library_settings",
+            _GatewaySettings(**PROXY_ENV, **{setting: f"{field}-from-settings"}),
+        ),
+        patch(
+            "httpx.AsyncClient.post",
+            new_callable=AsyncMock,
+            return_value=response,
+        ) as mock_post,
+    ):
+        await llm.query([TextInput(text="settings")])
+        await llm.query([TextInput(text="explicit")], **{field: f"{field}-explicit"})
+
+    calls = mock_post.await_args_list
+    bodies = [_load_json(call.kwargs["content"]) for call in calls]
+    assert bodies[0][field] == f"{field}-from-settings"
+    assert calls[0].kwargs["headers"][header] == f"{field}-from-settings"
+    assert bodies[1][field] == f"{field}-explicit"
+    assert calls[1].kwargs["headers"][header] == f"{field}-explicit"
+
+
+@pytest.mark.parametrize(
+    ("field", "setting"),
+    [
+        ("run_id", "RUN_ID"),
+        ("question_id", "QUESTION_ID"),
+        ("query_id", None),
+        ("attempt_id", "ATTEMPT_ID"),
+    ],
+)
+def test_resolve_query_ids_resolves_each_id_explicit_then_setting(
+    field: str, setting: str | None
+):
+    unset: dict[str, object | None] = {
+        "run_id": None,
+        "question_id": None,
+        "query_id": None,
+        "attempt_id": None,
+    }
+    settings = {setting: f"{field}-from-settings"} if setting else {}
+
+    with patch("model_library.model_library_settings", _GatewaySettings(**settings)):
+        from_settings = resolve_query_ids(**unset)
+        explicit = resolve_query_ids(**{**unset, field: f"{field}-explicit"})
+
+    if setting:
+        assert getattr(from_settings, field) == f"{field}-from-settings"
+    assert getattr(explicit, field) == f"{field}-explicit"
+    assert explicit.as_attributes() == {
+        "run_id": explicit.run_id,
+        "question_id": explicit.question_id,
+        "query_id": explicit.query_id,
+        "attempt_id": explicit.attempt_id,
+    }
+
+
+@pytest.mark.parametrize("field", ["run_id", "question_id", "attempt_id"])
+async def test_proxy_query_rejects_each_blank_explicit_id(field: str):
+    llm = GatewayLLM("gpt-4o", "openai")
+
+    with (
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
+        pytest.raises(ValueError, match=f"{field} must not be blank"),
+    ):
+        await llm.query([TextInput(text="hi")], **{field: " "})
 
 
 async def test_proxy_query_treats_blank_settings_ids_as_absent():
@@ -1629,6 +1737,7 @@ async def test_proxy_query_explicit_ids_override_settings_ids():
                 IDENTITY=json.dumps(identity),
                 RUN_ID="run-from-settings",
                 QUESTION_ID="question-from-settings",
+                ATTEMPT_ID="attempt-from-settings",
             ),
         ),
         patch(
@@ -1642,6 +1751,7 @@ async def test_proxy_query_explicit_ids_override_settings_ids():
             run_id="run-explicit",
             question_id="question-explicit",
             query_id="query-explicit",
+            attempt_id="attempt-explicit",
         )
 
     body = _load_json(mock_post.call_args[1]["content"])
@@ -1649,10 +1759,12 @@ async def test_proxy_query_explicit_ids_override_settings_ids():
     assert body["run_id"] == "run-explicit"
     assert body["question_id"] == "question-explicit"
     assert body["query_id"] == "query-explicit"
+    assert body["attempt_id"] == "attempt-explicit"
     assert mock_post.call_args[1]["headers"] == {
         "X-Run-Id": "run-explicit",
         "X-Question-Id": "question-explicit",
         "X-Query-Id": "query-explicit",
+        "X-Attempt-Id": "attempt-explicit",
     }
 
 
@@ -1673,12 +1785,14 @@ async def test_proxy_query_bounds_correlation_headers():
             run_id="r" * 200,
             question_id="q" * 200,
             query_id="z" * 200,
+            attempt_id="a" * 200,
         )
 
     assert mock_post.call_args[1]["headers"] == {
         "X-Run-Id": "r" * 128,
         "X-Question-Id": "q" * 128,
         "X-Query-Id": "z" * 128,
+        "X-Attempt-Id": "a" * 128,
     }
 
 
@@ -2823,3 +2937,13 @@ async def test_gateway_query_preserves_provider_tool_events():
     assert e.status == "error"
     assert e.input == "current AAPL stock price"
     assert e.output == "unavailable"
+
+
+def test_gateway_correlation_headers_omit_a_missing_attempt_id():
+    from model_library.base.gateway import _gateway_correlation_headers  # pyright: ignore[reportPrivateUsage]
+
+    headers = _gateway_correlation_headers(
+        {"run_id": "run", "question_id": "q", "query_id": "qry"}
+    )
+
+    assert headers == {"X-Run-Id": "run", "X-Question-Id": "q", "X-Query-Id": "qry"}

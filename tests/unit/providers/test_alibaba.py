@@ -2,8 +2,9 @@
 
 import pytest
 
-from model_library.base import LLMConfig, RawResponse
+from model_library.base import LLMConfig, RawResponse, TextInput
 from model_library.providers.delegates.alibaba import AlibabaConfig, AlibabaModel
+from model_library.registry_utils import get_registry_model
 from openai.types.chat import ChatCompletionMessage
 
 
@@ -48,3 +49,33 @@ class TestAlibabaPreserveThinking:
     def test_preserve_thinking_omitted_when_not_configured(self):
         model = AlibabaModel("qwen-codename-endpoint", config=LLMConfig(reasoning=True))
         assert model._get_extra_body() == {"enable_thinking": True}
+
+
+class TestAlibabaReasoningEffort:
+    """Qwen 3.8 Max effort keys send reasoning_effort beside enable_thinking.
+
+    https://docs.qwencloud.com/developer-guides/text-generation/thinking lists
+    low, medium and xhigh for qwen3.8-max, with xhigh as the default.
+    """
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        ("model_key", "expected_effort"),
+        [
+            ("alibaba/qwen3.8-max", None),
+            ("alibaba/qwen3.8-max-low", "low"),
+            ("alibaba/qwen3.8-max-medium", "medium"),
+        ],
+    )
+    async def test_registry_key_request_body(
+        self, model_key: str, expected_effort: str | None
+    ):
+        model = get_registry_model(model_key)
+        assert isinstance(model, AlibabaModel)
+        body = await model.build_body([TextInput(text="hi")], tools=[])
+
+        assert model._get_extra_body() == {
+            "enable_thinking": True,
+            "preserve_thinking": True,
+        }
+        assert body.get("reasoning_effort") == expected_effort

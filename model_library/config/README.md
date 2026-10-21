@@ -46,7 +46,7 @@ claude-4-models:                    # model block
 | `transcription_streaming` | Whether this entry uses a streaming transcription transport, including complete-file uploads with streamed transcript responses |
 | `costs_per_million_token` | `input`, `output`, optional `cache`, `batch`, `context` pricing. Set to `null` for models without known pricing |
 | `transcription_cost` | Duration STT pricing: `usd_per_minute`, `billing_basis`, and optional `minimum_billable_seconds` and `increment_seconds` |
-| `metadata` | `deprecated`, `available_for_everyone`, `available_as_evaluator`, `ignored_for_cost`, `internal_only` |
+| `metadata` | `deprecated`, `available_for_everyone`, `available_as_evaluator`, `ignored_for_cost` (defaults to `internal_only`), `internal_only` |
 | `default_parameters` | `temperature`, `top_p`, `top_k`, `reasoning_effort` |
 | `rate_limit` | Optional rate-limit policy and static retry/admission capacity. `supports_live_monitoring` defaults to `false`; `cache_read_counts_toward_limit` defaults to `true`. `requests` is a list of `{limit, mode}` entries. `tokens` uses either `total` or `input` plus `output`, with optional `uncached_input`; each capacity is `{limit}`. Request mode defaults to `sliding_window`; token mode defaults to `token_bucket`. Policy-only blocks are valid when a policy field is explicit; empty blocks and `null` are invalid. Omit unknown capacities. |
 | `provider_properties` | Provider-specific flags (e.g. `supports_auto_thinking`) |

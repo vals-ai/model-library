@@ -6,8 +6,24 @@ from unittest.mock import patch
 from starlette.testclient import TestClient
 
 import model_gateway.app as gateway_app
+from model_gateway.key_assignments import AttemptKey
 
 HEADERS = {"Authorization": "Bearer sk-test"}
+
+
+class InMemoryAssignmentStore:
+    """Single-process stand-in for the key assignments table."""
+
+    def __init__(self) -> None:
+        self._assignments: dict[tuple[AttemptKey, str], str] = {}
+
+    async def get(self, attempt_key: AttemptKey, model: str) -> str | None:
+        return self._assignments.get((attempt_key, model))
+
+    async def put_if_absent(
+        self, attempt_key: AttemptKey, model: str, key_name: str
+    ) -> str:
+        return self._assignments.setdefault((attempt_key, model), key_name)
 
 
 def _load_json(value: Any) -> Any:

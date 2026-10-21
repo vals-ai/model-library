@@ -94,7 +94,12 @@ grok-4.6-models:
       output: 6.00
       cache:
         read: 0.50
-      context: null
+      context:
+        threshold: 200_000
+        input: 4.00
+        output: 12.00
+        cache:
+          read: 1.00
 
   grok/grok-4.6:
     label: Grok 4.6

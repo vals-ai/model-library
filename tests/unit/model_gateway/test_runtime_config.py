@@ -82,6 +82,12 @@ def _openai_model_payload(
     return json.dumps(payload).encode()
 
 
+# The pools document every deployed stage publishes before its tasks start.
+POOL_PAYLOAD = json.dumps(
+    {"pools": {}, "model_pools": [], "weights": {}, "revision": 1}
+).encode()
+
+
 def _credential_payload(*, api_key: str) -> bytes:
     return json.dumps({"OPENAI_API_KEY": api_key}).encode()
 
@@ -112,6 +118,10 @@ class MutableAgent:
                     content=self.credential_payload,
                     headers={"Configuration-Version": self.credential_version},
                 )
+            if profile == "pools":
+                return httpx.Response(
+                    200, content=POOL_PAYLOAD, headers={"Configuration-Version": "1"}
+                )
             return httpx.Response(404)
 
         return httpx.MockTransport(handle)
@@ -131,6 +141,7 @@ def _manager(agent: MutableAgent) -> RuntimeConfigManager:
         agent=source,
         model_profile="models",
         credential_profile="credentials",
+        pool_profile="pools",
     )
 
 

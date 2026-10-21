@@ -1,0 +1,108 @@
+base-config:
+  company: Xiaomi
+  country: China
+  open_source: true
+  documentation_url: https://platform.xiaomimimo.com/#/docs/
+  supports:
+    images: false
+    files: false
+    tools: true
+  properties:
+    training_cutoff: December 2024
+    reasoning_model: false
+
+
+deprecated:
+  base-config:
+    metadata:
+      deprecated: true
+
+  xiaomi/mimo-v2.5:
+    company: Xiaomi
+    country: China
+    label: MiMo V2.5
+    release_date: 2026-04-22
+    open_source: true
+    documentation_url: https://platform.xiaomimimo.com/#/docs/
+    supports:
+      images: true
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: false
+      cache_read_counts_toward_limit: true
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    provider_endpoint: mimo-v2.5
+    properties:
+      context_window: 1000000
+      max_tokens: 128000
+      training_cutoff: December 2024
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.14
+      output: 0.28
+      cache:
+        read: 0.0028
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+      batch: null
+      context: null
+
+  xiaomi/mimo-v2.5-pro:
+    company: Xiaomi
+    country: China
+    label: MiMo V2.5 Pro
+    release_date: 2026-04-22
+    open_source: true
+    documentation_url: https://platform.xiaomimimo.com/#/docs/
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: false
+      cache_read_counts_toward_limit: true
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+      top_p: 0.95
+    provider_endpoint: mimo-v2.5-pro
+    properties:
+      context_window: 1000000
+      max_tokens: 128000
+      training_cutoff: December 2024
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.435
+      output: 0.87
+      cache:
+        read: 0.0036
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+      batch: null
+      context: null

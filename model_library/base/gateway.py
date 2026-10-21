@@ -104,25 +104,29 @@ def _dump_request(request: BaseModel) -> dict[str, Any]:
 
 
 def _gateway_correlation_headers(body: Mapping[str, Any]) -> dict[str, str]:
-    return {
+    headers = {
         "X-Run-Id": str(body["run_id"])[:128],
         "X-Question-Id": str(body["question_id"])[:128],
         "X-Query-Id": str(body["query_id"])[:128],
     }
+    if body.get("attempt_id") is not None:
+        headers["X-Attempt-Id"] = str(body["attempt_id"])[:128]
+    return headers
 
 
-def _gateway_retry_log_ids(
-    body: Mapping[str, Any],
-) -> tuple[str | None, str | None, str | None, str | None]:
+def _gateway_retry_log_ids(body: Mapping[str, Any]) -> dict[str, str | None]:
     identity = body.get("identity")
-    return (
-        _clean_optional(body.get("run_id")),
-        _clean_optional(body.get("question_id")),
-        _clean_optional(body.get("query_id")),
-        json.dumps(identity, sort_keys=True, separators=(",", ":"))
-        if identity is not None
-        else None,
-    )
+    return {
+        "run_id": _clean_optional(body.get("run_id")),
+        "question_id": _clean_optional(body.get("question_id")),
+        "query_id": _clean_optional(body.get("query_id")),
+        "attempt_id": _clean_optional(body.get("attempt_id")),
+        "identity": (
+            json.dumps(identity, sort_keys=True, separators=(",", ":"))
+            if identity is not None
+            else None
+        ),
+    }
 
 
 def _gateway_error_detail(resp: httpx.Response) -> str:
@@ -360,13 +364,10 @@ class GatewayLLM(LLM):
         url = f"{model_library.model_library_settings.MODEL_GATEWAY_URL.rstrip('/')}{path}"
 
         headers = _gateway_correlation_headers(body) if path == "/query" else None
-        run_id, question_id, query_id, identity = _gateway_retry_log_ids(body)
+        retry_log_ids = _gateway_retry_log_ids(body)
         gateway_retry_attrs = {
             "gateway.path": path,
-            "run_id": run_id,
-            "question_id": question_id,
-            "query_id": query_id,
-            "identity": identity,
+            **retry_log_ids,
             "retry.strategy": "gateway_http",
             "retry.max_attempts": GATEWAY_HTTP_MAX_ATTEMPTS,
         }
@@ -385,9 +386,10 @@ class GatewayLLM(LLM):
                 delay = _gateway_retry_delay_seconds(attempt)
                 logger_msg = (
                     f"gateway_http_retry path={path} attempt={attempt + 1} "
-                    f"max_attempts={GATEWAY_HTTP_MAX_ATTEMPTS} run_id={run_id} "
-                    f"question_id={question_id} query_id={query_id} "
-                    f"identity={identity} error_type={type(exc).__name__} "
+                    f"max_attempts={GATEWAY_HTTP_MAX_ATTEMPTS} run_id={retry_log_ids['run_id']} "
+                    f"question_id={retry_log_ids['question_id']} query_id={retry_log_ids['query_id']} "
+                    f"attempt_id={retry_log_ids['attempt_id']} identity={retry_log_ids['identity']} "
+                    f"error_type={type(exc).__name__} "
                     f"retry_after_s={delay:.3f}"
                 )
                 GATEWAY_RETRY_LOGGER.info(logger_msg)
@@ -408,9 +410,9 @@ class GatewayLLM(LLM):
                 if attempt > 0:
                     logger_msg = (
                         f"gateway_http_recovered path={path} attempts={attempt + 1} "
-                        f"max_attempts={GATEWAY_HTTP_MAX_ATTEMPTS} run_id={run_id} "
-                        f"question_id={question_id} query_id={query_id} "
-                        f"identity={identity}"
+                        f"max_attempts={GATEWAY_HTTP_MAX_ATTEMPTS} run_id={retry_log_ids['run_id']} "
+                        f"question_id={retry_log_ids['question_id']} query_id={retry_log_ids['query_id']} "
+                        f"attempt_id={retry_log_ids['attempt_id']} identity={retry_log_ids['identity']}"
                     )
                     GATEWAY_RETRY_LOGGER.info(logger_msg)
                     telemetry.log_sentry_info(
@@ -427,9 +429,10 @@ class GatewayLLM(LLM):
                 delay = _gateway_retry_delay_seconds(attempt)
                 logger_msg = (
                     f"gateway_http_retry path={path} attempt={attempt + 1} "
-                    f"max_attempts={GATEWAY_HTTP_MAX_ATTEMPTS} run_id={run_id} "
-                    f"question_id={question_id} query_id={query_id} "
-                    f"identity={identity} status_code={resp.status_code} "
+                    f"max_attempts={GATEWAY_HTTP_MAX_ATTEMPTS} run_id={retry_log_ids['run_id']} "
+                    f"question_id={retry_log_ids['question_id']} query_id={retry_log_ids['query_id']} "
+                    f"attempt_id={retry_log_ids['attempt_id']} identity={retry_log_ids['identity']} "
+                    f"status_code={resp.status_code} "
                     f"retry_after_s={delay:.3f}"
                 )
                 GATEWAY_RETRY_LOGGER.info(logger_msg)
@@ -513,20 +516,16 @@ class GatewayLLM(LLM):
             except (json.JSONDecodeError, telemetry.IdentityValidationError):
                 identity = None
 
-        run_id, question_id, query_id = resolve_query_ids(
+        ids = resolve_query_ids(
             run_id=kwargs.pop("run_id", None),
             question_id=kwargs.pop("question_id", None),
             query_id=kwargs.pop("query_id", None),
+            attempt_id=kwargs.pop("attempt_id", None),
         )
         in_agent = bool(kwargs.pop("in_agent", False))
 
-        base_logger = logger or self.instance_logger.getChild(f"<run={run_id}>")
-        query_logger = scoped_query_logger(
-            base_logger,
-            question_id=question_id,
-            query_id=query_id,
-            in_agent=in_agent,
-        )
+        base_logger = logger or self.instance_logger
+        query_logger = scoped_query_logger(base_logger, ids, in_agent=in_agent)
         current_input = normalize_query_input(input, kwargs=kwargs)
         all_input = normalize_query_input(current_input, history=history)
 
@@ -539,9 +538,7 @@ class GatewayLLM(LLM):
             all_input,
             tools=tools,
             output_schema=output_schema,
-            run_id=run_id,
-            question_id=question_id,
-            query_id=query_id,
+            **ids.as_attributes(),
             identity=identity,
             in_agent=in_agent,
             **kwargs,

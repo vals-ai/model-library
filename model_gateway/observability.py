@@ -23,12 +23,15 @@ GATEWAY_PORT = 8000
 DEFAULT_STAGE = "unknown"
 DEFAULT_SERVICE = "gateway"
 
+_latest_runtime_snapshot: dict[str, int] | None = None
+
 
 class RequestLogFields(TypedDict):
     alb_trace_id: str | None
     run_id: str | None
     question_id: str | None
     query_id: str | None
+    attempt_id: str | None
 
 
 def worker_id(*, pid: int | None = None) -> str:
@@ -51,6 +54,7 @@ def request_log_fields_from_scope(scope: MutableMapping[str, Any]) -> RequestLog
         "run_id": bounded_text(headers.get("x-run-id")),
         "question_id": bounded_text(headers.get("x-question-id")),
         "query_id": bounded_text(headers.get("x-query-id")),
+        "attempt_id": bounded_text(headers.get("x-attempt-id")),
     }
 
 
@@ -136,6 +140,15 @@ def runtime_snapshot() -> dict[str, int]:
         "outbound_socket_count": outbound_socket_count,
         "rss_bytes": rss_bytes,
     }
+
+
+def set_latest_runtime_snapshot(snapshot: dict[str, int]) -> None:
+    global _latest_runtime_snapshot
+    _latest_runtime_snapshot = snapshot
+
+
+def latest_runtime_snapshot() -> dict[str, int] | None:
+    return _latest_runtime_snapshot
 
 
 LoopExceptionHandler = Callable[[asyncio.AbstractEventLoop, dict[str, Any]], object]

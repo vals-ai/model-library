@@ -95,7 +95,12 @@ class GatewayOperation:
 
     def start_event(self, attrs: Mapping[str, object | None]) -> None:
         telemetry.set_attributes(attrs)
-        self.add_event("start")
+        id_attrs = {
+            key: attrs[key]
+            for key in ("run_id", "question_id", "query_id", "attempt_id")
+            if key in attrs
+        }
+        self.add_event("start", id_attrs or None)
 
     def add_event(
         self, suffix: str, attrs: Mapping[str, object | None] | None = None

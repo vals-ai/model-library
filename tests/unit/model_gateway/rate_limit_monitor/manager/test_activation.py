@@ -18,8 +18,6 @@ from tests.unit.model_gateway.rate_limit_monitor.manager._support import (
     _monitor,
     _isolate_monitor_metrics as _isolate_monitor_metrics,
 )
-
-
 async def test_unknown_model_is_rejected_without_store_or_provider_work(monkeypatch):
     store = FakeStore()
     monitor = _monitor(monkeypatch, store)

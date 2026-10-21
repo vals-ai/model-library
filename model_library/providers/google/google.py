@@ -103,7 +103,7 @@ def map_google_finish_reason(
                 if has_tool_calls
                 else StandardFinishReason.STOP
             )
-        case FinishReason.MAX_TOKENS:
+        case FinishReason.MAX_TOKENS | FinishReason.CONTINUATION:
             reason = StandardFinishReason.MAX_TOKENS
         case (
             FinishReason.SAFETY
@@ -135,10 +135,10 @@ class GoogleConfig(ProviderConfig):
     use_vertex: bool = False
     use_interactions: bool = False
     service_tier: Literal["standard", "flex"] | None = None
-    # Gemini <=2.5 models still take thinking_budget and the sampling
-    # parameters (temperature/top_p/top_k); Gemini 3+ (the default) uses
-    # thinking_level and rejects them
+    # Gemini <=2.5 uses thinking_budget; newer models use thinking_level.
+    # Sampling eligibility is governed separately by supports_temperature.
     uses_thinking_budget: bool = False
+    automatic_continuation: bool = False
 
 
 @register_provider("google")
@@ -245,9 +245,6 @@ class GoogleModel(LLM):
             # flip native back on for the delegate so it initializes its own
             # client registry; the outer model stays non-native.
             config.native = True
-            if not self.provider_config.uses_thinking_budget:
-                # upcoming Gemini models reject sampling params
-                config.supports_temperature = False
             self.delegate = OpenAIModel(
                 model_name=self.model_name,
                 provider=self.provider,
@@ -255,17 +252,6 @@ class GoogleModel(LLM):
                 use_completions=True,
             )
             config.native = False
-
-    def _drop_deprecated_params(self, kwargs: dict[str, object]) -> None:
-        dropped = [
-            name
-            for name in ("temperature", "top_p", "top_k", "thinking_budget")
-            if kwargs.pop(name, getattr(self, name, None)) is not None
-        ]
-        if dropped:
-            self.instance_logger.warning(
-                f"{self.model_name}: ignoring deprecated parameter(s) {dropped}"
-            )
 
     @override
     async def parse_input(
@@ -425,16 +411,8 @@ class GoogleModel(LLM):
     ) -> dict[str, Any]:
         generation_config = GenerateContentConfig(
             max_output_tokens=self.max_tokens,
+            automatic_continuation=self.provider_config.automatic_continuation,
         )
-        if not self.provider_config.uses_thinking_budget:
-            self._drop_deprecated_params(kwargs)
-        elif self.supports_temperature:
-            if self.temperature is not None:
-                generation_config.temperature = self.temperature
-            if self.top_p is not None:
-                generation_config.top_p = self.top_p
-            if self.top_k is not None:
-                generation_config.top_k = self.top_k
 
         generation_config.safety_settings = self.SAFETY_CONFIG
 
@@ -480,7 +458,8 @@ class GoogleModel(LLM):
                 generation_config.response_schema = output_schema
             generation_config.response_mime_type = "application/json"
 
-        generation_config = generation_config.model_copy(update=kwargs)
+        sampling = self._sampling_from_config(("temperature", "top_p", "top_k"))
+        generation_config = generation_config.model_copy(update={**sampling, **kwargs})
 
         body: dict[str, Any] = {
             "model": self.model_name,
@@ -500,8 +479,6 @@ class GoogleModel(LLM):
         **kwargs: object,
     ) -> QueryResult:
         if self.delegate:
-            if not self.provider_config.uses_thinking_budget:
-                self._drop_deprecated_params(kwargs)
             return await self.delegate_query(
                 input,
                 tools=tools,

@@ -26,6 +26,8 @@ class MetaConfig(ProviderConfig):
 
 @register_provider("meta")
 class MetaModel(DelegateOnly):
+    api_key_setting = "META_API_KEY"
+
     provider_config = MetaConfig()
 
     def __init__(
@@ -42,7 +44,7 @@ class MetaModel(DelegateOnly):
         # https://docs.llama.com
         config = config or LLMConfig()
         self._api_key = config.custom_api_key or SecretStr(
-            model_library_settings.META_API_KEY
+            self._api_key_from(model_library_settings)
         )
         delegate_config = config.model_copy(
             update={

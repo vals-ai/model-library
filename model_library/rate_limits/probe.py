@@ -10,9 +10,9 @@ async def probe_chat_completions_rate_limit(
 ) -> RateLimit | None:
     """Read rate-limit headers from an OpenAI-compatible /chat/completions reply.
 
-    Used by providers whose SDK does not expose response headers (xAI speaks
-    gRPC, Mistral's client returns parsed bodies only), so the limits are read
-    from one minimal direct HTTP call instead.
+    xAI reads limits from Chat Completions although queries use Responses;
+    Mistral's client returns parsed bodies only. One minimal direct HTTP call
+    reads the limits from this endpoint.
     """
     async with default_httpx_client() as client:
         response = await client.post(

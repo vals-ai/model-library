@@ -58,7 +58,7 @@ class GatewayRequestBase(BaseModel):
             if isinstance(provider_config, dict)
             else getattr(provider_config, "access_programs", None)
         )
-        if programs is not None and config.custom_api_key is None:
+        if programs is not None and not config.custom_api_key:
             raise ValueError(
                 "provider_config.access_programs cannot be set; use a registry key"
             )
@@ -75,11 +75,12 @@ class QueryRequest(GatewayRequestBase):
     run_id: str | None = None
     question_id: str | None = None
     query_id: str | None = None
+    attempt_id: str | None = None
     identity: object | None = None
     in_agent: bool = False
     token_retry_params: TokenRetryParams | None = None
 
-    @field_validator("run_id", "question_id")
+    @field_validator("run_id", "question_id", "attempt_id")
     @classmethod
     def _normalize_request_id(
         cls, value: str | None, info: ValidationInfo
@@ -172,11 +173,22 @@ def query_result_response_body(
     data = QueryResult.model_dump(
         result,
         mode="json",
-        exclude={"history"},
+        exclude={"history": True, "metadata": {"performance": True}},
         exclude_none=True,
         exclude_unset=failed,
         exclude_computed_fields=failed,
     )
+    performance = result.metadata.performance
+    if performance is not None:
+        # Deployed clients reject unknown performance fields; the ledger keeps the rest.
+        data["metadata"]["performance"] = {
+            "time_to_first_token_ms": performance.time_to_first_token_ms.model_dump(
+                mode="json",
+                exclude_none=True,
+                exclude_unset=failed,
+                exclude_computed_fields=failed,
+            )
+        }
     data["signed_history"] = signed_history
     return data
 

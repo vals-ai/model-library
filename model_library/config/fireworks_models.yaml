@@ -343,3 +343,37 @@ zai-models:
           label: GLM 5.3 (Fireworks, Max)
           default_parameters:
             reasoning_effort: "max"
+
+# Meta Superintelligence Labs open-weights models
+muse-models:
+  base-config:
+    company: Meta
+    country: United States
+    open_source: true
+    documentation_url: https://dev.meta.ai/docs/muse-glimmer
+
+  fireworks/muse-spark-open:
+    label: Muse Spark Open (Fireworks)
+    provider_endpoint: muse-spark-open
+    release_date: 2026-10-15
+    documentation_url: https://fireworks.ai/models/fireworks/muse-spark-open
+    properties:
+      context_window: 1_048_576
+      max_tokens: 131_072
+      reasoning_model: true
+    supports:
+      images: true
+      temperature: true
+      output_schema: true
+    costs_per_million_token:
+      input: 1.25
+      output: 4.25
+      cache:
+        read: 0.15
+      batch: null
+    default_parameters:
+      reasoning_effort: max
+      temperature: 1.0
+      top_p: 1.0
+    rate_limit:
+      supports_live_monitoring: false

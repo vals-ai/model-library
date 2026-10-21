@@ -3,6 +3,7 @@ from typing import Callable
 
 import model_library.telemetry as telemetry
 from model_library.base.base import QueryResult
+from model_library.base.query_ids import get_current_query_id_attributes
 from model_library.exceptions import exception_message
 from model_library.retriers.base import BaseRetrier
 from model_library.retriers.utils import jitter
@@ -64,6 +65,7 @@ class ExponentialBackoffRetrier(BaseRetrier):
             telemetry.record_scheduled_retry_exception(
                 exception,
                 {
+                    **get_current_query_id_attributes(),
                     "retry.strategy": self.strategy,
                     "retry.attempt": self.attempts,
                     "retry.max_tries": self.max_tries,

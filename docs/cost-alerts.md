@@ -119,9 +119,10 @@ ellipsis.
   as the evaluation watermark.
 - Comparison and breakdown queries include every model's request activity, but
   treat cost as zero for model keys whose registry metadata sets
-  `ignored_for_cost: true`. When the registry fetch variables are configured,
-  each run fetches the live gateway `/registry` snapshot so registry changes
-  take effect at the next release without redeploying the alert Lambda; on any
+  `ignored_for_cost: true` (omitted values default to `internal_only`). When
+  the registry fetch variables are configured, each run fetches the live
+  gateway `/registry` snapshot so registry changes take effect at the next
+  release without redeploying the alert Lambda; on any
   fetch failure the run logs a fallback record and uses the registry generated
   at deploy time. Registry changes reclassify alert cost in existing evaluated
   windows without changing stored usage events, aggregate rows, request

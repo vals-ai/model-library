@@ -1,134 +1,44 @@
-import base64
 import io
-import logging
-from typing import Any, Literal, Sequence, cast
+from typing import Literal, Sequence
 
-from pydantic import BaseModel, SecretStr
+from pydantic import SecretStr
 from typing_extensions import override
-from xai_sdk import AsyncClient
-from xai_sdk.aio.chat import Chat
-from xai_sdk.chat import Content, Response, system, tool_result, user
-from xai_sdk.chat import file as xai_file
-from xai_sdk.chat import image as xai_image
-from xai_sdk.chat import tool as xai_tool
-from xai_sdk.proto.v6.chat_pb2 import Message, Tool, ToolCallType
-from xai_sdk.tools import get_tool_call_type, web_search
-import model_library.base.serialize as init_serialize_opts
 
 from model_library import model_library_settings
-from model_library.failure_capture.core import current_capture
 from model_library.base import (
-    LLM,
+    DelegateOnly,
     FileBase,
-    FileInput,
-    FileWithBase64,
     FileWithId,
-    FileWithUrl,
-    FinishReason,
-    FinishReasonInfo,
     InputItem,
     LLMConfig,
     ProviderConfig,
-    QueryResult,
-    QueryResultCost,
-    QueryResultExtras,
-    QueryResultMetadata,
-    RawInput,
-    RawResponse,
-    SystemInput,
-    TextInput,
-    ToolBody,
-    ToolCall,
     ToolDefinition,
-    ToolResult,
 )
-from model_library.base.output.builder import QueryResultBuilder
-from model_library.base.output.result import ProviderToolEvent
-from model_library.exceptions import (
-    BadInputError,
-    ImmediateRetryException,
-    ModelNoOutputError,
-    NoMatchingToolCallError,
-    UnexpectedSystemInputError,
-    handle_empty_response,
-)
-from model_library.providers.openai import OpenAIModel
+from model_library.base.query_ids import PromptCacheKeyMode
+from model_library.providers.openai import OpenAIConfig
 from model_library.rate_limits import RateLimit
 from model_library.rate_limits.probe import probe_chat_completions_rate_limit
-from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
 
-_ = init_serialize_opts
-
-_XAI_KEEPALIVE_CHANNEL_OPTIONS = (
-    ("grpc.keepalive_time_ms", 30_000),
-    ("grpc.keepalive_timeout_ms", 10_000),
-    ("grpc.keepalive_permit_without_calls", 1),
-    ("grpc.http2.max_pings_without_data", 0),
-    # xai_sdk defaults this to 20 MiB, which long-output responses on
-    # large-document benchmarks exceed (observed 24.6 MiB, failing with
-    # RESOURCE_EXHAUSTED "Received message larger than max").
-    ("grpc.max_receive_message_length", 64 * 1024 * 1024),
-)
-
-
-def map_xai_finish_reason(
-    finish_reason: str | None,
-) -> FinishReasonInfo:
-    match finish_reason:
-        case "REASON_STOP":
-            reason = FinishReason.STOP
-        case "REASON_MAX_LEN":
-            reason = FinishReason.MAX_TOKENS
-        case "REASON_MAX_CONTEXT":
-            reason = FinishReason.CONTEXT_WINDOW_EXCEEDED
-        case "REASON_TOOL_CALLS":
-            reason = FinishReason.TOOL_CALLS
-        case "REASON_TIME_LIMIT":
-            reason = FinishReason.MAX_TOKENS
-        case _:
-            reason = FinishReason.UNKNOWN
-
-    return FinishReasonInfo(reason=reason, raw=finish_reason)
+_BASE_URL = "https://api.x.ai/v1"
 
 
 class XAIConfig(ProviderConfig):
-    native: bool = False
+    # A stable conversation key improves xAI prompt-cache hits.
+    # https://docs.x.ai/developers/advanced-api-usage/prompt-caching/best-practices
+    prompt_cache_key: PromptCacheKeyMode = "hash"
 
 
 @register_provider("grok")
-class XAIModel(LLM):
+class XAIModel(DelegateOnly):
+    api_key_setting = "XAI_API_KEY"
+
     provider_config = XAIConfig()
 
     @override
     def _get_default_api_key(self) -> str:
-        return model_library_settings.XAI_API_KEY
+        return self._api_key_from(model_library_settings)
 
-    @override
-    def get_client(
-        self, api_key: str | None = None, base_url: str | None = None
-    ) -> AsyncClient:
-        if not self.has_client():
-            assert api_key
-
-            if base_url:
-                client = AsyncClient(
-                    api_key=api_key,
-                    api_host=base_url,
-                    channel_options=list(_XAI_KEEPALIVE_CHANNEL_OPTIONS),
-                    timeout=60 * 60 * 24,
-                )
-            else:
-                client = AsyncClient(
-                    api_key=api_key,
-                    channel_options=list(_XAI_KEEPALIVE_CHANNEL_OPTIONS),
-                    timeout=60 * 60 * 24,
-                )
-
-            self.assign_client(client)
-        return super().get_client()
-
-    @override
     def __init__(
         self,
         model_name: str,
@@ -136,189 +46,25 @@ class XAIModel(LLM):
         *,
         config: LLMConfig | None = None,
     ):
+        config = config or LLMConfig()
         super().__init__(model_name, provider, config=config)
-        self.native = self.provider_config.native
+        self._custom_api_key = config.custom_api_key
 
-        # https://docs.x.ai/docs/guides/migration
-        if self.native:
-            self.delegate = None
-            self._rate_limit_base_url = "https://api.x.ai/v1"
-        else:
-            default_base_url = (
-                "https://us-west-1.api.x.ai/v1"
-                if "grok-3-mini-reasoning" in self.model_name
-                else "https://api.x.ai/v1"
-            )
-            self._rate_limit_base_url = default_base_url
-
-            config = config or LLMConfig()
-            config.custom_endpoint = config.custom_endpoint or default_base_url
-            config.custom_api_key = config.custom_api_key or SecretStr(
-                model_library_settings.XAI_API_KEY
-            )
-
-            # flip native back on for the delegate so it initializes its own
-            # client registry; the outer model stays non-native.
-            config.native = True
-            self.delegate = OpenAIModel(
-                model_name=self.model_name,
-                provider=provider,
-                config=config,
-                use_completions=False,
-            )
-            config.native = False
-
-    @override
-    async def get_rate_limit(self) -> RateLimit | None:
-        if self._has_custom_connection:
-            return None
-
-        return await probe_chat_completions_rate_limit(
-            base_url=self._rate_limit_base_url,
-            api_key=self._get_default_api_key(),
-            model_name=self.model_name,
+        delegate_config = config.model_copy(
+            update={
+                "custom_endpoint": config.custom_endpoint or _BASE_URL,
+                "custom_api_key": config.custom_api_key
+                or SecretStr(self._get_default_api_key()),
+                "provider_config": OpenAIConfig(
+                    prompt_cache_key=self.provider_config.prompt_cache_key,
+                ),
+            }
         )
-
-    async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
-        raw_responses = [x for x in input if isinstance(x, RawResponse)]
-        tool_call_ids: list[str] = []
-
-        calls = [
-            y
-            for x in raw_responses
-            if isinstance(x.response, Response) and x.response.tool_calls
-            for y in x.response.tool_calls
-        ]
-        tool_call_ids.extend([x.id for x in calls if x.id])
-        return tool_call_ids
-
-    @override
-    async def parse_input(
-        self,
-        input: Sequence[InputItem],
-        **kwargs: Any,
-    ) -> list[Message]:
-        new_input: list[Message] = []
-
-        if isinstance(input[0], SystemInput):
-            new_input.append(system(input[0].text))
-            input = input[1:]
-
-        content_user: list[Any] = []
-
-        def flush_content_user():
-            if content_user:
-                new_input.append(user(*content_user))
-                content_user.clear()
-
-        tool_call_ids = await self.get_tool_call_ids(input)
-
-        for item in input:
-            if isinstance(item, TextInput):
-                content_user.append(item.text)
-                continue
-
-            if isinstance(item, FileBase):
-                match item.type:
-                    case "image":
-                        parsed = await self.parse_image(item)
-                    case "file":
-                        parsed = await self.parse_file(item)
-                content_user.append(parsed)
-                continue
-
-            # non content user item
-            flush_content_user()
-
-            match item:
-                case ToolResult():
-                    if item.tool_call.id not in tool_call_ids:
-                        raise NoMatchingToolCallError()
-
-                    new_input.append(tool_result(item.result))
-                case RawResponse():
-                    new_input.append(item.response)
-                case RawInput():
-                    new_input.append(item.input)
-                case SystemInput():
-                    raise UnexpectedSystemInputError()
-
-        # in case content user item is the last item
-        flush_content_user()
-
-        # use Chat object to parse raw Response and other objects into the correct formats
-        # see xai's chat.py `class BaseChat` -> `def append`
-        chat: Chat = self.get_client().chat.create("dummy")
-        for message in new_input:
-            chat.append(message)
-        return list(chat.messages)
-
-    @override
-    async def parse_image(
-        self,
-        image: FileInput,
-    ) -> Content:
-        match image:
-            case FileWithBase64():
-                image_url = f"data:{image.mime};base64,{image.base64}"
-                return xai_image(image_url=image_url, detail="high")
-            case FileWithUrl():
-                return xai_image(image_url=image.url, detail="high")
-            case FileWithId():
-                return xai_file(file_id=image.file_id)
-            case _:
-                raise BadInputError("xAI does not support byte-backed files")
-
-    @override
-    async def parse_file(
-        self,
-        file: FileInput,
-    ) -> Content:
-        match file:
-            case FileWithId():
-                return xai_file(file_id=file.file_id)
-            case FileWithUrl():
-                return xai_file(url=file.url, filename=file.name, mime_type=file.mime)
-            case FileWithBase64():
-                return xai_file(
-                    data=base64.b64decode(file.base64),
-                    filename=file.name,
-                    mime_type=file.mime,
-                )
-            case _:
-                raise BadInputError("xAI does not support byte-backed files")
-
-    @property
-    @override
-    def search_tool(self) -> Tool:
-        return web_search()
-
-    @override
-    async def parse_tools(
-        self,
-        tools: list[ToolDefinition],
-    ) -> list[Tool]:
-        parsed_tools: list[Tool] = []
-        for tool in tools:
-            body = tool.body
-            if is_native_web_search(body):
-                parsed_tools.append(self.search_tool)
-                continue
-            if not isinstance(body, ToolBody):
-                parsed_tools.append(body)
-                continue
-            parsed_tools.append(
-                xai_tool(
-                    name=body.name,
-                    description=body.description,
-                    parameters={
-                        "type": "object",
-                        "properties": body.properties,
-                        "required": body.required,
-                    },
-                )
-            )
-        return parsed_tools
+        self.init_delegate(
+            config=delegate_config,
+            delegate_provider="openai",
+            use_completions=False,
+        )
 
     @override
     async def upload_file(
@@ -328,205 +74,22 @@ class XAIModel(LLM):
         bytes: io.BytesIO,
         type: Literal["image", "file"] = "file",
     ) -> FileWithId:
-        if self.delegate:
-            return await self.delegate.upload_file(name, mime, bytes, type=type)
-
-        response = await self.get_client().files.upload(
-            bytes,
-            filename=name,
-        )
-        return FileWithId(
-            type=type,
-            name=response.filename,
-            mime=mime,
-            file_id=response.id,
-        )
+        assert self.delegate
+        return await self.delegate.upload_file(name, mime, bytes, type=type)
 
     @override
-    async def build_body(
-        self,
-        input: Sequence[InputItem],
-        *,
-        tools: list[ToolDefinition],
-        output_schema: dict[str, Any] | type[BaseModel] | None = None,
-        **kwargs: Any,
-    ) -> dict[str, Any]:
-        body: dict[str, Any] = {
-            "model": self.model_name,
-            "tools": await self.parse_tools(tools),
-        }
+    async def get_rate_limit(self) -> RateLimit | None:
+        if self.custom_endpoint is not None:
+            return None
 
-        if self.max_tokens:
-            body["max_tokens"] = self.max_tokens
-
-        if self.supports_temperature:
-            if self.temperature is not None:
-                body["temperature"] = self.temperature
-            if self.top_p is not None:
-                body["top_p"] = self.top_p
-
-        if self.reasoning_effort:
-            body["reasoning_effort"] = self.reasoning_effort
-
-        if self.reasoning:
-            body["use_encrypted_content"] = True
-
-        body.update(kwargs)
-
-        body["messages"] = await self.parse_input(input)
-
-        return body
-
-    @override
-    async def _query_impl(
-        self,
-        input: Sequence[InputItem],
-        *,
-        tools: list[ToolDefinition],
-        query_logger: logging.Logger,
-        output_schema: dict[str, Any] | type[BaseModel] | None = None,
-        **kwargs: object,
-    ) -> QueryResult:
-        if self.delegate:
-            return await self.delegate_query(
-                input,
-                tools=tools,
-                query_logger=query_logger,
-                output_schema=output_schema,
-                **kwargs,
-            )
-
-        body = await self.build_body(
-            input, tools=tools, output_schema=output_schema, **kwargs
-        )
-
-        active_capture = current_capture()
-        attempt = active_capture.attempt("xai") if active_capture is not None else None
-        latest_response: Response | None = None
-        result_builder = QueryResultBuilder()
-        try:
-            chat: Chat = self.get_client().chat.create(**body)
-            if active_capture is not None:
-                try:
-                    request = chat._make_request(1)  # pyright: ignore[reportPrivateUsage]
-                    request_payload = request.SerializeToString()
-                except Exception:
-                    active_capture.record_error()
-                else:
-                    assert attempt is not None
-                    attempt.request_bytes(
-                        request_payload,
-                        representation="xai_request_protobuf_message",
-                    )
-
-            async for response, chunk in chat.stream():
-                latest_response = response
-                if active_capture is not None:
-                    try:
-                        response_payload = chunk.proto.SerializeToString()
-                    except Exception:
-                        active_capture.record_error()
-                    else:
-                        assert attempt is not None
-                        attempt.response_bytes(
-                            response_payload,
-                            representation="xai_response_protobuf_message",
-                        )
-                chunk_reasoning = cast(
-                    str | None, getattr(chunk, "reasoning_content", None)
-                )
-                chunk_content = cast(str | None, getattr(chunk, "content", None))
-                result_builder.append_reasoning_delta(chunk_reasoning)
-                result_builder.append_content_delta(chunk_content)
-                for index, _tool_call in enumerate(chunk.tool_calls):
-                    result_builder.record_tool_call_delta(index)
-            if not latest_response:
-                raise ModelNoOutputError("Model failed to produce a response")
-        except OSError as exc:
-            if attempt is not None:
-                attempt.fail(exc)
-            # Transient gRPC C-core OSError (e.g. [Errno 2]) not caught by retry logic.
-            raise ImmediateRetryException(str(exc)) from exc
-        except BaseException as exc:
-            if attempt is not None:
-                attempt.fail(exc)
-            raise
-        if attempt is not None:
-            attempt.finish()
-
-        native_search_requested = any(
-            tool_call.type == ToolCallType.TOOL_CALL_TYPE_WEB_SEARCH_TOOL
-            for tool_call in latest_response.tool_calls
-        ) and any(tool.HasField("web_search") for tool in chat.proto.tools)
-        tool_calls: list[ToolCall] = []
-        provider_tool_events: list[ProviderToolEvent] = []
-        for i, tool_call in enumerate(latest_response.tool_calls):
-            if (
-                native_search_requested
-                and get_tool_call_type(tool_call) == "web_search_tool"
-            ):
-                provider_tool_events.append(
-                    ProviderToolEvent.web_search(
-                        provider="xai",
-                        kind="web_search_tool",
-                        query=tool_call.function.arguments,
-                        sequence=i,
-                        id=tool_call.id,
-                    )
-                )
-                continue
-            tool_calls.append(
-                ToolCall(
-                    id=tool_call.id,
-                    name=tool_call.function.name,
-                    args=tool_call.function.arguments,
-                    sequence=i,
-                )
-            )
-
-        content = cast(str | None, getattr(latest_response, "content", None))
-        reasoning = cast(
-            str | None, getattr(latest_response, "reasoning_content", None)
-        )
-        finish_reason = latest_response.finish_reason
-
-        mapped_finish_reason = map_xai_finish_reason(finish_reason)
-
-        if content is not None and (content or not result_builder.has_output_text):
-            result_builder.set_output_text(content)
-        if reasoning:
-            result_builder.set_reasoning(reasoning)
-
-        has_observed_output = (
-            result_builder.has_output_text
-            or result_builder.has_reasoning
-            or bool(tool_calls)
-            or bool(provider_tool_events)
-        )
-        if not has_observed_output:
-            handle_empty_response(mapped_finish_reason, {"raw": latest_response})
-
-        return result_builder.build(
-            finish_reason=mapped_finish_reason,
-            metadata=QueryResultMetadata(
-                # see _calculate_cost
-                # proto3 scalar ints default to 0; CopyFrom on partial
-                # streaming chunks can leave prompt_tokens < cached
-                in_tokens=max(
-                    0,
-                    latest_response.usage.prompt_tokens
-                    - latest_response.usage.cached_prompt_text_tokens,
-                ),
-                out_tokens=latest_response.usage.completion_tokens,
-                reasoning_tokens=latest_response.usage.reasoning_tokens,
-                cache_read_tokens=latest_response.usage.cached_prompt_text_tokens,
+        return await probe_chat_completions_rate_limit(
+            base_url=_BASE_URL,
+            api_key=(
+                self._custom_api_key.get_secret_value()
+                if self._custom_api_key
+                else self._get_default_api_key()
             ),
-            extras=QueryResultExtras(
-                provider_response_id=getattr(latest_response, "id", None),
-            ),
-            tool_calls=tool_calls,
-            provider_tool_events=provider_tool_events,
-            history=[*input, RawResponse(response=latest_response)],
+            model_name=self.model_name,
         )
 
     @override
@@ -538,39 +101,10 @@ class XAIModel(LLM):
         tools: list[ToolDefinition] = [],
         **kwargs: object,
     ) -> int:
-        # File payloads are excluded: their base64 would be counted as text,
-        # while the provider tokenizes images with a separate encoder and
-        # reports the real breakdown in the response usage.
+        # Exclude files: their serialized form does not reflect content token usage.
         return await super().count_tokens(
             [item for item in input if not isinstance(item, FileBase)],
             history=[item for item in history if not isinstance(item, FileBase)],
             tools=tools,
             **kwargs,
         )
-
-    @override
-    async def _calculate_cost(
-        self,
-        metadata: QueryResultMetadata,
-        batch: bool = False,
-        bill_reasoning: bool = True,
-    ) -> QueryResultCost | None:
-        """
-        Future Cost considerations
-        Per 1000 calls:
-        - Web Search
-        - X Search
-        - Code Execution
-        - Document Search
-        Per 1000 sources:
-        - Live Search
-        Free:
-        - File Storage
-        - Collections Storage
-        """
-        # prompt caching automatically enabled
-        # reasoning_tokens tokens billed in addition to completion_tokens
-
-        # prompt_tokens include cached_prompt_text_tokens
-
-        return await super()._calculate_cost(metadata, batch, bill_reasoning=True)

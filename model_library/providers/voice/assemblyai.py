@@ -160,6 +160,7 @@ class AssemblyAIModel(TranscriptionOnly):
                     speech_model=SpeechModel(self.model_name),
                     encoding=Encoding.pcm_s16le,
                     sample_rate=_ASSEMBLYAI_SAMPLE_RATE,
+                    speaker_labels_revision_interval_ms=None,
                     language_codes=(
                         [request.language] if request.language is not None else None
                     ),

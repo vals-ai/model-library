@@ -9,9 +9,9 @@ from typing import cast
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from model_gateway.observability import (
+    latest_runtime_snapshot,
     log_gateway_event,
     request_log_fields_from_scope,
-    runtime_snapshot,
 )
 
 
@@ -44,7 +44,7 @@ class GatewayObservabilityMiddleware:
                 level=level,
                 route=path,
                 method=method,
-                runtime=_runtime_snapshot_for_anomaly(state),
+                runtime=latest_runtime_snapshot(),
                 **request_fields,
                 **fields,
             )
@@ -118,12 +118,6 @@ class GatewayObservabilityMiddleware:
                 )
 
 
-def _runtime_snapshot_for_anomaly(state: "_RequestBoundaryState") -> dict[str, int]:
-    if state.anomaly_runtime is None:
-        state.anomaly_runtime = runtime_snapshot()
-    return state.anomaly_runtime
-
-
 def _is_anomaly(state: "_RequestBoundaryState") -> bool:
     return (
         state.send_error
@@ -142,4 +136,3 @@ class _RequestBoundaryState:
         self.send_error = False
         self.client_disconnected = False
         self.status_code: int | None = None
-        self.anomaly_runtime: dict[str, int] | None = None

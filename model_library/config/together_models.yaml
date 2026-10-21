@@ -107,6 +107,32 @@ muse-models:
     country: United States
     documentation_url: https://dev.meta.ai/docs/muse-glimmer
 
+  together/muse-spark-open:
+    label: Muse Spark Open
+    provider_endpoint: meta-models/Muse-Spark-Open-816B-A42B
+    release_date: 2026-10-15
+    documentation_url: https://dev.meta.ai/resources/blog/build-with-muse-spark-open
+    properties:
+      context_window: 1_048_576
+      max_tokens: 131_072
+      reasoning_model: true
+    supports:
+      images: true
+      tools: true
+      temperature: true
+      output_schema: true
+    costs_per_million_token:
+      input: 1.25
+      output: 4.25
+      cache:
+        read: 0.15
+      batch: null
+    default_parameters:
+      # Model card: effort low|medium|high|xhigh (default xhigh); temperature 1.0, top_p 1.0.
+      reasoning_effort: xhigh
+      temperature: 1.0
+      top_p: 1.0
+
   together/muse-glimmer-30b:
     label: Muse Glimmer 30B
     provider_endpoint: meta-models/Muse-Glimmer-30B
@@ -131,3 +157,29 @@ muse-models:
       top_p: 0.95
       top_k: 64
 
+reflection-models:
+  together/reflection/Beam-1.0-501B-A23B:
+    company: Reflection
+    country: United States
+    label: Beam 1.0 (Together)
+    release_date: 2026-10-16
+    documentation_url: https://www.together.ai/models/reflection-beam
+    supports:
+      images: false
+      tools: true
+      temperature: true
+      output_schema: true
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.99
+    properties:
+      context_window: 1_048_576
+      max_tokens: 131_072
+      reasoning_model: true
+      training_cutoff: "2026-06"
+    costs_per_million_token:
+      input: 0.40
+      output: 1.20
+      cache:
+        read: 0.04
+      batch: null

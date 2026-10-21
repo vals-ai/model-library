@@ -13,7 +13,14 @@ from model_gateway.usage_ledger.redshift_load import (
 from model_gateway.usage_ledger.redshift_transform import RedshiftUsageRows
 
 
-_PERFORMANCE = {"encoding": "gzip+base64", "data": "x" * 90_048}
+_TIMELINE = {"encoding": "gzip+base64", "data": "x" * 90_048}
+_TTFT_COLUMNS = {
+    "ttft_any_ms": 7,
+    "ttft_answer_ms": 11,
+    "ttft_reasoning_ms": 7,
+    "ttft_content_ms": 11,
+    "ttft_tool_call_ms": None,
+}
 
 
 def _load(
@@ -39,7 +46,8 @@ def _rows() -> RedshiftUsageRows:
         },
         performance={
             "usage_event_id": "usage-1",
-            "performance": _PERFORMANCE,
+            **_TTFT_COLUMNS,
+            "timeline": _TIMELINE,
             "performance_truncated": False,
             "loaded_at": datetime(2026, 5, 29, 12, 1, tzinfo=UTC),
         },
@@ -51,7 +59,8 @@ def test_staging_table_carries_only_fact_and_performance_columns() -> None:
 
     assert "batch_id varchar(128) not null" in ddl
     assert "usage_event_id varchar(128) not null" in ddl
-    assert "performance varbyte(1048576)" in ddl
+    assert "ttft_answer_ms integer" in ddl
+    assert "timeline varbyte(1048576)" in ddl
     assert "performance_truncated boolean" in ddl
     for forbidden in ("identity_json", "metadata_json", "payload", "details"):
         assert forbidden not in ddl
@@ -59,17 +68,18 @@ def test_staging_table_carries_only_fact_and_performance_columns() -> None:
 
 def test_staging_row_combines_fact_and_serialized_performance() -> None:
     row = staging_row_from_redshift_rows(_rows())
-    performance = row["performance"]
+    timeline = row["timeline"]
 
-    assert isinstance(performance, bytes)
-    assert len(performance) > 65_535
+    assert isinstance(timeline, bytes)
+    assert len(timeline) > 65_535
     assert row == {
         "batch_id": "batch-1",
         "usage_event_id": "usage-1",
         "completed_at": datetime(2026, 5, 29, 12, tzinfo=UTC),
         "loaded_at": datetime(2026, 5, 29, 12, 1, tzinfo=UTC),
-        "performance": json.dumps(
-            _PERFORMANCE, sort_keys=True, separators=(",", ":")
+        **_TTFT_COLUMNS,
+        "timeline": json.dumps(
+            _TIMELINE, sort_keys=True, separators=(",", ":")
         ).encode(),
         "performance_truncated": False,
     }
@@ -87,19 +97,19 @@ def test_direct_prepare_copy_and_finalize_use_batch_ids() -> None:
     sql = "\n".join([*prepare, *copy, *finalize])
 
     assert prepare == [
-        "delete from gateway_usage_dev.usage_events_staging_v4\n"
+        "delete from gateway_usage_dev.usage_events_staging_v5\n"
         "where batch_id in ('window-s00', 'window-s01');"
     ]
     assert "from 's3://bucket/window/manifest.json'" in copy[0]
     assert "iam_role 'arn:aws:iam::123456789012:role/copy'" in copy[0]
     assert "on usage_events.usage_event_id = source.usage_event_id" in sql
-    assert "on usage_event_performance_v2.usage_event_id = source.usage_event_id" in sql
-    assert "merge into gateway_usage_dev.usage_event_performance_v2" in sql
-    assert "json_parse(performance)" not in sql
-    assert "source.performance" in sql
+    assert "on usage_event_performance_v3.usage_event_id = source.usage_event_id" in sql
+    assert "merge into gateway_usage_dev.usage_event_performance_v3" in sql
+    assert "json_parse(timeline)" not in sql
+    assert "source.timeline" in sql
     assert "usage_event_debug" not in sql
     assert "payload" not in sql
-    assert "delete from gateway_usage_dev.usage_events_staging_v4" in finalize[-1]
+    assert "delete from gateway_usage_dev.usage_events_staging_v5" in finalize[-1]
     assert "load_batches" not in sql
     assert "export_control" not in sql
     assert "accept_export_fence" not in sql
@@ -115,8 +125,8 @@ def test_finalize_can_defer_analytics_refresh_for_backfill() -> None:
     )
 
     assert "merge into gateway_usage.usage_events" in sql
-    assert "merge into gateway_usage.usage_event_performance_v2" in sql
-    assert "delete from gateway_usage.usage_events_staging_v4" in sql
+    assert "merge into gateway_usage.usage_event_performance_v3" in sql
+    assert "delete from gateway_usage.usage_events_staging_v5" in sql
     assert "usage_agg_" not in sql
     assert "usage_dimension_values" not in sql
 

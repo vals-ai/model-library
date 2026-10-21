@@ -47,7 +47,7 @@ Gateway requests send the model key and explicit `LLMConfig` override. The serve
 | Agent/provider runtime parameter | Top-level `LLMConfig` fields | Pass the config to `get_registry_model(..., override_config=config)`. |
 | Provider-specific parameter | `LLMConfig.provider_config` | Use the typed provider config. |
 | Bring your own key | `LLMConfig.custom_api_key` | The gateway rejects `custom_endpoint` and `registry_key`. |
-| Query attribution | `query(...)` fields | Keep `identity`, `run_id`, `question_id`, and `query_id` out of `LLMConfig`. |
+| Query attribution | `query(...)` fields | Keep `identity`, `run_id`, `question_id`, `query_id`, and `attempt_id` out of `LLMConfig`. |
 
 Agent/provider runtime parameters:
 
@@ -106,7 +106,7 @@ result = await model.query(
 
 Do not pass provider parameters such as `temperature`, `top_p`, `max_tokens`, `stop`, or provider SDK kwargs to `query()`. Put them in `LLMConfig` at model construction time. Gateway rejects unsupported extra query parameters before making the HTTP request.
 
-`logger` is ignored client-side for compatibility. `system_prompt` is still normalized into a leading system input, but new code should prefer explicit `SystemInput` items.
+`logger` supplies the base logger for client-side query logs. `system_prompt` is still normalized into a leading system input, but new code should prefer explicit `SystemInput` items.
 
 ## Metadata and registry access
 
@@ -157,11 +157,14 @@ Invalid `IDENTITY` settings are omitted by the client when they are:
 | `run_id` | When explicit `query(run_id=...)` is absent or `None`, use `RUN_ID`, then a generated ID. Explicit blank or whitespace-only values are rejected. |
 | `question_id` | When explicit `query(question_id=...)` is absent or `None`, use `QUESTION_ID`, then `TASK_ID` only when `QUESTION_ID` is unset or blank, then a generated ID. Explicit blank or whitespace-only values are rejected. |
 | `query_id` | Generated per query unless passed explicitly. There is no `QUERY_ID` env/settings fallback. Direct blank values are treated as absent. |
+| `attempt_id` | When explicit `query(attempt_id=...)` is absent or `None`, use `ATTEMPT_ID`, then a generated ID. Explicit blank or whitespace-only values are rejected. |
 
-- `RUN_ID`, `QUESTION_ID`, and `TASK_ID` are read through `model_library_settings` and apply to all `LLM.query()` calls.
+- `RUN_ID`, `QUESTION_ID`, `TASK_ID`, and `ATTEMPT_ID` are read through `model_library_settings` and apply to all `LLM.query()` calls.
 - `RUN_ID` and `QUESTION_ID` stay separate top-level gateway fields.
 - `TASK_ID` is an alias fallback for `QUESTION_ID`.
 - Blank or whitespace-only `RUN_ID`, `QUESTION_ID`, and `TASK_ID` env values are ignored.
+
+Native `LLM.query()` resolves the same four IDs once per call. Provider, retry, and token-queue telemetry share the immutable internal group through retries and sleeps; query loggers include the attempt ID. Query kwargs and Gateway request fields remain flat. Standalone task-level retriers retain run/question attribution without inventing query or attempt IDs.
 
 ## Runtime model-config overrides
 
@@ -178,6 +181,7 @@ Keep attribution fields out of `LLMConfig`:
 - `run_id`
 - `question_id`
 - `query_id`
+- `attempt_id`
 
 ```yaml
 run_cmd: >-

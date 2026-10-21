@@ -20,6 +20,8 @@ class TogetherConfig(ProviderConfig):
 
 @register_provider("together")
 class TogetherModel(DelegateOnly):
+    api_key_setting = "TOGETHER_API_KEY"
+
     provider_config = TogetherConfig()
 
     def __init__(
@@ -36,7 +38,7 @@ class TogetherModel(DelegateOnly):
             config.custom_endpoint or "https://api.together.xyz/v1/"
         )
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.TOGETHER_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(

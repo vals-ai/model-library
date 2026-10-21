@@ -1,5 +1,5 @@
-"""Typed-decision models, served through OpenRouter's Decisions API (Jev, Mercury Decide, Microsoft-Decision-1) or
-OpenAI's (``decision_api: openai``).
+"""Typed-decision models, served through OpenRouter's Decisions API (Jev, Mercury Decide, Microsoft-Decision-1),
+OpenAI's (``decision_api: openai``) or Perplexity's (``decision_api: perplexity``).
 
 A typed-decision model takes a ``state`` and typed ``questions`` and returns a typed answer for each: ``choice`` (one
 option plus a probability for every option), ``noul`` (a probability) or ``score`` (a value on an ordered scale). It
@@ -8,7 +8,8 @@ does not generate text.
 This is an OpenRouter model whose input is a decision request and whose output is the answers. It reuses
 ``OpenRouterModel``'s client, key and retries and posts to the Decisions endpoint itself; the model sent is the
 registry's ``provider_endpoint``. For OpenAI it points that client at OpenAI with ``OPENAI_API_KEY`` and translates the
-request and answers, so every decision model takes and returns the same shapes.
+request and answers, so every decision model takes and returns the same shapes. Perplexity takes OpenRouter's shapes, so
+only the client's URL and key change.
 
 The query's single text input *is* the decision request, as JSON::
 
@@ -48,12 +49,17 @@ from .openrouter import OpenRouterConfig, OpenRouterModel
 DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
 
 OPENAI_URL = "https://api.openai.com/v1"
+# The Decisions APIs other than OpenRouter's: the base URL the client is pointed at and the setting holding its key.
+DIRECT_APIS = {
+    "openai": (OPENAI_URL, "OPENAI_API_KEY"),
+    "perplexity": ("https://api.perplexity.ai/v1", "PERPLEXITY_API_KEY"),
+}
 
 QUESTION_TYPES = ("choice", "noul", "score")
 
 
 class DecisionConfig(OpenRouterConfig):
-    decision_api: Literal["openrouter", "openai"] = "openrouter"
+    decision_api: Literal["openrouter", "openai", "perplexity"] = "openrouter"
 
 
 class DecisionError(NoRetryException):
@@ -160,6 +166,9 @@ def _openrouter_answer(answer: dict[str, Any]) -> dict[str, Any]:
 
 @register_provider("decision")
 class DecisionModel(OpenRouterModel):
+    # The key follows `decision_api` (OpenRouter's or OpenAI's), not one setting.
+    api_key_setting = None
+
     provider_config = DecisionConfig()
 
     def __init__(
@@ -178,11 +187,17 @@ class DecisionModel(OpenRouterModel):
         config = config.model_copy() if config else LLMConfig()
         if (
             isinstance(config.provider_config, DecisionConfig)
-            and config.provider_config.decision_api == "openai"
+            and config.provider_config.decision_api in DIRECT_APIS
         ):
-            config.custom_endpoint = OPENAI_URL
+            config.custom_endpoint, key = DIRECT_APIS[
+                config.provider_config.decision_api
+            ]
             config.custom_api_key = config.custom_api_key or SecretStr(
-                model_library_settings.OPENAI_API_KEY
+                getattr(model_library_settings, key)
+            )
+        else:
+            config.custom_api_key = config.custom_api_key or SecretStr(
+                model_library_settings.OPENROUTER_API_KEY
             )
         super().__init__(model_name, provider, config=config)
 
@@ -244,7 +259,10 @@ class DecisionModel(OpenRouterModel):
             raise DecisionError(
                 "typed-decision models take only a decision request: no tools, output schema or query options"
             )
-        return {"model": self.model_name, **await self.parse_input(input)}
+        body = {"model": self.model_name, **await self.parse_input(input)}
+        if self.provider_config.openrouter_provider_only:
+            body["provider"] = {"only": self.provider_config.openrouter_provider_only}
+        return body
 
     @override
     async def _query_impl(
@@ -259,21 +277,19 @@ class DecisionModel(OpenRouterModel):
         body = await self.build_body(
             input, tools=tools, output_schema=output_schema, **kwargs
         )
-        via_openai = self.provider_config.decision_api == "openai"
-        url, sent = DECISIONS_URL, body
+        api = self.provider_config.decision_api
+        via_openai = api == "openai"
+        url, sent = (DECISIONS_URL if api == "openrouter" else "/decisions"), body
         if via_openai:
             state = body["state"]
-            url, sent = (
-                "/decisions",
-                {
-                    "model": body["model"],
-                    "input": state if isinstance(state, str) else json.dumps(state),
-                    "questions": [
-                        _openai_question(name, question)
-                        for name, question in body["questions"].items()
-                    ],
-                },
-            )
+            sent = {
+                "model": body["model"],
+                "input": state if isinstance(state, str) else json.dumps(state),
+                "questions": [
+                    _openai_question(name, question)
+                    for name, question in body["questions"].items()
+                ],
+            }
         try:
             payload = _obj(await self.get_client().post(url, body=sent, cast_to=object))
         except APIStatusError as exc:
@@ -314,8 +330,8 @@ class DecisionModel(OpenRouterModel):
                 "the Decisions API returned no token usage; refusing to report a $0 cost"
             )
 
-        # What OpenRouter says it billed and which provider served the call, kept for reconciliation (OpenAI reports
-        # neither). The result is billed at the registry price.
+        # What OpenRouter says it billed and which provider served the call, kept for reconciliation (OpenAI and
+        # Perplexity report neither). The result is billed at the registry price.
         extra = {
             f"upstream_{key}": value
             for key, value in (

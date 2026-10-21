@@ -202,12 +202,7 @@ class AI21LabsModel(LLM):
             "tools": await self.parse_tools(tools),
         }
 
-        if self.supports_temperature:
-            if self.temperature is not None:
-                body["temperature"] = self.temperature
-            if self.top_p is not None:
-                body["top_p"] = self.top_p
-
+        body.update(self._sampling_from_config(("temperature", "top_p")))
         body.update(kwargs)
         return body
 

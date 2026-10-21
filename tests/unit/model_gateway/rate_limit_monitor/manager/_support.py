@@ -29,8 +29,6 @@ ANTHROPIC_MODEL = "anthropic/claude-sonnet-4-5"
 GENERATION_A = "a" * 32
 
 GENERATION_B = "b" * 32
-
-
 @pytest.fixture(autouse=True)
 def _isolate_monitor_metrics(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in (

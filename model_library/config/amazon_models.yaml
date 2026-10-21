@@ -70,35 +70,6 @@ claude-models:
     default_parameters:
       temperature: 1
 
-  bedrock/claude-sonnet-4-20250514-v1:
-    label: Claude Sonnet 4 (Nonthinking)
-    release_date: 2025-05-22
-    documentation_url: https://www.anthropic.com/claude/sonnet
-    properties:
-      context_window: 200_000
-      max_tokens: 64_000
-      training_cutoff: 2025-03
-    metadata:
-      available_as_evaluator: true
-    costs_per_million_token:
-      input: 3.0
-      output: 15.0
-      cache:
-        read: 0.3
-        write: 3.75
-      context:
-        threshold: 200_000
-        input: 6.00
-        output: 22.5
-        cache:
-          read: 0.6
-          write: 7.50
-    provider_endpoint: us.anthropic.claude-sonnet-4-20250514-v1:0
-    alternative_keys:
-      - bedrock/claude-sonnet-4-20250514-v1-thinking:
-          properties:
-            reasoning_model: true
-
   bedrock/claude-opus-4-20250514-v1:
     label: Claude Opus 4 (Nonthinking)
     release_date: 2025-05-22

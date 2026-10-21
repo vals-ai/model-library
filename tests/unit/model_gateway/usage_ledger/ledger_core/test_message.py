@@ -53,6 +53,8 @@ def _usage_event() -> dict[str, object]:
         request=snapshot_usage_request(request),
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
         api_key_name="security-testing",
+        provider_key_name=None,
+        pool_revision=None,
     )
 
 
@@ -101,6 +103,8 @@ def test_external_non_finite_request_detail_is_reduced_before_serialization() ->
         error=None,
         request=snapshot_usage_request(request),
         api_key_name="test",
+        provider_key_name=None,
+        pool_revision=None,
     )
 
     message = serialize_usage_event_message(event)
@@ -129,6 +133,8 @@ def test_failed_result_round_trips_without_inventing_usage() -> None:
         error=error,
         request=snapshot_usage_request(request),
         api_key_name="test",
+        provider_key_name=None,
+        pool_revision=None,
     )
 
     restored = deserialize_usage_event_message(serialize_usage_event_message(event))

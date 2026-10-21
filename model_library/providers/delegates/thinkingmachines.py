@@ -27,6 +27,8 @@ class ThinkingMachinesConfig(ProviderConfig):
 
 @register_provider("thinkingmachines")
 class ThinkingMachinesModel(DelegateOnly):
+    api_key_setting = "TINKER_API_KEY"
+
     provider_config = ThinkingMachinesConfig()
 
     def __init__(
@@ -45,7 +47,7 @@ class ThinkingMachinesModel(DelegateOnly):
             or "https://tinker.thinkingmachines.dev/services/tinker-prod/oai/api/v1"
         )
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.TINKER_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(

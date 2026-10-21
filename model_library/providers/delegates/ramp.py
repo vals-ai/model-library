@@ -46,6 +46,8 @@ SWITCHYARD_SESSION_HEADERS = {"claude-code": "X-Claude-Code-Session-Id"}
 
 @register_provider("ramp")
 class RampModel(DelegateOnly):
+    api_key_setting = "RAMP_API_KEY"
+
     provider_config = RampConfig()
 
     def __init__(
@@ -64,7 +66,7 @@ class RampModel(DelegateOnly):
                 "custom_endpoint": config.custom_endpoint
                 or "https://api.router.com/v1",
                 "custom_api_key": config.custom_api_key
-                or SecretStr(model_library_settings.RAMP_API_KEY),
+                or SecretStr(self._api_key_from(model_library_settings)),
                 # Ramp routes on prompt_cache_key: one key per task attempt, so the
                 # served model sticks within it.
                 "provider_config": OpenAIConfig(prompt_cache_key="id"),

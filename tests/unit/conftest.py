@@ -58,21 +58,12 @@ def mock_llm_subclasses(method_name: str, mock_func: Callable[..., Any]):
     walk_provider_modules(apply_mock)
 
 
-class MockSequence:
-    def __len__(self):
-        return -1
-
-
 @pytest.fixture(autouse=True)
 def mock_all_get_client():
     """Mock get_client for all LLM provider subclasses."""
 
     mock_client = MagicMock(return_value=AsyncMock())
 
-    # for xai tokenize
-    mock_client.return_value.tokenize.tokenize_text = AsyncMock(
-        return_value=MockSequence()
-    )
     mock_llm_subclasses("get_client", mock_client)
 
     yield
@@ -91,7 +82,14 @@ def mock_all_mock_model_library_settings():
                     return ""
                 case "MODEL_LIBRARY_CUSTOM_CONFIG":
                     return None
-                case "RUN_ID" | "QUESTION_ID" | "TASK_ID" | "IDENTITY" | "QUERY_ID":
+                case (
+                    "RUN_ID"
+                    | "QUESTION_ID"
+                    | "TASK_ID"
+                    | "IDENTITY"
+                    | "QUERY_ID"
+                    | "ATTEMPT_ID"
+                ):
                     raise AttributeError(f"Missing config key: {name}")
                 case _:
                     return f"mock_ENV_{name}"

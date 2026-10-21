@@ -291,6 +291,7 @@ async def build_body(
     *,
     tools: list[ToolDefinition],
     output_schema: dict[str, Any] | type[BaseModel] | None = None,
+    sampling: dict[str, object],
     **kwargs: object,
 ) -> dict[str, Any]:
     if model.deep_research:
@@ -345,7 +346,7 @@ async def build_body(
     if model.verbosity is not None:
         body["text"] = {"format": {"type": "text"}, "verbosity": model.verbosity}
 
-    await apply_common_body(model, body, input, kwargs)
+    await apply_common_body(model, body, input, kwargs, sampling)
 
     if model.access_programs:
         # Write into kwargs["extra_body"] so the final body.update(kwargs) keeps
@@ -610,6 +611,8 @@ async def query(
         result_metadata.extra.update(routing)
     elif model.access_programs and response.model:
         result_metadata.served_model = response.model
+    elif model.provider == "openai":
+        result_metadata.extra["openai_response_model"] = response.model
 
     result = result_builder.build(
         finish_reason=mapped_finish_reason,

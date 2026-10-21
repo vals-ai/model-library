@@ -1,15 +1,29 @@
 # Typed-decision models
 
-Models that take a `state` and typed `questions` and return a typed answer for each, instead of generating text: `choice` (one option plus a probability for every option), `noul` (a probability from 0 to 1) and `score` (a value on an ordered scale). They are served by one provider (`decision`) through OpenRouter's Decisions API (`https://openrouter.ai/api/alpha/decisions`) with `OPENROUTER_API_KEY`, or, for entries with `provider_properties.decision_api: openai`, OpenAI's (`https://api.openai.com/v1/decisions`) with `OPENAI_API_KEY`. Through the gateway the gateway's key pays; called directly, the caller's own key (or `custom_api_key`) does. A `DecisionConfig` override changes only the fields it sets, so `decision_api` stays as the registry entry has it.
+Models that take a `state` and typed `questions` and return a typed answer for each, instead of generating text: `choice` (one option plus a probability for every option), `noul` (a probability from 0 to 1) and `score` (a value on an ordered scale). They are served by one provider (`decision`) through OpenRouter's Decisions API (`https://openrouter.ai/api/alpha/decisions`) with `OPENROUTER_API_KEY`, or, for entries with `provider_properties.decision_api: openai`, OpenAI's (`https://api.openai.com/v1/decisions`) with `OPENAI_API_KEY`, or, with `decision_api: perplexity`, Perplexity's (`https://api.perplexity.ai/v1/decisions`) with `PERPLEXITY_API_KEY`. Through the gateway the gateway's key pays; called directly, the caller's own key (or `custom_api_key`) does. A `DecisionConfig` override changes only the fields it sets, so `decision_api` stays as the registry entry has it.
 
 | Key | Sends (pinned OpenRouter slug) | Input price / 1M tokens | Context |
 | --- | --- | --- | --- |
 | `decision/jev-1.13.0` | `typesafe/jev-1.13-20260917` | $0.042 | 64,000 |
+| `decision/jev-1.14` | `typesafe/jev-1.14-20261014` | $0.042 | 262,144 |
 | `decision/mercury-decide` | `inception/mercury-decide-20260930` | $0.02 | 65,536 |
 | `decision/microsoft-decision-1` | `microsoft/microsoft-decision-1-20261009` | $0.042 | 32,768 |
 | `decision/gpt-6-luna` | `gpt-6-luna` on OpenAI (no dated snapshot exists) | $0.10, $0.20 past 272K | 921,600 |
+| `decision/decider-v1.2` | `pplx-decider-v1.2` on Perplexity (no dated snapshot exists) | $0.02 | 262,144 |
+| `decision/decider-flash-v1.2` | `pplx-decider-flash-v1.2` on Perplexity (no dated snapshot exists) | $0.01 | 262,144 |
+| `decision/drex-v1.5` | `nace-ai/drex-v1.5-20261009` | $0.04 | 131,072 |
+| `decision/drex-v2.0` | `nace-ai/drex-v2.0-20261009` | $0.06 | 131,072 |
+| `decision/d1` | `liquid/d1-20260930` | $0.02 | 65,536 |
+| `decision/d1-ultra` | `liquid/d1-ultra-20261015` | $0.042 | 32,768 |
+| `decision/kev-4b` | `jaredpalmer/kev-4b-20260924` | $0.042 | 8,192 |
+| `decision/tev1-4b-experimental` | `togethercomputer/tev1-4b-experimental-20260923` | $0.042 | 32,768 |
+| `decision/classify-1` | `scaledown/classify-1-20260928` | $0.04 | 1,000,000 |
+| `decision/clef-omni` | `cloudflare/clef-omni-20261009` | $0.15 | 65,536 |
+| `decision/clef` | `cloudflare/clef` on host `cloudflare` (no dated snapshot exists) | $0.24 | 65,536 |
+| `decision/clef-flash` | `cloudflare/clef-flash` on host `cloudflare` (no dated snapshot exists) | $0.038 | 24,576 |
+| `decision/solar-decide` | `upstage/solar-decide-20260928` on host `upstage/zdr` | $0.05 | 524,288 |
 
-Output is free. OpenRouter prices and context windows are OpenRouter's; OpenAI's price is from its [Decisions guide](https://developers.openai.com/api/docs/guides/decisions#pricing-and-availability) and its context window is the largest input `/v1/decisions` accepted. Every OpenRouter key sends a pinned dated slug, never an alias. `metadata.served_model` is the model OpenRouter reports, when it reports one. OpenRouter has reported TypeSafe, Inception and Microsoft as the serving providers (kept as `upstream_provider`); the adapter sends no routing constraint. OpenRouter marks the Decisions API "alpha", so its path may change.
+Output is free. OpenRouter prices and context windows are OpenRouter's; OpenAI's price is from its [Decisions guide](https://developers.openai.com/api/docs/guides/decisions#pricing-and-availability) and its context window is the largest input `/v1/decisions` accepted. Perplexity's prices and its 256K input limit are from its [API reference](https://docs.perplexity.ai/api-reference/decisions-post); it takes OpenRouter's request and answer shapes. Every OpenRouter key sends a pinned dated slug, never an alias, except Clef and Clef Flash, which OpenRouter serves only under an alias. `metadata.served_model` is the model OpenRouter reports, when it reports one. OpenRouter has reported TypeSafe, Inception and Microsoft as the serving providers (kept as `upstream_provider`); an entry with `provider_properties.openrouter_provider_only` is sent as `provider: {"only": [...]}` so OpenRouter routes only to those hosts (Clef's hosts differ in price and context; Upstage also serves Solar Decide without ZDR). OpenRouter marks the Decisions API "alpha", so its path may change.
 
 ## Calling one
 
@@ -48,8 +62,8 @@ Not supported: system prompts, images, files, tools, `output_schema`, query opti
 
 ## How it works
 
-`DecisionModel` (`model_library/providers/delegates/openrouter/decision.py`) reuses `OpenRouterModel`'s client setup (the key, `OPENROUTER_API_KEY` or a bring-your-own `custom_api_key`, and the retries), but not its chat query or endpoint; with `decision_api: openai` it points that client at `https://api.openai.com/v1` with `OPENAI_API_KEY`. It owns the Decisions POST and the translation of the response into a result, with cost from the registry price. The pinned slug is each registry entry's `provider_endpoint`.
+`DecisionModel` (`model_library/providers/delegates/openrouter/decision.py`) reuses `OpenRouterModel`'s client setup (the key, `OPENROUTER_API_KEY` or a bring-your-own `custom_api_key`, and the retries), but not its chat query or endpoint; with `decision_api: openai` or `perplexity` it points that client at `https://api.openai.com/v1` with `OPENAI_API_KEY` or `https://api.perplexity.ai/v1` with `PERPLEXITY_API_KEY`. It owns the Decisions POST and the translation of the response into a result, with cost from the registry price. The pinned slug is each registry entry's `provider_endpoint`.
 
 ## Deploying
 
-`OPENROUTER_API_KEY` and `OPENAI_API_KEY` are already in the gateway's provider secrets. A deployed gateway serves these keys once both the provider code is deployed and the registry is published; the two pipelines are triggered separately.
+`OPENROUTER_API_KEY` and `OPENAI_API_KEY` are already in the gateway's provider secrets. The Perplexity entries also need `PERPLEXITY_API_KEY` there. A deployed gateway serves these keys once both the provider code is deployed and the registry is published; the two pipelines are triggered separately.

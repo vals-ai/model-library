@@ -2042,6 +2042,7 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
                         "run_id": "run-a",
                         "question_id": "question-a",
                         "query_id": "query-a",
+                        "attempt_id": "attempt-a",
                         "identity": {
                             "email": "user@example.com",
                             "benchmark_name": "swebench",
@@ -2058,9 +2059,16 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
         telemetry.shutdown_telemetry()
 
     assert resp.status_code == 200
-    assert seen_kwargs["query_id"] == "query-a"
+    assert {
+        key: seen_kwargs[key]
+        for key in ("run_id", "question_id", "query_id", "attempt_id")
+    } == {
+        "run_id": "run-a",
+        "question_id": "question-a",
+        "query_id": "query-a",
+        "attempt_id": "attempt-a",
+    }
     assert "identity" not in seen_kwargs
-    assert bodies
     assert b"gateway.request_json" not in b"".join(bodies)
     assert b"gateway.response_json" not in b"".join(bodies)
 
@@ -2103,6 +2111,25 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
 
     assert config_hashes
     assert seen_kwargs["query_id"] in query_ids
+    assert any(
+        all(
+            attrs.get(key) == value
+            for key, value in {
+                "run_id": "run-a",
+                "question_id": "question-a",
+                "query_id": "query-a",
+                "attempt_id": "attempt-a",
+            }.items()
+        )
+        for attrs in span_attrs
+    )
+    start_event_attrs = next(
+        attrs for name, attrs in event_attrs if name == "gateway.query.start"
+    )
+    assert all(
+        start_event_attrs.get(key) == seen_kwargs[key]
+        for key in ("run_id", "question_id", "query_id", "attempt_id")
+    )
     assert (
         '{"agent_name":"swe-agent","benchmark_name":"swebench","email":"user@example.com"}'
         in identities
@@ -2744,15 +2771,18 @@ def test_query_sign_history_failure_does_not_write_usage_ledger():
 
 @pytest.mark.parametrize(
     ("client_host", "run_id", "expected_writes"),
-    [("testclient", "normal-run", 1), ("127.0.0.1", "gateway-startup-canary", 0)],
+    [("testclient", None, 1), ("127.0.0.1", "gateway-startup-canary", 0)],
 )
 def test_query_success_ledger_gate_preserves_success_wire(
-    client_host: str, run_id: str, expected_writes: int
+    client_host: str, run_id: str | None, expected_writes: int
 ):
     from model_library.base.output import QueryResult, QueryResultMetadata
 
+    seen_kwargs: dict[str, object] = {}
+
     class FakeLLM:
         async def query(self, inputs, **kwargs):
+            seen_kwargs.update(kwargs)
             return QueryResult(
                 output_text="ok",
                 history=[],
@@ -2766,26 +2796,50 @@ def test_query_success_ledger_gate_preserves_success_wire(
     with (
         patch.object(gateway_app, "create_usage_ledger_from_env", return_value=ledger),
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+        patch(
+            "model_gateway.routes.query.get_query_llm",
+            wraps=model_helpers.get_query_llm,
+        ) as get_query_llm,
     ):
         client = _make_client(client=(client_host, 50000))
-        response = client.post(
-            "/query",
-            json={
-                "model": "openai/gpt-4o",
-                "inputs": [{"kind": "text", "text": "hi"}],
-                "run_id": run_id,
-            },
-            headers=HEADERS,
-        )
+        body: dict[str, object] = {
+            "model": "openai/gpt-4o",
+            "inputs": [{"kind": "text", "text": "hi"}],
+        }
+        if run_id is not None:
+            body["run_id"] = run_id
+        response = client.post("/query", json=body, headers=HEADERS)
 
     assert response.status_code == 200
     assert response.json()["output_text"] == "ok"
     assert "result" not in response.json()
     assert "error" not in response.json()
     assert ledger.write_event.await_count == expected_writes
+    ids = {
+        key: seen_kwargs[key]
+        for key in ("run_id", "question_id", "query_id", "attempt_id")
+    }
+    if run_id is None:
+        assert len(cast(str, ids["run_id"])) == 8
+    else:
+        assert ids["run_id"] == run_id
+    lookup_body = get_query_llm.await_args.args[1]
+    assert lookup_body.run_id == run_id
+    assert lookup_body.question_id is None
+    assert lookup_body.query_id is None
+    assert lookup_body.attempt_id is None
+    assert all(
+        len(cast(str, ids[key])) == 14
+        for key in ("question_id", "query_id", "attempt_id")
+    )
     if expected_writes:
-        assert ledger.write_event.await_args.args[0]["outcome"] == "success"
-        assert "error" not in ledger.write_event.await_args.args[0]
+        event = ledger.write_event.await_args.args[0]
+        assert event["outcome"] == "success"
+        assert "error" not in event
+        assert {key: event[key] for key in ids} == ids
+        details = cast(dict[str, object], event["details"])
+        request_snapshot = cast(dict[str, object], details["request"])
+        assert {key: request_snapshot[key] for key in ids} == ids
 
 
 def test_query_success_uses_config_restores_raw_history_and_returns_metadata():

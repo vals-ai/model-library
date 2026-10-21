@@ -6,26 +6,10 @@ from unittest.mock import AsyncMock
 import pytest
 from rich.console import Console
 
-import model_gateway.model_helpers as model_helpers
 from model_library.base import QueryResult, QueryResultMetadata, TextInput
 from model_library.settings import ModelLibrarySettings
 from model_library.registry_utils import CLI_ONLY_PROVIDERS, get_registry_model
 from scripts import run_models
-
-
-def test_smoke_model_config_uses_default_key_when_secondary_is_missing(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    settings = ModelLibrarySettings()
-    settings.set(META_API_KEY="primary")
-    monkeypatch.setattr(run_models, "model_library_settings", settings)
-    monkeypatch.setattr(model_helpers, "model_library_settings", settings)
-
-    config = run_models.smoke_model_config("meta/muse_spark_1_3_max")
-
-    assert config.custom_api_key is None
-
-
 def test_select_models_skips_cli_only_providers() -> None:
     runnable, skipped = run_models.select_models(
         run_models.model_registry, research=False
@@ -82,7 +66,7 @@ async def _run_decision_smoke(monkeypatch: pytest.MonkeyPatch, result: QueryResu
     run_models.completed_models.clear()
     run_models.exceptions.clear()
 
-    await run_models.process_model("decision/jev-1.13.0", "decision")
+    await run_models.process_model("decision/jev-1.13.0", "decision", {})
 
 
 async def test_decision_smoke_passes_a_typed_answer_with_no_output_tokens(

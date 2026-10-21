@@ -86,6 +86,45 @@ v4-models:
             temperature: 1
             top_p: 0.95
 
+  deepseek/deepseek-v4.1-flash-1017:
+    label: DeepSeek V4.1 Flash 1017
+    release_date: 2026-10-17
+    provider_endpoint: deepseek-flash
+    supports:
+      images: true
+      temperature: true
+    properties:
+      context_window: 1_048_576
+      max_tokens: 384_000
+      reasoning_model: true
+    default_parameters:
+      reasoning_effort: "max"
+      max_tokens: 384_000
+      top_p: 1
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.006
+    alternative_keys:
+      - deepseek/deepseek-v4.1-flash-1017-high:
+          label: DeepSeek V4.1 Flash 1017 (High)
+          default_parameters:
+            reasoning_effort: high
+      - deepseek/deepseek-v4.1-flash-1017-low:
+          label: DeepSeek V4.1 Flash 1017 (Low)
+          default_parameters:
+            reasoning_effort: low
+      - deepseek/deepseek-v4.1-flash-1017-nonthinking:
+          supports:
+            temperature: true
+          properties:
+            reasoning_model: false
+          default_parameters:
+            reasoning_effort: null
+            temperature: 1
+            top_p: 0.95
+
   deepseek/deepseek-v4.1-flash:
     label: DeepSeek V4.1 Flash
     release_date: 2026-09-10

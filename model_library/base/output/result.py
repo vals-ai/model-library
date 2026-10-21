@@ -51,7 +51,7 @@ class FinishReason(str, Enum):
     """Model stopped because it reached the maximum token limit."""
 
     CONTEXT_WINDOW_EXCEEDED = "context_window_exceeded"
-    """Model stopped because the input exceeded the context window."""
+    """Model stopped because generation exceeded its context window."""
 
     TOOL_CALLS = "tool_calls"
     """Model stopped to make one or more tool calls."""

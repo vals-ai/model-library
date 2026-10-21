@@ -10,11 +10,15 @@ from model_library.base import (
     LLMConfig,
     ToolDefinition,
 )
+from model_library.providers.anthropic import AnthropicConfig
 from model_library.register_models import register_provider
 
 
 @register_provider("minimax")
 class MinimaxModel(DelegateOnly):
+    api_key_setting = "MINIMAX_API_KEY"
+    provider_config = AnthropicConfig()
+
     def __init__(
         self,
         model_name: str,
@@ -29,7 +33,7 @@ class MinimaxModel(DelegateOnly):
             config.custom_endpoint or "https://api.minimax.io/anthropic"
         )
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.MINIMAX_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(

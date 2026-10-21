@@ -7,6 +7,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable
+from datetime import datetime
 
 import httpx
 import pytest
@@ -298,6 +299,32 @@ async def test_openai_gets_its_own_request_shape_and_its_answers_come_back_in_th
     assert result.metadata.cost is not None
     assert result.metadata.cost.input == pytest.approx(400 * 0.1 / 1e6)
     assert result.metadata.extra == {}
+
+
+async def test_perplexity_gets_the_openrouter_request_at_its_own_url_and_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "model": "pplx-decider-v1.2",
+        "answers": ANSWERS,
+        "usage": {"input_tokens": 500, "output_tokens": 3},
+    }
+    seen = serve(monkeypatch, lambda _: httpx.Response(200, json=payload))
+
+    result = await get_registry_model("decision/decider-v1.2").query(
+        decision_request(STATE, QUESTIONS)
+    )
+
+    assert str(seen[0].url) == "https://api.perplexity.ai/v1/decisions"
+    assert seen[0].headers["authorization"] == "Bearer mock_ENV_PERPLEXITY_API_KEY"
+    assert json.loads(seen[0].content) == {
+        "model": "pplx-decider-v1.2",
+        "state": STATE,
+        "questions": QUESTIONS,
+    }
+    assert parse_decision_output(result.output_text) == ANSWERS
+    assert result.metadata.cost is not None
+    assert result.metadata.cost.total == pytest.approx(500 * 0.02 / 1_000_000)
 
 
 @pytest.mark.parametrize(
@@ -611,17 +638,28 @@ def test_direct_construction_has_the_decision_identity_and_leaves_the_config_alo
 
 
 @pytest.mark.parametrize(("key", "slug", "price", "upstream"), MODELS)
-def test_every_model_has_the_release_date_its_pinned_slug_carries(
+def test_every_model_is_released_no_earlier_than_its_pinned_slug_date(
     key: str, slug: str, price: float, upstream: str
 ) -> None:
-    # The benchmark exporter needs a release date for each model, and the pinned slug ends in it (YYYYMMDD).
+    # The pinned slug ends in the snapshot date (YYYYMMDD); the public release can be later.
     stamp = slug.rsplit("-", 1)[1]
+    snapshot_date = datetime.strptime(stamp, "%Y%m%d").date()
     config = get_registry_config(key)
     assert config is not None and config.release_date is not None
-    assert config.release_date.strftime("%Y%m%d") == stamp
+    assert config.release_date >= snapshot_date
 
 
 async def test_cost_can_be_recomputed_from_the_registry() -> None:
     cost = await recompute_cost(JEV, {"in_tokens": 520, "out_tokens": 54})
     assert cost.input == pytest.approx(520 * 0.042 / 1_000_000)
     assert cost.output == 0.0 and cost.total == pytest.approx(520 * 0.042 / 1_000_000)
+
+
+async def test_a_pinned_host_is_sent_as_openrouter_provider_routing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen = serve(monkeypatch, ok)
+    await get_registry_model("decision/solar-decide").query(
+        decision_request(STATE, QUESTIONS)
+    )
+    assert json.loads(seen[0].content)["provider"] == {"only": ["upstage/zdr"]}

@@ -10,8 +10,8 @@ import re
 from typing import Final, Literal, NamedTuple
 
 WAREHOUSE_SCHEMA: Final = "gateway_usage"
-USAGE_EVENTS_STAGING_TABLE_NAME: Final = "usage_events_staging_v4"
-USAGE_EVENT_PERFORMANCE_TABLE_NAME: Final = "usage_event_performance_v2"
+USAGE_EVENTS_STAGING_TABLE_NAME: Final = "usage_events_staging_v5"
+USAGE_EVENT_PERFORMANCE_TABLE_NAME: Final = "usage_event_performance_v3"
 PERFORMANCE_VARBYTE_MAX_BYTES: Final = 1_048_576
 MISSING_DIMENSION_VALUE: Final = "__missing__"
 RESERVED_DIMENSION_VALUES: Final[tuple[str, ...]] = (MISSING_DIMENSION_VALUE,)
@@ -63,9 +63,14 @@ USAGE_EVENT_FACT_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "source_sk",
     "loaded_at",
 )
+TIME_TO_FIRST_TOKEN_COLUMNS: Final[dict[str, str]] = {
+    field: f"ttft_{field}_ms"
+    for field in ("any", "answer", "reasoning", "content", "tool_call")
+}
 USAGE_EVENT_PERFORMANCE_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "usage_event_id",
-    "performance",
+    *TIME_TO_FIRST_TOKEN_COLUMNS.values(),
+    "timeline",
     "performance_truncated",
     "loaded_at",
 )
@@ -274,7 +279,10 @@ def usage_events_column_sql(*, include_batch_id: bool = False) -> str:
 
 
 def usage_events_staging_performance_column_sql() -> str:
-    return f"""  performance varbyte({PERFORMANCE_VARBYTE_MAX_BYTES}),
+    ttft_columns = "".join(
+        f"  {column} integer,\n" for column in TIME_TO_FIRST_TOKEN_COLUMNS.values()
+    )
+    return f"""{ttft_columns}  timeline varbyte({PERFORMANCE_VARBYTE_MAX_BYTES}),
   performance_truncated boolean not null default false"""
 
 
@@ -297,12 +305,11 @@ diststyle auto
 sortkey (completed_at);"""
 
 
-def usage_event_performance_v2_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:
+def usage_event_performance_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:
     table = qualified_table_name(USAGE_EVENT_PERFORMANCE_TABLE_NAME, schema)
     return f"""create table if not exists {table} (
   usage_event_id varchar(128) not null,
-  performance varbyte({PERFORMANCE_VARBYTE_MAX_BYTES}),
-  performance_truncated boolean not null default false,
+{usage_events_staging_performance_column_sql()},
   loaded_at timestamptz not null default getdate()
 )
 diststyle auto
@@ -657,7 +664,7 @@ def schema_statement_batches(
         create_schema_ddl(schema),
         usage_events_staging_table_ddl(schema),
         usage_events_table_ddl(schema),
-        usage_event_performance_v2_table_ddl(schema),
+        usage_event_performance_table_ddl(schema),
         *aggregate_ddls,
         usage_dimension_values_table_ddl(schema),
         analytics_dimensions_table_ddl(schema),

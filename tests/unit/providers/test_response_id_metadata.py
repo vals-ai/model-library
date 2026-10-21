@@ -21,7 +21,6 @@ from google.genai.types import (
 )
 
 from model_library.providers.ai21labs import AI21LabsModel
-from model_library.providers.anthropic import AnthropicModel
 from model_library.providers.google.google import GoogleModel
 from model_library.providers.mistral import MistralModel
 from model_library.providers.vals import DummyAIModel
@@ -33,8 +32,6 @@ from tests.unit.provider_response_helpers import (
     _amazon_text,
     _query_amazon,
     _query_anthropic,
-    _query_xai,
-    _xai_response,
 )
 
 
@@ -239,27 +236,3 @@ async def test_vals_query_captures_response_id_metadata():
 
     assert result.extras.response_id == "mock-id"
     assert result.extras.provider_response_id == "mock-id"
-
-
-async def test_xai_query_captures_response_id_metadata():
-    result = await _query_xai(
-        _xai_response(
-            response_id="xai-response-1",
-            content="hello",
-            completion_tokens=2,
-        ),
-        chunk_content="hello",
-    )
-
-    assert result.extras.response_id == "xai-response-1"
-    assert result.extras.provider_response_id == "xai-response-1"
-
-
-async def test_xai_query_allows_missing_response_id_metadata():
-    result = await _query_xai(
-        _xai_response(content="hello", completion_tokens=2),
-        chunk_content="hello",
-    )
-
-    assert result.output_text == "hello"
-    assert result.extras.response_id is None

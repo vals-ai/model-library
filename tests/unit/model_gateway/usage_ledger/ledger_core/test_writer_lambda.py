@@ -60,6 +60,8 @@ def _usage_event() -> dict[str, object]:
         error=None,
         request=snapshot_usage_request(request),
         api_key_name="test",
+        provider_key_name=None,
+        pool_revision=None,
         completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
     )
 

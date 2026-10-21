@@ -4,7 +4,7 @@ Unit tests for retry logic.
 
 import asyncio
 from contextlib import nullcontext
-from typing import Callable, Type
+from typing import Any, Callable, Type
 from unittest.mock import AsyncMock, MagicMock, Mock, call, patch
 
 import aiohttp
@@ -15,10 +15,12 @@ from anthropic import BadRequestError as AnthropicBadRequestError
 from anthropic import InternalServerError as AnthropicInternalServerError
 from openai import APIError, BadRequestError
 from openai import InternalServerError as OpenAIInternalServerError
+import model_library.telemetry as telemetry
 
 from model_library.base import LLM, QueryResult
 from model_library.base import FinishReason
 from model_library.base.output import FinishReasonInfo
+from model_library.base.query_ids import ResolvedQueryIds, scoped_query_ids
 from model_library.exceptions import (
     BackoffRetryException,
     BadInputError,
@@ -32,6 +34,7 @@ from model_library.exceptions import (
     MaxOutputTokensExceededError,
     ModelNoOutputError,
     NoMatchingToolCallError,
+    NoRetryException,
     QueryDeadlineExceededError,
     RateLimitException,
     RetryException,
@@ -686,6 +689,13 @@ async def test_backoff_retry_records_attempt_and_sleep_spans():
     retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=3)
     spans: list[tuple[str, dict[str, object | None]]] = []
     events: list[tuple[str, dict[str, object | None]]] = []
+    ids = ResolvedQueryIds(
+        run_id="run-r",
+        question_id="question-r",
+        query_id="query-r",
+        attempt_id="attempt-r",
+    )
+    expected_ids = ids.as_attributes()
 
     def fake_start_span(name: str, attributes: dict[str, object | None]):
         spans.append((name, dict(attributes)))
@@ -703,30 +713,44 @@ async def test_backoff_retry_records_attempt_and_sleep_spans():
             "model_library.retriers.base.telemetry.add_event",
             side_effect=fake_add_event,
         ),
+        patch(
+            "model_library.retriers.backoff.telemetry.record_scheduled_retry_exception"
+        ) as record_retry_exception,
     ):
-        result = await retry_decorator(retrier)(succeeds_after_retry)()
+        with scoped_query_ids(ids):
+            result = await retry_decorator(retrier)(succeeds_after_retry)()
 
     assert result == "success"
     assert spans[0] == (
         "model_library.retry_attempt",
-        {"retry.strategy": "backoff", "retry.attempt": 0},
+        {**expected_ids, "retry.strategy": "backoff", "retry.attempt": 0},
     )
     assert spans[1][0] == "model_library.retry_sleep"
+    assert all(
+        span_attrs[key] == value
+        for _, span_attrs in spans
+        for key, value in expected_ids.items()
+    )
     assert spans[1][1]["retry.strategy"] == "backoff"
     assert spans[1][1]["retry.attempt"] == 1
     assert spans[1][1]["exception.type"] == "RetryException"
     assert spans[2] == (
         "model_library.retry_attempt",
-        {"retry.strategy": "backoff", "retry.attempt": 1},
+        {**expected_ids, "retry.strategy": "backoff", "retry.attempt": 1},
     )
     assert events[0] == (
         "model_library.retry_attempt_start",
-        {"retry.strategy": "backoff", "retry.attempt": 0},
+        {**expected_ids, "retry.strategy": "backoff", "retry.attempt": 0},
     )
     assert ("model_library.retry_sleep", spans[1][1]) in events
     assert events[-1] == (
         "model_library.retry_attempt_success",
-        {"retry.strategy": "backoff", "retry.attempt": 1},
+        {**expected_ids, "retry.strategy": "backoff", "retry.attempt": 1},
+    )
+    record_retry_exception.assert_called_once()
+    assert all(
+        record_retry_exception.call_args.args[1][key] == value
+        for key, value in expected_ids.items()
     )
 
 
@@ -743,6 +767,10 @@ async def test_immediate_retry_exception_success(mock_llm: LLM):
         ]
     )
     mock_llm._query_impl = query_impl_mock  # pyright: ignore[reportPrivateUsage]
+    retry_events: list[tuple[str, dict[str, object | None]]] = []
+
+    def capture_retry_event(name: str, attributes: dict[str, object | None]) -> None:
+        retry_events.append((name, dict(attributes)))
 
     # track calls
     with (
@@ -757,8 +785,18 @@ async def test_immediate_retry_exception_success(mock_llm: LLM):
             autospec=True,
             wraps=ExponentialBackoffRetrier.execute,
         ) as mock_backoff_retry,
+        patch(
+            "model_library.retriers.base.telemetry.add_event",
+            side_effect=capture_retry_event,
+        ),
     ):
-        result = await mock_llm.query("Mock Input")
+        result = await mock_llm.query(
+            "Mock Input",
+            run_id="run-r",
+            question_id="question-r",
+            query_id="query-r",
+            attempt_id="attempt-r",
+        )
 
     assert result.output_text == "success"
     # called by immediate_retry_wrapper (2 immediate retries + 1 success)
@@ -767,6 +805,20 @@ async def test_immediate_retry_exception_success(mock_llm: LLM):
     assert mock_immediate_retry.call_count == 1
     # called once by query()
     assert mock_backoff_retry.call_count == 1
+    immediate_events = [
+        attrs for name, attrs in retry_events if name == "model_library.immediate_retry"
+    ]
+    assert [attrs["retry.attempt"] for attrs in immediate_events] == [1, 2]
+    assert all(
+        {key: attrs[key] for key in ("run_id", "question_id", "query_id", "attempt_id")}
+        == {
+            "run_id": "run-r",
+            "question_id": "question-r",
+            "query_id": "query-r",
+            "attempt_id": "attempt-r",
+        }
+        for attrs in immediate_events
+    )
 
 
 async def test_immediate_retry_exception_limit(mock_llm: LLM):
@@ -834,6 +886,16 @@ async def test_immediate_retry_exhausted_is_not_retriable():
         ("server_error occurred", True),  # server_error keyword
         ("Error 404", False),  # not found
         ("Error 400", False),  # bad request
+        ("HTTP/1.1 503 Service Unavailable", True),  # status code as a whole number
+        ("upstream returned 502.", True),  # status code before punctuation
+        ("HTTP Error 502.3 - Bad Gateway", True),  # status code with a sub-status
+        ("max_tokens: 65000 > 64000", False),  # 65000 contains 500
+        ("Expected a value <= 128000, but got 150000 instead.", False),  # 150000 contains 500
+        ("limit is 1,500,000 tokens", False),  # grouped digits contain 500
+        (
+            "Error code: 400 - {'error': {'type': 'Bad Request', 'code': 'process_messages_failed', 'message': 'Invalid JSON in tool call arguments: \\'{\"url\": \"https://www.sec.gov/Archives/edgar/data/1845338/000117891325000852/zk2532825.htm\"\\'', 'param': None}}",
+            False,
+        ),  # URL digits contain 500
         ("Misc Error", False),  # generic error
         ("overloaded", True),  # overloaded error from anthropic
         (
@@ -841,11 +903,23 @@ async def test_immediate_retry_exhausted_is_not_retriable():
             True,
         ),
         (
-            "The model is currently at capacity due to high demand.",
+            "unknown error, 715 (1000)",
+            True,
+        ),
+        (
+            "unknown error, 722 (1000)",
             True,
         ),
         (
             "We're currently processing too many requests — please try again later.",
+            True,
+        ),
+        (
+            "Stream error: h2 protocol error: error reading a body from connection",
+            True,
+        ),
+        (
+            "The upstream model stream ended unexpectedly before completing the response.",
             True,
         ),
     ],
@@ -939,16 +1013,46 @@ class _FormattedProviderError(Exception):
         return f"{self.args[0]}: Status 400. Body: {self.args[1]}"
 
 
-async def test_context_window_error_keeps_provider_message(mock_llm: LLM):
+async def test_context_window_error_keeps_provider_message(
+    mock_llm: LLM, monkeypatch: pytest.MonkeyPatch
+) -> None:
     body = '{"message":"Prompt 275593 > 262144 maximum context length"}'
     mock_llm._query_impl = AsyncMock(  # pyright: ignore[reportPrivateUsage]
         side_effect=[_FormattedProviderError("API error occurred", body)]
     )
+    query_ids = {
+        "run_id": "run-a",
+        "question_id": "question-a",
+        "query_id": "query-a",
+        "attempt_id": "attempt-a",
+    }
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    monkeypatch.setattr(telemetry, "_load_trace_api", lambda: False)
+    monkeypatch.setattr(
+        telemetry, "_sentry_context", telemetry.ContextVar("test_terminal_retry", default={})
+    )
+    captured: list[dict[str, Any]] = []
 
-    with pytest.raises(MaxContextWindowExceededError) as exc_info:
-        await mock_llm.query("Mock Input")
+    def capture_exception(exc: BaseException) -> None:
+        event = telemetry._before_send(  # pyright: ignore[reportPrivateUsage]
+            {"exception": {"values": [{"type": type(exc).__name__}]}}, {}
+        )
+        assert event is not None
+        captured.append(event)
+
+    with (
+        patch("sentry_sdk.capture_exception", side_effect=capture_exception),
+        pytest.raises(MaxContextWindowExceededError) as exc_info,
+    ):
+        await mock_llm.query("Mock Input", **query_ids)
 
     assert str(exc_info.value) == f"API error occurred: Status 400. Body: {body}"
+    assert {key: captured[0]["tags"][key] for key in query_ids} == query_ids
+
+    with patch("sentry_sdk.capture_exception", side_effect=capture_exception):
+        telemetry.record_exception(NoRetryException("unrelated later exception"))
+    assert len(captured) == 2
+    assert not query_ids.keys() & captured[1]["tags"].keys()
 
 
 @pytest.mark.parametrize(

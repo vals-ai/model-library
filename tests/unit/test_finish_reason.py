@@ -12,7 +12,6 @@ from model_library.providers.openai import (
     map_openai_completions_finish_reason,
     map_openai_responses_finish_reason,
 )
-from model_library.providers.xai import map_xai_finish_reason
 
 
 def _assert_finish_reason_info(
@@ -39,6 +38,7 @@ async def test_anthropic_finish_reason_all_values():
     expected: dict[str, FinishReason] = {
         "end_turn": FinishReason.STOP,
         "max_tokens": FinishReason.MAX_TOKENS,
+        "model_context_window_exceeded": FinishReason.CONTEXT_WINDOW_EXCEEDED,
         "stop_sequence": FinishReason.STOP_SEQUENCE,
         "tool_use": FinishReason.TOOL_CALLS,
         "pause_turn": FinishReason.PAUSED,
@@ -47,12 +47,6 @@ async def test_anthropic_finish_reason_all_values():
 
     assert set(stop_reasons) == set(expected)
 
-    info = map_anthropic_finish_reason("model_context_window_exceeded")
-    _assert_finish_reason_info(
-        info,
-        expected_reason=FinishReason.CONTEXT_WINDOW_EXCEEDED,
-        expected_raw="model_context_window_exceeded",
-    )
 
     for stop_reason in stop_reasons:
         info = map_anthropic_finish_reason(stop_reason)
@@ -165,6 +159,7 @@ async def test_google_finish_reason_all_values():
     handled: dict[GoogleFinishReason, FinishReason] = {
         GoogleFinishReason.STOP: FinishReason.STOP,
         GoogleFinishReason.MAX_TOKENS: FinishReason.MAX_TOKENS,
+        GoogleFinishReason.CONTINUATION: FinishReason.MAX_TOKENS,
         GoogleFinishReason.SAFETY: FinishReason.CONTENT_FILTER,
         GoogleFinishReason.RECITATION: FinishReason.CONTENT_FILTER,
         GoogleFinishReason.LANGUAGE: FinishReason.CONTENT_FILTER,
@@ -183,6 +178,7 @@ async def test_google_finish_reason_all_values():
         GoogleFinishReason.OTHER,
         GoogleFinishReason.NO_IMAGE,
         GoogleFinishReason.IMAGE_OTHER,
+        GoogleFinishReason.TOO_MANY_TOOL_CALLS,
     }
 
     assert set(GoogleFinishReason) == set(handled) | unknown
@@ -243,44 +239,6 @@ async def test_amazon_finish_reason_all_values():
             info,
             expected_reason=expected[stop_reason],
             expected_raw=stop_reason,
-        )
-
-
-async def test_xai_finish_reason_all_values():
-    from xai_sdk.proto.v6 import sample_pb2
-
-    finish_reasons = [
-        sample_pb2.FinishReason.Name(x)
-        for x in sample_pb2.FinishReason.values()
-        if sample_pb2.FinishReason.Name(x)
-    ]
-
-    handled: dict[str, FinishReason] = {
-        "REASON_MAX_LEN": FinishReason.MAX_TOKENS,
-        "REASON_MAX_CONTEXT": FinishReason.CONTEXT_WINDOW_EXCEEDED,
-        "REASON_STOP": FinishReason.STOP,
-        "REASON_TOOL_CALLS": FinishReason.TOOL_CALLS,
-        "REASON_TIME_LIMIT": FinishReason.MAX_TOKENS,
-    }
-
-    unknown = {"REASON_INVALID"}
-
-    assert set(finish_reasons) == set(handled) | unknown
-
-    for finish_reason in handled:
-        info = map_xai_finish_reason(finish_reason)
-        _assert_finish_reason_info(
-            info,
-            expected_reason=handled[finish_reason],
-            expected_raw=finish_reason,
-        )
-
-    for finish_reason in unknown:
-        info = map_xai_finish_reason(finish_reason)
-        _assert_finish_reason_info(
-            info,
-            expected_reason=FinishReason.UNKNOWN,
-            expected_raw=finish_reason,
         )
 
 

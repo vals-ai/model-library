@@ -225,3 +225,12 @@ qwen-3.8-models:
         write: 2.5
     provider_properties:
       preserve_thinking: true
+    alternative_keys:
+      - alibaba/qwen3.8-max-low:
+          label: Qwen 3.8 Max (Low)
+          default_parameters:
+            reasoning_effort: low
+      - alibaba/qwen3.8-max-medium:
+          label: Qwen 3.8 Max (Medium)
+          default_parameters:
+            reasoning_effort: medium

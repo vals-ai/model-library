@@ -41,8 +41,6 @@ from tests.unit.provider_response_helpers import (
     _amazon_text,
     _query_amazon,
     _query_anthropic,
-    _query_xai,
-    _xai_response,
 )
 
 
@@ -427,108 +425,6 @@ async def test_mistral_tool_only_query_keeps_unobserved_output_text_none():
         patch.object(model, "build_body", new_callable=AsyncMock, return_value={}),
     ):
         result = await model._query_impl(_INPUT, tools=[], query_logger=_LOGGER)
-
-    assert result.output_text is None
-    assert result.reasoning is None
-    assert result.tool_calls[0].name == "ping"
-
-
-async def test_xai_query_empty_output_text_raises_no_output():
-    with pytest.raises(ModelNoOutputError):
-        await _query_xai(
-            _xai_response(response_id="xai-response-empty", content=""),
-            chunk_content="",
-        )
-
-
-async def test_xai_query_observed_empty_stream_chunk_with_absent_final_content_raises_no_output():
-    with pytest.raises(ModelNoOutputError):
-        await _query_xai(
-            _xai_response(response_id="xai-response-empty-chunk", content=None),
-            chunk_content="",
-        )
-
-
-async def test_xai_empty_text_with_reasoning_keeps_reasoning_only():
-    result = await _query_xai(
-        _xai_response(
-            response_id="xai-response-empty-reasoning",
-            content="",
-            reasoning_content="considered",
-            reasoning_tokens=2,
-        ),
-        chunk_content="",
-    )
-
-    assert result.output_text is None
-    assert result.reasoning == "considered"
-    assert result.tool_calls == []
-
-
-async def test_xai_completed_absent_content_raises_no_output():
-    with pytest.raises(ModelNoOutputError):
-        await _query_xai(
-            _xai_response(response_id="xai-response-absent-content", content=None),
-            chunk_content=None,
-        )
-
-
-async def test_xai_empty_max_tokens_raises_max_output_tokens():
-    with pytest.raises(MaxOutputTokensExceededError):
-        await _query_xai(
-            _xai_response(
-                response_id="xai-response-empty-max-tokens",
-                content="",
-                finish_reason="REASON_MAX_LEN",
-            ),
-            chunk_content="",
-        )
-
-
-async def test_xai_mixed_content_and_tool_call_preserves_output_text():
-    tool_calls = [
-        SimpleNamespace(
-            id="tool-1",
-            type=1,
-            function=SimpleNamespace(name="ping", arguments="{}"),
-        )
-    ]
-    result = await _query_xai(
-        _xai_response(
-            response_id="xai-response-mixed-content-tool",
-            content="hello",
-            finish_reason="REASON_TOOL_CALLS",
-            tool_calls=tool_calls,
-            completion_tokens=2,
-        ),
-        chunk_content="",
-    )
-
-    assert result.output_text == "hello"
-    assert result.tool_calls[0].name == "ping"
-
-
-@pytest.mark.parametrize("content", [None, ""])
-async def test_xai_tool_only_query_uses_none_for_absent_or_empty_output_text(
-    content: str | None,
-):
-    tool_calls = [
-        SimpleNamespace(
-            id="tool-1",
-            type=1,
-            function=SimpleNamespace(name="ping", arguments="{}"),
-        )
-    ]
-    result = await _query_xai(
-        _xai_response(
-            response_id="xai-response-1",
-            content=content,
-            finish_reason="REASON_TOOL_CALLS",
-            tool_calls=tool_calls,
-            completion_tokens=2,
-        ),
-        chunk_content=content,
-    )
 
     assert result.output_text is None
     assert result.reasoning is None

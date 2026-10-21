@@ -8,6 +8,21 @@ class RunTokenAuthorizationError(Exception):
     """A run token was presented for work its claims do not cover."""
 
 
+class AssignedKeyUnavailableError(Exception):
+    """The provider key serving a request has no value."""
+
+    def __init__(
+        self, *, key_name: str, attempt_key: tuple[str, ...] | None, model: str
+    ) -> None:
+        message = f"Provider key {key_name} for {model} has no value"
+        if attempt_key is not None:
+            message += (
+                f"; attempt {attempt_key} holds it, and a new attempt picks"
+                " from the current pool"
+            )
+        super().__init__(message)
+
+
 class ErrorBody(BaseModel):
     code: str
     message: str
@@ -35,6 +50,10 @@ def map_exception_to_error(
     exc: Exception, *, provider: str | None = None
 ) -> ErrorResponse:
     msg = str(exc)
+    if isinstance(exc, AssignedKeyUnavailableError):
+        return ErrorResponse(
+            409, ErrorBody(code="assigned_key_unavailable", message=msg)
+        )
     provider = _extract_provider(msg) or provider
     lower = msg.lower()
 

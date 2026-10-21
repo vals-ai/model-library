@@ -8,8 +8,8 @@ from typing import Any, Literal
 from pydantic import SecretStr
 from typing_extensions import override
 
-from model_library import model_library_settings
 
+from model_library import model_library_settings
 from model_library.base import (
     DelegateOnly,
     LLMConfig,
@@ -19,6 +19,8 @@ from model_library.register_models import register_provider
 
 @register_provider("deepseek")
 class DeepSeekModel(DelegateOnly):
+    api_key_setting = "DEEPSEEK_API_KEY"
+
     def __init__(
         self,
         model_name: str,
@@ -33,7 +35,7 @@ class DeepSeekModel(DelegateOnly):
 
         config.custom_endpoint = config.custom_endpoint or "https://api.deepseek.com"
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.DEEPSEEK_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(

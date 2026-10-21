@@ -10,7 +10,6 @@ base-config:
     temperature: true
   properties:
     reasoning_model: false
-
 m3-models:
   minimax/MiniMax-M3:
     label: MiniMax-M3

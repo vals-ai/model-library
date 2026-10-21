@@ -9,6 +9,7 @@ from typing import Any, Callable, Coroutine
 
 import model_library.telemetry as telemetry
 from model_library.base.base import QueryResult
+from model_library.base.query_ids import get_current_query_id_attributes
 from model_library.rate_limits import RateLimit
 from model_library.exceptions import NoRetryException, exception_message
 from model_library.retriers.base import BaseRetrier
@@ -403,6 +404,7 @@ class TokenRetrier(BaseRetrier):
         telemetry.set_attributes(
             {
                 "retry_queue.mode": "enabled",
+                **self._telemetry_ids(),
                 "retry_queue.question_ref": self._question_id,
                 "retry_queue.dynamic_estimate.mode": telemetry.mode_attribute(
                     use_dynamic_estimate
@@ -418,6 +420,7 @@ class TokenRetrier(BaseRetrier):
             "run_id": self._run_id,
             "question_id": self._telemetry_question_id,
             "retry_queue.question_ref": self._question_id,
+            **get_current_query_id_attributes(),
         }
 
     async def _calculate_wait_time(

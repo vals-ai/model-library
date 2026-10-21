@@ -27,6 +27,8 @@ from model_gateway.auth import create_auth_middleware
 from model_gateway.cache import ModelCache
 from model_gateway.capacity import GatewayCapacityLimiter, create_capacity_middleware
 from model_gateway.errors import ErrorBody, ErrorResponse, RunTokenAuthorizationError
+from model_gateway.key_assignments import create_key_assignment_store_from_env
+from model_gateway.key_pool_config import pool_config_publisher_from_env
 from model_gateway.metrics import (
     MetricPublisher,
     create_metrics_middleware,
@@ -39,12 +41,14 @@ from model_gateway.observability import (
     install_loop_exception_handler,
     log_process_lifecycle,
     runtime_snapshot,
+    set_latest_runtime_snapshot,
 )
 from model_gateway.rate_limit_monitor import RateLimitMonitor
 from model_gateway.rate_limit_monitor.routes import register_rate_limit_monitor_routes
 from model_gateway.rate_limit_monitor.state import MonitorRedis, RateLimitMonitorStore
 from model_gateway.routes.benchmark_admission import register_benchmark_admission_routes
 from model_gateway.routes.health import register_health_routes
+from model_gateway.routes.key_pools import register_key_pool_routes
 from model_gateway.routes.models import register_model_routes
 from model_gateway.routes.provider_ops import register_provider_ops_routes
 from model_gateway.routes.rate_limit import (
@@ -96,7 +100,19 @@ async def _record_runtime_current(loop: asyncio.AbstractEventLoop) -> None:
     event_loop_lag_ms = int((loop.time() - lag_start) * 1000)
     snapshot = runtime_snapshot()
     snapshot["event_loop_lag_ms"] = event_loop_lag_ms
+    set_latest_runtime_snapshot(snapshot)
     record_runtime(snapshot)
+
+
+def _admin_api_key_names(api_keys_by_name: dict[str, str]) -> frozenset[str]:
+    """Gateway key names allowed on /admin routes, from GATEWAY_ADMIN_API_KEY_NAMES."""
+    decoded: object = json.loads(os.environ.get("GATEWAY_ADMIN_API_KEY_NAMES") or "[]")
+    names = cast(list[object], decoded) if isinstance(decoded, list) else None
+    if names is None or any(name not in api_keys_by_name for name in names):
+        raise RuntimeError(
+            "GATEWAY_ADMIN_API_KEY_NAMES must be a JSON list of MODEL_GATEWAY_API_KEYS names"
+        )
+    return frozenset(cast(list[str], names))
 
 
 def create_app() -> FastAPI:
@@ -108,6 +124,7 @@ def create_app() -> FastAPI:
         raise RuntimeError("MODEL_GATEWAY_API_KEYS must be set")
     api_keys_by_name = cast(dict[str, str], json.loads(api_keys))
     valid_keys = set(api_keys_by_name.values())
+    admin_api_key_names = _admin_api_key_names(api_keys_by_name)
 
     hmac_secret_value = model_library_settings.get("MODEL_GATEWAY_HMAC_SECRET", None)
     if not isinstance(hmac_secret_value, str) or not hmac_secret_value:
@@ -122,6 +139,10 @@ def create_app() -> FastAPI:
     )
     usage_ledger = (
         create_usage_ledger_from_env() if query_enabled else NoopUsageLedger()
+    )
+    key_assignments = create_key_assignment_store_from_env() if query_enabled else None
+    pool_config_publisher = (
+        pool_config_publisher_from_env() if control_enabled else None
     )
     rate_limit_probe_service: RateLimitProbeService | None = None
 
@@ -155,6 +176,7 @@ def create_app() -> FastAPI:
             metrics_publishers.insert(0, capacity_limiter.record_current)
         metrics_task: asyncio.Task[None] | None = None
         usage_ledger_started = False
+        key_assignments_started = False
         canary_task: asyncio.Task[None] | None = None
         rate_limit_monitor: RateLimitMonitor | None = None
         runtime_refresh_stop: asyncio.Event | None = None
@@ -197,6 +219,9 @@ def create_app() -> FastAPI:
                 )
             await usage_ledger.start()
             usage_ledger_started = True
+            if key_assignments is not None:
+                await key_assignments.start()
+                key_assignments_started = True
             yield
         finally:
             log_process_lifecycle("gateway.process.shutdown_start")
@@ -223,6 +248,13 @@ def create_app() -> FastAPI:
                 except Exception:
                     logger.exception(
                         "Gateway usage ledger close failed during shutdown"
+                    )
+            if key_assignments is not None and key_assignments_started:
+                try:
+                    await key_assignments.close()
+                except Exception:
+                    logger.exception(
+                        "Gateway key assignments close failed during shutdown"
                     )
             if rate_limit_monitor is not None:
                 try:
@@ -262,10 +294,13 @@ def create_app() -> FastAPI:
     )
     app.state.cache = cache
     app.state.runtime_config_state = runtime_config_state
+    app.state.admin_api_key_names = admin_api_key_names
+    app.state.pool_config_publisher = pool_config_publisher
     app.state.hmac_secret = hmac_secret
     app.state.runtime_role = runtime_role
     app.state.capacity_limiter = capacity_limiter
     app.state.usage_ledger = usage_ledger
+    app.state.key_assignments = key_assignments
     app.state.rate_limit_monitor = None
     app.state.startup_canary = startup_canary_state(startup_canary_enabled)
 
@@ -327,6 +362,7 @@ def create_app() -> FastAPI:
         register_rate_limit_monitor_routes(app)
     if control_enabled:
         register_model_routes(app)
+        register_key_pool_routes(app)
     if query_enabled:
         register_token_retry_routes(app)
         register_query_routes(app, cache=cache)

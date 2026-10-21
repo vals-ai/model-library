@@ -22,6 +22,8 @@ from model_library.base.input import TextInput, ToolCall
 from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
 from model_library.base import LLM
 from model_library.base.base import ResolvedTokenRetryParams, TokenRetryParams
+from model_library.base.query_ids import ResolvedQueryIds
+from model_library.base.query_logging import scoped_query_logger
 from model_library.retriers.token import TokenRetrier, set_redis_client
 from model_library.retriers.token.utils import KEY_PREFIX
 from model_library.utils import run_logging
@@ -152,6 +154,8 @@ async def test_token_retry_telemetry_uses_original_question_id(redis):
     assert wait_start["question_id"] == "question-a"
     assert wait_start["retry_queue.question_ref"] == "run-a:question-a"
     assert wait_start["retry_queue.mode"] == "enabled"
+    assert "query_id" not in wait_start
+    assert "attempt_id" not in wait_start
     assert tokens_deducted["question_id"] == "question-a"
     assert tokens_deducted["retry_queue.question_ref"] == "run-a:question-a"
 
@@ -185,6 +189,8 @@ async def test_llm_query_uses_settings_run_and_question_ids():
     assert attrs["question_id"] == "question-from-settings"
     assert isinstance(attrs["query_id"], str)
     assert len(cast(str, attrs["query_id"])) == 14
+    assert isinstance(attrs["attempt_id"], str)
+    assert len(cast(str, attrs["attempt_id"])) == 14
 
 
 async def test_llm_query_uses_task_id_alias_when_question_id_absent():
@@ -222,11 +228,13 @@ async def test_llm_query_explicit_ids_override_settings_ids():
         run_id="run-explicit",
         question_id="question-explicit",
         query_id="query-explicit",
+        attempt_id="attempt-explicit",
     )
 
     assert attrs["run_id"] == "run-explicit"
     assert attrs["question_id"] == "question-explicit"
     assert attrs["query_id"] == "query-explicit"
+    assert attrs["attempt_id"] == "attempt-explicit"
 
 
 async def test_llm_query_ignores_query_id_setting():
@@ -278,12 +286,22 @@ async def test_query_id_is_used_for_logging_and_not_forwarded_to_provider():
     llm = MockLLM("gpt-4o", "openai")
     llm._query_impl = AsyncMock(return_value=QueryResult(output_text="ok"))  # pyright: ignore[reportPrivateUsage]
 
-    await llm.query("hello", run_id="run-a", question_id="q1", query_id="query-a")
+    await llm.query(
+        "hello",
+        run_id="run-a",
+        question_id="q1",
+        query_id="query-a",
+        attempt_id="attempt-a",
+    )
 
     _args, kwargs = llm._query_impl.call_args  # pyright: ignore[reportPrivateUsage]
     assert "query_id" not in kwargs
+    assert "attempt_id" not in kwargs
     assert "run_id" not in kwargs
     assert "question_id" not in kwargs
+    assert kwargs["query_logger"].name.endswith(
+        "<run=run-a><question=q1><query=query-a><attempt=attempt-a>"
+    )
 
 
 async def test_llm_query_records_provider_query_span():
@@ -291,6 +309,10 @@ async def test_llm_query_records_provider_query_span():
     llm = MockLLM("gpt-4o", "openai")
     llm._query_impl = AsyncMock(return_value=QueryResult(output_text="ok"))  # pyright: ignore[reportPrivateUsage]
     spans: list[tuple[str, dict[str, object | None], str]] = []
+    events: list[tuple[str, dict[str, object | None]]] = []
+
+    def fake_add_event(name: str, attributes: dict[str, object | None]) -> None:
+        events.append((name, dict(attributes)))
 
     def fake_start_span(
         name: str,
@@ -301,10 +323,14 @@ async def test_llm_query_records_provider_query_span():
         spans.append((name, dict(attributes), kind))
         return nullcontext()
 
-    with patch(
-        "model_library.base.base.telemetry.start_span", side_effect=fake_start_span
+    with (
+        patch("model_library.base.base.telemetry.start_span", side_effect=fake_start_span),
+        patch("model_library.base.base.telemetry.add_event", side_effect=fake_add_event),
     ):
-        await llm.query("hello", run_id="run-a", question_id="q1", query_id="query-a")
+        await llm.query(
+            "hello", run_id="run-a", question_id="q1", query_id="query-a",
+            attempt_id="attempt-a",
+        )
 
     provider_spans = [
         span for span in spans if span[0] == "model_library.provider_query"
@@ -315,6 +341,7 @@ async def test_llm_query_records_provider_query_span():
             "run_id": "run-a",
             "question_id": "q1",
             "query_id": "query-a",
+            "attempt_id": "attempt-a",
             "model.provider": "openai",
             "model.name": "gpt-4o",
             "model.registry_key": None,
@@ -326,6 +353,20 @@ async def test_llm_query_records_provider_query_span():
         "client",
     )
     assert provider_spans == [expected_span]
+    expected_ids = {
+        "run_id": "run-a", "question_id": "q1",
+        "query_id": "query-a", "attempt_id": "attempt-a",
+    }
+    for name in (
+        "model_library.query.start",
+        "model_library.query.retry_wrapper_start",
+        "model_library.retry_attempt_start",
+        "model_library.retry_attempt_success",
+        "model_library.query.retry_wrapper_done",
+        "model_library.query.done",
+    ):
+        attrs = next(attrs for event_name, attrs in events if event_name == name)
+        assert all(attrs[key] == value for key, value in expected_ids.items())
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -444,11 +485,35 @@ async def test_agent_passes_scoped_logger_to_llm():
     assert captured and captured[0].name.startswith("agent.eval<gpt-4o>")
 
 
-async def test_query_logger_includes_question_and_query_ids():
-    """Verify closing bracket is present (the bug we fixed)."""
-    parent = logging.getLogger("llm.openai.gpt-4o<run=abc>")
-    child = parent.getChild("<question=q123><query=qry456>")
-    assert child.name.endswith("<query=qry456>")
+async def test_query_logger_includes_question_and_query_ids(caplog):
+    parent = logging.getLogger("llm.openai.gpt-4o")
+    ids = ResolvedQueryIds(
+        run_id="abc",
+        question_id="q123",
+        query_id="qry456",
+        attempt_id="att789",
+    )
+    with caplog.at_level(logging.INFO, logger=parent.name):
+        agent_child = scoped_query_logger(parent, ids, in_agent=True)
+        normal_child = scoped_query_logger(parent, ids, in_agent=False)
+        agent_child.info("agent query")
+        normal_child.info("non-agent query")
+        assert normal_child.getEffectiveLevel() == logging.INFO
+    assert agent_child is not normal_child
+    assert agent_child.name.endswith(
+        "<agent><run=abc><question=q123><query=qry456><attempt=att789>"
+    )
+    assert normal_child.name.endswith(
+        "<run=abc><question=q123><query=qry456><attempt=att789>"
+    )
+    assert agent_child.level == logging.WARNING
+    assert normal_child.level == logging.NOTSET
+    messages = [
+        record.getMessage()
+        for record in caplog.records
+        if record.name.startswith(parent.name)
+    ]
+    assert messages == ["non-agent query"]
 
 
 # ── run_logging context manager ───────────────────────────────────────

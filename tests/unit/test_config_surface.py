@@ -243,6 +243,19 @@ def test_active_registry_provider_properties_validate_to_provider_config() -> No
 
 
 @pytest.mark.unit
+def test_openrouter_keys_pin_a_host() -> None:
+    """OpenRouter load-balances across hosts, some quantized, unless the key pins one."""
+    unpinned = [
+        config.full_key
+        for config in _active_registry_configs()
+        if config.provider_name == "openrouter"
+        and not config.metadata.router
+        and not config.provider_properties.model_dump().get("openrouter_provider_only")
+    ]
+    assert not unpinned
+
+
+@pytest.mark.unit
 def test_override_config_only_replaces_explicit_fields() -> None:
     registry_config = get_model_registry()["openai/gpt-4o"]
     override = LLMConfig(temperature=0.25)

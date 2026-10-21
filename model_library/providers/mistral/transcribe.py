@@ -28,7 +28,7 @@ from model_library.base.transcription import (
 )
 from model_library.exceptions import ModelNoOutputError
 from model_library.register_models import register_provider
-from model_library.utils import default_httpx_client
+from model_library.utils import default_httpx2_client
 
 
 @register_provider("mistral")
@@ -50,7 +50,7 @@ class MistralTranscriptionModel(TranscriptionOnly):
             self.assign_client(
                 Mistral(
                     api_key=api_key,
-                    async_client=default_httpx_client(),
+                    async_client=default_httpx2_client(),
                     server_url=base_url,
                     timeout_ms=300_000,
                 )

@@ -12,6 +12,8 @@ from model_library.register_models import register_provider
 
 @register_provider("poolside")
 class PoolsideModel(DelegateOnly):
+    api_key_setting = "POOLSIDE_API_KEY"
+
     def __init__(
         self,
         model_name: str,
@@ -26,7 +28,7 @@ class PoolsideModel(DelegateOnly):
             config.custom_endpoint or "https://inference.poolside.ai/v1/"
         )
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.POOLSIDE_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(

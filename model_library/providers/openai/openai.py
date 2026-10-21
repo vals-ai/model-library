@@ -60,11 +60,13 @@ OpenAIToolCallMode = Literal["default", "auto", "code_mode"]
 
 
 class OpenAIConfig(ProviderConfig):
+    use_completions: bool = False
     deep_research: bool = False
     tool_call_mode: OpenAIToolCallMode = "default"
     verbosity: Literal["low", "medium", "high"] | None = None
     prompt_cache_retention: Literal["24h", "in_memory"] | None = None
     prompt_cache_key: PromptCacheKeyMode | None = None
+    supports_prompt_cache_options: bool = False
     reasoning_context: Literal["current_turn", "all_turns"] | None = None
     parallel_tool_calls: bool | None = None
     service_tier: Literal["default", "flex"] | None = None
@@ -75,11 +77,13 @@ class OpenAIConfig(ProviderConfig):
 
 @register_provider("openai")
 class OpenAIModel(LLM):
+    api_key_setting = "OPENAI_API_KEY"
+
     provider_config = OpenAIConfig()
 
     @override
     def _get_default_api_key(self) -> str:
-        return model_library_settings.OPENAI_API_KEY
+        return self._api_key_from(model_library_settings)
 
     @override
     def get_client(
@@ -102,7 +106,7 @@ class OpenAIModel(LLM):
         provider: str = "openai",
         *,
         config: LLMConfig | None = None,
-        use_completions: bool = False,
+        use_completions: bool | None = None,
         normalize_null_assistant_history_fields: bool = False,
     ):
         self._api = completions if use_completions else responses
@@ -113,6 +117,8 @@ class OpenAIModel(LLM):
         self.router_mode: bool = False
 
         super().__init__(model_name, provider, config=config)
+        if use_completions is None and self.provider_config.use_completions:
+            self._api = completions
 
         self.deep_research = self.provider_config.deep_research
         self.tool_call_mode = self.provider_config.tool_call_mode
@@ -120,6 +126,9 @@ class OpenAIModel(LLM):
         self.prompt_cache_retention = self.provider_config.prompt_cache_retention
         self.prompt_cache_key_mode: PromptCacheKeyMode | None = (
             self.provider_config.prompt_cache_key
+        )
+        self.supports_prompt_cache_options = (
+            self.provider_config.supports_prompt_cache_options
         )
         self.reasoning_context = self.provider_config.reasoning_context
         self.parallel_tool_calls = self.provider_config.parallel_tool_calls
@@ -192,8 +201,19 @@ class OpenAIModel(LLM):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
+        supported_parameters = (
+            ("temperature", "top_p", "top_k")
+            if self._api is completions
+            else ("temperature", "top_p")
+        )
+        sampling = self._sampling_from_config(supported_parameters)
         return await self._api.build_body(
-            self, input, tools=tools, output_schema=output_schema, **kwargs
+            self,
+            input,
+            tools=tools,
+            output_schema=output_schema,
+            sampling=sampling,
+            **kwargs,
         )
 
     @override

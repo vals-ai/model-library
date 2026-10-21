@@ -16,6 +16,8 @@ from collections.abc import Generator, Mapping
 from contextlib import ExitStack, contextmanager
 from contextvars import ContextVar
 from importlib import import_module
+from threading import Lock
+from time import monotonic
 from typing import Any, cast
 
 from model_library import model_library_settings
@@ -39,6 +41,7 @@ TELEMETRY_DELIVERY_LOGGER_ROOTS = (
 HTTP_TRACE_EXCLUDED_ROUTES = frozenset({"/health/live", "/health/ready"})
 HTTP_TRACE_ALLOWED_ROUTES = frozenset(
     {
+        "/admin/key-pools",
         "/benchmark-runs/acquire",
         "/benchmark-runs/release",
         "/benchmark-runs/renew",
@@ -73,7 +76,7 @@ SENSITIVE_ATTRIBUTE_PARTS = frozenset(
     }
 )
 CONFIG_FINGERPRINT_EXCLUDED_PARAM_KEYS = frozenset(
-    {"identity", "in_agent", "query_id", "question_id", "run_id"}
+    {"attempt_id", "identity", "in_agent", "query_id", "question_id", "run_id"}
 )
 IDENTITY_DIMENSION_KEYS = ("benchmark_name", "agent_name", "email")
 CONTENT_SAFE_ATTRIBUTE_KEYS = frozenset(
@@ -119,6 +122,7 @@ SENTRY_TAG_ATTRIBUTE_KEYS = frozenset(
         "run_id",
         "question_id",
         "query_id",
+        "attempt_id",
         "in_agent",
         "identity.benchmark_name",
         "identity.agent_name",
@@ -219,6 +223,12 @@ _provider_exception_deferred: ContextVar[bool] = ContextVar(
 CONFIG_SEEN_CACHE_MAX_SIZE = 4096
 CONFIG_SEEN_CACHE_TTL_SECONDS = 300.0
 _seen_config_hashes: dict[str, float] = {}
+_RETRY_EVENT_BURST = 5.0
+_RETRY_EVENT_REFILL_SECONDS = 5.0
+_RETRY_EVENT_IDLE_SECONDS = _RETRY_EVENT_BURST * _RETRY_EVENT_REFILL_SECONDS
+_retry_event_buckets: dict[tuple[str, type[BaseException]], tuple[float, float]] = {}
+_retry_event_last_cleanup = 0.0
+_retry_event_lock = Lock()
 
 
 def _env_enabled() -> bool:
@@ -469,12 +479,51 @@ def _attach_sentry_search_tags(event: dict[str, Any]) -> dict[str, object] | Non
     return tags
 
 
+def _admit_scheduled_retry_event(
+    model_registry_key: str, exception_type: type[BaseException]
+) -> bool:
+    global _retry_event_last_cleanup
+    with _retry_event_lock:
+        now = monotonic()
+        if now - _retry_event_last_cleanup >= _RETRY_EVENT_IDLE_SECONDS:
+            expired = [
+                key
+                for key, (_, updated) in _retry_event_buckets.items()
+                if now - updated >= _RETRY_EVENT_IDLE_SECONDS
+            ]
+            for key in expired:
+                del _retry_event_buckets[key]
+            _retry_event_last_cleanup = now
+
+        key = (model_registry_key, exception_type)
+        if key not in _retry_event_buckets:
+            _retry_event_buckets[key] = (_RETRY_EVENT_BURST - 1, now)
+            return True
+        tokens, updated = _retry_event_buckets[key]
+        tokens = min(
+            _RETRY_EVENT_BURST, tokens + (now - updated) / _RETRY_EVENT_REFILL_SECONDS
+        )
+        if tokens < 1:
+            _retry_event_buckets[key] = (tokens, now)
+            return False
+        _retry_event_buckets[key] = (tokens - 1, now)
+        return True
+
+
 def _before_send(event: dict[str, Any], hint: object) -> dict[str, Any] | None:
-    """Suppress deferred exceptions and add current Gateway debug tags."""
+    """Suppress deferred exceptions and tag admitted Gateway events."""
     if _provider_exception_deferred.get() and "exception" in event:
         return None
     tags = _attach_sentry_search_tags(event)
     if tags is not None:
+        if tags.get("retry.state") == "scheduled" and "model.registry_key" in tags:
+            exc_info = cast(
+                Mapping[str, tuple[type[BaseException], BaseException, object]], hint
+            )["exc_info"]
+            if not _admit_scheduled_retry_event(
+                cast(str, tags["model.registry_key"]), exc_info[0]
+            ):
+                return None
         fingerprint = _sentry_fingerprint(event, hint, tags)
         if fingerprint:
             event["fingerprint"] = fingerprint
@@ -1019,14 +1068,18 @@ def record_retrier_exception(
 ) -> None:
     """Record a retrier-owned exception unless Gateway has deferred it."""
     if not _provider_exception_deferred.get():
-        record_exception(exc, attributes)
+        token = _sentry_context.set(_sentry_context.get())
+        try:
+            record_exception(exc, attributes)
+        finally:
+            _sentry_context.reset(token)
 
 
 def record_scheduled_retry_exception(
     exc: BaseException,
     attributes: Mapping[str, object | None],
 ) -> None:
-    """Send one warning-level Sentry exception for an accepted retry."""
+    """Attempt warning-level Sentry capture for an accepted retry."""
     if not is_enabled():
         return
 
@@ -1160,6 +1213,7 @@ def run_attributes(request_context: Mapping[str, object]) -> dict[str, object | 
         "run_id": request_context.get("run_id"),
         "question_id": request_context.get("question_id"),
         "query_id": request_context.get("query_id"),
+        "attempt_id": request_context.get("attempt_id"),
         "identity": identity_attribute,
         **identity_dimensions,
         "in_agent": in_agent,

@@ -540,6 +540,9 @@ async def test_access_programs_records_served_model(
         )
 
     assert result.metadata.served_model == expected
+    assert result.metadata.extra.get("openai_response_model") == (
+        None if access_programs else "gpt-4o-mini"
+    )
 
 
 async def test_access_programs_omitted_from_body_by_default():
@@ -2195,7 +2198,7 @@ async def test_non_streaming_responses_usage_populates_normalized_metadata(
 
 
 async def test_non_streaming_responses_records_response_model():
-    """A model without access_programs records no served_model."""
+    """A direct OpenAI call records the reported model without marking routing."""
     response = _responses_response(response_id="resp_served", text_block_text="ok")
     response.model = "gpt-6-sol"
     model = OpenAIModel("gpt-daybreak-blue-latest")
@@ -2211,11 +2214,13 @@ async def test_non_streaming_responses_records_response_model():
         )
 
     assert result.metadata.served_model is None
+    assert result.metadata.extra["openai_response_model"] == "gpt-6-sol"
 
 
 async def test_non_streaming_responses_skips_response_model_for_other_providers():
     """Delegated providers such as xAI would be mislabeled openai/ in ATIF."""
     response = _responses_response(response_id="resp_xai", text_block_text="ok")
+    response.model = "grok-reported"
     model = OpenAIModel("grok-test", provider="xai")
     mock_client = MagicMock()
     mock_client.responses.create = AsyncMock(return_value=response)

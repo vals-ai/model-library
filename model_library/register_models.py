@@ -89,6 +89,12 @@ class Metadata(BaseModel):
     ignored_for_cost: bool = False
     router: bool = Field(default=False, exclude_if=lambda v: not v)
 
+    @model_validator(mode="after")
+    def default_ignored_for_cost(self):
+        if "ignored_for_cost" not in self.model_fields_set:
+            self.ignored_for_cost = self.internal_only
+        return self
+
 
 class CompanyIcon(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)

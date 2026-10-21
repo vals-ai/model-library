@@ -6,6 +6,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import httpx
+import httpx2
 import pytest
 
 from model_library.agent.agent import AgentResult
@@ -91,7 +92,7 @@ def test_get_context_window_for_nonexistent_model():
     assert context_window is None
 
 
-def _assert_provider_timeout(timeout: httpx.Timeout):
+def _assert_provider_timeout(timeout: httpx.Timeout | httpx2.Timeout):
     assert timeout.connect == model_utils.PROVIDER_CONNECT_TIMEOUT_SECONDS
     assert timeout.read == model_utils.PROVIDER_READ_TIMEOUT_SECONDS
     assert timeout.write == model_utils.PROVIDER_WRITE_TIMEOUT_SECONDS
@@ -354,8 +355,8 @@ async def test_plain_httpx_clients_preserve_no_proxy_bypass(
         await client.aclose()
 
 
-async def test_default_aiohttp_httpx_client_uses_provider_timeout():
-    client = model_utils.default_aiohttp_httpx_client()
+async def test_default_aiohttp_httpx2_client_uses_provider_timeout():
+    client = model_utils.default_aiohttp_httpx2_client()
     try:
         _assert_provider_timeout(client.timeout)
     finally:
@@ -386,34 +387,7 @@ async def test_gateway_httpx_client_uses_gateway_timeout():
 async def test_openai_client_uses_provider_timeout():
     client = model_utils.create_openai_client_with_defaults(api_key="sk-test")
     try:
-        assert isinstance(client.timeout, httpx.Timeout)
         _assert_provider_timeout(client.timeout)
-    finally:
-        await client.close()
-
-
-async def test_openai_client_uses_aiohttp_httpx_client_factory(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    calls: list[dict[str, str] | None] = []
-
-    def fake_default_aiohttp_httpx_client(
-        *, dns_resolve: dict[str, str] | None = None
-    ) -> httpx.AsyncClient:
-        calls.append(dns_resolve)
-        return httpx.AsyncClient()
-
-    monkeypatch.setattr(
-        model_utils,
-        "default_aiohttp_httpx_client",
-        fake_default_aiohttp_httpx_client,
-    )
-
-    client = model_utils.create_openai_client_with_defaults(
-        api_key="sk-test", dns_resolve={"api.openai.com": "127.0.0.1"}
-    )
-    try:
-        assert calls == [{"api.openai.com": "127.0.0.1"}]
     finally:
         await client.close()
 
@@ -421,33 +395,6 @@ async def test_openai_client_uses_aiohttp_httpx_client_factory(
 async def test_anthropic_client_uses_provider_timeout():
     client = model_utils.create_anthropic_client_with_defaults(api_key="sk-test")
     try:
-        assert isinstance(client.timeout, httpx.Timeout)
         _assert_provider_timeout(client.timeout)
-    finally:
-        await client.close()
-
-
-async def test_anthropic_client_uses_aiohttp_httpx_client_factory(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    calls = 0
-
-    def fake_default_aiohttp_httpx_client(
-        *, dns_resolve: dict[str, str] | None = None
-    ) -> httpx.AsyncClient:
-        nonlocal calls
-        assert dns_resolve is None
-        calls += 1
-        return httpx.AsyncClient()
-
-    monkeypatch.setattr(
-        model_utils,
-        "default_aiohttp_httpx_client",
-        fake_default_aiohttp_httpx_client,
-    )
-
-    client = model_utils.create_anthropic_client_with_defaults(api_key="sk-test")
-    try:
-        assert calls == 1
     finally:
         await client.close()

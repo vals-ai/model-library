@@ -1,4 +1,4 @@
-"""Agent artifact examples: ATIF export, replay, and resume."""
+"""Agent artifact examples: ATIF export, replay, resume, and saved history."""
 
 # ruff: noqa: E402
 from __future__ import annotations
@@ -13,13 +13,16 @@ if __package__ in {None, ""}:
 import argparse
 import asyncio
 import json
+from typing import cast
 
-from model_library.agent import Agent, AgentConfig, AgentTurn, TurnLimit
+from model_library import model_library_settings
+from model_library.agent import Agent, AgentConfig, AgentResult, AgentTurn, TurnLimit
 from model_library.agent.tools.submit import SubmitTool
 from model_library.base import LLM
 from model_library.base.input import TextInput, ToolCall, ToolDefinition
 from model_library.registry_utils import get_registry_model
 
+from examples.quickstart import basic_agent
 from examples.setup import console_log, setup
 from examples.utils import GetWeather, SaveNote
 
@@ -166,6 +169,40 @@ async def run_and_resume(run_model: LLM, resume_model: LLM) -> None:
     console_log(f"Resume answer:   {resume_result.final_answer}")
 
 
+async def save_history(model: LLM, path: _Path) -> None:
+    """Save a completed quickstart agent history for a later invocation."""
+    result = cast(
+        AgentResult,
+        await basic_agent(model, raise_errors=True, max_turns=5, max_seconds=90),
+    )
+    if result.final_error is not None:
+        raise RuntimeError(f"Quickstart agent did not complete: {result}")
+
+    with path.open("x") as artifact:
+        artifact.write(LLM.serialize_input(result.final_history))
+    console_log(f"Saved completed history to {path}")
+
+
+async def followup_history(model: LLM, path: _Path) -> None:
+    """Answer two questions from saved history without executing tools."""
+    history = LLM.deserialize_input(path)
+    tools = [GetWeather().definition, SaveNote().definition]
+    for question in (
+        "What temperature and conditions were reported for Tokyo earlier?",
+        "What key did you use when saving the weather note earlier?",
+    ):
+        response = await model.query(
+            [TextInput(text=question)], history=history, tools=tools
+        )
+        if response.tool_calls:
+            raise RuntimeError(
+                f"Follow-up requested new tool calls: {fmt_calls(response.tool_calls)}"
+            )
+        console_log(f"Question: {question}")
+        console_log(f"Follow-up answer: {response.output_text_str}")
+        history = response.history
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(description="Run agent artifact extras")
     subparsers = parser.add_subparsers(dest="mode", required=True)
@@ -189,7 +226,19 @@ async def main() -> None:
         "resume_model", nargs="?", default="openai/gpt-5-mini-2025-08-07"
     )
 
+    save_parser = subparsers.add_parser("save")
+    save_parser.add_argument("model")
+    save_parser.add_argument("history_file", type=_Path)
+
+    followup_parser = subparsers.add_parser("followup")
+    followup_parser.add_argument("model")
+    followup_parser.add_argument("history_file", type=_Path)
+
     args = parser.parse_args()
+    if args.mode in {"save", "followup"} and not model_library_settings.get(
+        "MODEL_GATEWAY_URL"
+    ):
+        parser.error("save and followup require MODEL_GATEWAY_URL")
 
     if args.mode == "atif":
         await agent_with_atif(get_registry_model(args.model))
@@ -201,6 +250,10 @@ async def main() -> None:
         await run_and_resume(
             get_registry_model(args.model), get_registry_model(args.resume_model)
         )
+    elif args.mode == "save":
+        await save_history(get_registry_model(args.model), args.history_file)
+    elif args.mode == "followup":
+        await followup_history(get_registry_model(args.model), args.history_file)
 
 
 if __name__ == "__main__":

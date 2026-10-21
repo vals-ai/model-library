@@ -57,6 +57,17 @@ uv run python -m examples
 
 The command list puts core examples first, then recurring model-release checks, agent/tool loops, starter demos, one-off feature examples, and setup/compatibility asides such as custom endpoints and Google modes. The prompt-caching demo reports cached tokens and a `Caching` category result. The validator checks all implemented image/file transports and also reports caching, reasoning, rate-limit, and pricing diagnostics; other demos usually default to one representative live path and use flags such as `--mode both` for broader coverage.
 
+### Gateway history continuation
+
+Configure `MODEL_GATEWAY_URL` and `MODEL_GATEWAY_API_KEY` in the repo-root `.env`. Run these as separate invocations from the same checkout: save against the current Gateway revision, update the Gateway outside this example, then follow up against the candidate revision. Keep the same model and Gateway history-signing key:
+
+```bash
+uv run python examples/extras/artifacts.py save <model> <history-file>
+uv run python examples/extras/artifacts.py followup <model> <history-file>
+```
+
+Only load a trusted saved history file. The weather tool returns fake local data, but the model calls are real. The save command creates a new checkpoint file and prints the original agent's `Logs:` directory. Inspect `<Logs directory>/turns/turn_*/result.json` for the executed `get_weather` and `save_note` tool calls, and the matching `state.json` for the saved note: Tokyo weather should be 18C and foggy, saved under `tokyo_weather` with those facts. Review both follow-up answers against those actions: the first should recall the weather, the second the note key, without new tool calls. Exit zero alone does not establish a correct task or answers; record a manual verdict with the tested model and both Gateway revisions. This selected continuation check does not orchestrate a server update or run in CI and does not prove universal history compatibility.
+
 ## Support modules
 
 - `examples/setup.py`, `examples/utils.py`, and `examples/data/` are support modules used by runnable demos.

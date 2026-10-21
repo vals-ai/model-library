@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+import gzip
+import json
 from typing import Any, cast
 
 from model_gateway.usage_ledger import redshift_schema
@@ -95,9 +98,7 @@ def redshift_rows_from_usage_event(
 
     completed_at = datetime.fromisoformat(event["completed_at"])
     loaded_at_utc = (loaded_at or datetime.now(UTC)).astimezone(UTC)
-    performance_data, performance_truncated = _performance_data(
-        event[ledger_schema.DETAILS_FIELD]
-    )
+    performance_data = _performance_data(event[ledger_schema.DETAILS_FIELD])
     query_id = event.get("query_id")
 
     outcome = event["outcome"] if event["schema_version"] == 4 else "success"
@@ -123,8 +124,7 @@ def redshift_rows_from_usage_event(
             )
     performance: RedshiftRow = {
         "usage_event_id": fact["usage_event_id"],
-        "performance": performance_data,
-        "performance_truncated": performance_truncated,
+        **performance_data,
         "loaded_at": loaded_at_utc,
     }
     return RedshiftUsageRows(fact=fact, performance=performance)
@@ -140,21 +140,64 @@ def _validate_reserved_dimension_values(event: Mapping[str, Any]) -> None:
             )
 
 
-def _performance_data(
-    details: Any,
-) -> tuple[dict[str, object] | None, bool]:
-    details_truncated = bool(details.get("truncated", False))
-    performance_value: object = details["result"]["metadata"]["performance"]
-    if performance_value is None:
-        return None, details_truncated
+def _performance_data(details: Any) -> RedshiftRow:
+    truncated = bool(details.get("truncated", False))
+    value: object = details["result"]["metadata"]["performance"]
+    if value is None:
+        return {
+            **dict.fromkeys(redshift_schema.TIME_TO_FIRST_TOKEN_COLUMNS.values()),
+            "timeline": None,
+            "performance_truncated": truncated,
+        }
+    if not isinstance(value, Mapping):
+        raise ValueError("performance must be an object")
+    performance = cast(Mapping[str, Any], value)
+    if "timeline" not in performance:
+        performance = _split_legacy_performance(performance)
+    ttft = performance.get("time_to_first_token_ms")
+    if not (
+        {"time_to_first_token_ms", "timeline"}
+        <= set(performance)
+        <= {"time_to_first_token_ms", "answer_decode_ms", "timeline"}
+    ) or not isinstance(ttft, Mapping):
+        raise ValueError(
+            "performance must contain time_to_first_token_ms and a compressed timeline"
+        )
+    ttft = cast(Mapping[str, object], ttft)
+    return {
+        **{
+            column: ttft.get(field)
+            for field, column in redshift_schema.TIME_TO_FIRST_TOKEN_COLUMNS.items()
+        },
+        "timeline": _compressed_envelope(performance["timeline"]),
+        "performance_truncated": truncated,
+    }
 
-    if not isinstance(performance_value, Mapping):
-        raise ValueError("performance must contain a compressed envelope")
-    performance = cast(Mapping[str, object], performance_value)
-    if set(performance) != {"encoding", "data"}:
-        raise ValueError("performance must contain only encoding and data")
-    encoding = performance["encoding"]
-    data = performance["data"]
+
+def _split_legacy_performance(envelope: object) -> dict[str, object]:
+    """Convert events written when the whole performance object was compressed."""
+    data = _compressed_envelope(envelope)["data"]
+    payload = json.loads(gzip.decompress(base64.b64decode(data, validate=True)))
+    timeline = json.dumps(payload["timeline"], separators=(",", ":")).encode()
+    return {
+        "time_to_first_token_ms": payload["time_to_first_token_ms"],
+        "timeline": {
+            "encoding": "gzip+base64",
+            "data": base64.b64encode(
+                gzip.compress(timeline, compresslevel=1, mtime=0)
+            ).decode("ascii"),
+        },
+    }
+
+
+def _compressed_envelope(value: object) -> dict[str, str]:
+    if not isinstance(value, Mapping):
+        raise ValueError("performance timeline must contain a compressed envelope")
+    envelope = cast(Mapping[str, object], value)
+    if set(envelope) != {"encoding", "data"}:
+        raise ValueError("performance timeline must contain only encoding and data")
+    encoding = envelope["encoding"]
+    data = envelope["data"]
     if encoding != "gzip+base64" or not isinstance(data, str):
-        raise ValueError("performance must contain a gzip+base64 string envelope")
-    return {"encoding": encoding, "data": data}, details_truncated
+        raise ValueError("performance timeline must be a gzip+base64 string envelope")
+    return {"encoding": "gzip+base64", "data": data}

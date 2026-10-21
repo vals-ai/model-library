@@ -26,6 +26,7 @@ class DigitalOceanConfig(ProviderConfig):
 
 @register_provider("digitalocean")
 class DigitalOceanModel(DelegateOnly):
+    api_key_setting = "DIGITAL_OCEAN_API_KEY"
     provider_config = DigitalOceanConfig()
 
     def __init__(
@@ -43,7 +44,7 @@ class DigitalOceanModel(DelegateOnly):
                 "custom_endpoint": config.custom_endpoint
                 or "https://inference.do-ai.run/v1",
                 "custom_api_key": config.custom_api_key
-                or SecretStr(model_library_settings.DIGITAL_OCEAN_API_KEY),
+                or SecretStr(self._api_key_from(model_library_settings)),
             }
         )
 

@@ -122,7 +122,9 @@ class AmazonModel(LLM):
         config: LLMConfig | None = None,
     ):
         super().__init__(model_name, provider, config=config)
-        self.supports_cache = "amazon" in self.model_name or "claude" in self.model_name
+        self.supports_cache = self.prompt_caching and (
+            "amazon" in self.model_name or "claude" in self.model_name
+        )
         self.supports_cache = (
             self.supports_cache and "v2" not in self.model_name
         )  # supported but no access yet
@@ -331,13 +333,11 @@ class AmazonModel(LLM):
         if self.max_tokens:
             inference["maxTokens"] = self.max_tokens
 
-        # Only set temperature for models where supports_temperature is True.
-        # For example, "thinking" models don't support temperature: https://docs.claude.com/en/docs/build-with-claude/extended-thinking#feature-compatibility
-        if self.supports_temperature:
-            if self.temperature is not None:
-                inference["temperature"] = self.temperature
-            if self.top_p is not None:
-                inference["topP"] = self.top_p
+        sampling = self._sampling_from_config(("temperature", "top_p"))
+        if "temperature" in sampling:
+            inference["temperature"] = sampling["temperature"]
+        if "top_p" in sampling:
+            inference["topP"] = sampling["top_p"]
 
         inference.update(
             kwargs

@@ -9,7 +9,7 @@ from model_library.providers.delegates.alibaba import AlibabaConfig, AlibabaMode
 from model_library.providers.delegates.fireworks import FireworksModel
 from model_library.providers.delegates.kimi import KimiModel
 from model_library.providers.mistral import MistralModel
-from model_library.providers.xai import XAIConfig, XAIModel
+from model_library.providers.xai import XAIModel
 from model_library.rate_limits import (
     RateLimit,
     RateLimitCapacity,
@@ -17,7 +17,6 @@ from model_library.rate_limits import (
     TokenRateLimit,
 )
 
-_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 _DATE_HEADER = "Mon, 01 Jan 2024 00:00:00 GMT"
 _DATE_TIMESTAMP = 1_704_067_200.0
@@ -45,52 +44,89 @@ def _client(response: httpx.Response) -> tuple[MagicMock, AsyncMock]:
     return client, get
 
 
-@pytest.mark.parametrize(
-    ("model_type", "model_name", "probe_target"),
-    [
-        pytest.param(
-            AlibabaModel,
-            "qwen3.8-max",
-            "model_library.providers.delegates.alibaba.default_httpx_client",
-            id="alibaba",
-        ),
-        pytest.param(
-            MistralModel,
-            "mistral-medium-latest",
-            "model_library.providers.mistral.chat.probe_chat_completions_rate_limit",
-            id="mistral",
-        ),
-        pytest.param(
-            XAIModel,
-            "grok-3-mini",
-            "model_library.providers.xai.probe_chat_completions_rate_limit",
-            id="xai",
-        ),
-    ],
-)
 @pytest.mark.parametrize("custom_field", ["custom_api_key", "custom_endpoint"])
-async def test_custom_connection_skips_default_account_probe(
-    model_type,
-    model_name: str,
-    probe_target: str,
-    custom_field: str,
-    monkeypatch,
+async def test_alibaba_custom_connection_skips_default_account_probe(
+    custom_field: str, monkeypatch
 ) -> None:
-    monkeypatch.setattr(model_type, "_get_default_api_key", lambda _: "default-key")
+    monkeypatch.setattr(AlibabaModel, "_get_default_api_key", lambda _: "default-key")
     config = (
         LLMConfig(custom_api_key=SecretStr("custom-key"))
         if custom_field == "custom_api_key"
         else LLMConfig(custom_endpoint="https://custom.example/v1")
     )
-    model = model_type(model_name, config=config)
+    model = AlibabaModel("qwen3.8-max", config=config)
 
     with patch(
-        probe_target,
+        "model_library.providers.delegates.alibaba.default_httpx_client",
         side_effect=AssertionError("unexpected default probe"),
     ) as probe:
         assert await model.get_rate_limit() is None
 
     probe.assert_not_called()
+
+
+_PROBED_MODELS = [
+    pytest.param(
+        MistralModel,
+        "mistral-medium-latest",
+        "model_library.providers.mistral.chat.probe_chat_completions_rate_limit",
+        "https://api.mistral.ai/v1",
+        id="mistral",
+    ),
+    pytest.param(
+        XAIModel,
+        "grok-3-mini",
+        "model_library.providers.xai.probe_chat_completions_rate_limit",
+        "https://api.x.ai/v1",
+        id="xai",
+    ),
+]
+
+
+@pytest.mark.parametrize(
+    ("model_type", "model_name", "probe_target", "base_url"), _PROBED_MODELS
+)
+async def test_custom_endpoint_skips_account_probe(
+    model_type, model_name: str, probe_target: str, base_url: str, monkeypatch
+) -> None:
+    monkeypatch.setattr(model_type, "_get_default_api_key", lambda _: "default-key")
+    model = model_type(
+        model_name,
+        config=LLMConfig(
+            custom_api_key=SecretStr("custom-key"),
+            custom_endpoint="https://custom.example/v1",
+        ),
+    )
+
+    with patch(
+        probe_target, side_effect=AssertionError("unexpected probe")
+    ) as probe:
+        assert await model.get_rate_limit() is None
+
+    probe.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("model_type", "model_name", "probe_target", "base_url"), _PROBED_MODELS
+)
+async def test_custom_api_key_probes_that_account(
+    model_type, model_name: str, probe_target: str, base_url: str, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        model_type,
+        "_get_default_api_key",
+        lambda _: pytest.fail("default key read despite custom key"),
+    )
+    model = model_type(
+        model_name, config=LLMConfig(custom_api_key=SecretStr("custom-key"))
+    )
+
+    with patch(probe_target, new_callable=AsyncMock) as probe:
+        await model.get_rate_limit()
+
+    probe.assert_awaited_once_with(
+        base_url=base_url, api_key="custom-key", model_name=model_name
+    )
 
 
 async def test_mistral_probe_uses_default_provider_config(monkeypatch):
@@ -109,14 +145,13 @@ async def test_mistral_probe_uses_default_provider_config(monkeypatch):
     )
 
 
-async def test_xai_native_probe_uses_default_provider_config(monkeypatch):
+async def test_xai_probe_uses_default_provider_config(monkeypatch):
     monkeypatch.setattr(XAIModel, "_get_default_api_key", lambda _: "default-key")
     with patch(
         "model_library.providers.xai.probe_chat_completions_rate_limit",
         new_callable=AsyncMock,
     ) as probe:
-        model = XAIModel("grok-3-mini", config=_NATIVE)
-        assert model.delegate is None
+        model = XAIModel("grok-3-mini")
         await model.get_rate_limit()
 
     probe.assert_awaited_once_with(

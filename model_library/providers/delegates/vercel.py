@@ -12,6 +12,8 @@ from model_library.register_models import register_provider
 
 @register_provider("vercel")
 class VercelModel(DelegateOnly):
+    api_key_setting = "VERCEL_API_KEY"
+
     def __init__(
         self,
         model_name: str,
@@ -27,7 +29,7 @@ class VercelModel(DelegateOnly):
             config.custom_endpoint or "https://ai-gateway.vercel.sh/v1"
         )
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.VERCEL_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(

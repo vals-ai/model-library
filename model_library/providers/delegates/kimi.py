@@ -41,6 +41,7 @@ class KimiConfig(ProviderConfig):
 
 @register_provider("kimi")
 class KimiModel(DelegateOnly):
+    api_key_setting = "KIMI_API_KEY"
     provider_config = KimiConfig()
 
     def __init__(
@@ -76,8 +77,7 @@ class KimiModel(DelegateOnly):
         )
 
     def _default_api_key(self) -> str:
-        api_key = model_library_settings.KIMI_API_KEY
-        return api_key
+        return self._api_key_from(model_library_settings)
 
     @override
     async def get_rate_limit(self) -> RateLimit | None:

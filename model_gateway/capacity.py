@@ -322,6 +322,7 @@ async def _attach_request_identity(request: Request) -> None:
         "run_id": body_mapping.get("run_id"),
         "question_id": body_mapping.get("question_id"),
         "query_id": body_mapping.get("query_id"),
+        "attempt_id": body_mapping.get("attempt_id"),
         "identity": body_mapping.get("identity"),
         "in_agent": body_mapping.get("in_agent"),
     }

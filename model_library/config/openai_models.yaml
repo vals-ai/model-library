@@ -42,6 +42,7 @@ gpt-6-models:
           write_markup: 1.25
     provider_properties:
       verbosity: "medium"
+      supports_prompt_cache_options: true
 
   openai/gpt-6-astra:
     label: GPT-6 Astra
@@ -229,6 +230,7 @@ gpt-5.6-models:
           write_markup: 1.25
     provider_properties:
       verbosity: "medium"
+      supports_prompt_cache_options: true
 
   openai/gpt-5.6-sol:
     label: GPT-5.6 Sol
@@ -299,55 +301,6 @@ gpt-5.6-models:
               cyber: daybreak_blue
       - openai/gpt-5.6-luna-high:
           label: GPT-5.6 Luna (High)
-          default_parameters:
-            reasoning_effort: "high"
-
-daybreak-models:
-  base-config:
-    documentation_url: "https://developers.openai.com/api/docs/models/\
-      daybreak-blue-latest"
-    supports:
-      images: true
-      files: true
-      temperature: false
-    metadata:
-      available_for_everyone: false
-    properties:
-      context_window: 1_050_000
-      max_tokens: 128_000
-      training_cutoff: "2026-02"
-      reasoning_model: true
-    costs_per_million_token:
-      cache:
-        read_discount: 0.1
-        write_markup: 1.25
-      context:
-        threshold: 272_000
-        cache:
-          read_discount: 0.1
-          write_markup: 1.25
-    provider_properties:
-      verbosity: "medium"
-
-  openai/gpt-daybreak-blue:
-    label: Daybreak Blue
-    release_date: 2026-08-10
-    provider_endpoint: gpt-daybreak-blue-latest
-    costs_per_million_token:
-      input: 5
-      output: 30
-      context:
-        input: 10
-        output: 45
-    default_parameters:
-      reasoning_effort: "max"
-    provider_properties:
-      reasoning_context: all_turns
-      access_programs:
-        cyber: daybreak_blue
-    alternative_keys:
-      - openai/gpt-daybreak-blue-high:
-          label: Daybreak Blue (High)
           default_parameters:
             reasoning_effort: "high"
 

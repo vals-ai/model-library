@@ -23,6 +23,71 @@ deprecated:
     metadata:
       deprecated: true
 
+  openai/gpt-daybreak-blue:
+    company: OpenAI
+    country: United States
+    label: Daybreak Blue
+    release_date: 2026-08-10
+    open_source: false
+    documentation_url: https://developers.openai.com/api/docs/models/daybreak-blue-latest
+    supports:
+      images: true
+      audio: false
+      transcription: false
+      videos: false
+      files: true
+      temperature: false
+      tools: true
+      output_schema: true
+    metadata:
+      available_for_everyone: false
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    provider_properties:
+      verbosity: medium
+      reasoning_context: all_turns
+      access_programs:
+        cyber: daybreak_blue
+    rate_limit:
+      supports_live_monitoring: true
+      cache_read_counts_toward_limit: true
+    alternative_keys:
+    - openai/gpt-daybreak-blue-high:
+        label: Daybreak Blue (High)
+        default_parameters:
+          reasoning_effort: high
+    default_parameters:
+      reasoning_effort: max
+    provider_endpoint: gpt-daybreak-blue-latest
+    properties:
+      context_window: 1050000
+      max_tokens: 128000
+      training_cutoff: 2026-02
+      reasoning_model: true
+    costs_per_million_token:
+      input: 5.0
+      output: 30.0
+      cache:
+        read: null
+        write: null
+        read_discount: 0.1
+        write_markup: 1.25
+      batch:
+        input: null
+        output: null
+        input_discount: 0.5
+        output_discount: 0.5
+      context:
+        threshold: 272000.0
+        input: 10.0
+        output: 45.0
+        cache:
+          read: null
+          write: null
+          read_discount: 0.1
+          write_markup: 1.25
+
   openai/gpt-5-codex:
     company: OpenAI
     country: United States

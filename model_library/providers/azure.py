@@ -14,7 +14,7 @@ from model_library.base import (
 from model_library.providers.openai import OpenAIModel, completions
 from model_library.register_models import register_provider
 from model_library.registry_utils import compute_model_cost, get_registry_config
-from model_library.utils import default_httpx_client
+from model_library.utils import default_httpx2_client
 
 ROUTING_FEE_PER_M_INPUT_TOKENS = 0.14
 SERVED_MODEL_PROVIDERS = ("azure", "openai", "anthropic", "grok")
@@ -31,6 +31,9 @@ def _served_model_key(served_model: str) -> str | None:
 
 @register_provider("azure")
 class AzureOpenAIModel(OpenAIModel):
+    # The key travels with an endpoint and API version, not as one setting.
+    api_key_setting = None
+
     @override
     def _get_default_api_key(self) -> str:
         return json.dumps(
@@ -54,7 +57,7 @@ class AzureOpenAIModel(OpenAIModel):
                 api_key=creds["AZURE_API_KEY"],
                 azure_endpoint=base_url or creds["AZURE_ENDPOINT"],
                 api_version=creds["AZURE_API_VERSION"],
-                http_client=default_httpx_client(),
+                http_client=default_httpx2_client(),
                 max_retries=3,
             )
             self.assign_client(client)

@@ -8,6 +8,16 @@ The Gateway server and native provider callers use the default, provider-full `m
 
 The client supports ordinary Gateway entrypoints: registry-backed `GatewayLLM` construction, queries including tools and structured outputs, signed raw history, and Gateway utility routes. Native provider calls and public native SDK helpers require the full distribution. Gateway moderation returns a library-owned typed response preserving fields, nested attributes, aliases, and JSON output, but not the provider SDK response class; native moderation retains its SDK response. SDK exception aliases are no longer re-exported from `model_library.exceptions` in either distribution; native provider imports register SDK retry types when loaded, rather than making SDK-class retry matching available before provider load. Normal native provider calls and library serialization remain supported in the full distribution.
 
+Native HTTPX2 client factories lazily register the existing retry categories for connection errors, read errors, and remote protocol errors; Gateway-only imports do not load HTTPX2.
+
+## SDK dependency policy
+
+The published full `model-library` declares compatible provider SDK ranges, including the voice and server extras. Gateway builds install exact versions from the root `uv.lock` with `uv sync --locked --extra server --extra voice`; the SDK-free client keeps its separate dependency manifest. The Gateway's boto3/botocore lock follows the server aiobotocore-compatible range, which can lag the latest boto3; the full-library boto3 requirement remains ranged.
+
+Private Dependabot proactively checks only the configured provider SDKs daily at 08:00 UTC, with a one-day release-age buffer. It groups major, minor, and patch version updates together against `dev`; related lockfile dependencies may also move as needed. Review both `pyproject.toml` and `uv.lock` in each proposal; major releases may widen published ranges, so confirm compatibility across the declared range and migrate adapters if needed before merging. PRs show version changes and available release notes; none are auto-merged. The `Run Models` check requires a manual PR rerun.
+
+Before merging a provider-SDK update PR, including Dependabot PRs, the live [Gateway history continuation example](../examples/README.md#gateway-history-continuation) must pass: save against the current Gateway revision, then follow up against the candidate revision with the same model and signing key. Review the original weather/note actions in the agent artifacts and both follow-up answers; exit zero alone does not establish a correct task or answers. Record both Gateway revisions, the tested model, and the manually reviewed semantic verdict in the PR. This is a manual review requirement, not an automated merge block; offline or synthetic checks do not satisfy it.
+
 ## Quick start
 
 ```env
@@ -99,8 +109,11 @@ usage-ledger section.
 - `SENTRY_RELEASE` (**optional**): immutable release string attached to Sentry events/traces. Persistent dev/prod gateway releases set this to the full CodePipeline source Git SHA; manual preview releases leave it unset.
 - `SENTRY_OTLP_COLLECTOR_URL` (**optional**): local/sidecar OTLP HTTP collector URL. When unset, Sentry's OTLP integration exports directly to the Sentry endpoint derived from `SENTRY_DSN`.
 - `OTEL_SERVICE_NAME` (**optional**): OpenTelemetry service name. Defaults to `model-proxy-gateway` when tracing is enabled.
+- `GATEWAY_KEY_ASSIGNMENTS_TABLE_NAME` (**deployed query runtime**): DynamoDB table that records which provider key each task attempt uses, one item per attempt and model (`pk` is the SHA-256 hex of the JSON pair `[["<attempt part>", ...],"<model>"]`). Assignments are kept like the usage ledger, with no TTL, so the key a request used can always be found. The first writer wins through a conditional put. When it is unset, the Gateway logs a warning and keeps the per-request pick.
 - `GATEWAY_FAILED_EXCHANGE_CAPTURE_ENABLED` (**deployed query runtime**): deployed query runtimes set this to `true` so failed user-facing provider exchanges can be attached to Sentry. Control and rate-limit paths do not enable capture.
-One capture spans the complete provider operation and all retries. It records HTTPX request/response entity bytes, aiohttp entity bytes as exposed by the configured client path, Bedrock serialized request bodies and raw AWS event-stream bytes, or native xAI protobuf messages. Typed inline query and token-count image and file payloads are replaced with same-length, compressible omission markers while the rest of each serialized request is retained. If a registered payload cannot be removed, that attempt records only the request length. File-upload and transcription attempts always record request lengths without payloads. Responses are unchanged. These are diagnostic representations, not TLS, HTTP/2, or gRPC framing. Successful captures are discarded without compression. Final failures and cancellations produce `provider-failed-exchange.ndjson.gz` with MIME `application/gzip` on the canonical Sentry event when Gateway telemetry and Sentry are enabled; otherwise the capture is discarded after metrics are emitted. Attachments may retain request data and unchanged provider response bodies, so Sentry access and retention must remain restricted.
+One capture spans the complete provider operation and all retries. It records HTTPX request/response entity bytes, aiohttp entity bytes as exposed by the configured client path, or Bedrock serialized request bodies and raw AWS event-stream bytes. Typed inline query and token-count image and file payloads are replaced with same-length, compressible omission markers while the rest of each serialized request is retained. If a registered payload cannot be removed, that attempt records only the request length. File-upload and transcription attempts always record request lengths without payloads. Responses are unchanged. These are diagnostic representations, not TLS or HTTP/2 framing. Successful captures are discarded without compression. Final failures and cancellations produce `provider-failed-exchange.ndjson.gz` with MIME `application/gzip` on the canonical Sentry event when Gateway telemetry and Sentry are enabled; otherwise the capture is discarded after metrics are emitted. Attachments may retain request data and unchanged provider response bodies, so Sentry access and retention must remain restricted.
+
+Early closure of a started HTTPX2 response iterator records `closed` only after underlying cleanup succeeds; cleanup failures and cancellation remain errors.
 
 Capture starts in a 1 MiB memory spool and rolls larger NDJSON to local disk. Retained NDJSON records and pending request buffers share a 128 MiB raw-capture budget across retries; this is not a maximum request size, and pending buffers can still use memory beyond the spool's rollover threshold. At the limit, capture adds a truncation marker and drops further records while payload counters continue. Compression runs in a worker thread, but capture recording still runs on the request path; cancellation cleanup waits for that worker before closing the spool. Gzip artifacts over the unchanged 20 MiB attachment limit are not attached. Metrics report attempts, payload/chunk and artifact bytes, compression time, capture errors, and transport. Changes to capture enablement take effect only after new query tasks deploy.
 
@@ -114,6 +127,7 @@ Capture starts in a 1 MiB memory spool and rolls larger NDJSON to local disk. Re
 | `RUN_ID` | No | Default run ID for gateway queries when `query(run_id=...)` is absent or `None`. |
 | `QUESTION_ID` | No | Default question/task ID for gateway queries when `query(question_id=...)` is absent or `None`. |
 | `TASK_ID` | No | Alias fallback for `QUESTION_ID`; used only when `QUESTION_ID` is unset or blank. |
+| `ATTEMPT_ID` | No | Default task-attempt ID for gateway queries when `query(attempt_id=...)` is absent or `None`. |
 
 Attribution behavior:
 
@@ -140,15 +154,19 @@ Attribution behavior:
 - `QUESTION_ID` takes precedence over `TASK_ID`.
 - There is no `QUERY_ID` env/settings fallback.
 - `query_id` is generated per request unless passed explicitly.
-- Blank or whitespace-only `RUN_ID`, `QUESTION_ID`, and `TASK_ID` values are ignored.
-- Explicit blank or whitespace-only `run_id` and `question_id` values are rejected.
+- Blank or whitespace-only `RUN_ID`, `QUESTION_ID`, `TASK_ID`, and `ATTEMPT_ID` values are ignored.
+- Explicit blank or whitespace-only `run_id`, `question_id`, and `attempt_id` values are rejected.
 - Direct blank `query_id` values are treated as absent.
+- `attempt_id` names one execution of a task; a whole-task rerun gets a new one. It resolves like `run_id`: explicit value, then `ATTEMPT_ID`, then a generated ID.
+- The client resolves the four IDs as one internal group and sends them as flat request fields and correlation headers. For raw HTTP `/query` requests with omitted IDs, gateway resolves one quartet for native execution, `gateway.query.start`, and usage records; managed credential selection still uses the original request IDs.
+- The usage ledger stores `attempt_id` on the row beside `run_id`. It is not yet a Redshift column or a ledger index key.
 
 Provider retry policy:
 
 - Direct provider execution and gateway-server provider execution use the normal model retrier unless a custom retrier replaces it.
 - Eight failed outer provider calls with an integer `status_code` of exactly `500` exhaust a query's HTTP-500 retry budget; seven such failures may still be followed by success on call eight. Other retryable errors retain the selected retrier's normal budget.
 - Provider SDKs may retry internally within each outer provider call. Exceptions classified only by message text do not consume the structured HTTP-500 budget.
+- When an exception is classified by its message text, a retryable status code (`429`, `500`, `502`, `503`, `504`, `529`) counts only as a whole number: `65000` or `1,500,000` in a validation message does not make the error retryable.
 
 Local query deadlines:
 
@@ -280,8 +298,9 @@ Client (get_model_registry / get_registry_model)
        - `run_id`
        - `question_id`
        - `query_id`
+       - `attempt_id`
        - `in_agent`
-   - Provider-specific overrides live under `config.provider_config`, not as top-level fields. For example, a `google/*` request selects Vertex with `config.provider_config.use_vertex=true`; the gateway supplies the server-side GCP credentials.
+   - Provider-specific overrides live under `config.provider_config`, not as top-level fields. For example, a `google/*` request selects Vertex with `config.provider_config.use_vertex=true`; the gateway supplies the server-side GCP credentials. An `openai/*` request selects Chat Completions with `config.provider_config.use_completions=true` (Responses is the default).
    - `model.metadata` is a copy of the registry entry used at construction.
    - Existing model instances retain that construction snapshot; newly constructed models use the refreshed registry.
    - Client-side custom retriers are rejected in gateway mode because provider retries run on the gateway server.
@@ -341,6 +360,7 @@ To save client-returned Gateway history locally without provider SDKs, use `LLM.
 - **Server input validation**: Serialized raw blobs in client inputs are HMAC-verified before restoring — tampered or unsigned blobs are rejected. Caller-built `RawInput` values that are not blobs are never unpickled
 - **Client query path never deserializes**: It only echoes opaque blobs; server-side history restoration happens on the server. Explicit local `LLM.deserialize_input` is separate from the query path.
 - **custom_api_key**: Passed only in per-request provider config so clients can use BYOK without using it as the gateway bearer token
+- **provider_config.access_programs**: Caller-supplied overrides require a nonempty `custom_api_key`; requests using gateway-managed keys use the registry's access programs
 - **custom_endpoint, registry_key**: Rejected on every request; they would serve the named model from another endpoint or registry entry
 
 ## Running locally

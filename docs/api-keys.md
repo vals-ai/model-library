@@ -41,6 +41,7 @@ because it uses Meta's fixed realtime WebSocket protocol.
 | `perplexity/*` | Perplexity | `PERPLEXITY_API_KEY` |
 | `poolside/*` | Poolside | `POOLSIDE_API_KEY` |
 | `ramp/*` | Ramp Router | `RAMP_API_KEY` |
+| `reflection/*` | Reflection | `REFLECTION_API_KEY` |
 | `stepfun/*` | StepFun | `STEPFUN_API_KEY` |
 | `thinkingmachines/*` | Thinking Machines (Tinker) | `TINKER_API_KEY` |
 | `together/*` | Together AI | `TOGETHER_API_KEY` |

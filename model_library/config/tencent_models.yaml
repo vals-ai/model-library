@@ -19,6 +19,8 @@ hy4-models:
       reasoning_model: true
       context_window: 1_048_576
       max_tokens: 64_000
+    provider_properties:
+      openrouter_provider_only: [tencent]
     default_parameters:
       temperature: 0.9
       top_p: 1.0

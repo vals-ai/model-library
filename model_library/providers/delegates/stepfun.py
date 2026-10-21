@@ -18,6 +18,8 @@ from model_library.register_models import register_provider
 
 @register_provider("stepfun")
 class StepFunModel(DelegateOnly):
+    api_key_setting = "STEPFUN_API_KEY"
+
     def __init__(
         self,
         model_name: str,
@@ -34,7 +36,7 @@ class StepFunModel(DelegateOnly):
                 "custom_endpoint": config.custom_endpoint
                 or "https://api.stepfun.ai/v1",
                 "custom_api_key": config.custom_api_key
-                or SecretStr(model_library_settings.STEPFUN_API_KEY),
+                or SecretStr(self._api_key_from(model_library_settings)),
             }
         )
 

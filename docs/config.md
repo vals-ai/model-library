@@ -55,9 +55,25 @@ claude-sonnet-models: # named block
 
 Result: `claude-sonnet-4-6` gets `company: Anthropic`, `country: United States`, `images: true`, `tools: true`, `reasoning_model: false`, plus its own `context_window` and `max_tokens`.
 
+## Sampling
+
+Chat adapters select `temperature`, `top_p`, and `top_k` from `LLMConfig`. Configured `None` values are omitted; zero remains a value. Configured non-`None` values disabled by `supports_temperature` or the adapter's field/mode rules are omitted with a warning, including inherited registry defaults.
+
+For configured sampling, OpenAI Chat Completions and Google encode all three fields. OpenAI Responses (including xAI through its delegate), Bedrock, Mistral, AI21, and Vals encode `temperature` and `top_p`. Native Anthropic encodes `temperature` only without reasoning, and `top_p` only for MiniMax; it omits configured `top_k`. Delegated calls use their selected API adapter's rules.
+
+Native query kwargs are custom overrides applied through each adapter's existing merge path, without these sampling capability checks. Use endpoint-native shapes, such as Bedrock `topP` or OpenAI Chat Completions `extra_body={"top_k": ...}`. Explicit `None` follows SDK behavior rather than a shared omission rule. Existing SDK translations and raw `extra_body` precedence remain unchanged; SDKs or providers may ignore or reject unsupported arguments.
+
+Anthropic token counting reuses the request builder. Unsupported raw count kwargs can trigger its existing approximate fallback, including when estimating tokens for token-rate limits.
+
+Gateway callers set sampling in `LLMConfig`, not query kwargs. Its request format omits `None` configuration values, so they do not clear inherited server defaults.
+
+## Prompt Caching
+
+Anthropic (and its delegates), Bedrock, and OpenRouter routers add cache breakpoints to every request by default, and Anthropic bills each cache write. For inputs that won't be reused, such as one-off grading, set `LLMConfig(prompt_caching=False)` to send no breakpoints, so the request writes no cache. OpenAI GPT-5.6+ caches implicitly and bills writes, so those models instead get `prompt_cache_options.mode: "explicit"` with no breakpoints.
+
 ## Provider Properties
 
-OpenAI remains one provider and one `OpenAIModel`. The constructor's `use_completions` selector chooses Chat Completions when true and Responses when false (the default), once per instance. The separate API implementations are internal: public model names and provider configuration do not change.
+OpenAI remains one provider and one `OpenAIModel`. Set `LLMConfig(provider_config=OpenAIConfig(use_completions=True))` in `get_registry_model(..., override_config=...)` to choose Chat Completions for an OpenAI model; the default remains Responses. An explicit constructor `use_completions` selector takes precedence, preserving delegate API choices. The separate API implementations remain internal; public model names do not change.
 
 Provider-specific `provider_properties` are validated by each provider:
 
@@ -65,15 +81,16 @@ Provider-specific `provider_properties` are validated by each provider:
 - **Anthropic**: Set `thinking_off_type: between_tools` on auto-thinking models that reject `{"type": "disabled"}`; a request with `reasoning: false` then sends `between_tools`, and since that setting only accepts low/medium/high effort, `xhigh`/`max` are sent as `high`. `fallback_models` entries on such a request carry `thinking: {"type": "disabled"}` since the API validates each fallback against its own model.
 - **Anthropic**: Set `task_budget_tokens` to send `output_config.task_budget` with the task-budgets beta, an advisory token budget the model paces its agentic loop against. It is not enforced; `max_tokens` remains the hard ceiling.
 - **Anthropic**: Set `returns_thinking_truncated_turns: true` to return a turn that ran out of tokens inside a thinking block as a `max_tokens` result with its reasoning, instead of raising, so the client can continue the turn. On these keys only, replaying such a turn appends a short text block, since Anthropic rejects an assistant message whose final block is thinking.
-- **Google**: Set `uses_thinking_budget: true` on Gemini 2.5 and older models, which still take `thinking_budget` and the sampling parameters (`temperature`, `top_p`, `top_k`). Without the flag (Gemini 3+), reasoning requests send `thinking_level` (from `reasoning_effort` or a `thinking_level` kwarg), and `thinking_budget` plus the sampling parameters are dropped with a warning.
+- **Google**: Set `uses_thinking_budget: true` on models that take `thinking_budget`; otherwise reasoning requests send `thinking_level`. Configured sampling follows `supports_temperature` independently of thinking mode. `automatic_continuation` defaults to false; set it to true per model to opt into SDK multi-hop generation. Native query kwargs override provider config.
 - **OpenAI-compatible completions**: Set `stream_completions: false` to use non-streaming chat completions. The default is `true`.
 - **OpenAI Responses**: Set `code_mode: true` to add the hosted Code Mode tool. When enabled, function tools without explicit `allowed_callers` are sent with `allowed_callers: ["code_mode", "direct"]`.
-- **OpenAI Responses**: Set `access_programs` (for example `{cyber: daybreak_blue}`) to send OpenAI access programs. Set it in the registry entry, because a request `provider_config` replaces the entry's whole one. The gateway rejects it in a request unless the request has its own `custom_api_key`. `openai/gpt-daybreak-blue` and the `-daybreak` keys set it. A `-daybreak` key pins one model, so OpenAI cannot change it as it can the alias. OpenAI returns a 400 on models the program does not cover, such as `gpt-6.1-sol`.
+- **OpenAI Responses**: Set `access_programs` (for example `{cyber: daybreak_blue}`) to send OpenAI access programs. Set it in the registry entry, because a request `provider_config` replaces the entry's whole one. The gateway rejects it in a request unless the request has its own `custom_api_key`. The `-daybreak` keys set it; each pins one model. OpenAI returns a 400 on models the program does not cover, such as `gpt-6.1-sol`.
 - **OpenAI / Google**: Set `service_tier: flex` to request Flex processing (sent as `service_tier`); responses are billed at the model's `batch` discount.
-- **xAI**: Grok requests use the OpenAI-compatible Responses API by default (encrypted reasoning is requested via `include: ["reasoning.encrypted_content"]`). Set `native: true` to use the `xai_sdk` gRPC client instead.
+- **xAI**: Grok requests use the OpenAI-compatible Responses API (encrypted reasoning is requested via `include: ["reasoning.encrypted_content"]`). Every request carries a `prompt_cache_key` (`hash` by default, `id` to key on the resolved run/question IDs), which xAI uses for server routing ([maximizing cache hits](https://docs.x.ai/developers/advanced-api-usage/prompt-caching/maximizing-cache-hits)). The hash stays stable across turns with a `RawResponse` history boundary; replaying history only as `RawInput` dictionaries hashes the full input and may change the key each turn.
 - **Meta**: Set `use_responses: true` on selected models to route the OpenAI-compatible delegate through the Responses API instead of Chat Completions.
-- **OpenAI-compatible providers**: Set `prompt_cache_key: id` to derive an OpenAI prompt-cache key from the resolved `run_id` and `question_id`, or `prompt_cache_key: hash` to derive it from the stable prompt prefix, for Responses and Chat Completions.
+- **OpenAI-compatible providers**: Set `prompt_cache_key: id` to derive an OpenAI prompt-cache key from the resolved `run_id` and `question_id`, or `prompt_cache_key: hash` to derive it from the prompt prefix (up to the first `RawResponse`, or the full input if none exists), for Responses and Chat Completions.
 - **Alibaba Qwen reasoning models**: Set `preserve_thinking: true` to preserve reasoning context across turns.
+- **OpenRouter**: Set `openrouter_provider_only` to the host slugs allowed to serve a non-router key (sent as `provider.only`). Without it OpenRouter load-balances across every host, including quantized ones, so a unit test requires it on every non-router `openrouter/*` key.
 - **Alibaba**: Set `mainland: true` to route to the mainland China DashScope endpoint, authenticated with `DASHSCOPE_CN_API_KEY` instead of `DASHSCOPE_API_KEY`. Model Studio keys are region-scoped and are rejected by the other region's endpoint.
 
 ## Common model fields
@@ -96,9 +113,9 @@ OpenAI-compatible completions delegates accept base64 files only and reject `Fil
 
 Set `supports.audio: true` only when the provider accepts audio input, such as Gemini through `FileWithBytes`.
 
-Expose reasoning-effort variants as `alternative_keys` entries that override `default_parameters.reasoning_effort` (for example a `-xhigh` alias). Native SDK providers must encode every declared value: xAI `xhigh` requires `xai-sdk>=1.19.0`.
+Expose reasoning-effort variants as `alternative_keys` entries that override `default_parameters.reasoning_effort` (for example a `-xhigh` alias). `alibaba/qwen3.8-max-low` and `-medium` pin Qwen 3.8 Max to `low` and `medium`; QwenCloud takes `reasoning_effort` alongside `enable_thinking` and rejects it together with `thinking_budget`.
 
-xAI entries with `properties.reasoning_model: true` request `use_encrypted_content=True`. The returned `encrypted_content` lives on the raw response kept in history, survives `serialize_input`/`deserialize_input`, and is replayed on later turns so reasoning continues across multi-turn and tool-call loops. Without it, xAI stops reasoning after a few turns.
+xAI entries with `properties.reasoning_model: true` request `include: ["reasoning.encrypted_content"]`. The returned reasoning items live on the raw response kept in history, survive `serialize_input`/`deserialize_input`, and are replayed unchanged on later turns so reasoning continues across multi-turn and tool-call loops and the cached prompt prefix is preserved; xAI treats omitted reasoning content as the top cause of cache misses. Responses raw-response history remains supported; previously serialized native xAI protobuf history is incompatible after removal of `xai-sdk`.
 
 ## Transcription models
 
@@ -295,6 +312,7 @@ provider files are included automatically.
 | `NVIDIA_API_KEY`                   | —       | NVIDIA API key                                                                                |
 | `POOLSIDE_API_KEY`                 | —       | Poolside API key                                                                              |
 | `RAMP_API_KEY`                     | —       | Ramp Router API key                                                                           |
+| `REFLECTION_API_KEY`               | —       | Reflection API key                                                                            |
 | `SAKANA_API_KEY`                   | —       | Sakana Fugu API key                                                                           |
 | `DIGITAL_OCEAN_API_KEY`            | —       | DigitalOcean Inference model access key                                                       |
 | `BASETEN_API_KEY`                  | —       | Baseten API key                                                                               |

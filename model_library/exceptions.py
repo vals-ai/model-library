@@ -385,13 +385,18 @@ def register_retryable_exceptions(*exception_types: type[Exception]) -> None:
     RETRIABLE_EXCEPTIONS.extend(exception_types)
 
 
-RETRIABLE_EXCEPTION_CODES = [
+# Matched as whole numbers in the error message: "65000" and "1,500,000" are not a 500.
+RETRIABLE_STATUS_CODES = {
     "429",  # rate limit / too many requests
     "500",  # internal server error
     "502",  # bad gateway
     "503",  # service unavailable
     "504",  # gateway timeout
     "529",  # overloaded, service unavailable
+}
+_MESSAGE_NUMBER_PATTERN = re.compile(r"\d{1,3}(?:,\d{3})+|\d+")
+
+RETRIABLE_EXCEPTION_CODES = [
     "retry",
     "timeout",
     "connection_error",
@@ -404,16 +409,13 @@ RETRIABLE_EXCEPTION_CODES = [
     "throttling",  # AWS throttling errors
     "internal server error",
     "InternalServerError",
-    "statuscode.internal",  # gRPC INTERNAL errors (e.g. xAI native SDK)
-    "statuscode.unavailable",  # gRPC UNAVAILABLE errors (e.g. broken pipe)
-    "statuscode.invalid_argument",  # gRPC INVALID_ARGUMENT (transient under concurrency)
-    "currently at capacity",  # provider-side capacity rejection (xAI gRPC RESOURCE_EXHAUSTED)
     "processing too many requests",  # OpenAI flex capacity rejection, sent as a stream error event with no HTTP status
     "download multimodal file timed out",  # transient DashScope multimodal fetch timeout
-    "statuscode.unknown",  # gRPC UNKNOWN errors (e.g. "Stream removed")
-    "stream removed",  # gRPC stream dropped by peer
-    "rst_stream",  # gRPC RST_STREAM errors
+    "h2 protocol error",  # HTTP/2 body read failure sent as a stream error event (Together)
+    "stream ended unexpectedly",  # upstream stream cut mid-response, sent as a stream error event (Together)
     "unknown error, 999",
+    "unknown error, 715",
+    "unknown error, 722",
     "multimodal data is corrupted",  # transient 400 from some OpenAI-compatible endpoints on image payloads
 ]
 
@@ -439,6 +441,10 @@ def is_retriable_error(e: Exception) -> bool:
         return True
 
     error_message = str(e).lower()
+    if not RETRIABLE_STATUS_CODES.isdisjoint(
+        _MESSAGE_NUMBER_PATTERN.findall(error_message)
+    ):
+        return True
     return any(code in error_message for code in RETRIABLE_EXCEPTION_CODES)
 
 

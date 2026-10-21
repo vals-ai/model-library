@@ -36,6 +36,7 @@ Both distributions expose the same `model_library` imports and overlap on instal
 | Run examples from a repo checkout | [Examples guide](examples/README.md) |
 | Run tests | [Tests guide](tests/README.md) |
 | Contribute to model registry config | [Model config README](model_library/config/README.md) |
+| Open an issue or pull request | [Contributing](CONTRIBUTING.md) |
 
 ## Features
 

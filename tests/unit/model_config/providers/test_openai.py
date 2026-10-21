@@ -44,10 +44,3 @@ async def test_daybreak_key_sends_the_program_and_keeps_the_base_config(name: st
     body = await daybreak.build_body(_INPUT, tools=[])
     assert body["extra_body"] == {"access_programs": {"cyber": "daybreak_blue"}}
     assert "extra_body" not in await base.build_body(_INPUT, tools=[])
-
-
-@pytest.mark.parametrize("key", ["gpt-daybreak-blue", "gpt-daybreak-blue-high"])
-async def test_daybreak_blue_alias_sends_the_program(key: str):
-    body = await _model(f"openai/{key}").build_body(_INPUT, tools=[])
-
-    assert body["extra_body"] == {"access_programs": {"cyber": "daybreak_blue"}}

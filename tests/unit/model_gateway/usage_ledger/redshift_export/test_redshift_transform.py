@@ -1,16 +1,36 @@
 from __future__ import annotations
 
+import base64
 from datetime import UTC, date, datetime
 from decimal import Decimal
+import gzip
+import json
+from typing import cast
+
 import pytest
 
 from model_gateway.usage_ledger import redshift_schema
 from model_gateway.usage_ledger.redshift_transform import redshift_rows_from_usage_event
 
 
+_TIMELINE = {"encoding": "gzip+base64", "data": "opaque"}
 _COMPRESSED_PERFORMANCE = {
-    "encoding": "gzip+base64",
-    "data": "opaque",
+    "time_to_first_token_ms": {
+        "any": 7,
+        "answer": 11,
+        "reasoning": 7,
+        "content": 11,
+        "tool_call": None,
+    },
+    "answer_decode_ms": 900,
+    "timeline": _TIMELINE,
+}
+_TTFT_COLUMNS = {
+    "ttft_any_ms": 7,
+    "ttft_answer_ms": 11,
+    "ttft_reasoning_ms": 7,
+    "ttft_content_ms": 11,
+    "ttft_tool_call_ms": None,
 }
 
 
@@ -112,7 +132,8 @@ def test_redshift_rows_from_usage_event_maps_v3_fact_and_performance_rows() -> N
     }
     assert rows.performance == {
         "usage_event_id": "usage-1",
-        "performance": _COMPRESSED_PERFORMANCE,
+        **_TTFT_COLUMNS,
+        "timeline": _TIMELINE,
         "performance_truncated": False,
         "loaded_at": datetime(2026, 5, 29, 12, 35, 1, tzinfo=UTC),
     }
@@ -121,7 +142,9 @@ def test_redshift_rows_from_usage_event_maps_v3_fact_and_performance_rows() -> N
 @pytest.mark.parametrize(
     "performance",
     [
-        {"timeline": []},
+        {"timeline": _TIMELINE},
+        {"time_to_first_token_ms": {}, "timeline": {"encoding": "plain", "data": ""}},
+        {**_COMPRESSED_PERFORMANCE, "extra": True},
         {"encoding": "plain", "data": "opaque"},
         {"encoding": "gzip+base64", "data": 1},
         {"encoding": "gzip+base64", "data": "opaque", "extra": True},
@@ -137,6 +160,29 @@ def test_redshift_rows_reject_invalid_performance_envelopes(
         redshift_rows_from_usage_event(event, batch_id="batch-1")
 
 
+def test_redshift_rows_split_legacy_whole_performance_envelope() -> None:
+    timeline = [
+        {"channel": "reasoning", "index": 0, "first_token_ms": 5, "end_ms": 9, "events": []},
+        {"channel": "content", "index": 0, "first_token_ms": 10, "end_ms": 40, "events": []},
+    ]
+    payload = json.dumps(
+        {"time_to_first_token_ms": _COMPRESSED_PERFORMANCE["time_to_first_token_ms"], "timeline": timeline}
+    ).encode()
+    legacy = {
+        "encoding": "gzip+base64",
+        "data": base64.b64encode(gzip.compress(payload)).decode("ascii"),
+    }
+
+    rows = redshift_rows_from_usage_event(
+        _usage_event(details=_details(performance=legacy)), batch_id="batch-1"
+    )
+
+    assert {column: rows.performance[column] for column in _TTFT_COLUMNS} == _TTFT_COLUMNS
+    envelope = cast(dict[str, str], rows.performance["timeline"])
+    assert envelope["encoding"] == "gzip+base64"
+    assert json.loads(gzip.decompress(base64.b64decode(envelope["data"]))) == timeline
+
+
 def test_redshift_rows_from_usage_event_marks_whole_details_replacement() -> None:
     rows = redshift_rows_from_usage_event(
         _usage_event(
@@ -149,7 +195,7 @@ def test_redshift_rows_from_usage_event_marks_whole_details_replacement() -> Non
         batch_id="batch-1",
     )
 
-    assert rows.performance["performance"] is None
+    assert rows.performance["timeline"] is None
     assert rows.performance["performance_truncated"]
 
 
@@ -174,7 +220,7 @@ def test_redshift_rows_from_usage_event_handles_optional_root_and_performance() 
     assert rows.fact["api_key_name"] is None
     assert rows.fact["finish_reason"] == "length"
     assert rows.fact["finish_reason_raw"] is None
-    assert rows.performance["performance"] is None
+    assert rows.performance["timeline"] is None
     assert not rows.performance["performance_truncated"]
 
 

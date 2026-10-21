@@ -198,6 +198,7 @@ async def build_body(
     *,
     tools: list[ToolDefinition],
     output_schema: dict[str, Any] | type[BaseModel] | None = None,
+    sampling: dict[str, object],
     **kwargs: object,
 ) -> dict[str, Any]:
     body: dict[str, Any] = {
@@ -244,14 +245,14 @@ async def build_body(
         # require explicitly setting reasoning effort to disable thinking
         body["reasoning_effort"] = model.reasoning_effort
 
-    await apply_common_body(model, body, input, kwargs)
+    await apply_common_body(model, body, input, kwargs, sampling)
 
-    # top_k isn't a standard chat-completions field; forward it via
+    # Configured top_k isn't a standard chat-completions field; forward it via
     # extra_body so non-OpenAI backends (e.g. Gemini OpenAI-compat)
     # receive it while the OpenAI SDK doesn't reject it client-side.
-    if model.supports_temperature and model.top_k is not None:
+    if "top_k" in sampling:
         extra_body = cast(dict[str, Any], body.setdefault("extra_body", {}))
-        extra_body.setdefault("top_k", model.top_k)
+        extra_body.setdefault("top_k", sampling["top_k"])
 
     if output_schema is not None:
         schema = output_schema_value(output_schema)
@@ -265,7 +266,7 @@ async def build_body(
         }
 
     # Merge rather than replace extra_body: delegates pass their own via
-    # kwargs, which would otherwise discard entries set above (notably top_k).
+    # kwargs, which would otherwise discard configured entries (notably top_k).
     extra_body_kwarg = kwargs.pop("extra_body", None)
     body.update(kwargs)
     if extra_body_kwarg:

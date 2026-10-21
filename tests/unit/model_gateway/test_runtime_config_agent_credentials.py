@@ -184,6 +184,9 @@ def test_explicit_a_b_a_rollback_gets_new_generation_and_cache_namespace():
     assert state.current.cache_namespace == "models=0:credentials=opaque-a:3"
 
 
+_POOLS = b'{"pools": {}, "model_pools": [], "weights": {}, "revision": 1}'
+
+
 class SelectableAgent:
     def __init__(self, slow_profile: str) -> None:
         self.slow_profile = slow_profile
@@ -191,6 +194,8 @@ class SelectableAgent:
     async def fetch(self, profile: str) -> AgentConfiguration:
         if profile == self.slow_profile:
             await asyncio.sleep(1)
+        if profile == "pools":
+            return AgentConfiguration(_POOLS, "pools-1")
         content = _models(2) if profile == "models" else _credentials("after")
         return AgentConfiguration(content, f"{profile}-2")
 
@@ -206,14 +211,16 @@ async def test_applied_logs_name_worker_and_versions_without_secret(
         agent=SelectableAgent("none"),  # type: ignore[arg-type]
         model_profile="models",
         credential_profile="credentials",
+        pool_profile="pools",
     )
 
     with caplog.at_level("INFO", logger="model_proxy_server.runtime_config"):
         await manager.refresh_once()
 
     assert manager.state.current.models.revision == 2
-    assert caplog.text.count(f"worker_id={worker_id()}") == 2
+    assert caplog.text.count(f"worker_id={worker_id()}") == 3
     assert "source=models revision=2" in caplog.text
+    assert "source=pools revision=1 configuration_version=pools-1" in caplog.text
     assert "source=credentials version=credentials-2 generation=1" in caplog.text
     assert "after" not in caplog.text
 
@@ -231,6 +238,7 @@ async def test_timeout_installs_healthy_source_and_preserves_captured_view(
         agent=SelectableAgent(timed_out),  # type: ignore[arg-type]
         model_profile="models",
         credential_profile="credentials",
+        pool_profile="pools",
         source_timeout_seconds=0.01,
     )
 
@@ -281,6 +289,7 @@ def _runtime_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "GATEWAY_APPCONFIG_ENVIRONMENT": "test",
         "GATEWAY_APPCONFIG_MODEL_PROFILE": "models",
         "GATEWAY_APPCONFIG_CREDENTIAL_PROFILE": "credentials",
+        "GATEWAY_APPCONFIG_POOL_PROFILE": "pools",
         "GATEWAY_APPCONFIG_ACCESS_TOKEN": "token",
     }.items():
         monkeypatch.setenv(name, value)
@@ -312,3 +321,19 @@ def test_factory_ignores_legacy_managed_fields_setting(
     monkeypatch.setenv("GATEWAY_PROVIDER_MANAGED_FIELDS", "not-json")
 
     assert runtime_config_manager_from_env(RuntimeConfigState.bootstrap()) is not None
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "GATEWAY_APPCONFIG_MODEL_PROFILE",
+        "GATEWAY_APPCONFIG_CREDENTIAL_PROFILE",
+        "GATEWAY_APPCONFIG_POOL_PROFILE",
+    ],
+)
+def test_factory_requires_every_profile(monkeypatch: pytest.MonkeyPatch, name: str):
+    _runtime_env(monkeypatch)
+    monkeypatch.delenv(name)
+
+    with pytest.raises(RuntimeError, match=name):
+        runtime_config_manager_from_env(RuntimeConfigState.bootstrap())

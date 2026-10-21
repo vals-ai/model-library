@@ -8,7 +8,6 @@ from model_library.providers.amazon import AmazonModel
 from model_library.providers.anthropic import AnthropicModel
 from model_library.providers.google.google import GoogleModel
 from model_library.providers.mistral import MistralModel
-from model_library.providers.xai import XAIConfig, XAIModel
 
 _MIMES = pytest.mark.parametrize("mime", ["png", "image/png"])
 
@@ -48,12 +47,3 @@ async def test_mistral_data_url(mime: str):
     parsed = await MistralModel("mistral-test").parse_image(_image(mime))
     assert parsed["image_url"] == "data:image/png;base64,dGVzdA=="
 
-
-@_MIMES
-async def test_xai_native_data_url(mime: str):
-    model = XAIModel(
-        "grok-4.7",
-        config=LLMConfig(provider_config=XAIConfig(native=True)),
-    )
-    parsed = await model.parse_image(_image(mime))
-    assert parsed.image_url.image_url == "data:image/png;base64,dGVzdA=="

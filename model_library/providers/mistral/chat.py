@@ -43,7 +43,7 @@ from model_library.rate_limits import RateLimit
 from model_library.rate_limits.probe import probe_chat_completions_rate_limit
 from model_library.agent.tool import is_native_web_search
 from model_library.register_models import register_provider
-from model_library.utils import PROVIDER_READ_TIMEOUT_SECONDS, default_httpx_client
+from model_library.utils import PROVIDER_READ_TIMEOUT_SECONDS, default_httpx2_client
 
 if TYPE_CHECKING:
     from mistralai.client import Mistral
@@ -108,9 +108,11 @@ def map_mistral_finish_reason(
 
 @register_provider("mistralai")
 class MistralModel(LLM):
+    api_key_setting = "MISTRAL_API_KEY"
+
     @override
     def _get_default_api_key(self) -> str:
-        return model_library_settings.MISTRAL_API_KEY
+        return self._api_key_from(model_library_settings)
 
     @override
     def get_client(
@@ -124,19 +126,12 @@ class MistralModel(LLM):
             from opentelemetry import trace
 
             timeout_ms = int(PROVIDER_READ_TIMEOUT_SECONDS * 1000)
-            if base_url:
-                client = Mistral(
-                    api_key=api_key,
-                    async_client=default_httpx_client(),
-                    server_url=base_url,
-                    timeout_ms=timeout_ms,
-                )
-            else:
-                client = Mistral(
-                    api_key=api_key,
-                    async_client=default_httpx_client(),
-                    timeout_ms=timeout_ms,
-                )
+            client = Mistral(
+                api_key=api_key,
+                async_client=default_httpx2_client(),
+                server_url=base_url or None,
+                timeout_ms=timeout_ms,
+            )
 
             # Mistral treats NoOpTracerProvider as enabled and buffers streams.
             set_tracer_provider(client, trace.ProxyTracerProvider())
@@ -151,15 +146,20 @@ class MistralModel(LLM):
         config: LLMConfig | None = None,
     ):
         super().__init__(model_name, provider, config=config)
+        self._custom_api_key = config.custom_api_key if config else None
 
     @override
     async def get_rate_limit(self) -> RateLimit | None:
-        if self._has_custom_connection:
+        if self.custom_endpoint is not None:
             return None
 
         return await probe_chat_completions_rate_limit(
             base_url="https://api.mistral.ai/v1",
-            api_key=self._get_default_api_key(),
+            api_key=(
+                self._custom_api_key.get_secret_value()
+                if self._custom_api_key
+                else self._get_default_api_key()
+            ),
             model_name=self.model_name,
         )
 
@@ -321,12 +321,7 @@ class MistralModel(LLM):
         if self.max_tokens:
             body["max_tokens"] = self.max_tokens
 
-        if self.supports_temperature:
-            if self.temperature is not None:
-                body["temperature"] = self.temperature
-            if self.top_p is not None:
-                body["top_p"] = self.top_p
-
+        body.update(self._sampling_from_config(("temperature", "top_p")))
         body.update(kwargs)
         return body
 

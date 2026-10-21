@@ -1,13 +1,22 @@
 import json
+import logging
+import time
 from types import SimpleNamespace
 
 import pytest
 import sentry_sdk
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.sampling import ALWAYS_OFF
 from sentry_sdk.transport import Transport
 from sentry_sdk.utils import event_from_exception
 
 import model_library.telemetry as telemetry
+from model_gateway.route_helpers import GatewayOperation
+from model_gateway.types import ProviderError
 from model_library import model_library_settings
+from model_library.exceptions import ImmediateRetryException, ImmediateRetryExhaustedError
+from model_library.retriers.base import BaseRetrier
 
 
 def _load_json_object(value: object) -> dict[str, object]:
@@ -18,6 +27,26 @@ def _load_json_object(value: object) -> dict[str, object]:
     if not isinstance(payload, dict):
         raise AssertionError(f"Expected a JSON object, got {type(payload).__name__}")
     return payload
+
+
+class RecordingTransport(Transport):
+    def __init__(self, options: dict[str, object]):
+        super().__init__(options)
+        self.envelopes: list[object] = []
+
+    def capture_envelope(self, envelope: object) -> None:
+        self.envelopes.append(envelope)
+
+
+def _recording_client() -> tuple[sentry_sdk.Client, RecordingTransport]:
+    client = sentry_sdk.Client(
+        dsn="https://public@example.com/1",
+        transport=RecordingTransport,
+        before_send=telemetry._before_send,  # pyright: ignore[reportPrivateUsage, reportArgumentType]
+    )
+    transport = client.transport
+    assert isinstance(transport, RecordingTransport)
+    return client, transport
 
 
 class RecordingSpan:
@@ -422,6 +451,7 @@ def test_run_attributes_reads_request_context_only():
         "run_id": "run-a",
         "question_id": "q1",
         "query_id": None,
+        "attempt_id": None,
         "identity": None,
         "in_agent": None,
         "llm.in_agent.mode": "disabled",
@@ -885,23 +915,9 @@ def test_before_send_retains_non_exception_event_during_deferral():
 def test_deferred_exception_is_dropped_before_canonical_capture(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class RecordingTransport(Transport):
-        def __init__(self, options: dict[str, object] | None = None):
-            super().__init__(options)
-            self.envelopes: list[object] = []
-
-        def capture_envelope(self, envelope: object) -> None:
-            self.envelopes.append(envelope)
-
     monkeypatch.setattr(telemetry, "_enabled", True)
     exception = RuntimeError("provider failure")
-    client = sentry_sdk.Client(
-        dsn="https://public@example.com/1",
-        transport=RecordingTransport,
-        before_send=telemetry._before_send,  # pyright: ignore[reportPrivateUsage, reportArgumentType]
-    )
-    transport = client.transport
-    assert isinstance(transport, RecordingTransport)
+    client, transport = _recording_client()
     try:
         with sentry_sdk.isolation_scope() as scope:
             scope.set_client(client)
@@ -930,14 +946,6 @@ def test_deferred_exception_is_dropped_before_canonical_capture(
 def test_scheduled_retry_exception_is_warning_during_gateway_deferral(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class RecordingTransport(Transport):
-        def __init__(self, options: dict[str, object] | None = None):
-            super().__init__(options)
-            self.envelopes: list[object] = []
-
-        def capture_envelope(self, envelope: object) -> None:
-            self.envelopes.append(envelope)
-
     monkeypatch.setattr(
         telemetry,
         "_sentry_context",
@@ -947,13 +955,7 @@ def test_scheduled_retry_exception_is_warning_during_gateway_deferral(
         ),
     )
     monkeypatch.setattr(telemetry, "_enabled", True)
-    client = sentry_sdk.Client(
-        dsn="https://public@example.com/1",
-        transport=RecordingTransport,
-        before_send=telemetry._before_send,  # pyright: ignore[reportPrivateUsage, reportArgumentType]
-    )
-    transport = client.transport
-    assert isinstance(transport, RecordingTransport)
+    client, transport = _recording_client()
     try:
         with sentry_sdk.isolation_scope() as scope:
             scope.set_client(client)
@@ -978,6 +980,204 @@ def test_scheduled_retry_exception_is_warning_during_gateway_deferral(
         "retry.state": "scheduled",
         "retry.strategy": "immediate",
     }
+
+
+@pytest.mark.asyncio
+async def test_unsampled_gateway_retry_budget_through_sentry_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = TracerProvider(sampler=ALWAYS_OFF)
+    monkeypatch.setattr(
+        telemetry,
+        "_trace_api",
+        SimpleNamespace(get_tracer=provider.get_tracer, get_current_span=trace.get_current_span),
+    )
+    monkeypatch.setattr(telemetry, "_span_kind", trace.SpanKind)
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    monkeypatch.setattr(telemetry, "_retry_event_buckets", {})
+    monkeypatch.setattr(telemetry, "_retry_event_last_cleanup", 100.0)
+    monkeypatch.setattr(telemetry, "monotonic", lambda: 100.0)
+    monkeypatch.setattr(
+        telemetry,
+        "_sentry_context",
+        telemetry.ContextVar("test_unsampled_gateway_context", default={}),
+    )
+    client, transport = _recording_client()
+    attempts = 0
+
+    async def failing_provider() -> None:
+        nonlocal attempts
+        attempts += 1
+        raise ImmediateRetryException(f"provider-attempt-{attempts}")
+
+    try:
+        with sentry_sdk.isolation_scope() as scope:
+            scope.set_client(client)
+            for model, expected_count in (
+                ("model-a", 6),
+                ("model-a", 7),
+                ("model-b", 13),
+            ):
+                attrs = {"model.registry_key": model, "gen_ai.request.model": model}
+                with telemetry.start_span("gateway.query", attrs) as span:
+                    assert span is not None and not span.is_recording()
+                    operation = GatewayOperation(
+                        operation="query",
+                        dimensions={"Provider": "openai"},
+                        start=time.perf_counter(),
+                        provider="openai",
+                    )
+                    operation.start_event(attrs)
+                    result = await operation.provider_call(
+                        BaseRetrier.immediate_retry_wrapper(
+                            failing_provider, logging.getLogger(__name__)
+                        ),
+                        span_attrs=attrs,
+                    )
+                    assert isinstance(result, ProviderError)
+                    assert result.exception_type == "ImmediateRetryException"
+                assert len(transport.envelopes) == expected_count
+            assert attempts == 33
+        client.flush()
+    finally:
+        client.close()
+        provider.shutdown()
+
+    events = [
+        list(envelope.items)[0].get_event()  # type: ignore[attr-defined]
+        for envelope in transport.envelopes
+    ]
+    assert all(event is not None for event in events)
+    for index, model in ((5, "model-a"), (6, "model-a"), (12, "model-b")):
+        terminal = events[index]
+        assert terminal["tags"]["model.registry_key"] == model
+        assert "retry.state" not in terminal["tags"]
+        assert (
+            terminal["exception"]["values"][-1]["type"]
+            == ImmediateRetryExhaustedError.__name__
+        )
+    assert [event["tags"]["model.registry_key"] for event in events] == [
+        *(["model-a"] * 7),
+        *(["model-b"] * 6),
+    ]
+    assert all(events[index]["level"] == "warning" for index in (*range(5), *range(7, 12)))
+
+
+def test_scheduled_retry_budget_through_sentry_sdk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = [100.0]
+    monkeypatch.setattr(telemetry, "monotonic", lambda: now[0])
+    monkeypatch.setattr(telemetry, "_retry_event_buckets", {})
+    monkeypatch.setattr(telemetry, "_retry_event_last_cleanup", now[0])
+    monkeypatch.setattr(
+        telemetry,
+        "_sentry_context",
+        telemetry.ContextVar("test_retry_budget_context", default={}),
+    )
+    monkeypatch.setattr(telemetry, "_enabled", True)
+    client, transport = _recording_client()
+
+    def scheduled(exc: BaseException, model: str | None) -> None:
+        telemetry._sentry_context.set(  # pyright: ignore[reportPrivateUsage]
+            {"model.registry_key": model} if model is not None else {}
+        )
+        telemetry.record_scheduled_retry_exception(
+            exc, {"retry.strategy": "immediate", "retry.attempt": 1}
+        )
+
+    try:
+        with sentry_sdk.isolation_scope() as scope:
+            scope.set_client(client)
+            for index in range(5):
+                scheduled(RuntimeError(f"burst-{index}"), "model-a")
+            assert len(transport.envelopes) == 5
+            scheduled(RuntimeError("burst-excess"), "model-a")
+            scheduled(RuntimeError("different-message-same-class"), "model-a")
+            assert len(transport.envelopes) == 5
+
+            now[0] = 104.999
+            scheduled(RuntimeError("before-refill"), "model-a")
+            assert len(transport.envelopes) == 5
+            now[0] = 105.0
+            scheduled(RuntimeError("first-refill"), "model-a")
+            assert len(transport.envelopes) == 6
+            scheduled(RuntimeError("after-refill-excess"), "model-a")
+            for second in (106.0, 107.0, 109.999):
+                now[0] = second
+                scheduled(RuntimeError(f"rejected-{second}"), "model-a")
+            assert len(transport.envelopes) == 6
+            now[0] = 110.0
+            scheduled(RuntimeError("second-refill"), "model-a")
+            scheduled(RuntimeError("still-excess"), "model-a")
+            assert len(transport.envelopes) == 7
+
+            scheduled(RuntimeError("other-model"), "model-b")
+            scheduled(ValueError("other-class"), "model-a")
+            assert len(transport.envelopes) == 9
+            telemetry._sentry_context.set(  # pyright: ignore[reportPrivateUsage]
+                {"model.registry_key": "model-a"}
+            )
+            telemetry.record_exception(RuntimeError("terminal"))
+            assert len(transport.envelopes) == 10
+            scheduled(RuntimeError("without-model-1"), None)
+            scheduled(RuntimeError("without-model-2"), None)
+            assert len(transport.envelopes) == 12
+
+            # The capture at 125 advances the sweep clock; the next one is at 150.
+            now[0] = 125.0
+            scheduled(RuntimeError("sweep-primer"), "model-c")
+            now[0] = 149.9
+            for index in range(5):
+                scheduled(RuntimeError(f"recent-burst-{index}"), "model-a")
+            scheduled(RuntimeError("recent-burst-excess"), "model-a")
+            assert len(transport.envelopes) == 18
+
+            now[0] = 150.0
+            for index in range(5):
+                scheduled(RuntimeError(f"idle-burst-{index}"), "model-b")
+            scheduled(RuntimeError("idle-burst-excess"), "model-b")
+            scheduled(RuntimeError("recent-before-refill"), "model-a")
+            assert len(transport.envelopes) == 23
+            now[0] = 154.9
+            scheduled(RuntimeError("recent-first-refill"), "model-a")
+            scheduled(RuntimeError("recent-after-refill-excess"), "model-a")
+            assert len(transport.envelopes) == 24
+        client.flush()
+    finally:
+        client.close()
+
+    events = [
+        list(envelope.items)[0].get_event()  # type: ignore[attr-defined]
+        for envelope in transport.envelopes
+    ]
+    assert all(event is not None for event in events)
+    assert [event["exception"]["values"][0]["value"] for event in events] == [
+        *(f"burst-{index}" for index in range(5)),
+        "first-refill",
+        "second-refill",
+        "other-model",
+        "other-class",
+        "terminal",
+        "without-model-1",
+        "without-model-2",
+        "sweep-primer",
+        *(f"recent-burst-{index}" for index in range(5)),
+        *(f"idle-burst-{index}" for index in range(5)),
+        "recent-first-refill",
+    ]
+    assert all(event["tags"]["retry.state"] == "scheduled" for event in events[:9])
+    assert events[7]["tags"]["model.registry_key"] == "model-b"
+    assert events[8]["exception"]["values"][0]["type"] == "ValueError"
+    assert "retry.state" not in events[9]["tags"]
+    assert all("model.registry_key" not in event["tags"] for event in events[10:12])
+    assert [event["tags"]["model.registry_key"] for event in events[12:]] == [
+        "model-c",
+        *(["model-a"] * 5),
+        *(["model-b"] * 5),
+        "model-a",
+    ]
+    assert all(event["tags"]["retry.state"] == "scheduled" for event in events[12:])
 
 def test_before_send_adds_search_context_without_overwriting_event_tags(monkeypatch):
     monkeypatch.setattr(

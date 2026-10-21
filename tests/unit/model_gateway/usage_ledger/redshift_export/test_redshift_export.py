@@ -17,7 +17,7 @@ from model_gateway.usage_ledger.redshift_export import (
 
 
 def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
-    performance = b'{"encoding":"gzip+base64","data":"' + b"x" * 90_048 + b'"}'
+    timeline = b'{"encoding":"gzip+base64","data":"' + b"x" * 90_048 + b'"}'
     payload = parquet_bytes_from_rows(
         [
             {
@@ -59,7 +59,12 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
                 "source_pk": "pk",
                 "source_sk": "sk",
                 "loaded_at": datetime(2026, 5, 29, 12, 2, tzinfo=UTC),
-                "performance": performance,
+                "ttft_any_ms": 7,
+                "ttft_answer_ms": 11,
+                "ttft_reasoning_ms": 7,
+                "ttft_content_ms": 11,
+                "ttft_tool_call_ms": None,
+                "timeline": timeline,
                 "performance_truncated": False,
             }
         ]
@@ -74,7 +79,8 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
     assert table.schema.field("metadata_schema_version").type == pa.int32()
     assert table.schema.field("cost_usd").type == pa.decimal128(38, 12)
     assert table.schema.field("duration_seconds").type == pa.decimal128(18, 6)
-    assert table.schema.field("performance").type == pa.binary()
+    assert table.schema.field("ttft_answer_ms").type == pa.int32()
+    assert table.schema.field("timeline").type == pa.binary()
     assert "payload" not in table.schema.names
     assert "details" not in table.schema.names
     row = table.to_pylist()[0]
@@ -87,8 +93,10 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
     assert row["outcome"] == "success"
     assert row["error_type"] is None
     assert not row["performance_truncated"]
-    assert len(row["performance"]) > 65_535
-    assert row["performance"] == performance
+    assert row["ttft_answer_ms"] == 11
+    assert row["ttft_tool_call_ms"] is None
+    assert len(row["timeline"]) > 65_535
+    assert row["timeline"] == timeline
     sparse = dict(row)
     sparse.update(
         schema_version=4,

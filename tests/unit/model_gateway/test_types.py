@@ -11,10 +11,19 @@ def _request(provider_config: dict[str, object] | None) -> dict[str, object]:
     return {"model": "openai/gpt-6-sol", "inputs": [], "config": config}
 
 
-def test_request_provider_config_cannot_set_access_programs():
+@pytest.mark.parametrize("custom_api_key", [None, ""])
+def test_request_provider_config_cannot_set_access_programs(
+    custom_api_key: str | None,
+):
+    config: dict[str, object] = {
+        "provider_config": {"access_programs": {"cyber": "daybreak_blue"}}
+    }
+    if custom_api_key is not None:
+        config["custom_api_key"] = custom_api_key
+
     with pytest.raises(ValidationError, match="access_programs cannot be set"):
         QueryRequest.model_validate(
-            _request({"access_programs": {"cyber": "daybreak_blue"}})
+            {"model": "openai/gpt-6-sol", "inputs": [], "config": config}
         )
 
 

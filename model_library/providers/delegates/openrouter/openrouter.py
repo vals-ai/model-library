@@ -21,10 +21,13 @@ class OpenRouterConfig(ProviderConfig):
     openrouter_allowed_models: list[str] | None = None
     openrouter_cost_tier: Literal["low", "medium", "high", "xhigh", "max"] | None = None
     openrouter_min_coding_score: float | None = None
+    openrouter_provider_only: list[str] | None = None
 
 
 @register_provider("openrouter")
 class OpenRouterModel(DelegateOnly):
+    api_key_setting = "OPENROUTER_API_KEY"
+
     provider_config = OpenRouterConfig()
 
     def __init__(
@@ -42,7 +45,7 @@ class OpenRouterModel(DelegateOnly):
             config.custom_endpoint or "https://openrouter.ai/api/v1"
         )
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.OPENROUTER_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(
@@ -89,11 +92,16 @@ class OpenRouterModel(DelegateOnly):
                 model_name=self._registry_key or f"openrouter/{self.model_name}"
             )
             # Claude upstreams cache only with a breakpoint; others cache on their own.
-            extra_body["cache_control"] = {"type": "ephemeral"}
+            if self.prompt_caching:
+                extra_body["cache_control"] = {"type": "ephemeral"}
             # Auto may pick a host that silently ignores response_format or tools;
             # require_parameters makes it pick one that supports them (or fail).
             if output_schema is not None or tools:
                 extra_body["provider"] = {"require_parameters": True}
+        elif self.provider_config.openrouter_provider_only:
+            extra_body["provider"] = {
+                "only": self.provider_config.openrouter_provider_only
+            }
 
         return await self.delegate_query(
             input,

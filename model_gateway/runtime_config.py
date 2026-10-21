@@ -21,6 +21,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
 
+from model_gateway.key_pool_config import PoolConfigSnapshot, PublishedPoolDocument
 from model_gateway.metrics import record_runtime_config_refresh
 from model_gateway.observability import worker_id
 from model_library.register_models import (
@@ -34,7 +35,7 @@ from model_library.settings import managed_settings_snapshot
 
 logger = logging.getLogger("model_proxy_server.runtime_config")
 
-SourceName = Literal["models", "credentials"]
+SourceName = Literal["models", "credentials", "pools"]
 
 # The Gateway's own settings; a credential snapshot must never override them.
 GATEWAY_OWNED_FIELD_PREFIXES = ("GATEWAY_", "MODEL_GATEWAY_", "AWS_", "OTEL_")
@@ -120,6 +121,7 @@ class _RevealedCredentials(Mapping[str, str]):
 class RuntimeView:
     models: ModelSnapshot
     credentials: CredentialSnapshot | None
+    pools: PoolConfigSnapshot | None
 
     @property
     def cache_namespace(self) -> str:
@@ -128,7 +130,13 @@ class RuntimeView:
             if self.credentials is None
             else f"{self.credentials.version}:{self.credentials.generation}"
         )
-        return f"models={self.models.revision}:credentials={credential_revision}"
+        namespace = f"models={self.models.revision}:credentials={credential_revision}"
+        # Pool changes rebuild rate-limit monitor probes for the new keys.
+        return (
+            namespace
+            if self.pools is None
+            else f"{namespace}:pools={self.pools.document.revision}"
+        )
 
 
 @dataclass(frozen=True)
@@ -148,6 +156,20 @@ def runtime_cache_namespace() -> str:
     return "bootstrap" if view is None else view.cache_namespace
 
 
+def runtime_pool_snapshot() -> PoolConfigSnapshot | None:
+    """The published pool config this request runs with; None without AppConfig."""
+    view = _runtime_view_context.get()
+    return None if view is None else view.pools
+
+
+def runtime_credential_fields() -> frozenset[str]:
+    """The provider secret's field names this request runs with; empty without AppConfig."""
+    view = _runtime_view_context.get()
+    if view is None or view.credentials is None:
+        return frozenset()
+    return view.credentials.managed_fields
+
+
 class RuntimeConfigState:
     def __init__(self, view: RuntimeView) -> None:
         self._view = view
@@ -164,6 +186,7 @@ class RuntimeConfigState:
                     registries=get_registries(),
                 ),
                 credentials=None,
+                pools=None,
             )
         )
 
@@ -194,6 +217,7 @@ class RuntimeConfigState:
         self,
         models: ModelSnapshot | None = None,
         credentials: CredentialSnapshot | None = None,
+        pools: PoolConfigSnapshot | None = None,
     ) -> InstallResult:
         """Install valid sources independently in one immutable runtime view."""
         with self._lock:
@@ -203,10 +227,22 @@ class RuntimeConfigState:
                     _validate_successor(
                         self._view.models.revision,
                         self._view.models.digest,
-                        models,
+                        models.revision,
+                        models.digest,
                     )
                 except SnapshotRejectedError:
                     rejected.add("models")
+            current_pools = self._view.pools
+            if pools is not None and current_pools is not None:
+                try:
+                    _validate_successor(
+                        current_pools.document.revision,
+                        current_pools.digest,
+                        pools.document.revision,
+                        pools.digest,
+                    )
+                except SnapshotRejectedError:
+                    rejected.add("pools")
 
             current_credentials = self._view.credentials
             if (
@@ -236,10 +272,20 @@ class RuntimeConfigState:
                 else:
                     applied.add("credentials")
                     next_credentials = credentials
+            next_pools = current_pools
+            if pools is not None and "pools" not in rejected:
+                if (
+                    current_pools is not None
+                    and pools.document.revision == current_pools.document.revision
+                ):
+                    unchanged.add("pools")
+                else:
+                    applied.add("pools")
+                    next_pools = pools
 
             if applied:
                 self._view = RuntimeView(
-                    models=next_models, credentials=next_credentials
+                    models=next_models, credentials=next_credentials, pools=next_pools
                 )
             return InstallResult(
                 applied=frozenset(applied),
@@ -251,11 +297,12 @@ class RuntimeConfigState:
 def _validate_successor(
     current_revision: int,
     current_digest: str,
-    candidate: ModelSnapshot,
+    candidate_revision: int,
+    candidate_digest: str,
 ) -> None:
-    if candidate.revision < current_revision:
+    if candidate_revision < current_revision:
         raise SnapshotRejectedError("candidate revision is older than current")
-    if candidate.revision == current_revision and candidate.digest != current_digest:
+    if candidate_revision == current_revision and candidate_digest != current_digest:
         raise SnapshotRejectedError("candidate changes an existing revision")
 
 
@@ -329,6 +376,7 @@ class RuntimeConfigManager:
         agent: AppConfigAgentClient,
         model_profile: str,
         credential_profile: str,
+        pool_profile: str,
         poll_interval_seconds: float = 5.0,
         source_timeout_seconds: float = 3.0,
     ) -> None:
@@ -336,6 +384,7 @@ class RuntimeConfigManager:
         self._agent = agent
         self._model_profile = model_profile
         self._credential_profile = credential_profile
+        self._pool_profile = pool_profile
         self._poll_interval_seconds = poll_interval_seconds
         self._source_timeout_seconds = source_timeout_seconds
         self._refresh_lock = asyncio.Lock()
@@ -347,7 +396,9 @@ class RuntimeConfigManager:
     async def _refresh_once(self) -> RefreshResult:
         failed: set[SourceName] = set()
         rejected: set[SourceName] = set()
-        candidates: dict[SourceName, ModelSnapshot | CredentialSnapshot] = {}
+        candidates: dict[
+            SourceName, ModelSnapshot | CredentialSnapshot | PoolConfigSnapshot
+        ] = {}
 
         async def read(source: SourceName, profile: str) -> None:
             try:
@@ -365,6 +416,12 @@ class RuntimeConfigManager:
                         candidates[source] = await asyncio.to_thread(
                             _parse_model_snapshot, delivered.content
                         )
+                elif source == "pools":
+                    candidates[source] = _parse_pool_snapshot(
+                        delivered.content,
+                        version=delivered.version,
+                        current=self.state.current.pools,
+                    )
                 else:
                     candidates[source] = _parse_credential_snapshot(
                         delivered.content,
@@ -385,10 +442,12 @@ class RuntimeConfigManager:
         await asyncio.gather(
             read("models", self._model_profile),
             read("credentials", self._credential_profile),
+            read("pools", self._pool_profile),
         )
         models = cast(ModelSnapshot | None, candidates.get("models"))
         credentials = cast(CredentialSnapshot | None, candidates.get("credentials"))
-        installed = self.state.install(models, credentials)
+        pools = cast(PoolConfigSnapshot | None, candidates.get("pools"))
+        installed = self.state.install(models, credentials, pools)
         rejected.update(installed.rejected)
         for source in rejected:
             record_runtime_config_refresh(source=source, outcome="rejected")
@@ -420,6 +479,15 @@ class RuntimeConfigManager:
                     outcome="applied",
                     propagation_seconds=source_propagation_seconds,
                 )
+            elif isinstance(candidate, PoolConfigSnapshot):
+                logger.info(
+                    "Applied runtime configuration snapshot source=pools "
+                    "revision=%s configuration_version=%s worker_id=%s",
+                    candidate.document.revision,
+                    candidate.configuration_version,
+                    worker_id(),
+                )
+                record_runtime_config_refresh(source=source, outcome="applied")
             else:
                 logger.info(
                     "Applied runtime configuration snapshot source=credentials "
@@ -473,6 +541,7 @@ def runtime_config_manager_from_env(
             "GATEWAY_APPCONFIG_ENVIRONMENT",
             "GATEWAY_APPCONFIG_MODEL_PROFILE",
             "GATEWAY_APPCONFIG_CREDENTIAL_PROFILE",
+            "GATEWAY_APPCONFIG_POOL_PROFILE",
             "GATEWAY_APPCONFIG_ACCESS_TOKEN",
         )
     }
@@ -497,6 +566,7 @@ def runtime_config_manager_from_env(
         ),
         model_profile=required["GATEWAY_APPCONFIG_MODEL_PROFILE"],
         credential_profile=required["GATEWAY_APPCONFIG_CREDENTIAL_PROFILE"],
+        pool_profile=required["GATEWAY_APPCONFIG_POOL_PROFILE"],
         poll_interval_seconds=poll_interval,
     )
 
@@ -567,4 +637,17 @@ def _parse_credential_snapshot(
         digest=digest,
         managed_fields=managed_fields,
         values=MappingProxyType(values),
+    )
+
+
+def _parse_pool_snapshot(
+    payload: bytes, *, version: str, current: PoolConfigSnapshot | None
+) -> PoolConfigSnapshot:
+    digest = hashlib.sha256(payload).hexdigest()
+    if current is not None and digest == current.digest:
+        return current
+    return PoolConfigSnapshot(
+        digest=digest,
+        document=PublishedPoolDocument.model_validate_json(payload),
+        configuration_version=version,
     )

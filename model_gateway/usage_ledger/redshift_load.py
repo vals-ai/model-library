@@ -26,7 +26,7 @@ def staging_row_from_redshift_rows(rows: RedshiftUsageRows) -> dict[str, object]
     row = dict(rows.fact)
     row.update(
         {
-            key: _json_bytes(value) if key == "performance" else value
+            key: _json_bytes(value) if key == "timeline" else value
             for key, value in rows.performance.items()
             if key != "loaded_at"
         }
@@ -43,7 +43,7 @@ def copy_usage_events_staging_sql(
     table = redshift_schema.qualified_table_name(
         redshift_schema.USAGE_EVENTS_STAGING_TABLE_NAME, schema
     )
-    columns = _select_column_list(_STAGING_COPY_COLUMNS, spaces=2, expressions={})
+    columns = _column_list(_STAGING_COPY_COLUMNS)
     return f"""copy {table} (
 {columns}
 )
@@ -253,15 +253,11 @@ def _batch_source_sql(
     schema: str,
     columns: tuple[str, ...],
     batch_predicate: str,
-    *,
-    expressions: dict[str, str] | None = None,
 ) -> str:
     staging = redshift_schema.qualified_table_name(
         redshift_schema.USAGE_EVENTS_STAGING_TABLE_NAME, schema
     )
-    selected_columns = _select_column_list(
-        columns, spaces=2, expressions=expressions or {}
-    )
+    selected_columns = _column_list(columns)
     return f"""  select
 {selected_columns}
   from {staging}
@@ -279,21 +275,6 @@ def _json_bytes(value: object) -> bytes | None:
     return json.dumps(
         value, sort_keys=True, separators=(",", ":"), default=str
     ).encode()
-
-
-def _select_column_list(
-    columns: tuple[str, ...],
-    *,
-    spaces: int = 2,
-    expressions: dict[str, str],
-) -> str:
-    prefix = " " * spaces
-    return ",\n".join(
-        f"{prefix}{expressions[column]} as {column}"
-        if column in expressions
-        else f"{prefix}{column}"
-        for column in columns
-    )
 
 
 def _column_list(columns: tuple[str, ...], *, spaces: int = 2) -> str:

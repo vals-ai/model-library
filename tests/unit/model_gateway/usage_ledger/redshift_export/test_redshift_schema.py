@@ -66,16 +66,17 @@ def test_aggregate_tables_are_defined_per_grain_without_non_additive_metrics():
 def test_fact_staging_performance_and_dimension_table_ddls_are_specific():
     staging_ddl = redshift_schema.usage_events_staging_table_ddl()
     facts_ddl = redshift_schema.usage_events_table_ddl()
-    performance_ddl = redshift_schema.usage_event_performance_v2_table_ddl()
+    performance_ddl = redshift_schema.usage_event_performance_table_ddl()
     dimension_values_ddl = redshift_schema.usage_dimension_values_table_ddl()
     analytics_dimensions_ddl = redshift_schema.analytics_dimensions_table_ddl()
 
     assert (
-        "create table if not exists gateway_usage.usage_events_staging_v4"
+        "create table if not exists gateway_usage.usage_events_staging_v5"
         in staging_ddl
     )
     assert "batch_id varchar(128) not null" in staging_ddl
-    assert "performance varbyte(1048576)" in staging_ddl
+    assert "ttft_any_ms integer" in staging_ddl
+    assert "timeline varbyte(1048576)" in staging_ddl
     assert "sortkey (batch_id, completed_at)" in staging_ddl
     staging_column_block = staging_ddl.split("(\n", 1)[1].split("\n)\n", 1)[0]
     staging_column_names = tuple(
@@ -129,12 +130,17 @@ def test_fact_staging_performance_and_dimension_table_ddls_are_specific():
         assert column in facts_ddl
 
     assert (
-        "create table if not exists gateway_usage.usage_event_performance_v2"
+        "create table if not exists gateway_usage.usage_event_performance_v3"
         in performance_ddl
     )
     for column in (
         "usage_event_id varchar(128) not null",
-        "performance varbyte(1048576)",
+        "ttft_any_ms integer",
+        "ttft_answer_ms integer",
+        "ttft_reasoning_ms integer",
+        "ttft_content_ms integer",
+        "ttft_tool_call_ms integer",
+        "timeline varbyte(1048576)",
         "performance_truncated boolean not null default false",
         "loaded_at timestamptz not null default getdate()",
     ):
@@ -155,7 +161,7 @@ def test_fact_staging_performance_and_dimension_table_ddls_are_specific():
         assert forbidden not in performance_ddl
 
     assert redshift_schema.USAGE_EVENT_PERFORMANCE_TABLE_NAME == (
-        "usage_event_performance_v2"
+        "usage_event_performance_v3"
     )
 
     assert (
@@ -201,7 +207,7 @@ def test_schema_statement_batches_include_required_tables_without_control_state(
     for table in (
         "usage_events_staging",
         "usage_events",
-        "usage_event_performance_v2",
+        "usage_event_performance_v3",
         "usage_agg_5m",
         "usage_agg_1h",
         "usage_agg_1d",

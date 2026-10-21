@@ -1,7 +1,7 @@
 # Typed-decision models: one call takes a state and typed questions and returns a typed answer for each (a choice
 # with a probability for every option, a probability, or a score). They do not generate text. Served by the
 # `decision` provider (providers/delegates/openrouter/decision.py) through OpenRouter's Decisions API with OPENROUTER_API_KEY, or
-# OpenAI's with OPENAI_API_KEY (`decision_api: openai`); the gateway already holds both. See docs/decision-models.md.
+# OpenAI's with OPENAI_API_KEY (`decision_api: openai`) or Perplexity's with PERPLEXITY_API_KEY (`decision_api: perplexity`). See docs/decision-models.md.
 # Prices are USD per million input tokens, output is free. OpenRouter context windows are from its decision-model
 # catalog.
 base-config:
@@ -27,10 +27,23 @@ decision-models:
     provider_endpoint: typesafe/jev-1.13-20260917  # pinned, dated; never an alias
     label: Jev 1.13.0
     company: TypeSafe
+    country: United States
     documentation_url: https://openrouter.ai/typesafe/jev-1.13
-    release_date: 2026-09-17
+    release_date: 2026-09-18
     properties:
-      context_window: 64_000
+      context_window: 262_144
+    costs_per_million_token:
+      input: 0.042
+
+  decision/jev-1.14:
+    provider_endpoint: typesafe/jev-1.14-20261014  # pinned, dated; never an alias
+    label: Jev 1.14
+    company: TypeSafe
+    country: United States
+    documentation_url: https://openrouter.ai/typesafe/jev-1.14
+    release_date: 2026-10-14
+    properties:
+      context_window: 262_144
     costs_per_million_token:
       input: 0.042
 
@@ -78,3 +91,179 @@ decision-models:
         threshold: 272_000
         input: 0.2
         output: 0.0
+
+  decision/decider-v1.2:
+    provider_endpoint: pplx-decider-v1.2  # Perplexity serves no dated snapshot; never the -latest alias
+    label: Decider V1.2
+    company: Perplexity
+    country: United States
+    documentation_url: https://docs.perplexity.ai/docs/decisions/quickstart
+    release_date: 2026-10-16
+    open_source: true
+    provider_properties:
+      decision_api: perplexity
+    properties:
+      context_window: 262_144
+    costs_per_million_token:
+      input: 0.02
+
+  decision/decider-flash-v1.2:
+    provider_endpoint: pplx-decider-flash-v1.2  # Perplexity serves no dated snapshot; never the -latest alias
+    label: Decider Flash V1.2
+    company: Perplexity
+    country: United States
+    documentation_url: https://docs.perplexity.ai/docs/decisions/quickstart
+    release_date: 2026-10-16
+    open_source: true
+    provider_properties:
+      decision_api: perplexity
+    properties:
+      context_window: 262_144
+    costs_per_million_token:
+      input: 0.01
+
+  decision/drex-v1.5:
+    provider_endpoint: nace-ai/drex-v1.5-20261009  # pinned, dated; never an alias
+    label: Drex v1.5
+    company: Nace.AI
+    country: United States
+    documentation_url: https://openrouter.ai/nace-ai/drex-v1.5
+    release_date: 2026-10-09
+    open_source: true
+    properties:
+      context_window: 131_072
+    costs_per_million_token:
+      input: 0.04
+
+  decision/drex-v2.0:
+    provider_endpoint: nace-ai/drex-v2.0-20261009  # pinned, dated; never an alias
+    label: Drex v2.0
+    company: Nace.AI
+    country: United States
+    documentation_url: https://openrouter.ai/nace-ai/drex-v2.0
+    release_date: 2026-10-12
+    open_source: true
+    properties:
+      context_window: 131_072
+    costs_per_million_token:
+      input: 0.06
+
+  decision/d1:
+    provider_endpoint: liquid/d1-20260930  # pinned, dated; never an alias
+    label: d1
+    company: Liquid AI
+    country: United States
+    documentation_url: https://openrouter.ai/liquid/d1
+    release_date: 2026-10-01
+    properties:
+      context_window: 65_536
+    costs_per_million_token:
+      input: 0.02
+
+  decision/d1-ultra:
+    provider_endpoint: liquid/d1-ultra-20261015  # pinned, dated; never an alias
+    label: d1-ultra
+    company: Liquid AI
+    country: United States
+    documentation_url: https://openrouter.ai/liquid/d1-ultra
+    release_date: 2026-10-15
+    properties:
+      context_window: 32_768
+    costs_per_million_token:
+      input: 0.042
+
+  decision/kev-4b:
+    provider_endpoint: jaredpalmer/kev-4b-20260924  # pinned, dated; never an alias
+    label: Kev 4B
+    company: Jared Palmer
+    documentation_url: https://openrouter.ai/jaredpalmer/kev-4b
+    release_date: 2026-09-25
+    open_source: true
+    properties:
+      context_window: 8_192
+    costs_per_million_token:
+      input: 0.042
+
+  decision/tev1-4b-experimental:
+    provider_endpoint: togethercomputer/tev1-4b-experimental-20260923  # pinned, dated; never an alias
+    label: Tev1 4B Experimental
+    company: Together AI
+    country: United States
+    documentation_url: https://openrouter.ai/togethercomputer/tev1-4b-experimental
+    release_date: 2026-09-30
+    open_source: true
+    properties:
+      context_window: 32_768
+    costs_per_million_token:
+      input: 0.042
+
+  decision/classify-1:
+    provider_endpoint: scaledown/classify-1-20260928  # pinned, dated; never an alias
+    label: Classify-1
+    company: ScaleDown
+    country: United States
+    documentation_url: https://openrouter.ai/scaledown/classify-1
+    release_date: 2026-10-13
+    properties:
+      context_window: 1_000_000
+    costs_per_million_token:
+      input: 0.04
+
+  decision/clef-omni:
+    provider_endpoint: cloudflare/clef-omni-20261009  # pinned, dated; never an alias
+    label: Clef Omni
+    company: Cloudflare
+    country: United States
+    documentation_url: https://openrouter.ai/cloudflare/clef-omni
+    release_date: 2026-10-09
+    open_source: true
+    properties:
+      context_window: 65_536
+    costs_per_million_token:
+      input: 0.15
+
+  # Every OpenRouter host serves the same weights at its own price and context; pinned to Cloudflare's.
+  decision/clef:
+    provider_endpoint: cloudflare/clef  # OpenRouter serves no dated snapshot
+    label: Clef
+    company: Cloudflare
+    country: United States
+    documentation_url: https://openrouter.ai/cloudflare/clef
+    release_date: 2026-10-01
+    open_source: true
+    provider_properties:
+      openrouter_provider_only: [cloudflare]
+    properties:
+      context_window: 65_536
+    costs_per_million_token:
+      input: 0.24
+
+  decision/clef-flash:
+    provider_endpoint: cloudflare/clef-flash  # OpenRouter serves no dated snapshot
+    label: Clef Flash
+    company: Cloudflare
+    country: United States
+    documentation_url: https://openrouter.ai/cloudflare/clef-flash
+    release_date: 2026-10-01
+    open_source: true
+    provider_properties:
+      openrouter_provider_only: [cloudflare]
+    properties:
+      context_window: 24_576
+    costs_per_million_token:
+      input: 0.038
+
+  # Upstage also serves a non-ZDR endpoint (`upstage`); pinned to the ZDR one.
+  decision/solar-decide:
+    provider_endpoint: upstage/solar-decide-20260928  # pinned, dated; never an alias
+    label: Solar Decide
+    company: Upstage
+    country: South Korea
+    documentation_url: https://openrouter.ai/upstage/solar-decide
+    release_date: 2026-09-28
+    provider_properties:
+      openrouter_provider_only: [upstage/zdr]
+    properties:
+      context_window: 524_288
+    costs_per_million_token:
+      input: 0.05

@@ -3,6 +3,7 @@ import logging
 import socket
 from collections.abc import Generator
 from contextlib import contextmanager
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
 
@@ -18,6 +19,8 @@ from model_library.failure_capture.aiohttp import (
 from model_library.failure_capture.httpx import CapturingAsyncHTTPTransport
 
 if TYPE_CHECKING:
+    import httpx2
+
     from anthropic import AsyncAnthropic
     from openai import AsyncOpenAI
 
@@ -279,17 +282,30 @@ def make_aiohttp_session(
     )
 
 
-def default_aiohttp_httpx_client(
-    dns_resolve: dict[str, str] | None = None,
-) -> httpx.AsyncClient:
-    """Create an httpx AsyncClient backed by aiohttp with optimized pooling."""
-    from httpx_aiohttp import AiohttpTransport
+@cache
+def _register_httpx2_retryable_exceptions() -> None:
+    import httpx2
 
-    return httpx.AsyncClient(
+    from model_library.exceptions import register_retryable_exceptions
+
+    register_retryable_exceptions(
+        httpx2.RemoteProtocolError, httpx2.ReadError, httpx2.ConnectError
+    )
+
+
+def default_aiohttp_httpx2_client(
+    dns_resolve: dict[str, str] | None = None,
+) -> "httpx2.AsyncClient":
+    """Create an httpx2 AsyncClient backed by the existing aiohttp session."""
+    import httpx2
+    from httpx_aiohttp.httpx2 import AiohttpTransport
+
+    _register_httpx2_retryable_exceptions()
+    return httpx2.AsyncClient(
         transport=AiohttpTransport(
             client=lambda: make_aiohttp_session(dns_resolve=dns_resolve)
         ),
-        timeout=httpx.Timeout(
+        timeout=httpx2.Timeout(
             connect=PROVIDER_CONNECT_TIMEOUT_SECONDS,
             read=PROVIDER_READ_TIMEOUT_SECONDS,
             write=PROVIDER_WRITE_TIMEOUT_SECONDS,
@@ -323,6 +339,33 @@ def default_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncCl
     )
 
 
+def default_httpx2_client() -> "httpx2.AsyncClient":
+    """Create an httpx2 client with provider pooling and exchange capture."""
+    import httpx2
+
+    from model_library.failure_capture.httpx2 import CapturingAsyncHTTPTransport
+
+    _register_httpx2_retryable_exceptions()
+    limits = httpx2.Limits(max_connections=2000, max_keepalive_connections=300)
+    return httpx2.AsyncClient(
+        mounts={
+            "all://*": CapturingAsyncHTTPTransport(
+                httpx2.AsyncHTTPTransport(
+                    limits=limits,
+                    socket_options=tcp_keepalive_socket_options(),
+                )
+            )
+        },
+        timeout=httpx2.Timeout(
+            connect=PROVIDER_CONNECT_TIMEOUT_SECONDS,
+            read=PROVIDER_READ_TIMEOUT_SECONDS,
+            write=PROVIDER_WRITE_TIMEOUT_SECONDS,
+            pool=PROVIDER_POOL_TIMEOUT_SECONDS,
+        ),
+        limits=limits,
+    )
+
+
 def gateway_httpx_client(headers: dict[str, str] | None = None) -> httpx.AsyncClient:
     limits = httpx.Limits(max_connections=2000, max_keepalive_connections=300)
     return httpx.AsyncClient(
@@ -352,16 +395,16 @@ def create_openai_client_with_defaults(
 ) -> "AsyncOpenAI":
     """
     OpenAI defaults:
-    DEFAULT_TIMEOUT = httpx.Timeout(timeout=600, connect=5.0)
+    DEFAULT_TIMEOUT = httpx2.Timeout(timeout=600, connect=5.0)
     DEFAULT_MAX_RETRIES = 2
-    DEFAULT_CONNECTION_LIMITS = httpx.Limits(max_connections=1000, max_keepalive_connections=100)
+    DEFAULT_CONNECTION_LIMITS = httpx2.Limits(max_connections=1000, max_keepalive_connections=100)
     """
     from openai import AsyncOpenAI
 
     return AsyncOpenAI(
         api_key=api_key,
         base_url=base_url,
-        http_client=default_aiohttp_httpx_client(dns_resolve=dns_resolve),
+        http_client=default_aiohttp_httpx2_client(dns_resolve=dns_resolve),
         max_retries=3,
     )
 
@@ -375,7 +418,7 @@ def create_anthropic_client_with_defaults(
         base_url=base_url,
         api_key=api_key,
         default_headers=default_headers,
-        http_client=default_aiohttp_httpx_client(),
+        http_client=default_aiohttp_httpx2_client(),
         max_retries=3,
     )
 

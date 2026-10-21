@@ -88,9 +88,13 @@ async def apply_common_body(
     body: dict[str, Any],
     input: Sequence[InputItem],
     kwargs: dict[str, object],
+    sampling: dict[str, object],
 ) -> None:
     if model.prompt_cache_retention is not None:
         body["prompt_cache_retention"] = model.prompt_cache_retention
+    # GPT-5.6+ caches implicitly and bills writes; explicit mode with no breakpoints writes nothing.
+    if not model.prompt_caching and model.supports_prompt_cache_options:
+        body["prompt_cache_options"] = {"mode": "explicit"}
     if model.service_tier is not None:
         body["service_tier"] = model.service_tier
     prompt_cache_key = await resolve_prompt_cache_key(
@@ -105,11 +109,10 @@ async def apply_common_body(
         body["prompt_cache_key"] = prompt_cache_key
     if model.parallel_tool_calls is not None:
         body["parallel_tool_calls"] = model.parallel_tool_calls
-    if model.supports_temperature:
-        if model.temperature is not None:
-            body["temperature"] = model.temperature
-        if model.top_p is not None:
-            body["top_p"] = model.top_p
+    if "temperature" in sampling:
+        body["temperature"] = sampling["temperature"]
+    if "top_p" in sampling:
+        body["top_p"] = sampling["top_p"]
 
 
 def output_schema_value(

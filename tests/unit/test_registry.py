@@ -18,6 +18,7 @@ from model_library.providers.google import GoogleModel
 from model_library.register_models import (
     ICONS_DIR,
     CompanyIcon,
+    Metadata,
     ModelRegistry,
     get_company_icon,
     get_deprecated_model_registry,
@@ -202,6 +203,21 @@ async def test_manual_and_registry_instantiation():
     assert isinstance(model1, FireworksModel)
     assert isinstance(model2, GoogleModel)
     assert isinstance(model3, FireworksModel)
+
+
+@pytest.mark.parametrize(
+    ("metadata", "ignored"),
+    [
+        ({}, False),
+        ({"internal_only": True}, True),
+        ({"internal_only": True, "ignored_for_cost": False}, False),
+        ({"internal_only": False, "ignored_for_cost": True}, True),
+    ],
+)
+def test_ignored_for_cost_defaults_to_internal_only(
+    metadata: dict[str, bool], ignored: bool
+) -> None:
+    assert Metadata.model_validate(metadata).ignored_for_cost is ignored
 
 
 def test_registry_metadata_is_available_but_not_rendered():

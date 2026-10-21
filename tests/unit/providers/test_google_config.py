@@ -1,9 +1,7 @@
 import logging
-from unittest.mock import AsyncMock, patch
 
 import pytest
 from google.genai.types import GenerateContentConfig, ServiceTier, ThinkingLevel
-from pydantic import SecretStr
 
 from model_library.base import LLMConfig, QueryResultMetadata
 from model_library.base.input import TextInput
@@ -69,23 +67,44 @@ async def test_flex_service_tier_billed_at_batch_rate():
     assert flex_cost.output == pytest.approx(standard_cost.output / 2)
 
 
-async def test_thinking_level_models_drop_sampling_params(caplog):
+async def test_thinking_level_models_accept_sampling_when_capable():
     model = GoogleModel(
         "gemini-3.5-flash",
-        config=LLMConfig(
-            temperature=0.5,
-            top_p=0.9,
-        ),
+        config=LLMConfig(temperature=0.5, top_p=0.9),
     )
 
-    with caplog.at_level(logging.WARNING, logger="llm"):
-        body = await model.build_body(_INPUT, tools=[], top_k=40)
+    body = await model.build_body(_INPUT, tools=[], top_k=40)
 
     config = body["config"]
-    assert config.temperature is None
+    assert config.temperature == 0.5
+    assert config.top_p == 0.9
+    assert config.top_k == 40
+
+
+@pytest.mark.parametrize("budget_mode", [False, True])
+@pytest.mark.parametrize("capable", [False, True])
+async def test_google_sampling_capability_independent_of_thinking_mode(
+    budget_mode, capable, caplog
+):
+    model = GoogleModel(
+        "gemini-test",
+        config=LLMConfig(
+            temperature=0.4, top_p=0.8, top_k=11,
+            supports_temperature=capable,
+            provider_config=GoogleConfig(uses_thinking_budget=budget_mode),
+        ),
+    )
+    with caplog.at_level(logging.WARNING, logger="llm"):
+        body = await model.build_body(
+            _INPUT, tools=[], temperature=0, top_p=None, top_k=0
+        )
+    config = body["config"]
+    assert config.temperature == 0
     assert config.top_p is None
-    assert config.top_k is None
-    assert "deprecated parameter" in caplog.text
+    assert config.top_k == 0
+    assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == (
+        0 if capable else 3
+    )
 
 
 async def test_thinking_budget_models_accept_temperature():
@@ -102,7 +121,7 @@ async def test_thinking_budget_models_accept_temperature():
     assert body["config"].temperature == 0.5
 
 
-async def test_thinking_level_models_ignore_thinking_budget(caplog):
+async def test_thinking_level_models_leave_raw_thinking_budget_on_config(caplog):
     model = GoogleModel(
         "gemini-3.5-flash",
         config=LLMConfig(
@@ -117,36 +136,8 @@ async def test_thinking_level_models_ignore_thinking_budget(caplog):
     thinking_config = body["config"].thinking_config
     assert thinking_config.thinking_level == ThinkingLevel.HIGH
     assert thinking_config.thinking_budget is None
-    assert "thinking_budget" in caplog.text
-
-
-async def test_thinking_level_delegate_drops_sampling_params(caplog):
-    model = GoogleModel(
-        "gemini-3.5-flash",
-        config=LLMConfig(
-            native=False,
-            temperature=0.5,
-            custom_api_key=SecretStr("test-key"),
-        ),
-    )
-    delegate = model.delegate
-    assert delegate is not None
-    assert delegate.supports_temperature is False
-
-    with (
-        patch.object(delegate, "_query_impl", new_callable=AsyncMock) as mock_impl,
-        caplog.at_level(logging.WARNING, logger="llm"),
-    ):
-        await model._query_impl(
-            _INPUT,
-            tools=[],
-            query_logger=logging.getLogger("test"),
-            temperature=0.7,
-        )
-
-    mock_impl.assert_awaited_once()
-    assert "temperature" not in mock_impl.call_args.kwargs
-    assert "deprecated parameter" in caplog.text
+    assert body["config"].thinking_budget == 0
+    assert "thinking_budget" not in caplog.text
 
 
 async def test_thinking_level_models_accept_thinking_level_kwarg():

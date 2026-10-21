@@ -3,16 +3,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from model_library.base import LLMConfig
 from model_library.base.base import client_registry
 from model_library.providers.amazon import AmazonModel
-from model_library.providers.xai import XAIConfig, XAIModel
-
-_NATIVE = LLMConfig(provider_config=XAIConfig(native=True))
 
 # The unit-test fixture replaces provider get_client methods at runtime.
 _AMAZON_GET_CLIENT = AmazonModel.get_client
-_XAI_GET_CLIENT = XAIModel.get_client
 
 
 @pytest.mark.parametrize(
@@ -61,34 +56,3 @@ def test_amazon_client_enables_tcp_keepalive_without_changing_credentials(
     } == (expected_credentials)
     assert config.max_pool_connections == 1000
     assert config.tcp_keepalive is True
-
-
-@pytest.mark.parametrize("base_url", [None, "custom.api.x.ai"])
-def test_xai_client_passes_explicit_keepalive_options(base_url: str | None):
-    sdk_client = MagicMock()
-
-    with (
-        patch.dict(client_registry, {}, clear=True),
-        patch(
-            "model_library.providers.xai.AsyncClient", return_value=sdk_client
-        ) as create_client,
-    ):
-        model = XAIModel("grok-3-mini", config=_NATIVE)
-        client = _XAI_GET_CLIENT(model, api_key="xai-key", base_url=base_url)
-
-    expected_arguments = {
-        "api_key": "xai-key",
-        "channel_options": [
-            ("grpc.keepalive_time_ms", 30_000),
-            ("grpc.keepalive_timeout_ms", 10_000),
-            ("grpc.keepalive_permit_without_calls", 1),
-            ("grpc.http2.max_pings_without_data", 0),
-            ("grpc.max_receive_message_length", 64 * 1024 * 1024),
-        ],
-        "timeout": 60 * 60 * 24,
-    }
-    if base_url:
-        expected_arguments["api_host"] = base_url
-
-    assert client is sdk_client
-    create_client.assert_called_once_with(**expected_arguments)

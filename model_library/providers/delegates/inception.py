@@ -12,6 +12,8 @@ from model_library.register_models import register_provider
 
 @register_provider("inception")
 class MercuryModel(DelegateOnly):
+    api_key_setting = "MERCURY_API_KEY"
+
     def __init__(
         self,
         model_name: str,
@@ -27,7 +29,7 @@ class MercuryModel(DelegateOnly):
             config.custom_endpoint or "https://api.inceptionlabs.ai/v1/"
         )
         config.custom_api_key = config.custom_api_key or SecretStr(
-            model_library_settings.MERCURY_API_KEY
+            self._api_key_from(model_library_settings)
         )
 
         self.init_delegate(

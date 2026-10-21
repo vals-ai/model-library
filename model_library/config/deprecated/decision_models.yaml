@@ -1,0 +1,58 @@
+base-config:
+  open_source: false
+  supports:
+    images: false
+    videos: false
+    files: false
+    temperature: false
+    tools: false
+    output_schema: false
+  properties:
+    # No free-text output, so there is no output budget.
+    max_tokens: 0
+    reasoning_model: false
+  metadata:
+    available_as_evaluator: false
+  costs_per_million_token:
+    output: 0.0
+
+
+deprecated:
+  base-config:
+    metadata:
+      deprecated: true
+
+  decision/decider-v1.1-27b:
+    company: Perplexity
+    country: United States
+    label: Decider V1.1 27B
+    release_date: 2026-10-07
+    open_source: true
+    documentation_url: https://openrouter.ai/perplexity/pplx-decider-v1.1-27b
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      temperature: false
+      tools: false
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: perplexity/pplx-decider-v1.1-27b-20261006
+    properties:
+      context_window: 262144
+      max_tokens: 0
+      reasoning_model: false
+    costs_per_million_token:
+      input: 0.02
+      output: 0.0
+      cache: null
+      batch: null
+      context: null

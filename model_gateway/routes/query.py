@@ -10,8 +10,11 @@ from fastapi import Depends, FastAPI, Request
 import model_library.telemetry as telemetry
 from model_gateway.cache import ModelCache
 from model_gateway.history import sign_history
+from model_gateway.key_assignments import AssignmentStore
 from model_gateway.metrics import model_dimensions
 from model_gateway.model_helpers import (
+    assigned_key_setting,
+    current_pool_revision,
     get_query_llm,
     provider_from_model,
     require_raw_input_secret,
@@ -33,6 +36,7 @@ from model_gateway.usage_ledger.details import snapshot_usage_request
 from model_gateway.usage_ledger.store import build_usage_event
 from model_library.base import LLM, dump_gateway_config, dump_llm_config
 from model_library.base.output import QueryResult
+from model_library.base.query_ids import resolve_query_ids
 
 _T = TypeVar("_T")
 
@@ -62,13 +66,20 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
         body: Annotated[QueryRequest, Depends(run_token_authorized(QueryRequest))],
     ):
         start = time.perf_counter()
+        lookup_body = body
+        ids = resolve_query_ids(
+            run_id=body.run_id,
+            question_id=body.question_id,
+            query_id=body.query_id,
+            attempt_id=body.attempt_id,
+        )
+        id_attrs = ids.as_attributes()
+        body = body.model_copy(update=id_attrs)
         usage_request = snapshot_usage_request(body)
         config = dump_llm_config(body.config)
         display_config = dump_gateway_config(body.config)
         query_params = {
-            "run_id": body.run_id,
-            "question_id": body.question_id,
-            "query_id": body.query_id,
+            **id_attrs,
             "identity": body.identity,
             "in_agent": body.in_agent,
         }
@@ -147,6 +158,11 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
             operation.record_phase(phase, outcome="success", start=phase_start)
             return result
 
+        # The key this request holds and the pools revision active for it; both
+        # stay None when no pool assigns the key.
+        provider_key_name: str | None = None
+        pool_revision: int | None = None
+
         async def result_payload_and_ledger(
             result: QueryResult, *, error: ProviderError | None
         ) -> dict[str, object]:
@@ -175,6 +191,8 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                         error=error,
                         request=usage_request,
                         api_key_name=request.state.gateway_api_key_name,
+                        provider_key_name=provider_key_name,
+                        pool_revision=pool_revision,
                     )
                     telemetry.set_attributes(
                         {"gateway.usage_event_id": usage_event["usage_event_id"]}
@@ -186,9 +204,23 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
             return result_payload
 
         try:
+            key_assignments: AssignmentStore | None = request.app.state.key_assignments
+            if key_assignments is not None:
+                store = key_assignments
+                provider_key_name = await run_phase(
+                    "key_assignment", lambda: assigned_key_setting(lookup_body, store)
+                )
+            # The pools revision active for this request; a held key may be older.
+            pool_revision = (
+                current_pool_revision() if provider_key_name is not None else None
+            )
+
             operation.add_event("model_cache_lookup")
             llm = await run_phase(
-                "model_cache_lookup", lambda: get_query_llm(cache, body)
+                "model_cache_lookup",
+                lambda: get_query_llm(
+                    cache, lookup_body, managed_key_setting=provider_key_name
+                ),
             )
 
             # Restored provider objects can be much larger than signed JSON blobs.
@@ -215,10 +247,11 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                     body.inputs,
                     tools=body.tools,
                     output_schema=body.output_schema,
-                    run_id=body.run_id,
-                    question_id=body.question_id,
                     in_agent=body.in_agent,
-                    query_id=body.query_id,
+                    run_id=ids.run_id,
+                    question_id=ids.question_id,
+                    query_id=ids.query_id,
+                    attempt_id=ids.attempt_id,
                     deadline=_provider_operation_deadline(request),
                 ),
                 span_attrs=query_attrs,
@@ -287,11 +320,15 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 await asyncio.sleep(_DEPLOY_TEST_RESPONSE_DELAY_SECONDS)
                 telemetry.add_event("deploy_test_response_delay_done")
 
-            return operation.success(
+            response = operation.success(
                 result_payload,
                 extra_metrics=extra_metrics,
                 attrs=response_attrs,
             )
+            response.headers["X-Model-Gateway-Duration-Seconds"] = str(
+                result.metadata.duration_seconds
+            )
+            return response
 
         except Exception as exc:
             return operation.error(exc, phase=error_phase)

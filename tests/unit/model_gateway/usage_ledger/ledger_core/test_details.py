@@ -27,8 +27,10 @@ from model_library.base.output import (
     QueryResultMetadata,
     QueryResultPerformance,
     CompressedQueryResultPerformance,
+    QueryTimeToFirstToken,
     decompress_query_result_performance,
 )
+from model_library.base.output.performance import CompressedQueryPerformanceTimeline
 
 
 def _request(**overrides: object) -> QueryRequest:
@@ -313,7 +315,10 @@ def test_details_preserve_compressed_performance_envelope() -> None:
 
 def test_details_preserve_compressed_performance_over_generic_string_limit() -> None:
     performance = CompressedQueryResultPerformance(
-        data="x" * (MAX_LEDGER_VALUE_JSON_CHARS + 1)
+        time_to_first_token_ms=QueryTimeToFirstToken(any=5),
+        timeline=CompressedQueryPerformanceTimeline(
+            data="x" * (MAX_LEDGER_VALUE_JSON_CHARS + 1)
+        ),
     )
 
     details = _details(

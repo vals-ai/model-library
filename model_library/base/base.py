@@ -6,10 +6,9 @@ import io
 import json
 import logging
 import pickle
-import sys
 import threading
 from abc import ABC, abstractmethod
-from collections.abc import Awaitable, Generator, Mapping
+from collections.abc import Awaitable, Collection, Generator, Mapping
 from math import ceil
 from pathlib import Path
 from time import perf_counter
@@ -17,6 +16,7 @@ from typing import (
     TYPE_CHECKING,
     Any,
     Callable,
+    ClassVar,
     Literal,
     Sequence,
     TypedDict,
@@ -157,6 +157,7 @@ class LLMConfig(ValsModel):
     supports_temperature: bool = True
     supports_tools: bool = False
     supports_output_schema: bool = False
+    prompt_caching: bool = True
     native: bool = True
     provider_config: dict[str, Any] | ProviderConfig | None = None
     registry_key: str | None = None
@@ -256,6 +257,16 @@ class LLM(ABC):
     """
 
     gateway_mode: bool = False
+    # The setting holding this provider's one default API key, e.g.
+    # "DEEPSEEK_API_KEY"; None when its credential is not one key.
+    api_key_setting: ClassVar[str | None] = None
+
+    @classmethod
+    def _api_key_from(cls, settings: object) -> str:
+        """Read `api_key_setting` from the provider module's settings object."""
+        if cls.api_key_setting is None:
+            raise ValueError(f"{cls.__name__} has no api_key_setting")
+        return getattr(settings, cls.api_key_setting)
 
     def _client_registry_namespace(self) -> str:
         """Return the namespace for this model's reusable SDK client."""
@@ -372,6 +383,7 @@ class LLM(ABC):
         self.supports_temperature: bool = config.supports_temperature
         self.supports_tools: bool = config.supports_tools
         self.supports_output_schema: bool = config.supports_output_schema
+        self.prompt_caching: bool = config.prompt_caching
 
         self.native: bool = config.native
         self.delegate: "LLM | None" = None
@@ -410,6 +422,22 @@ class LLM(ABC):
             key_hash,
         )
         self.get_client(api_key=raw_key, base_url=base_url)
+
+    def _sampling_from_config(
+        self, supported_parameters: Collection[str]
+    ) -> dict[str, object]:
+        sampling: dict[str, object] = {}
+        for name in ("temperature", "top_p", "top_k"):
+            value = getattr(self, name)
+            if value is None:
+                continue
+            if self.supports_temperature and name in supported_parameters:
+                sampling[name] = value
+            else:
+                self.instance_logger.warning(
+                    "Omitting unsupported configured sampling parameter %s", name
+                )
+        return sampling
 
     def __rich_repr__(self) -> Generator[tuple[str, Any], None, None]:
         attrs = vars(self).copy()
@@ -525,16 +553,16 @@ class LLM(ABC):
             model_name = self._registry_key or f"{self.provider}/{self.model_name}"
             raise Exception(f"{model_name} does not support structured outputs")
 
-        run_id, question_id, query_id = resolve_query_ids(
+        ids = resolve_query_ids(
             run_id=run_id,
             question_id=question_id,
             query_id=kwargs.pop("query_id", None),
+            attempt_id=kwargs.pop("attempt_id", None),
         )
+        query_id_attributes = ids.as_attributes()
         telemetry.set_attributes(
             {
-                "run_id": run_id,
-                "question_id": question_id,
-                "query_id": query_id,
+                **query_id_attributes,
                 "model.provider": self.provider,
                 "model.name": self.model_name,
                 "model.registry_key": self._registry_key,
@@ -551,21 +579,12 @@ class LLM(ABC):
         )
         telemetry.add_event(
             "model_library.query.start",
-            {
-                "run_id": run_id,
-                "question_id": question_id,
-                "query_id": query_id,
-            },
+            query_id_attributes,
         )
 
-        _base_logger = logger or self.instance_logger.getChild(f"<run={run_id}>")
+        _base_logger = logger or self.instance_logger
 
-        query_logger = scoped_query_logger(
-            _base_logger,
-            question_id=question_id,
-            query_id=query_id,
-            in_agent=in_agent,
-        )
+        query_logger = scoped_query_logger(_base_logger, ids, in_agent=in_agent)
         info_enabled = query_logger.isEnabledFor(logging.INFO)
         debug_enabled = query_logger.isEnabledFor(logging.DEBUG)
 
@@ -589,9 +608,7 @@ class LLM(ABC):
             with telemetry.start_span(
                 "model_library.provider_query",
                 {
-                    "run_id": run_id,
-                    "question_id": question_id,
-                    "query_id": query_id,
+                    **query_id_attributes,
                     "model.provider": self.provider,
                     "model.name": self.model_name,
                     "model.registry_key": self._registry_key,
@@ -606,18 +623,13 @@ class LLM(ABC):
                 },
                 kind="client",
             ):
-                with scoped_query_ids(
-                    run_id=run_id,
-                    question_id=question_id,
-                    query_id=query_id,
-                ):
-                    return await self._query_impl(
-                        input,
-                        tools=tools,
-                        query_logger=query_logger,
-                        output_schema=output_schema,
-                        **kwargs,
-                    )
+                return await self._query_impl(
+                    input,
+                    tools=tools,
+                    query_logger=query_logger,
+                    output_schema=output_schema,
+                    **kwargs,
+                )
 
         async def timed_query() -> tuple[QueryResult, float]:
             return await LLM.timer_wrapper(query_func)
@@ -650,8 +662,8 @@ class LLM(ABC):
                 retrier = TokenRetrier(
                     logger=query_logger,
                     client_registry_key=self._client_registry_key_model_specific,
-                    run_id=run_id,
-                    question_id=question_id,
+                    run_id=ids.run_id,
+                    question_id=ids.question_id,
                     estimate_input_tokens=estimate_input_tokens,
                     estimate_output_tokens=estimate_output_tokens,
                     use_dynamic_estimate=self._resolved_token_retry_params.use_dynamic_estimate,
@@ -672,27 +684,21 @@ class LLM(ABC):
             else self.custom_retrier(immediate_retry)
         )
 
-        telemetry.add_event(
-            "model_library.query.retry_wrapper_start",
-            {
-                "run_id": run_id,
-                "question_id": question_id,
-                "query_id": query_id,
-                "retry_queue.mode": telemetry.mode_attribute(
-                    self.token_retry_params is not None
-                ),
-            },
-        )
-        output, duration = await run_with_retry()
-        telemetry.add_event(
-            "model_library.query.retry_wrapper_done",
-            {
-                "run_id": run_id,
-                "question_id": question_id,
-                "query_id": query_id,
-                "llm.duration_seconds": duration,
-            },
-        )
+        with scoped_query_ids(ids):
+            telemetry.add_event(
+                "model_library.query.retry_wrapper_start",
+                {
+                    **query_id_attributes,
+                    "retry_queue.mode": telemetry.mode_attribute(
+                        self.token_retry_params is not None
+                    ),
+                },
+            )
+            output, duration = await run_with_retry()
+            telemetry.add_event(
+                "model_library.query.retry_wrapper_done",
+                {**query_id_attributes, "llm.duration_seconds": duration},
+            )
         output.metadata.duration_seconds = round_to_milliseconds(duration)
         try:
             bill = (
@@ -738,9 +744,7 @@ class LLM(ABC):
         telemetry.add_event(
             "model_library.query.done",
             {
-                "run_id": run_id,
-                "question_id": question_id,
-                "query_id": query_id,
+                **query_id_attributes,
                 "gen_ai.usage.input_tokens": output.metadata.total_input_tokens,
                 "gen_ai.usage.output_tokens": output.metadata.total_output_tokens,
                 "llm.duration_seconds": duration,
@@ -1158,10 +1162,6 @@ class LLM(ABC):
     @staticmethod
     def _pickle_field(value: Any, secret: bytes | None) -> str | SignedPickle:
         """Pickle a value to base64. If secret is given, attach an HMAC tag."""
-        if "xai_sdk.proto.v6.chat_pb2" in sys.modules:
-            import model_library.base.serialize as init_serialize_opts
-
-            _ = init_serialize_opts
         pickled = base64.b64encode(pickle.dumps(value)).decode()
         if secret:
             tag = hmac.new(secret, pickled.encode(), hashlib.sha256).hexdigest()

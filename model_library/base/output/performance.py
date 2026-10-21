@@ -2,11 +2,12 @@
 
 import base64
 import gzip
-from typing import Literal, cast
+from typing import Final, Literal, cast
 
 from pydantic import (
     ConfigDict,
     Field,
+    TypeAdapter,
     model_validator,
 )
 from typing_extensions import Self
@@ -20,6 +21,7 @@ __all__ = [
     "QueryTimeToFirstToken",
     "QueryPerformanceTimelineEntry",
     "QueryResultPerformance",
+    "CompressedQueryPerformanceTimeline",
     "CompressedQueryResultPerformance",
     "compress_query_result_performance",
     "decompress_query_result_performance",
@@ -439,8 +441,8 @@ class QueryResultPerformance(ValsModel):
         return self
 
 
-class CompressedQueryResultPerformance(ValsModel):
-    """Lossless JSON representation of compressed query performance telemetry."""
+class CompressedQueryPerformanceTimeline(ValsModel):
+    """Lossless gzip/base64 JSON encoding of a performance timeline."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -448,19 +450,36 @@ class CompressedQueryResultPerformance(ValsModel):
     data: str
 
 
+class CompressedQueryResultPerformance(ValsModel):
+    """Query performance with readable first-token fields and a compressed timeline."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    time_to_first_token_ms: QueryTimeToFirstToken
+    timeline: CompressedQueryPerformanceTimeline
+
+
+_TIMELINE_ADAPTER: Final = TypeAdapter(list[QueryPerformanceTimelineEntry])
+
+
 def compress_query_result_performance(
     performance: QueryResultPerformance,
 ) -> CompressedQueryResultPerformance:
-    payload = performance.model_dump_json().encode()
+    payload = _TIMELINE_ADAPTER.dump_json(performance.timeline)
     compressed = gzip.compress(payload, compresslevel=1, mtime=0)
     return CompressedQueryResultPerformance(
-        data=base64.b64encode(compressed).decode("ascii")
+        time_to_first_token_ms=performance.time_to_first_token_ms,
+        timeline=CompressedQueryPerformanceTimeline(
+            data=base64.b64encode(compressed).decode("ascii")
+        ),
     )
 
 
 def decompress_query_result_performance(
     performance: CompressedQueryResultPerformance,
 ) -> QueryResultPerformance:
-    compressed = base64.b64decode(performance.data, validate=True)
-    payload = gzip.decompress(compressed)
-    return QueryResultPerformance.model_validate_json(payload)
+    compressed = base64.b64decode(performance.timeline.data, validate=True)
+    return QueryResultPerformance(
+        time_to_first_token_ms=performance.time_to_first_token_ms,
+        timeline=_TIMELINE_ADAPTER.validate_json(gzip.decompress(compressed)),
+    )

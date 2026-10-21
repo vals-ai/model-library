@@ -6,6 +6,7 @@ from typing import Any, Awaitable, Callable, Literal, TypeVar
 
 import model_library.telemetry as telemetry
 from model_library.base.base import QueryResult
+from model_library.base.query_ids import get_current_query_id_attributes
 from model_library.exceptions import (
     ContentFilterError,
     ImmediateRetryException,
@@ -46,6 +47,7 @@ class BaseRetrier(ABC):
         MAX_IMMEDIATE_RETRIES = 10
         retries = 0
         start_time = time.time()
+        query_id_attributes = get_current_query_id_attributes()
         while True:
             try:
                 result = await func()
@@ -60,6 +62,7 @@ class BaseRetrier(ABC):
                     telemetry.log_sentry_info(
                         logger_msg,
                         {
+                            **query_id_attributes,
                             "retry.strategy": "immediate",
                             "retry.immediate_attempts": retries,
                             "retry.max_tries": MAX_IMMEDIATE_RETRIES,
@@ -75,6 +78,7 @@ class BaseRetrier(ABC):
                     ) from e
                 retries += 1
                 retry_attributes = {
+                    **query_id_attributes,
                     "retry.attempt": retries,
                     "retry.max_tries": MAX_IMMEDIATE_RETRIES,
                     "exception.type": type(e).__name__,
@@ -173,6 +177,7 @@ class BaseRetrier(ABC):
         telemetry.add_event(
             "model_library.retry_giveup",
             {
+                **get_current_query_id_attributes(),
                 "retry.strategy": self.strategy,
                 "retry.reason": reason,
                 "retry.attempt": self.attempts,
@@ -182,7 +187,11 @@ class BaseRetrier(ABC):
         )
         telemetry.record_retrier_exception(
             exception,
-            {"retry.strategy": self.strategy, "retry.reason": reason},
+            {
+                **get_current_query_id_attributes(),
+                "retry.strategy": self.strategy,
+                "retry.reason": reason,
+            },
         )
 
         self.logger.error(
@@ -229,6 +238,7 @@ class BaseRetrier(ABC):
         self.attempts = 0
         self.start_time = time.time()
         http_500_failures = 0
+        query_id_attributes = get_current_query_id_attributes()
 
         await self.validate()
         telemetry.set_attributes(
@@ -242,6 +252,7 @@ class BaseRetrier(ABC):
         while True:
             try:
                 attempt_attributes = {
+                    **query_id_attributes,
                     "retry.strategy": self.strategy,
                     "retry.attempt": self.attempts,
                 }
@@ -269,6 +280,7 @@ class BaseRetrier(ABC):
                         telemetry.log_sentry_info(
                             logger_msg,
                             {
+                                **query_id_attributes,
                                 "retry.strategy": self.strategy,
                                 "retry.attempts": self.attempts,
                                 "retry.max_tries": self.max_tries,
@@ -313,6 +325,7 @@ class BaseRetrier(ABC):
                 # call pre retry sleep hook
                 await self._on_retry(e, elapsed, wait_time)
                 sleep_attributes = {
+                    **query_id_attributes,
                     "retry.strategy": self.strategy,
                     "retry.attempt": self.attempts,
                     "retry.elapsed_seconds": elapsed,
