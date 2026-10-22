@@ -16,6 +16,7 @@ base-config:
     batch:
       input_discount: 0.5
       output_discount: 0.5
+      cache_discount: 0.5
   default_parameters:
     reasoning_effort: "high"
 gpt-6-models:

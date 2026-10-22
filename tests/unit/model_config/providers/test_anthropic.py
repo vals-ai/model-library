@@ -46,6 +46,7 @@ async def _query_anthropic_with_provider_config(
                 output_tokens=0,
                 cache_read_input_tokens=0,
                 cache_creation_input_tokens=0,
+                cache_creation=None,
             )
             for declined in declined_models
         ),
@@ -56,6 +57,7 @@ async def _query_anthropic_with_provider_config(
             output_tokens=1,
             cache_read_input_tokens=0,
             cache_creation_input_tokens=0,
+            cache_creation=None,
         ),
     ]
 
@@ -65,6 +67,7 @@ async def _query_anthropic_with_provider_config(
         output_tokens_details = None
         cache_read_input_tokens = 0
         cache_creation_input_tokens = 0
+        cache_creation = None
         iterations = fallback_iterations if provider_config.fallback_models else None
 
     class _DummyMessage:

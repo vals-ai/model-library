@@ -34,14 +34,14 @@ qwen-3.5-models:
       input: 0.4
       output: 2.4
       cache:
-        read: 0.04
+        read: 0.08
         write: 0.5
       context:
         threshold: 256_000
         input: 1.2
         output: 7.2
         cache:
-          read: 0.12
+          read: 0.24
           write: 1.5
     alternative_keys:
       - alibaba/qwen3.5-plus-thinking:
@@ -133,12 +133,15 @@ qwen-3.6-models:
       input: 0.5
       output: 3
       cache:
-        read: 0.05
+        read: 0.10
         write: 0.625
       context:
         threshold: 256_000
         input: 2.0
         output: 6.0
+        cache:
+          read: 0.40
+          write: 2.5
 
 qwen-3.7-models:
   base-config:
@@ -150,7 +153,7 @@ qwen-3.7-models:
       input: 2.5
       output: 7.5
       cache:
-        read: 0.25
+        read: 0.50
         write: 3.125
 
   alibaba/qwen3.7-max:
@@ -185,14 +188,14 @@ qwen-3.7-models:
       input: 0.4
       output: 1.6
       cache:
-        read: 0.04
+        read: 0.08
         write: 0.5
       context:
         threshold: 256_000
         input: 1.2
         output: 4.8
         cache:
-          read: 0.12
+          read: 0.24
           write: 1.5
     provider_properties:
       preserve_thinking: true

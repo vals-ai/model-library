@@ -111,6 +111,7 @@ class TestAnthropicStreamingPerformance:
                 output_tokens=2,
                 cache_read_input_tokens=0,
                 cache_creation_input_tokens=0,
+                cache_creation=None,
                 iterations=None,
             ),
             content=[
@@ -172,6 +173,7 @@ class TestAnthropicStreamingPerformance:
                 output_tokens=2,
                 cache_read_input_tokens=0,
                 cache_creation_input_tokens=0,
+                cache_creation=None,
                 iterations=None,
             ),
             content=[SimpleNamespace(type="text", text="answer")],
@@ -224,6 +226,7 @@ class TestAnthropicStreamingPerformance:
                 output_tokens=2,
                 cache_read_input_tokens=0,
                 cache_creation_input_tokens=0,
+                cache_creation=None,
                 iterations=None,
             ),
             content=[
@@ -277,6 +280,7 @@ class TestAnthropicStreamingPerformance:
                 output_tokens=2,
                 cache_read_input_tokens=0,
                 cache_creation_input_tokens=0,
+                cache_creation=None,
                 iterations=None,
             ),
             content=[

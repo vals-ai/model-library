@@ -102,6 +102,40 @@ gemini-3-models:
     costs_per_million_token:
       input: 0.25
       output: 1.50
+      batch:
+        cache_discount: 0.5
+
+  google/gemini-4-argon:
+    label: Gemini 4 Argon
+    release_date: 2026-10-13
+    documentation_url: >-
+      https://ai.google.dev/gemini-api/docs/models/gemini-4-argon
+    properties:
+      context_window: 1048576
+      max_tokens: 1048576
+      reasoning_model: true
+    provider_properties:
+      automatic_continuation: true
+    costs_per_million_token:
+      input: 2.0
+      output: 10.0
+      cache:
+        read: 0.10
+      batch:
+        cache_discount: 0.5
+    alternative_keys:
+      - google/gemini-4-argon-low:
+          label: Gemini 4 Argon (Low)
+          default_parameters:
+            reasoning_effort: low
+      - google/gemini-4-argon-medium:
+          label: Gemini 4 Argon (Medium)
+          default_parameters:
+            reasoning_effort: medium
+      - google/gemini-4-argon-high:
+          label: Gemini 4 Argon (High)
+          default_parameters:
+            reasoning_effort: high
 
   google/gemini-3.8-flash:
     label: Gemini 3.8 Flash
@@ -113,10 +147,12 @@ gemini-3-models:
       max_tokens: 65536
       reasoning_model: true
     costs_per_million_token:
-      input: 1.50
-      output: 7.50
+      input: 0.75
+      output: 3.75
       cache:
-        read: 0.15
+        read: 0.075
+      batch:
+        cache_discount: 0.5
     alternative_keys:
       - google/gemini-3.8-flash-low:
           label: Gemini 3.8 Flash (Low)
@@ -191,10 +227,12 @@ gemini-3-models:
       max_tokens: 65536
       reasoning_model: true
     costs_per_million_token:
-      input: 1.5
-      output: 7.5
+      input: 0.75
+      output: 3.75
       cache:
-        read: 0.15
+        read: 0.075
+      batch:
+        cache_discount: 0.5
     metadata:
       available_as_evaluator: true
 

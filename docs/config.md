@@ -69,7 +69,9 @@ Gateway callers set sampling in `LLMConfig`, not query kwargs. Its request forma
 
 ## Prompt Caching
 
-Anthropic (and its delegates), Bedrock, and OpenRouter routers add cache breakpoints to every request by default, and Anthropic bills each cache write. For inputs that won't be reused, such as one-off grading, set `LLMConfig(prompt_caching=False)` to send no breakpoints, so the request writes no cache. OpenAI GPT-5.6+ caches implicitly and bills writes, so those models instead get `prompt_cache_options.mode: "explicit"` with no breakpoints.
+Anthropic (and its delegates), Bedrock, and OpenRouter routers add cache breakpoints to every request by default, and Anthropic bills each cache write. For inputs that won't be reused, such as one-off grading, set `LLMConfig(prompt_caching="off")` to send no breakpoints, so the request writes no cache. OpenAI GPT-5.6+ caches implicitly and bills writes, so those models instead get `prompt_cache_options.mode: "explicit"` with no breakpoints.
+
+Anthropic breakpoints default to the 5-minute cache. For agents whose turns are often more than 5 minutes apart, set `LLMConfig(prompt_caching="1h")` to send `ttl: "1h"` (Bedrock: only Claude 4.5+, older models keep 5m); writes are billed at 2x input instead of 1.25x. Cost prices each write at the TTL the provider reports (`usage.cache_creation` on Anthropic, `usage.cacheDetails` on Bedrock), falling back to the requested TTL when absent. Kimi K3 gets `prompt_cache_options: {"mode": "implicit", "ttl": "1h"}`, billing writes at 2x input instead of 1x.
 
 ## Provider Properties
 
@@ -85,8 +87,9 @@ Provider-specific `provider_properties` are validated by each provider:
 - **OpenAI-compatible completions**: Set `stream_completions: false` to use non-streaming chat completions. The default is `true`.
 - **OpenAI Responses**: Set `code_mode: true` to add the hosted Code Mode tool. When enabled, function tools without explicit `allowed_callers` are sent with `allowed_callers: ["code_mode", "direct"]`.
 - **OpenAI Responses**: Set `access_programs` (for example `{cyber: daybreak_blue}`) to send OpenAI access programs. Set it in the registry entry, because a request `provider_config` replaces the entry's whole one. The gateway rejects it in a request unless the request has its own `custom_api_key`. The `-daybreak` keys set it; each pins one model. OpenAI returns a 400 on models the program does not cover, such as `gpt-6.1-sol`.
-- **OpenAI / Google**: Set `service_tier: flex` to request Flex processing (sent as `service_tier`); responses are billed at the model's `batch` discount.
+- **OpenAI / Google**: Set `service_tier: flex` to request Flex processing (sent as `service_tier`); responses are billed at the model's `batch` discount, and cache reads/writes at `batch.cache_discount` (default 1, for providers whose cache and batch discounts do not stack).
 - **xAI**: Grok requests use the OpenAI-compatible Responses API (encrypted reasoning is requested via `include: ["reasoning.encrypted_content"]`). Every request carries a `prompt_cache_key` (`hash` by default, `id` to key on the resolved run/question IDs), which xAI uses for server routing ([maximizing cache hits](https://docs.x.ai/developers/advanced-api-usage/prompt-caching/maximizing-cache-hits)). The hash stays stable across turns with a `RawResponse` history boundary; replaying history only as `RawInput` dictionaries hashes the full input and may change the key each turn.
+- **Mistral**: Every request carries a `prompt_cache_key` (`hash` by default, `id` for the resolved run/question IDs, `null` to omit) as a cache-routing hint ([prompt caching](https://docs.mistral.ai/capabilities/completion/prompt_caching)).
 - **Meta**: Set `use_responses: true` on selected models to route the OpenAI-compatible delegate through the Responses API instead of Chat Completions.
 - **OpenAI-compatible providers**: Set `prompt_cache_key: id` to derive an OpenAI prompt-cache key from the resolved `run_id` and `question_id`, or `prompt_cache_key: hash` to derive it from the prompt prefix (up to the first `RawResponse`, or the full input if none exists), for Responses and Chat Completions.
 - **Alibaba Qwen reasoning models**: Set `preserve_thinking: true` to preserve reasoning context across turns.
@@ -98,6 +101,8 @@ Provider-specific `provider_properties` are validated by each provider:
 Set `country` to the model creator's country, not the hosting provider's country. Declare it wherever `company` is defined.
 
 Set `provider_endpoint` when the registry key differs from the model ID sent to the provider.
+
+Set `metadata.internal_only: true` on a model, `alternative_keys` entry, or block/provider `base-config` to limit it to internal orgs and keep it out of the public export.
 
 Company icons live in `model_library/config/icons/`. Name the light asset exactly `<company>.svg|png` and an optional dark asset `<company>-dark.svg|png`. Add a separate exact-name asset when two company labels use the same artwork; registry configs and `/registry` payloads contain only `company`, not icon filenames. Call `get_company_icon(company)` to resolve the bundled filenames; it returns `None` when no exact light asset exists and leaves `dark=None` when there is no dark asset. PNG and SVG files are bundled in the Python package.
 

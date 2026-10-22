@@ -17,9 +17,11 @@ base-config:
     cache:
       read_discount: 0.1
       write_markup: 1.25
+      write_1h_markup: 2
     batch:
       input_discount: 0.5
       output_discount: 0.5
+      cache_discount: 0.5
   documentation_url: https://docs.claude.com/en/docs/about-claude/models/overview
   default_parameters:
     temperature: 1
@@ -57,7 +59,6 @@ claude-fable-5-models:
           label: Claude Fable 5 (No Fallback)
           provider_properties:
             fallback_models: []
-
 claude-fable-5-1-models:
   anthropic/claude-fable-5-1:
     label: Claude Fable 5.1
@@ -131,6 +132,7 @@ claude-haiku-5-5-models:
         cache:
           read: 0.05
           write: 0.625
+          write_1h_markup: 2
     provider_properties:
       supports_auto_thinking: true
       supports_compute_effort: true
@@ -158,7 +160,6 @@ claude-haiku-5-5-models:
           label: Claude Haiku 5.5 (Max Effort)
           default_parameters:
             compute_effort: "max"
-
 claude-sonnet-5-5-models:
   anthropic/claude-sonnet-5-5:
     label: Claude Sonnet 5.5
@@ -209,7 +210,6 @@ claude-sonnet-5-5-models:
           label: Claude Sonnet 5.5 (No Fallback)
           provider_properties:
             fallback_models: []
-
 claude-opus-5-5-models:
   anthropic/claude-opus-5-5:
     label: Claude Opus 5.5
@@ -260,7 +260,6 @@ claude-opus-5-5-models:
           label: Claude Opus 5.5 (No Fallback)
           provider_properties:
             fallback_models: []
-
 claude-opus-5-models:
   anthropic/claude-opus-5:
     label: Claude Opus 5
@@ -309,12 +308,6 @@ claude-opus-5-models:
           label: Claude Opus 5 (No Fallback)
           provider_properties:
             fallback_models: []
-      - anthropic/claude-opus-5-range:
-          label: Claude Opus 5 (Cyber Range)
-          metadata:
-            available_for_everyone: false
-            internal_only: true
-
 claude-opus-4-8-models:
   anthropic/claude-opus-4-8:
     label: Claude Opus 4.8
@@ -344,11 +337,6 @@ claude-opus-4-8-models:
           label: Claude Opus 4.8 (Medium Effort)
           default_parameters:
             compute_effort: "medium"
-      - anthropic/claude-opus-4-8-range:
-          label: Claude Opus 4.8 (Cyber Range)
-          metadata:
-            available_for_everyone: false
-            internal_only: true
 claude-opus-4-7-models:
   anthropic/claude-opus-4-7:
     label: Claude Opus 4.7
@@ -373,11 +361,6 @@ claude-opus-4-7-models:
           label: Claude Opus 4.7 (High Effort)
           default_parameters:
             compute_effort: "high"
-      - anthropic/claude-opus-4-7-range:
-          label: Claude Opus 4.7 (Cyber Range)
-          metadata:
-            available_for_everyone: false
-            internal_only: true
 claude-opus-models:
   anthropic/claude-opus-4-6:
     label: Claude Opus 4.6 (Nonthinking)
@@ -423,11 +406,6 @@ claude-opus-models:
       - anthropic/claude-opus-4-5-20251101-thinking:
           properties:
             reasoning_model: true
-      - anthropic/claude-opus-4-5-range:
-          label: Claude Opus 4.5 (Cyber Range)
-          metadata:
-            available_for_everyone: false
-            internal_only: true
 claude-sonnet-models:
   anthropic/claude-sonnet-5:
     label: Claude Sonnet 5
@@ -468,12 +446,6 @@ claude-sonnet-models:
           label: Claude Sonnet 5 (Extra High Effort)
           default_parameters:
             compute_effort: "xhigh"
-      - anthropic/claude-sonnet-5-range:
-          label: Claude Sonnet 5 (Cyber Range)
-          metadata:
-            available_for_everyone: false
-            internal_only: true
-
   anthropic/claude-sonnet-4-6:
     label: Claude Sonnet 4.6
     release_date: 2026-02-17
@@ -494,7 +466,6 @@ claude-sonnet-models:
       compute_effort: "max"
     metadata:
       available_as_evaluator: true
-
   anthropic/claude-sonnet-4-5-20250929:
     label: Claude Sonnet 4.5 (Nonthinking)
     release_date: 2025-09-29
@@ -517,15 +488,11 @@ claude-sonnet-models:
         cache:
           read: 0.6
           write: 7.50
+          write_1h_markup: 2
     alternative_keys:
       - anthropic/claude-sonnet-4-5-20250929-thinking:
           properties:
             reasoning_model: true
-      - anthropic/claude-sonnet-4-5-range:
-          label: Claude Sonnet 4.5 (Cyber Range)
-          metadata:
-            available_for_everyone: false
-            internal_only: true
 claude-haiku-models:
   anthropic/claude-haiku-4-5-20251001:
     label: Claude Haiku 4.5 (Nonthinking)

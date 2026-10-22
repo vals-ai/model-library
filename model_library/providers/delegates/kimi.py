@@ -120,15 +120,20 @@ class KimiModel(DelegateOnly):
         Build extra body parameters for Kimi-specific features.
         see https://platform.moonshot.ai/docs/guide/kimi-k2-5-quickstart#parameters-differences-in-request-body
         """
+        extra: dict[str, Any] = {}
+        # https://platform.moonshot.ai/docs/guide/use-context-caching-feature-of-kimi-api
+        if self.prompt_caching == "1h":
+            extra["prompt_cache_options"] = {"mode": "implicit", "ttl": "1h"}
         if self.model_name == _KIMI_K3_PUBLIC_MODEL:
-            return {}
+            return extra
 
         thinking: dict[str, str] = {"type": "enabled" if self.reasoning else "disabled"}
         if self.reasoning and self.provider_config.thinking_keep is not None:
             thinking["keep"] = self.provider_config.thinking_keep
         if self.reasoning and self.provider_config.thinking_effort is not None:
             thinking["effort"] = self.provider_config.thinking_effort
-        return {"thinking": thinking}
+        extra["thinking"] = thinking
+        return extra
 
     async def _preprocess_files(self, input: Sequence[InputItem]) -> list[InputItem]:
         """Replace file items with TextInput containing extracted text.

@@ -13,7 +13,7 @@ base-config:
     reasoning_model: false
   costs_per_million_token:
     cache:
-      read_discount: 1
+      read_discount: 0.5
     batch:
       input_discount: 0.5
       output_discount: 0.5
@@ -66,6 +66,8 @@ openai-models:
     costs_per_million_token:
       input: 0.15
       output: 0.60
+      cache:
+        read: 0.015
 
 kimi-models:
   base-config:

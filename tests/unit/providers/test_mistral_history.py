@@ -7,9 +7,10 @@ from mistralai.client.models import (
     ToolCall as MistralToolCall,
 )
 
-from model_library.base import TextInput
+from model_library.base import LLMConfig, TextInput
 from model_library.base.input import RawResponse, ToolCall, ToolResult
 from model_library.providers.mistral import MistralModel
+from model_library.providers.mistral.chat import MistralConfig
 
 
 def _assistant(
@@ -91,4 +92,28 @@ async def test_answered_tool_calls_are_kept():
     assert [m["tool_call_id"] for m in messages[2:4]] == ["call-1", "call-2"]
 
 
+async def test_prompt_cache_key_is_stable_across_turns():
+    model = MistralModel("mistral-test")
+    first = await model.build_body([TextInput(text="List files.")], tools=[])
+    second = await model.build_body(
+        [
+            TextInput(text="List files."),
+            RawResponse(response=_assistant("call-1")),
+            _tool_result("call-1"),
+        ],
+        tools=[],
+    )
+    other = await model.build_body([TextInput(text="Read a file.")], tools=[])
 
+    assert first["prompt_cache_key"] == second["prompt_cache_key"]
+    assert first["prompt_cache_key"] != other["prompt_cache_key"]
+
+
+async def test_prompt_cache_key_can_be_disabled():
+    model = MistralModel(
+        "mistral-test",
+        config=LLMConfig(provider_config=MistralConfig(prompt_cache_key=None)),
+    )
+    body = await model.build_body([TextInput(text="List files.")], tools=[])
+
+    assert "prompt_cache_key" not in body

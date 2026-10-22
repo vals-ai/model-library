@@ -185,6 +185,7 @@ async def test_anthropic_query_empty_output_text_raises_no_output():
             output_tokens=0,
             cache_read_input_tokens=0,
             cache_creation_input_tokens=0,
+            cache_creation=None,
             iterations=None,
         ),
     )
@@ -207,6 +208,7 @@ async def test_anthropic_empty_output_text_with_reasoning_keeps_reasoning_only()
             output_tokens=1,
             cache_read_input_tokens=0,
             cache_creation_input_tokens=0,
+            cache_creation=None,
             iterations=None,
         ),
     )
@@ -241,6 +243,7 @@ async def test_anthropic_empty_text_with_reasoning_and_tool_keeps_useful_outputs
             output_tokens=1,
             cache_read_input_tokens=0,
             cache_creation_input_tokens=0,
+            cache_creation=None,
             iterations=None,
         ),
     )
@@ -278,6 +281,7 @@ async def test_anthropic_query_absent_content_raises_no_output(
             output_tokens=0,
             cache_read_input_tokens=0,
             cache_creation_input_tokens=0,
+            cache_creation=None,
             iterations=None,
         ),
     )
@@ -307,6 +311,7 @@ async def test_anthropic_empty_non_success_raises_mapped_error(
             output_tokens=0,
             cache_read_input_tokens=0,
             cache_creation_input_tokens=0,
+            cache_creation=None,
             iterations=None,
         ),
     )
@@ -333,6 +338,7 @@ async def test_anthropic_tool_only_query_keeps_unobserved_output_text_none():
             output_tokens=2,
             cache_read_input_tokens=0,
             cache_creation_input_tokens=0,
+            cache_creation=None,
             iterations=None,
         ),
     )

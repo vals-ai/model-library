@@ -343,7 +343,7 @@ class AnthropicModel(LLM):
         flush_content_user()
 
         # cache control
-        if new_input and self.prompt_caching:
+        if new_input and self.prompt_caching != "off":
             last_msg = new_input[-1]
             if not isinstance(last_msg, dict):
                 return new_input
@@ -488,7 +488,11 @@ class AnthropicModel(LLM):
             mime=mime,
         )
 
-    cache_control = {"type": "ephemeral"}  # 5 min cache
+    @property
+    def cache_control(self) -> dict[str, str]:
+        if self.prompt_caching == "1h" and self.provider == "anthropic":
+            return {"type": "ephemeral", "ttl": "1h"}
+        return {"type": "ephemeral"}
 
     @override
     async def build_body(
@@ -515,7 +519,7 @@ class AnthropicModel(LLM):
 
         if system_text is not None:
             system_block: dict[str, Any] = {"type": "text", "text": system_text}
-            if self.prompt_caching:
+            if self.prompt_caching != "off":
                 system_block["cache_control"] = self.cache_control
             body["system"] = [system_block]
 
@@ -574,7 +578,7 @@ class AnthropicModel(LLM):
 
         parsed_tools = await self.parse_tools(tools)
         if parsed_tools:
-            if self.prompt_caching and "system" not in body:
+            if self.prompt_caching != "off" and "system" not in body:
                 parsed_tools[-1]["cache_control"] = self.cache_control
             body["tools"] = parsed_tools
 
@@ -834,6 +838,9 @@ class AnthropicModel(LLM):
                         out_tokens=iteration.output_tokens,
                         cache_read_tokens=iteration.cache_read_input_tokens,
                         cache_write_tokens=iteration.cache_creation_input_tokens,
+                        cache_write_1h_tokens=iteration.cache_creation.ephemeral_1h_input_tokens
+                        if iteration.cache_creation
+                        else None,
                     ),
                 )
             )
@@ -857,6 +864,15 @@ class AnthropicModel(LLM):
                 reasoning_tokens=reasoning_tokens,
                 cache_read_tokens=usage.cache_read_input_tokens,
                 cache_write_tokens=usage.cache_creation_input_tokens,
+                # server-tool loops report writes beyond the split; bill them at the requested ttl
+                cache_write_1h_tokens=(
+                    (usage.cache_creation_input_tokens or 0)
+                    - usage.cache_creation.ephemeral_5m_input_tokens
+                    if self.prompt_caching == "1h"
+                    else usage.cache_creation.ephemeral_1h_input_tokens
+                )
+                if usage.cache_creation
+                else None,
                 fallback=fallback,
                 extra={"anthropic_response_model": message.model},
             ),
@@ -996,8 +1012,6 @@ class AnthropicModel(LLM):
         Free:
         - Web Fetch
         """
-        # prompt caching manually enabled
-        # assumed that cache tokens are ephemeral_5m_input_tokens
         # a server-side fallback response is billed at the serving model's price
         return await super()._calculate_cost(
             metadata,

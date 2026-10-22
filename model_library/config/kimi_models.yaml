@@ -38,6 +38,7 @@ kimi-models:
       output: 15.0
       cache:
         read: 0.3
+        write_1h_markup: 2.0
     alternative_keys:
       - kimi/kimi-k3-public
       - kimi/kimi-k3-low:

@@ -28,7 +28,7 @@ from model_library.providers.openai import OpenAIModel
 
 
 MODEL_NAME = "vals/dumbmar-5o-ultra-thinking"
-MODEL_DOCUMENT = Path("model_library/config/dummy_model.yaml").read_text()
+MODEL_DOCUMENT = Path("tests/unit/model_gateway/dummy_model.yaml").read_text()
 OPENAI_MODEL_NAME = "openai/runtime-config-credential-cache-test"
 OPENAI_MODEL_DOCUMENT = """\
 base-config:

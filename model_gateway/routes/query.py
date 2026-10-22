@@ -214,6 +214,8 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
             pool_revision = (
                 current_pool_revision() if provider_key_name is not None else None
             )
+            query_attrs["gateway.provider_key_name"] = provider_key_name
+            query_attrs["gateway.pool_revision"] = pool_revision
 
             operation.add_event("model_cache_lookup")
             llm = await run_phase(

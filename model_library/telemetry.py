@@ -129,6 +129,8 @@ SENTRY_TAG_ATTRIBUTE_KEYS = frozenset(
         "identity.email",
         "gateway.route",
         "gateway.api_key_name",
+        "gateway.provider_key_name",
+        "gateway.pool_revision",
         "gateway.operation",
         "gateway.status_code",
         "gateway.usage_event_id",

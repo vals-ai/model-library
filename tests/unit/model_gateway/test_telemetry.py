@@ -1019,6 +1019,7 @@ async def test_unsampled_gateway_retry_budget_through_sentry_sdk(
                 ("model-b", 13),
             ):
                 attrs = {"model.registry_key": model, "gen_ai.request.model": model}
+                call_attrs = {**attrs, "gateway.provider_key_name": f"{model}-KEY"}
                 with telemetry.start_span("gateway.query", attrs) as span:
                     assert span is not None and not span.is_recording()
                     operation = GatewayOperation(
@@ -1032,7 +1033,7 @@ async def test_unsampled_gateway_retry_budget_through_sentry_sdk(
                         BaseRetrier.immediate_retry_wrapper(
                             failing_provider, logging.getLogger(__name__)
                         ),
-                        span_attrs=attrs,
+                        span_attrs=call_attrs,
                     )
                     assert isinstance(result, ProviderError)
                     assert result.exception_type == "ImmediateRetryException"
@@ -1060,6 +1061,11 @@ async def test_unsampled_gateway_retry_budget_through_sentry_sdk(
         *(["model-a"] * 7),
         *(["model-b"] * 6),
     ]
+    assert all(
+        event["tags"]["gateway.provider_key_name"]
+        == f"{event['tags']['model.registry_key']}-KEY"
+        for event in events
+    )
     assert all(events[index]["level"] == "warning" for index in (*range(5), *range(7, 12)))
 
 

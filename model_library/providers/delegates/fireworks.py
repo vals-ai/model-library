@@ -137,10 +137,7 @@ class FireworksModel(DelegateOnly):
         # https://docs.fireworks.ai/guides/prompt-caching
         # Prompt caching is enabled by default for all Fireworks models and deployments.
 
-        # Discounts for prompt caching are available for enterprise deployments. Contact us to learn more.
-
-        # https://docs.fireworks.ai/faq-new/billing-pricing/is-prompt-caching-billed-differently
-        # prompt caching does not affect billing for serverless models
+        # Cached prompt tokens on serverless models are discounted (50% by default, varies by model).
 
         return await super()._calculate_cost(
             metadata,

@@ -157,7 +157,7 @@ class LLMConfig(ValsModel):
     supports_temperature: bool = True
     supports_tools: bool = False
     supports_output_schema: bool = False
-    prompt_caching: bool = True
+    prompt_caching: Literal["off", "5m", "1h"] = "5m"
     native: bool = True
     provider_config: dict[str, Any] | ProviderConfig | None = None
     registry_key: str | None = None
@@ -383,7 +383,7 @@ class LLM(ABC):
         self.supports_temperature: bool = config.supports_temperature
         self.supports_tools: bool = config.supports_tools
         self.supports_output_schema: bool = config.supports_output_schema
-        self.prompt_caching: bool = config.prompt_caching
+        self.prompt_caching: Literal["off", "5m", "1h"] = config.prompt_caching
 
         self.native: bool = config.native
         self.delegate: "LLM | None" = None
@@ -825,6 +825,7 @@ class LLM(ABC):
             metadata,
             batch=batch,
             bill_reasoning=bill_reasoning,
+            cache_ttl="1h" if self.prompt_caching == "1h" else "5m",
         )
 
     @abstractmethod

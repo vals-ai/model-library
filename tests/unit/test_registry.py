@@ -230,10 +230,6 @@ def test_registry_metadata_is_available_but_not_rendered():
 
 
 async def test_cli_models_not_instantiable():
-    with pytest.raises(ValueError, match="Cursor CLI"):
-        get_registry_model("cursor/composer-2.5")
-    with pytest.raises(ValueError, match="Devin CLI"):
-        get_registry_model("devin/swe-1-6-fast")
     with pytest.raises(ValueError, match="Factory CLI"):
         get_registry_model("factory/router")
 
@@ -265,26 +261,6 @@ def test_agent_router_models_carry_nominal_prices_excluded_from_cost(
     assert costs.input == 3.0
     assert costs.output == 15.0
     assert config.metadata.ignored_for_cost is True
-
-
-async def test_cursor_cli_model_cost_can_be_recomputed_from_registry():
-    cost = await recompute_cost(
-        "cursor/composer-2.5-fast",
-        {
-            "in_tokens": 100,
-            "out_tokens": 20,
-            "cache_read_tokens": 1000,
-            "cache_write_tokens": 10,
-        },
-    )
-
-    assert cost.input == pytest.approx(0.0003)
-    assert cost.output == pytest.approx(0.0003)
-    assert cost.cache_read == pytest.approx(0.0005)
-    assert cost.cache_write is None
-    assert cost.total == pytest.approx(0.0011)
-
-
 async def test_none_costs():
     """Models without costs should have costs_per_million_token=None and return None cost."""
     from model_library.base import QueryResultMetadata

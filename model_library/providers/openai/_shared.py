@@ -93,7 +93,7 @@ async def apply_common_body(
     if model.prompt_cache_retention is not None:
         body["prompt_cache_retention"] = model.prompt_cache_retention
     # GPT-5.6+ caches implicitly and bills writes; explicit mode with no breakpoints writes nothing.
-    if not model.prompt_caching and model.supports_prompt_cache_options:
+    if model.prompt_caching == "off" and model.supports_prompt_cache_options:
         body["prompt_cache_options"] = {"mode": "explicit"}
     if model.service_tier is not None:
         body["service_tier"] = model.service_tier

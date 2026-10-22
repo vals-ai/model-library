@@ -23,7 +23,7 @@ from model_gateway.runtime_config import (
 from model_library import model_library_settings
 
 
-MODEL_DOCUMENT = Path("model_library/config/dummy_model.yaml").read_text()
+MODEL_DOCUMENT = Path("tests/unit/model_gateway/dummy_model.yaml").read_text()
 
 
 def _models(revision: int) -> bytes:

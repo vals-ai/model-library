@@ -20,12 +20,6 @@ base-config:
     available_as_evaluator: false
     ignored_for_cost: true
   costs_per_million_token: null
-
-swe-models:
-  devin/swe-1-6-fast:
-    label: SWE-1.6 Fast
-    release_date: 2026-05-22
-
 router-models:
   # Adaptive is Cognition's model router: `devin --model adaptive` picks a
   # pinned family per task. Devin bills ACUs, not tokens, so no real per-token

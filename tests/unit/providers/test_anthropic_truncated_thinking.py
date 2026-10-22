@@ -32,6 +32,7 @@ def _message(content: list[SimpleNamespace], stop_reason: str) -> MagicMock:
         output_tokens=512,
         cache_read_input_tokens=None,
         cache_creation_input_tokens=None,
+        cache_creation=None,
         output_tokens_details=None,
         iterations=None,
     )

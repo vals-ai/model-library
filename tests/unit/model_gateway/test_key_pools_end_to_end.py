@@ -8,7 +8,7 @@ an attempt's first and second request.
 
 import asyncio
 import os
-from collections.abc import Iterator
+from collections.abc import Awaitable, Iterator, Mapping
 from typing import Any
 from unittest.mock import patch
 
@@ -25,6 +25,7 @@ from model_gateway.key_assignments import (
     DynamoAssignmentStore,
 )
 from model_gateway.key_pool_config import PoolConfigSnapshot
+from model_gateway.route_helpers import GatewayOperation
 from model_library.base import LLMConfig, QueryResult
 from scripts.seed_key_pools import registry_endpoints, seed_document
 from tests.unit.model_gateway._seeded_pools import seeded_pools
@@ -178,6 +179,43 @@ def test_each_attempt_keeps_its_key_across_workers_and_pool_changes(
     served = [*first.values(), *second.values(), KEY_3, KEY_3]
     assert [event["provider_key_name"] for event in ledger.events] == served
     assert not any(value in repr(ledger.events) for value in VALUES.values())
+
+
+def test_the_provider_call_is_tagged_with_its_key_and_pools_revision(
+    ledger: FakeUsageLedger,
+) -> None:
+    recorded: list[Mapping[str, object | None]] = []
+    provider_call = GatewayOperation.provider_call
+
+    async def recording_provider_call(
+        self: GatewayOperation,
+        awaitable: Awaitable[Any],
+        *,
+        span_attrs: Mapping[str, object | None],
+    ) -> Any:
+        recorded.append(span_attrs)
+        return await provider_call(self, awaitable, span_attrs=span_attrs)
+
+    document = seed_document(lambda key: key in VALUES, registry_endpoints())
+    snapshot = PoolConfigSnapshot(
+        digest="d",
+        document=document.model_copy(update={"revision": 7}),
+        configuration_version="7",
+    )
+    worker = _worker(ledger, InMemoryAssignmentStore())
+    with (
+        patch.object(GatewayOperation, "provider_call", recording_provider_call),
+        patch.object(model_helpers, "runtime_pool_snapshot", lambda: snapshot),
+        patch.object(model_helpers, "current_pool_config", _PICK_FROM_RUNTIME_VIEW),
+    ):
+        key = _key_used(worker, "A")
+
+    [attrs] = recorded
+    assert (attrs["gateway.provider_key_name"], attrs["gateway.pool_revision"]) == (
+        key,
+        7,
+    )
+    assert VALUES[key] not in repr(attrs)
 
 
 def test_without_a_table_five_of_six_attempts_move_when_key_3_is_added(

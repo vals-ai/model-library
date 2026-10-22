@@ -82,6 +82,7 @@ async def test_anthropic_query_captures_message_id_metadata():
             output_tokens=2,
             cache_read_input_tokens=0,
             cache_creation_input_tokens=0,
+            cache_creation=None,
             iterations=None,
         ),
         _request_id="anthropic-request-1",

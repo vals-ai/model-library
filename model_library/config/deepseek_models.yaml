@@ -12,6 +12,7 @@ base-config:
     reasoning_model: false
   default_parameters:
     temperature: 1
+
 v4-models:
   base-config:
     open_source: true
@@ -174,10 +175,10 @@ v4-models:
       reasoning_effort: "high"
       max_tokens: 384_000
     costs_per_million_token:
-      input: 0.44
-      output: 1.32
+      input: 0.30
+      output: 1.20
       cache:
-        read: 0.014
+        read: 0.006
     alternative_keys:
       - deepseek/deepseek-v4-flash-nonthinking:
           supports:
@@ -201,10 +202,10 @@ v4-models:
       reasoning_effort: "high"
       max_tokens: 384_000
     costs_per_million_token:
-      input: 0.44
-      output: 1.32
+      input: 0.30
+      output: 1.20
       cache:
-        read: 0.014
+        read: 0.006
     alternative_keys:
       - deepseek/deepseek-v4-flash-0731-nonthinking:
           supports:

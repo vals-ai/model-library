@@ -7,6 +7,7 @@ The operator is a Dashboards-style caller holding the `dashboards` Gateway key.
 """
 
 import asyncio
+import dataclasses
 import json
 import os
 from collections.abc import Iterator
@@ -32,6 +33,7 @@ from tests.unit.model_gateway._support import InMemoryAssignmentStore, _make_cli
 MODEL = "anthropic/claude-opus-4-6"
 RUN_ID = "run-7"
 POOL_PROFILE = "pools"
+ACCESS_PROFILE = "access"
 
 KEY_1, KEY_2, KEY_3 = "ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY_2", "ANTHROPIC_API_KEY_3"
 EAP_KEY = "ANTHROPIC_API_KEY_EAP_9_18"
@@ -46,6 +48,10 @@ SETTING_FOR_VALUE = {value: name for name, value in VALUES.items()}
 OPERATOR = {"Authorization": "Bearer sk-dashboards"}
 HARNESS = {"Authorization": "Bearer sk-harness"}
 API_KEYS = {"dashboards": "sk-dashboards", "harness": "sk-harness"}
+def access_document(names: list[str]) -> bytes:
+    return json.dumps({"admin_api_key_names": names}).encode()
+
+
 class InMemoryAppConfig:
     """One AppConfig profile: the control app publishes, the workers' agents read."""
 
@@ -78,6 +84,12 @@ class InMemoryAppConfig:
                     content=json.dumps(
                         {name: os.environ[name] for name in VALUES if name in os.environ}
                     ).encode(),
+                    headers={"Configuration-Version": "1"},
+                )
+            if request.url.path.endswith(f"/configurations/{ACCESS_PROFILE}"):
+                return httpx.Response(
+                    200,
+                    content=access_document(["dashboards"]),
                     headers={"Configuration-Version": "1"},
                 )
             if not request.url.path.endswith(f"/configurations/{POOL_PROFILE}"):
@@ -123,7 +135,6 @@ def clock_at_zero(monkeypatch: pytest.MonkeyPatch) -> None:
 def three_anthropic_keys(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     for name, value in VALUES.items():
         monkeypatch.setenv(name, value)
-    monkeypatch.setenv("GATEWAY_ADMIN_API_KEY_NAMES", '["dashboards"]')
     with patch.object(
         model_helpers, "get_registry_model", side_effect=_build_provider_llm
     ):
@@ -143,6 +154,7 @@ def _app(
                 model_profile="models",
                 credential_profile="credentials",
                 pool_profile=POOL_PROFILE,
+                access_profile=ACCESS_PROFILE if role == "control" else None,
             )
         )
         return built[-1]
@@ -471,9 +483,8 @@ def test_a_pool_whose_weights_are_all_zero_is_refused() -> None:
 def test_both_routes_refuse_without_a_served_pools_document() -> None:
     appconfig = InMemoryAppConfig()
     control = _app(appconfig, "control", None)
-    control.app.state.runtime_config_manager.state._view = (  # pyright: ignore[reportAttributeAccessIssue]
-        RuntimeConfigState.bootstrap().current
-    )
+    state: RuntimeConfigState = control.app.state.runtime_config_manager.state  # pyright: ignore[reportAttributeAccessIssue]
+    state._view = dataclasses.replace(state.current, pools=None)  # pyright: ignore[reportPrivateUsage]
 
     got = control.get("/admin/key-pools", headers=OPERATOR)
     put = control.put("/admin/key-pools", json=_pools(KEY_1), headers=OPERATOR)

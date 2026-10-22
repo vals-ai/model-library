@@ -3,7 +3,7 @@ import math
 from functools import cache
 from inspect import getattr_static
 from pathlib import Path
-from typing import TypedDict, TypeVar, cast
+from typing import Literal, TypedDict, TypeVar, cast
 
 from model_library.base import (
     GatewayLLM,
@@ -307,6 +307,7 @@ def compute_model_cost(
     *,
     batch: bool = False,
     bill_reasoning: bool = True,
+    cache_ttl: Literal["5m", "1h"] = "5m",
 ) -> QueryResultCost | None:
     costs = get_model_cost(model_str)
     if not costs:
@@ -315,12 +316,14 @@ def compute_model_cost(
     million = 1_000_000
     input_cost = costs.input
     output_cost = costs.output
-    cache_read_cost, cache_write_cost = None, None
+    cache_read_cost, cache_write_cost, cache_write_1h_cost = None, None, None
 
     if metadata.cache_read_tokens or metadata.cache_write_tokens:
         if not costs.cache:
             raise Exception("Cache costs not set")
-        cache_read_cost, cache_write_cost = costs.cache.get_costs(input_cost)
+        cache_read_cost, cache_write_cost, cache_write_1h_cost = costs.cache.get_costs(
+            input_cost
+        )
 
     if costs.context and metadata.total_input_tokens > costs.context.threshold:
         input_cost, output_cost = costs.context.get_costs(
@@ -329,14 +332,29 @@ def compute_model_cost(
             metadata.total_input_tokens,
         )
         if costs.context.cache:
-            cache_read_cost, cache_write_cost = costs.context.cache.get_costs(
-                input_cost
+            cache_read_cost, cache_write_cost, cache_write_1h_cost = (
+                costs.context.cache.get_costs(input_cost)
             )
+
+    # the provider's 5m/1h split when reported, else every write at the requested TTL
+    cache_write_1h_tokens = metadata.cache_write_1h_tokens
+    if cache_write_1h_tokens is None:
+        cache_write_1h_tokens = (
+            (metadata.cache_write_tokens or 0) if cache_ttl == "1h" else 0
+        )
 
     if batch:
         if not costs.batch:
             raise Exception("Batch costs not set")
         input_cost, output_cost = costs.batch.get_costs(input_cost, output_cost)
+        if (
+            cache_read_cost is not None
+            and cache_write_cost is not None
+            and cache_write_1h_cost is not None
+        ):
+            cache_read_cost *= costs.batch.cache_discount
+            cache_write_cost *= costs.batch.cache_discount
+            cache_write_1h_cost *= costs.batch.cache_discount
 
     return QueryResultCost(
         input=input_cost * metadata.in_tokens / million,
@@ -347,8 +365,14 @@ def compute_model_cost(
         cache_read=cache_read_cost * metadata.cache_read_tokens / million
         if metadata.cache_read_tokens is not None and cache_read_cost
         else None,
-        cache_write=cache_write_cost * metadata.cache_write_tokens / million
-        if metadata.cache_write_tokens is not None and cache_write_cost
+        cache_write=(
+            cache_write_cost * (metadata.cache_write_tokens - cache_write_1h_tokens)
+            + cache_write_1h_cost * cache_write_1h_tokens
+        )
+        / million
+        if metadata.cache_write_tokens is not None
+        and cache_write_cost
+        and cache_write_1h_cost
         else None,
     )
 

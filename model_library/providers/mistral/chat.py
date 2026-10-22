@@ -19,6 +19,7 @@ from model_library.base import (
     FinishReasonInfo,
     InputItem,
     LLMConfig,
+    ProviderConfig,
     QueryResult,
     QueryResultExtras,
     QueryResultMetadata,
@@ -32,6 +33,7 @@ from model_library.base import (
     ToolResult,
 )
 from model_library.base.output.builder import QueryResultBuilder
+from model_library.base.query_ids import PromptCacheKeyMode, resolve_prompt_cache_key
 from model_library.exceptions import (
     BackoffRetryException,
     BadInputError,
@@ -106,9 +108,17 @@ def map_mistral_finish_reason(
     return FinishReasonInfo(reason=reason, raw=finish_reason)
 
 
+class MistralConfig(ProviderConfig):
+    # A stable conversation key improves Mistral prompt-cache hits.
+    # https://docs.mistral.ai/capabilities/completion/prompt_caching
+    prompt_cache_key: PromptCacheKeyMode | None = "hash"
+
+
 @register_provider("mistralai")
 class MistralModel(LLM):
     api_key_setting = "MISTRAL_API_KEY"
+
+    provider_config = MistralConfig()
 
     @override
     def _get_default_api_key(self) -> str:
@@ -311,6 +321,15 @@ class MistralModel(LLM):
             "messages": await self.parse_input(input),
             "tools": tools,
         }
+
+        prompt_cache_key = await resolve_prompt_cache_key(
+            mode=self.provider_config.prompt_cache_key,
+            model_name=self.model_name,
+            input=input,
+            parse_prompt_prefix=self.parse_input,
+        )
+        if prompt_cache_key is not None:
+            body["prompt_cache_key"] = prompt_cache_key
 
         if self.reasoning:
             if self.reasoning_effort is not None:

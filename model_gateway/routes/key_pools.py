@@ -23,6 +23,7 @@ from model_gateway.key_pool_config import (
 from model_gateway.key_pool_validation import validate_mapping
 from model_gateway.observability import log_gateway_event
 from model_gateway.runtime_config import (
+    runtime_admin_api_key_names,
     runtime_credential_fields,
     runtime_pool_snapshot,
 )
@@ -43,9 +44,10 @@ def _no_pools_profile() -> JSONResponse:
 
 
 def _admin_denied(request: Request) -> JSONResponse | None:
-    admin_names = cast(frozenset[str], request.app.state.admin_api_key_names)
     # Run tokens never reach here: auth refuses them on every /admin path.
-    if request.state.gateway_api_key_name not in admin_names:
+    key_name = request.state.gateway_api_key_name
+    unique_names = cast(frozenset[str], request.app.state.unique_api_key_names)
+    if key_name not in runtime_admin_api_key_names() or key_name not in unique_names:
         return _error_response(
             403, "forbidden", "This Gateway key cannot manage key pools"
         )

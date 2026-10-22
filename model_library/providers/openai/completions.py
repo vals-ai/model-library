@@ -4,6 +4,7 @@ import logging
 from collections.abc import AsyncIterator, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
+from openai import AsyncStream
 from openai.types.chat import (
     ChatCompletion,
     ChatCompletionChunk,
@@ -515,6 +516,12 @@ async def query(
             if chunk.usage:
                 # NOTE: see _calculate_cost
                 metadata = metadata_from_usage(chunk.usage)
+        if model.provider == "kimi":
+            headers = cast(
+                AsyncStream[ChatCompletionChunk], completion
+            ).response.headers
+            if (write_1h := headers.get("msh-usage-cache-write-tokens-1h")) is not None:
+                metadata.cache_write_1h_tokens = int(write_1h)
 
     if model.stream_completions:
         raw_tool_calls = [tool_call for tool_call in raw_tool_calls if tool_call.id]

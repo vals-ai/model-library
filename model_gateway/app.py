@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from collections import Counter
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager, suppress
 from functools import partial
@@ -104,17 +105,6 @@ async def _record_runtime_current(loop: asyncio.AbstractEventLoop) -> None:
     record_runtime(snapshot)
 
 
-def _admin_api_key_names(api_keys_by_name: dict[str, str]) -> frozenset[str]:
-    """Gateway key names allowed on /admin routes, from GATEWAY_ADMIN_API_KEY_NAMES."""
-    decoded: object = json.loads(os.environ.get("GATEWAY_ADMIN_API_KEY_NAMES") or "[]")
-    names = cast(list[object], decoded) if isinstance(decoded, list) else None
-    if names is None or any(name not in api_keys_by_name for name in names):
-        raise RuntimeError(
-            "GATEWAY_ADMIN_API_KEY_NAMES must be a JSON list of MODEL_GATEWAY_API_KEYS names"
-        )
-    return frozenset(cast(list[str], names))
-
-
 def create_app() -> FastAPI:
     runtime_role = gateway_runtime_role()
     query_enabled = runtime_role in {"combined", "query"}
@@ -124,7 +114,10 @@ def create_app() -> FastAPI:
         raise RuntimeError("MODEL_GATEWAY_API_KEYS must be set")
     api_keys_by_name = cast(dict[str, str], json.loads(api_keys))
     valid_keys = set(api_keys_by_name.values())
-    admin_api_key_names = _admin_api_key_names(api_keys_by_name)
+    value_counts = Counter(api_keys_by_name.values())
+    unique_api_key_names = frozenset(
+        name for name, value in api_keys_by_name.items() if value_counts[value] == 1
+    )
 
     hmac_secret_value = model_library_settings.get("MODEL_GATEWAY_HMAC_SECRET", None)
     if not isinstance(hmac_secret_value, str) or not hmac_secret_value:
@@ -185,7 +178,7 @@ def create_app() -> FastAPI:
         try:
             if runtime_config_manager is not None:
                 initial_refresh = await runtime_config_manager.refresh_once()
-                if initial_refresh.failed or initial_refresh.rejected:
+                if (initial_refresh.failed | initial_refresh.rejected) - {"access"}:
                     raise RuntimeError("Initial runtime configuration refresh failed")
                 runtime_refresh_stop = asyncio.Event()
                 runtime_refresh_task = asyncio.create_task(
@@ -294,7 +287,7 @@ def create_app() -> FastAPI:
     )
     app.state.cache = cache
     app.state.runtime_config_state = runtime_config_state
-    app.state.admin_api_key_names = admin_api_key_names
+    app.state.unique_api_key_names = unique_api_key_names
     app.state.pool_config_publisher = pool_config_publisher
     app.state.hmac_secret = hmac_secret
     app.state.runtime_role = runtime_role

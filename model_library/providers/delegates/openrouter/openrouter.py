@@ -92,7 +92,7 @@ class OpenRouterModel(DelegateOnly):
                 model_name=self._registry_key or f"openrouter/{self.model_name}"
             )
             # Claude upstreams cache only with a breakpoint; others cache on their own.
-            if self.prompt_caching:
+            if self.prompt_caching != "off":
                 extra_body["cache_control"] = {"type": "ephemeral"}
             # Auto may pick a host that silently ignores response_format or tools;
             # require_parameters makes it pick one that supports them (or fail).
