@@ -15,6 +15,7 @@ from model_library.register_models import (
 from model_library.registry_utils import get_model_names, get_registry_config
 
 from model_gateway.run_tokens import registry_visibility
+from model_gateway.valsmith_catalog import resolve_valsmith_policies, valsmith_catalog
 
 
 def register_model_routes(app: FastAPI) -> None:
@@ -25,6 +26,7 @@ def register_model_routes(app: FastAPI) -> None:
         include_alt_keys: bool = True,
         include_excluded_fields: bool = False,
         include_transcription: bool = False,
+        include_valsmith: bool = False,
     ):
         with_transcription = include_excluded_fields and include_transcription
         models, transcription = get_registries()
@@ -38,11 +40,17 @@ def register_model_routes(app: FastAPI) -> None:
                 deprecated.update(get_deprecated_transcription_registry())
             registry = {**deprecated, **registry}
         visible_keys = visible_registry_keys(registry, include_alt_keys)
+        policies = resolve_valsmith_policies(registry)
         exclude = None
         if not include_excluded_fields:
             exclude = {
                 "supports": {"transcription"},
                 "metadata": {"router"},
+                "costs_per_million_token": {
+                    "cache": {"write_1h_markup"},
+                    "context": {"cache": {"write_1h_markup"}},
+                    "batch": {"cache_discount"},
+                },
                 "country": True,
                 "rate_limit": True,
                 "transcription_cost": True,
@@ -68,13 +76,15 @@ def register_model_routes(app: FastAPI) -> None:
             return payload
 
         visible_to_caller = registry_visibility(request)
-        return {
-            "models": {
-                key: serialize_config(config)
-                for key, config in registry.items()
-                if key in visible_keys and visible_to_caller(key, config)
-            }
+        payloads = {
+            key: serialize_config(config)
+            for key, config in registry.items()
+            if key in visible_keys and visible_to_caller(key, config)
         }
+        if include_valsmith:
+            return valsmith_catalog(registry, payloads, policies)
+
+        return {"models": payloads}
 
     @app.get("/models")
     async def list_models():

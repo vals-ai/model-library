@@ -33,6 +33,7 @@ USAGE_EVENT_FACT_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "question_id",
     "query_id",
     "query_id_normalized",
+    "attempt_id",
     "requested_model_key",
     "provider",
     "provider_endpoint",
@@ -241,6 +242,7 @@ def usage_events_column_sql(*, include_batch_id: bool = False) -> str:
   question_id varchar(65535),
   query_id varchar(65535),
   query_id_normalized varchar(65535),
+  attempt_id varchar(65535),
 
   requested_model_key varchar(2048) not null,
   provider varchar(256) not null,
@@ -303,6 +305,16 @@ def usage_events_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:
 )
 diststyle auto
 sortkey (completed_at);"""
+
+
+SCHEMA_COLUMN_ADDITIONS: Final[tuple[dict[str, str], ...]] = tuple(
+    {
+        "TableName": table_name,
+        "ColumnName": "attempt_id",
+        "ColumnType": "varchar(65535)",
+    }
+    for table_name in (USAGE_EVENTS_STAGING_TABLE_NAME, "usage_events")
+)
 
 
 def usage_event_performance_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:

@@ -31,6 +31,7 @@ from model_library.base import (
 from model_library.base.input import (
     FileWithBase64,
     FileWithUrl,
+    InputItem,
     RawResponse,
     SystemInput,
     TextInput,
@@ -39,6 +40,7 @@ from model_library.base.input import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.query_ids import ResolvedQueryIds, scoped_query_ids
 from model_library.exceptions import (
     BadInputError,
     ContentFilterError,
@@ -399,18 +401,6 @@ async def test_responses_prompt_cache_retention_added_to_body():
     assert body["prompt_cache_retention"] == "24h"
 
 
-async def test_responses_prompt_cache_key_from_query_ids_added_to_body():
-    model = OpenAIModel(
-        "gpt-4o",
-        config=LLMConfig(provider_config=OpenAIConfig(prompt_cache_key="id")),
-    )
-
-    body = await model.build_body(_INPUT, tools=[], run_id="run-a", question_id="q-a")
-
-    assert isinstance(body["prompt_cache_key"], str)
-    assert len(body["prompt_cache_key"]) == 32
-
-
 async def test_prompt_cache_key_hash_is_stable_across_turns():
     model = OpenAIModel(
         "gpt-4o",
@@ -433,51 +423,38 @@ async def test_prompt_cache_key_hash_is_stable_across_turns():
     assert body_1["prompt_cache_key"] == body_2["prompt_cache_key"]
 
 
-async def test_prompt_cache_key_hash_differs_for_different_initial_inputs():
-    model = OpenAIModel(
-        "gpt-4o",
-        config=LLMConfig(provider_config=OpenAIConfig(prompt_cache_key="hash")),
-    )
-
-    body_1 = await model.build_body(
-        [SystemInput(text="sys"), TextInput(text="first user msg")],
-        tools=[],
-    )
-    body_2 = await model.build_body(
-        [SystemInput(text="sys"), TextInput(text="different first user msg")],
-        tools=[],
-    )
-
-    assert body_1["prompt_cache_key"] != body_2["prompt_cache_key"]
-
-
-async def test_prompt_cache_key_id_uses_query_ids():
+async def test_prompt_cache_key_uses_caller_query_ids():
     model = OpenAIModel(
         "gpt-4o",
         config=LLMConfig(provider_config=OpenAIConfig(prompt_cache_key="id")),
     )
 
-    body_1 = await model.build_body(
-        [SystemInput(text="sys"), TextInput(text="first user msg")],
-        tools=[],
-        run_id="run-a",
-        question_id="q-a",
-    )
-    body_2 = await model.build_body(
-        [SystemInput(text="sys"), TextInput(text="different first user msg")],
-        tools=[],
-        run_id="run-a",
-        question_id="q-a",
-    )
-    body_3 = await model.build_body(
-        [SystemInput(text="sys"), TextInput(text="first user msg")],
-        tools=[],
-        run_id="run-a",
-        question_id="q-b",
+    async def key(question_id: str, first_message: str) -> str:
+        with scoped_query_ids(ResolvedQueryIds("run-a", question_id, "q", "a")):
+            body = await model.build_body(
+                [SystemInput(text="sys"), TextInput(text=first_message)], tools=[]
+            )
+        return body["prompt_cache_key"]
+
+    assert await key("q-a", "first") == await key("q-a", "different first")
+    assert await key("q-a", "first") != await key("q-b", "first")
+
+
+async def test_prompt_cache_key_without_ids_uses_system_prompt_and_tools():
+    model = OpenAIModel(
+        "gpt-4o",
+        config=LLMConfig(provider_config=OpenAIConfig(prompt_cache_key="hash")),
     )
 
-    assert body_1["prompt_cache_key"] == body_2["prompt_cache_key"]
-    assert body_1["prompt_cache_key"] != body_3["prompt_cache_key"]
+    async def key(input: list[InputItem]) -> str:
+        with scoped_query_ids(ResolvedQueryIds(None, None, "q", None)):
+            body = await model.build_body(input, tools=[])
+        return body["prompt_cache_key"]
+
+    rubric = [SystemInput(text="rubric"), TextInput(text="criterion 1")]
+    assert await key(rubric) == await key([rubric[0], TextInput(text="criterion 2")])
+    assert await key(rubric) != await key([SystemInput(text="other"), rubric[1]])
+    assert await key([TextInput(text="a")]) != await key([TextInput(text="b")])
 
 
 async def test_completions_prompt_cache_retention_added_to_body():

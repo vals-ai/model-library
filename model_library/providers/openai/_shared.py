@@ -17,9 +17,10 @@ from model_library.base import (
     SystemInput,
     TextInput,
     ToolBody,
+    ToolDefinition,
     ToolResult,
 )
-from model_library.base.query_ids import resolve_prompt_cache_key
+from model_library.base.query_ids import prompt_cache_key_from_query_ids
 from model_library.exceptions import NoMatchingToolCallError
 
 if TYPE_CHECKING:
@@ -83,11 +84,11 @@ def function_tool_payload(body: ToolBody) -> dict[str, Any]:
     return payload
 
 
-async def apply_common_body(
+def apply_common_body(
     model: OpenAIModel,
     body: dict[str, Any],
     input: Sequence[InputItem],
-    kwargs: dict[str, object],
+    tools: Sequence[ToolDefinition],
     sampling: dict[str, object],
 ) -> None:
     if model.prompt_cache_retention is not None:
@@ -97,16 +98,10 @@ async def apply_common_body(
         body["prompt_cache_options"] = {"mode": "explicit"}
     if model.service_tier is not None:
         body["service_tier"] = model.service_tier
-    prompt_cache_key = await resolve_prompt_cache_key(
-        mode=model.prompt_cache_key_mode,
-        model_name=model.model_name,
-        input=input,
-        parse_prompt_prefix=model.parse_input,
-        run_id=kwargs.pop("run_id", None),
-        question_id=kwargs.pop("question_id", None),
-    )
-    if prompt_cache_key is not None:
-        body["prompt_cache_key"] = prompt_cache_key
+    if model.prompt_cache_key_mode is not None:
+        body["prompt_cache_key"] = prompt_cache_key_from_query_ids(
+            model_name=model.model_name, input=input, tools=tools
+        )
     if model.parallel_tool_calls is not None:
         body["parallel_tool_calls"] = model.parallel_tool_calls
     if "temperature" in sampling:

@@ -69,7 +69,7 @@ async def test_default_logger_uses_llm_root():
 
 
 async def test_default_llm_logger_uses_llm_root():
-    """Without custom logger, query logger parents off 'llm.<provider>.<model><run=...>'."""
+    """Without custom logger, query logger parents off 'llm.<provider>.<model><query=...>'."""
     MockLLM = _make_mock_llm_class()
     llm = MockLLM("gpt-4o", "openai")
 
@@ -81,8 +81,7 @@ async def test_default_llm_logger_uses_llm_root():
     call_kwargs = query_impl_mock.call_args.kwargs
     query_logger = call_kwargs["query_logger"]
     assert query_logger.name.startswith("llm.openai.gpt-4o")
-    assert "<run=" in query_logger.name
-    assert "<question=" in query_logger.name
+    assert "<run=" not in query_logger.name
     assert "<query=" in query_logger.name
 
 
@@ -100,7 +99,6 @@ async def test_query_child_logger_derives_from_custom_logger():
     call_kwargs = query_impl_mock.call_args.kwargs
     query_logger = call_kwargs["query_logger"]
     assert query_logger.name.startswith("myapp.")
-    assert "<question=" in query_logger.name
     assert "<query=" in query_logger.name
 
 

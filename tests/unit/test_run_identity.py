@@ -180,46 +180,19 @@ async def _query_identity_attrs(
     return next(attrs for attrs in attrs_seen if "model.provider" in attrs)
 
 
-async def test_llm_query_uses_settings_run_and_question_ids():
-    attrs = await _query_identity_attrs(
-        _Settings(RUN_ID="run-from-settings", QUESTION_ID="question-from-settings")
-    )
-
-    assert attrs["run_id"] == "run-from-settings"
-    assert attrs["question_id"] == "question-from-settings"
-    assert isinstance(attrs["query_id"], str)
-    assert len(cast(str, attrs["query_id"])) == 14
-    assert isinstance(attrs["attempt_id"], str)
-    assert len(cast(str, attrs["attempt_id"])) == 14
-
-
-async def test_llm_query_uses_task_id_alias_when_question_id_absent():
-    attrs = await _query_identity_attrs(
-        _Settings(RUN_ID="run-from-settings", TASK_ID="task-from-settings")
-    )
-
-    assert attrs["run_id"] == "run-from-settings"
-    assert attrs["question_id"] == "task-from-settings"
-
-
-async def test_llm_query_uses_task_id_alias_when_question_id_blank():
-    attrs = await _query_identity_attrs(
-        _Settings(QUESTION_ID=" ", TASK_ID="task-from-settings")
-    )
-
-    assert attrs["question_id"] == "task-from-settings"
-
-
-async def test_llm_query_question_id_setting_precedes_task_id_alias():
+async def test_llm_query_ignores_id_settings():
     attrs = await _query_identity_attrs(
         _Settings(
             RUN_ID="run-from-settings",
             QUESTION_ID="question-from-settings",
             TASK_ID="task-from-settings",
+            ATTEMPT_ID="attempt-from-settings",
         )
     )
 
-    assert attrs["question_id"] == "question-from-settings"
+    assert "run_id" not in attrs
+    assert "question_id" not in attrs
+    assert "attempt_id" not in attrs
 
 
 async def test_llm_query_explicit_ids_override_settings_ids():
@@ -268,17 +241,6 @@ async def test_llm_query_rejects_blank_explicit_run_and_question_ids(
 ):
     with pytest.raises(ValueError, match=match):
         await _query_identity_attrs(_Settings(), **kwargs)
-
-
-async def test_llm_query_treats_blank_settings_ids_as_absent():
-    attrs = await _query_identity_attrs(
-        _Settings(RUN_ID="", QUESTION_ID=" ", TASK_ID="\t")
-    )
-
-    assert isinstance(attrs["run_id"], str)
-    assert len(cast(str, attrs["run_id"])) == 8
-    assert isinstance(attrs["question_id"], str)
-    assert len(cast(str, attrs["question_id"])) == 14
 
 
 async def test_query_id_is_used_for_logging_and_not_forwarded_to_provider():
@@ -789,6 +751,17 @@ async def test_run_id_and_question_id_forwarded_to_token_retrier():
 
     assert captured["run_id"] == "my-run-id"
     assert captured["question_id"] == "my-question-id"
+
+
+async def test_token_retry_requires_run_and_question_ids():
+    MockLLM = _make_mock_llm_class()
+    llm = MockLLM("gpt-4o", "openai")
+    llm._resolved_token_retry_params = ResolvedTokenRetryParams(  # pyright: ignore[reportAttributeAccessIssue]
+        input_modifier=1.0, output_modifier=1.0, use_dynamic_estimate=True, limit=10_000
+    )
+
+    with pytest.raises(ValueError, match="token retry requires run_id and question_id"):
+        await llm.query("test input", run_id="my-run-id")
 
 
 async def test_rpm_only_query_skips_token_estimate():

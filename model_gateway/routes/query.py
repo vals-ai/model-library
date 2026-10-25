@@ -2,13 +2,17 @@
 
 import asyncio
 import time
+import uuid
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 from typing import Annotated, TypeVar, cast
 
 from fastapi import Depends, FastAPI, Request
+from fastapi.responses import JSONResponse
 
 import model_library.telemetry as telemetry
 from model_gateway.cache import ModelCache
+from model_gateway.errors import ErrorBody
 from model_gateway.history import sign_history
 from model_gateway.key_assignments import AssignmentStore
 from model_gateway.metrics import model_dimensions
@@ -21,6 +25,7 @@ from model_gateway.model_helpers import (
 )
 from model_gateway.route_helpers import GatewayOperation, ok_response
 from model_gateway.run_tokens import run_token_authorized
+from model_gateway.runtime_config import runtime_budget_policy
 from model_gateway.telemetry_helpers import (
     query_config_params,
     query_telemetry_attributes,
@@ -33,6 +38,7 @@ from model_gateway.types import (
     query_result_response_body,
 )
 from model_gateway.usage_ledger.details import snapshot_usage_request
+from model_gateway.usage_ledger.schema import identity_email_value
 from model_gateway.usage_ledger.store import build_usage_event
 from model_library.base import LLM, dump_gateway_config, dump_llm_config
 from model_library.base.output import QueryResult
@@ -73,8 +79,24 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
             query_id=body.query_id,
             attempt_id=body.attempt_id,
         )
-        id_attrs = ids.as_attributes()
+        # The ledger gets every ID; the provider call keeps only the caller's.
+        id_attrs = {
+            "run_id": uuid.uuid4().hex[:8],
+            "question_id": uuid.uuid4().hex[:14],
+            "attempt_id": uuid.uuid4().hex[:14],
+        } | ids.as_attributes()
         body = body.model_copy(update=id_attrs)
+        if request.app.state.budget_service.blocked(
+            runtime_budget_policy(),
+            identity_email_value(body.identity),
+            datetime.now(UTC),
+        ):
+            return JSONResponse(
+                status_code=402,
+                content=ErrorBody(
+                    code="budget_exceeded", message="Email spending budget exceeded"
+                ).model_dump(exclude_none=True),
+            )
         usage_request = snapshot_usage_request(body)
         config = dump_llm_config(body.config)
         display_config = dump_gateway_config(body.config)

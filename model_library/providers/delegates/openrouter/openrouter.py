@@ -89,7 +89,9 @@ class OpenRouterModel(DelegateOnly):
                 extra_body["plugins"] = [{"id": plugin_id, **settings}]
             # One session per task attempt, so the served model sticks within it.
             extra_body["session_id"] = prompt_cache_key_from_query_ids(
-                model_name=self._registry_key or f"openrouter/{self.model_name}"
+                model_name=self._registry_key or f"openrouter/{self.model_name}",
+                input=input,
+                tools=tools,
             )
             # Claude upstreams cache only with a breakpoint; others cache on their own.
             if self.prompt_caching != "off":

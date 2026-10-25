@@ -504,7 +504,14 @@ def visible_registry_keys(
 def model_config_from_json(data: dict[str, Any]) -> RegistryEntry:
     """Parse a chat or transcription entry from gateway registry JSON."""
     provider_properties = data["provider_properties"]
-    payload = json.dumps(data)
+    # Gateway adds product metadata outside the model configuration.
+    payload = json.dumps(
+        {
+            key: value
+            for key, value in data.items()
+            if key not in {"catalog", "valsmith"}
+        }
+    )
     try:
         model = registry_entry_adapter.validate_json(payload)
     except ValidationError as error:

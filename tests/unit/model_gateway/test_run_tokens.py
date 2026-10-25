@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import json
 import time
 from types import SimpleNamespace
 from typing import Any
@@ -13,6 +14,7 @@ import pytest
 import model_gateway.model_helpers as model_helpers
 import model_gateway.routes.query as query_routes
 import model_gateway.routes.run_tokens as run_token_routes
+import model_gateway.run_tokens as run_tokens
 from model_gateway.errors import RunTokenAuthorizationError
 from model_gateway.run_tokens import RunTokenClaims, run_token_authorized
 from model_gateway.types import EmbeddingRequest
@@ -25,6 +27,7 @@ OTHER = "anthropic/claude-4-opus"
 EMBEDDING = "text-embedding-3-small"
 RUN_ID = "run-1"
 TASK_ID = "task_0"
+ATTEMPT_ID = "attempt-1"
 
 
 @pytest.fixture(autouse=True)
@@ -41,6 +44,7 @@ def _mint(
     payload = {
         "run_id": RUN_ID,
         "task_id": TASK_ID,
+        "attempt_id": ATTEMPT_ID,
         "allowed_models": [MODEL],
         "ttl_seconds": 3600,
         **overrides,
@@ -79,6 +83,7 @@ def _claims(**overrides: Any) -> RunTokenClaims:
     return RunTokenClaims(
         run_id=RUN_ID,
         task_id=TASK_ID,
+        attempt_id=ATTEMPT_ID,
         allowed_models=[MODEL],
         allowed_embedding_models=[EMBEDDING],
         minted_by="executor",
@@ -105,16 +110,24 @@ def test_minted_token_can_call_query_and_revoke_by_its_digest() -> None:
     )
     assert revoked.status_code == 200
     assert _post_query(client, token).status_code == 401
-    assert client.post(
-        "/service-auth/revoke", headers=HEADERS, json={"lease_id": minted["lease_id"]}
-    ).status_code == 404
+    assert (
+        client.post(
+            "/service-auth/revoke",
+            headers=HEADERS,
+            json={"lease_id": minted["lease_id"]},
+        ).status_code
+        == 404
+    )
 
 
 def test_revoke_that_loses_a_race_reports_not_found() -> None:
     client = _make_client()
     lease = {"lease_id": _mint(client)["lease_id"]}
     stale = asyncio.run(run_token_routes.get_run_token(lease["lease_id"]))
-    assert client.post("/service-auth/revoke", headers=HEADERS, json=lease).status_code == 200
+    assert (
+        client.post("/service-auth/revoke", headers=HEADERS, json=lease).status_code
+        == 200
+    )
 
     # A concurrent revoke read the lease before the first one deleted it.
     with patch.object(run_token_routes, "get_run_token", AsyncMock(return_value=stale)):
@@ -157,9 +170,9 @@ def test_embedding_request_cannot_choose_an_unassigned_embedding_model() -> None
 
 def test_embedded_route_respects_model_scope() -> None:
     client = _make_client()
-    token = _mint(
-        client, allowed_models=[MODEL], allowed_embedding_models=[EMBEDDING]
-    )["token"]
+    token = _mint(client, allowed_models=[MODEL], allowed_embedding_models=[EMBEDDING])[
+        "token"
+    ]
     denied = client.post(
         "/embeddings", headers=_bearer(token), json={"model": OTHER, "text": "hi"}
     )
@@ -204,6 +217,7 @@ def test_mint_rejects_an_unusable_scope(overrides: dict[str, Any]) -> None:
     payload = {
         "run_id": RUN_ID,
         "task_id": TASK_ID,
+        "attempt_id": ATTEMPT_ID,
         "allowed_models": [MODEL],
         "ttl_seconds": 3600,
         **overrides,
@@ -279,6 +293,7 @@ def test_token_cannot_set_retry_params() -> None:
             json={
                 "run_id": RUN_ID,
                 "task_id": TASK_ID,
+                "attempt_id": ATTEMPT_ID,
                 "allowed_models": [MODEL],
                 "ttl_seconds": 3600,
                 "token_retry_params": retry,
@@ -303,7 +318,12 @@ def test_sandbox_token_cannot_enter_control_or_model_catalog() -> None:
     for path, payload in (
         (
             "/service-auth",
-            {"run_id": RUN_ID, "task_id": TASK_ID, "allowed_models": [MODEL]},
+            {
+                "run_id": RUN_ID,
+                "task_id": TASK_ID,
+                "attempt_id": ATTEMPT_ID,
+                "allowed_models": [MODEL],
+            },
         ),
         ("/service-auth/revoke", {"lease_id": minted["lease_id"]}),
         ("/benchmark-runs/acquire", {"run_id": RUN_ID, "model": MODEL}),
@@ -322,3 +342,43 @@ def test_registry_exposes_only_assigned_models_to_sandbox() -> None:
     assert visible.status_code == full.status_code == 200
     assert set(visible.json()["models"]) == {MODEL}
     assert set(full.json()["models"]) > {MODEL}
+
+
+def test_token_attempt_is_stamped_over_the_body_attempt() -> None:
+    client = _make_client()
+    token = _mint(client, attempt_id="attempt-7")["token"]
+    body = _capture_query(client, token, attempt_id="client-attempt")
+    assert (body.run_id, body.question_id, body.attempt_id) == (
+        RUN_ID,
+        TASK_ID,
+        "attempt-7",
+    )
+
+
+def test_legacy_mint_without_an_attempt_leaves_the_body_attempt_alone() -> None:
+    client = _make_client()
+    payload = {
+        "run_id": RUN_ID,
+        "task_id": TASK_ID,
+        "allowed_models": [MODEL],
+        "ttl_seconds": 3600,
+    }
+    response = client.post("/service-auth", headers=HEADERS, json=payload)
+    assert response.status_code == 200, response.text
+    body = _capture_query(client, response.json()["token"], attempt_id="client-attempt")
+    assert (body.run_id, body.question_id, body.attempt_id) == (
+        RUN_ID,
+        TASK_ID,
+        "client-attempt",
+    )
+
+
+def test_legacy_stored_token_without_an_attempt_still_authorizes(redis: Any) -> None:
+    client = _make_client()
+    minted = _mint(client)
+    key = run_tokens._token_key(minted["lease_id"])  # pyright: ignore[reportPrivateUsage]
+    stored = json.loads(asyncio.run(redis.get(key)))
+    del stored["attempt_id"]
+    asyncio.run(redis.set(key, json.dumps(stored)))
+    body = _capture_query(client, minted["token"], attempt_id="client-attempt")
+    assert (body.run_id, body.attempt_id) == (RUN_ID, "client-attempt")

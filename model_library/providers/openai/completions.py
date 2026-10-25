@@ -219,12 +219,12 @@ async def build_body(
 
     # DeepSeek, Ant, Baseten, Together and older Kimi modes use max_tokens. Ant ignores
     # max_completion_tokens outright, which would leave generation uncapped.
-    # Kimi K3 follows the current API contract and uses max_completion_tokens.
+    # Kimi K3-family models follow the current API contract and uses max_completion_tokens.
     if (
         model.reasoning
         and model.max_tokens
         and model.provider not in ("deepseek", "ant", "baseten", "together")
-        and (model.provider != "kimi" or model.model_name == "kimi-k3")
+        and (model.provider != "kimi" or model.model_name.startswith("kimi-k3"))
     ):
         del body["max_tokens"]
         body["max_completion_tokens"] = model.max_tokens
@@ -246,7 +246,7 @@ async def build_body(
         # require explicitly setting reasoning effort to disable thinking
         body["reasoning_effort"] = model.reasoning_effort
 
-    await apply_common_body(model, body, input, kwargs, sampling)
+    apply_common_body(model, body, input, tools, sampling)
 
     # Configured top_k isn't a standard chat-completions field; forward it via
     # extra_body so non-OpenAI backends (e.g. Gemini OpenAI-compat)
@@ -590,8 +590,8 @@ async def query(
         )
     elif not omit_null_message_fields:
         final_message.tool_calls = None
-    preserve_empty_reasoning = (
-        model.provider == "kimi" and model.model_name == "kimi-k3"
+    preserve_empty_reasoning = model.provider == "kimi" and model.model_name.startswith(
+        "kimi-k3"
     )
     if reasoning_text or preserve_empty_reasoning:
         setattr(final_message, "reasoning_content", reasoning_text or "")

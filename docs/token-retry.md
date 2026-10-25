@@ -12,7 +12,7 @@ The system has two layers:
 
 ### Run identity (`run_id`)
 
-Inflight tracking, dynamic estimates, and dispatched counting are all keyed by `run_id`. Pass `run_id` explicitly to `LLM.query()` or `Agent.run()`. If omitted, a short random UUID is generated per call.
+Inflight tracking, dynamic estimates, and dispatched counting are all keyed by `run_id`. Pass `run_id` and `question_id` to `LLM.query()` or `Agent.run()`; token retry raises without them.
 
 For multi-process benchmarks where each question spawns a separate process (new Agent + new LLM), pass the same `run_id` to every `query()` / `agent.run()` call so all processes share a single run identity in Redis.
 
@@ -23,7 +23,6 @@ App calls model.init_token_retry(params)
   → spawns background_loops (refill + correction + cleanup + heartbeat + watchdog)
 
 App calls model.query(input, run_id=..., question_id=...)
-  → run_id / question_id auto-generated if not provided
   → creates TokenRetrier(run_id, question_id) per request
   → _pre_function: lpos check (lazy, cached) to detect if queued
   → _pre_function: atomically admit request + deduct tokens, enter inflight
@@ -142,7 +141,7 @@ Learns actual token usage per run and adjusts future estimates via exponential m
 
 For agentic runs where one question makes multiple sequential `model.query()` calls:
 
-- `LLM.query()` accepts an optional `question_id` param (auto-generated 14-char hex UUID if not provided)
+- `LLM.query()` takes `question_id`, required with token retry
 - `Agent.run()` accepts `question_id` and passes it to all turns
 - `TokenRetrier` uses `question_id` (not `request_id`) for the per-run dispatched SET
 - Agentic dispatched cycling: `srem` at start of `_pre_function`, `sadd` after deduction — dispatched count reflects questions with current turn inflight, not total queries made

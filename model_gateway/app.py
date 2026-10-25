@@ -25,6 +25,9 @@ from model_library.retriers.token import set_redis_client
 
 from model_gateway.asgi_observability import GatewayObservabilityMiddleware
 from model_gateway.auth import create_auth_middleware
+from model_gateway.budgets.bump_service import BumpService
+from model_gateway.budgets.service import BudgetService
+from model_gateway.budgets.override_service import override_service_from_env
 from model_gateway.cache import ModelCache
 from model_gateway.capacity import GatewayCapacityLimiter, create_capacity_middleware
 from model_gateway.errors import ErrorBody, ErrorResponse, RunTokenAuthorizationError
@@ -48,6 +51,7 @@ from model_gateway.rate_limit_monitor import RateLimitMonitor
 from model_gateway.rate_limit_monitor.routes import register_rate_limit_monitor_routes
 from model_gateway.rate_limit_monitor.state import MonitorRedis, RateLimitMonitorStore
 from model_gateway.routes.benchmark_admission import register_benchmark_admission_routes
+from model_gateway.routes.budgets import register_budget_routes
 from model_gateway.routes.health import register_health_routes
 from model_gateway.routes.key_pools import register_key_pool_routes
 from model_gateway.routes.models import register_model_routes
@@ -137,6 +141,11 @@ def create_app() -> FastAPI:
     pool_config_publisher = (
         pool_config_publisher_from_env() if control_enabled else None
     )
+    override_service = (
+        override_service_from_env(os.environ.get("GATEWAY_STAGE", "local"))
+        if control_enabled
+        else None
+    )
     rate_limit_probe_service: RateLimitProbeService | None = None
 
     @asynccontextmanager
@@ -174,15 +183,72 @@ def create_app() -> FastAPI:
         rate_limit_monitor: RateLimitMonitor | None = None
         runtime_refresh_stop: asyncio.Event | None = None
         runtime_refresh_task: asyncio.Task[None] | None = None
+        budget_stop = asyncio.Event()
+        budget_tasks: list[asyncio.Task[None]] = []
         delivery_metric_handler = install_telemetry_delivery_metric_handler()
+        budget_bucket = (
+            os.environ.get("GATEWAY_BUDGET_SNAPSHOT_BUCKET")
+            if control_enabled
+            else None
+        )
+        budget_service = BudgetService(
+            stage=os.environ.get("GATEWAY_STAGE", "local"),
+            redis=redis_client,
+            bucket=budget_bucket,
+            key=os.environ.get("GATEWAY_BUDGET_SNAPSHOT_KEY")
+            if control_enabled
+            else None,
+        )
+        bump_service = BumpService(
+            stage=budget_service.stage,
+            redis=redis_client,
+            bucket=budget_bucket,
+            key=os.environ.get("GATEWAY_BUDGET_BUMPS_KEY") if control_enabled else None,
+        )
+        budget_service.bump_service = bump_service
+        app.state.budget_service = budget_service
+        app.state.bump_service = bump_service
         try:
             if runtime_config_manager is not None:
                 initial_refresh = await runtime_config_manager.refresh_once()
-                if (initial_refresh.failed | initial_refresh.rejected) - {"access"}:
+                if (initial_refresh.failed | initial_refresh.rejected) - {
+                    "access",
+                    "budgets",
+                }:
                     raise RuntimeError("Initial runtime configuration refresh failed")
                 runtime_refresh_stop = asyncio.Event()
                 runtime_refresh_task = asyncio.create_task(
                     runtime_config_manager.run(runtime_refresh_stop)
+                )
+            if control_enabled:
+                try:
+                    await budget_service.refresh_control_once()
+                except Exception:
+                    logger.exception("Initial control budget refresh failed")
+                budget_tasks.append(
+                    asyncio.create_task(budget_service.run_control(budget_stop))
+                )
+                try:
+                    await bump_service.refresh_control_once()
+                except Exception:
+                    logger.exception("Initial control bump refresh failed")
+                budget_tasks.append(
+                    asyncio.create_task(bump_service.run_control(budget_stop))
+                )
+            if query_enabled:
+                try:
+                    await budget_service.refresh_query_once()
+                except Exception:
+                    logger.exception("Initial query budget refresh failed")
+                budget_tasks.append(
+                    asyncio.create_task(budget_service.run_query(budget_stop))
+                )
+                try:
+                    await bump_service.refresh_query_once()
+                except Exception:
+                    logger.exception("Initial query bump refresh failed")
+                budget_tasks.append(
+                    asyncio.create_task(bump_service.run_query(budget_stop))
                 )
             with runtime_config_state.capture():
                 model_count = len(get_model_names())
@@ -218,12 +284,17 @@ def create_app() -> FastAPI:
             yield
         finally:
             log_process_lifecycle("gateway.process.shutdown_start")
+            budget_stop.set()
+            for task in budget_tasks:
+                await task
             if runtime_refresh_stop is not None:
                 runtime_refresh_stop.set()
             if runtime_refresh_task is not None:
                 await runtime_refresh_task
             if runtime_config_manager is not None:
                 await runtime_config_manager.aclose()
+            if override_service is not None:
+                await override_service.close()
             if canary_task is not None and not canary_task.done():
                 canary_task.cancel()
                 with suppress(asyncio.CancelledError):
@@ -287,8 +358,15 @@ def create_app() -> FastAPI:
     )
     app.state.cache = cache
     app.state.runtime_config_state = runtime_config_state
+    app.state.budget_service = BudgetService(
+        stage=os.environ.get("GATEWAY_STAGE", "local"), redis=None
+    )
+    app.state.bump_service = BumpService(
+        stage=os.environ.get("GATEWAY_STAGE", "local"), redis=None
+    )
     app.state.unique_api_key_names = unique_api_key_names
     app.state.pool_config_publisher = pool_config_publisher
+    app.state.override_service = override_service
     app.state.hmac_secret = hmac_secret
     app.state.runtime_role = runtime_role
     app.state.capacity_limiter = capacity_limiter
@@ -356,6 +434,7 @@ def create_app() -> FastAPI:
     if control_enabled:
         register_model_routes(app)
         register_key_pool_routes(app)
+        register_budget_routes(app)
     if query_enabled:
         register_token_retry_routes(app)
         register_query_routes(app, cache=cache)

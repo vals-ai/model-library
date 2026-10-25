@@ -12,6 +12,48 @@ base-config:
 
 kimi-models:
 
+  kimi/kimi-k3.1-pro:
+
+    label: Kimi K3.1 Pro
+    release_date: 2026-10-23
+    documentation_url: https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart
+    provider_endpoint: kimi-k3.1-pro
+    open_source: true
+    supports:
+      images: true
+      videos: true
+      temperature: true
+    properties:
+      reasoning_model: true
+      context_window: 1_048_576
+      max_tokens: 1_048_576
+    default_parameters:
+      reasoning_effort: max
+      temperature: 1
+      top_p: 0.95
+      max_tokens: 262_144
+    provider_properties:
+      prompt_cache_key: hash
+    costs_per_million_token:
+      input: 2.0
+      output: 10.0
+      cache:
+        read: 0.2
+        write_1h_markup: 2.0
+    alternative_keys:
+      - kimi/kimi-k3.1-pro-low:
+          label: Kimi K3.1 Pro (Low)
+          default_parameters:
+            reasoning_effort: low
+      - kimi/kimi-k3.1-pro-high:
+          label: Kimi K3.1 Pro (High)
+          default_parameters:
+            reasoning_effort: high
+      - kimi/kimi-k3.1-pro-max:
+          label: Kimi K3.1 Pro (Max)
+          default_parameters:
+            reasoning_effort: max
+
   kimi/kimi-k3:
 
     label: Kimi K3

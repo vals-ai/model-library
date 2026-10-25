@@ -15,15 +15,17 @@ from model_library.base import (
     QueryResultMetadata,
     ToolDefinition,
 )
+from model_library.base.query_ids import prompt_cache_key_from_query_ids
 from model_library.rate_limits import RateLimit, RateLimitCapacity, TokenRateLimit
 from model_library.register_models import register_provider
 
-FIREROUTER_ENDPOINT_PREFIX = "accounts/fireworks/routers/"
+FIREROUTER_ENDPOINT_PREFIXES = ("accounts/fireworks/routers/", "firerouter/")
 
 
 class FireworksConfig(ProviderConfig):
     serverless: bool = True
     firerouter_routing_preference: int | None = None
+    use_responses: bool = False
 
 
 @register_provider("fireworks")
@@ -41,7 +43,7 @@ class FireworksModel(DelegateOnly):
     ):
         super().__init__(model_name, provider, config=config)
 
-        is_firerouter = self.model_name.startswith(FIREROUTER_ENDPOINT_PREFIX)
+        is_firerouter = self.model_name.startswith(FIREROUTER_ENDPOINT_PREFIXES)
         if not is_firerouter:
             if self.provider_config.serverless:
                 self.model_name = "accounts/fireworks/models/" + self.model_name
@@ -66,7 +68,7 @@ class FireworksModel(DelegateOnly):
         self.init_delegate(
             config=config,
             delegate_provider="openai",
-            use_completions=True,
+            use_completions=not self.provider_config.use_responses,
             normalize_null_assistant_history_fields=True,
         )
 
@@ -82,6 +84,11 @@ class FireworksModel(DelegateOnly):
     ) -> QueryResult:
         if self.is_router:
             self.enable_router_mode()
+            kwargs["prompt_cache_key"] = prompt_cache_key_from_query_ids(
+                model_name=self._registry_key or f"fireworks/{self.model_name}",
+                input=input,
+                tools=tools,
+            )
             preference = self.provider_config.firerouter_routing_preference
             if preference is not None:
                 kwargs["extra_headers"] = {"x-routing-preference": str(preference)}

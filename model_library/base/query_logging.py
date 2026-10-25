@@ -18,9 +18,9 @@ def scoped_query_logger(
     *,
     in_agent: bool,
 ) -> logging.Logger:
-    child_name = ("<agent>" if in_agent else "") + (
-        f"<run={ids.run_id}><question={ids.question_id}>"
-        f"<query={ids.query_id}><attempt={ids.attempt_id}>"
+    child_name = ("<agent>" if in_agent else "") + "".join(
+        f"<{name.removesuffix('_id')}={value}>"
+        for name, value in ids.as_attributes().items()
     )
     query_logger = base_logger.getChild(child_name)
     if in_agent:

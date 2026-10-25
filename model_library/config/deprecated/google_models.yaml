@@ -21,7 +21,6 @@ deprecated:
   base-config:
     metadata:
       deprecated: true
-
   google/gemini-3-pro-preview:
     company: Google
     country: United States

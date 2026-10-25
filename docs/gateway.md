@@ -124,10 +124,6 @@ Capture starts in a 1 MiB memory spool and rolls larger NDJSON to local disk. Re
 | `MODEL_GATEWAY_URL` | Yes | URL of the gateway server (e.g. `http://localhost:8001`) |
 | `MODEL_GATEWAY_API_KEY` | Yes | Client API key (must be in the server's `MODEL_GATEWAY_API_KEYS`) |
 | `IDENTITY` | No | JSON object attached to gateway query telemetry and usage ledger rows. |
-| `RUN_ID` | No | Default run ID for gateway queries when `query(run_id=...)` is absent or `None`. |
-| `QUESTION_ID` | No | Default question/task ID for gateway queries when `query(question_id=...)` is absent or `None`. |
-| `TASK_ID` | No | Alias fallback for `QUESTION_ID`; used only when `QUESTION_ID` is unset or blank. |
-| `ATTEMPT_ID` | No | Default task-attempt ID for gateway queries when `query(attempt_id=...)` is absent or `None`. |
 
 Attribution behavior:
 
@@ -149,17 +145,14 @@ Attribution behavior:
 - Explicit non-`None` `query(identity=...)` overrides `IDENTITY` from `model_library_settings`.
 - `query(identity=None)` falls back to `IDENTITY` from `model_library_settings`.
 - Invalid explicit `query(identity=...)` values raise validation errors before the request is sent.
-- `RUN_ID`, `QUESTION_ID`, and `TASK_ID` are read through `model_library_settings`.
-- `RUN_ID`, `QUESTION_ID`, and `TASK_ID` apply to all `LLM.query()` calls.
-- `QUESTION_ID` takes precedence over `TASK_ID`.
-- There is no `QUERY_ID` env/settings fallback.
+- `run_id`, `question_id` and `attempt_id` come only from `query(...)` arguments or the run token; there is no env/settings fallback.
 - `query_id` is generated per request unless passed explicitly.
-- Blank or whitespace-only `RUN_ID`, `QUESTION_ID`, `TASK_ID`, and `ATTEMPT_ID` values are ignored.
 - Explicit blank or whitespace-only `run_id`, `question_id`, and `attempt_id` values are rejected.
 - Direct blank `query_id` values are treated as absent.
-- `attempt_id` names one execution of a task; a whole-task rerun gets a new one. It resolves like `run_id`: explicit value, then `ATTEMPT_ID`, then a generated ID.
-- The client resolves the four IDs as one internal group and sends them as flat request fields and correlation headers. For raw HTTP `/query` requests with omitted IDs, gateway resolves one quartet for native execution, `gateway.query.start`, and usage records; managed credential selection still uses the original request IDs.
-- The usage ledger stores `attempt_id` on the row beside `run_id`. It is not yet a Redshift column or a ledger index key.
+- `attempt_id` names one execution of a task; a whole-task rerun gets a new one.
+- `model_library.base.gateway.gateway_token_scope(token)` sends every Gateway request made inside the `with` block with that run token as a per-request `Authorization` header; the shared client and `MODEL_GATEWAY_API_KEY` are untouched and the scope is request-local (`contextvars`). The Gateway stamps the token's run, task, attempt and identity on the usage it records. Benchmark services open this scope around each evaluation with a grading token.
+- The client resolves the four IDs as one internal group and sends them as flat request fields and correlation headers. For `/query` requests with omitted IDs, the gateway fills them for `gateway.query.start` and usage records; native execution and managed credential selection use only the request's IDs.
+- The usage ledger stores `attempt_id` on the row beside `run_id` and exports it to the Redshift `usage_events.attempt_id` column, so analytics can tell repeated grading or generation of one task apart by attempt. It is not a ledger index key.
 
 Provider retry policy:
 
@@ -384,4 +377,4 @@ The [quick-start command](#quick-start) uses Docker Compose. It builds the gatew
 | `model_library/telemetry.py` | Optional OpenTelemetry helpers and attribute filtering |
 | `model_library/base/gateway.py` | Client-side `GatewayLLM` class |
 | `model_library/exceptions.py` | `GatewayMethodNotSupported` exception |
-| `Dockerfile` | Multi-stage build with uv |
+| `Dockerfile` | Multi-stage build with uv; the runtime stage upgrades distro `ca-certificates` so CA distrusts land without waiting for a base-image refresh |

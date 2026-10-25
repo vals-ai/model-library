@@ -346,7 +346,7 @@ async def build_body(
     if model.verbosity is not None:
         body["text"] = {"format": {"type": "text"}, "verbosity": model.verbosity}
 
-    await apply_common_body(model, body, input, kwargs, sampling)
+    apply_common_body(model, body, input, tools, sampling)
 
     if model.access_programs:
         # Write into kwargs["extra_body"] so the final body.update(kwargs) keeps
@@ -588,18 +588,22 @@ async def query(
         )
 
     result_metadata = QueryResultMetadata()
-    if response.usage:
+    if usage := response.usage:
         # see _calculate_cost
-        cache_read_tokens = response.usage.input_tokens_details.cached_tokens
-        cache_write_tokens = response.usage.input_tokens_details.cache_write_tokens or 0
-        reasoning_tokens = response.usage.output_tokens_details.reasoning_tokens
+        input_details = usage.input_tokens_details
+        cache_read_tokens = (input_details.cached_tokens or 0) if input_details else 0
+        cache_write_tokens = (
+            (input_details.cache_write_tokens or 0) if input_details else 0
+        )
+        output_details = usage.output_tokens_details
+        reasoning_tokens = output_details.reasoning_tokens if output_details else None
         result_metadata = QueryResultMetadata(
             in_tokens=(
-                response.usage.input_tokens - cache_read_tokens - cache_write_tokens
-                if response.usage.input_tokens
+                usage.input_tokens - cache_read_tokens - cache_write_tokens
+                if usage.input_tokens
                 else 0
             ),
-            out_tokens=response.usage.output_tokens - reasoning_tokens,
+            out_tokens=usage.output_tokens - (reasoning_tokens or 0),
             reasoning_tokens=reasoning_tokens,
             cache_read_tokens=cache_read_tokens,
             cache_write_tokens=cache_write_tokens,

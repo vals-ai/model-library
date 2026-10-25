@@ -74,7 +74,9 @@ class DigitalOceanModel(DelegateOnly):
             self.enable_router_mode()
             kwargs["extra_headers"] = {
                 "X-Model-Affinity": prompt_cache_key_from_query_ids(
-                    model_name=self._registry_key or self.model_name
+                    model_name=self._registry_key or self.model_name,
+                    input=input,
+                    tools=tools,
                 )
             }
 

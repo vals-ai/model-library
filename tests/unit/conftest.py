@@ -82,14 +82,7 @@ def mock_all_mock_model_library_settings():
                     return ""
                 case "MODEL_LIBRARY_CUSTOM_CONFIG":
                     return None
-                case (
-                    "RUN_ID"
-                    | "QUESTION_ID"
-                    | "TASK_ID"
-                    | "IDENTITY"
-                    | "QUERY_ID"
-                    | "ATTEMPT_ID"
-                ):
+                case "IDENTITY":
                     raise AttributeError(f"Missing config key: {name}")
                 case _:
                     return f"mock_ENV_{name}"

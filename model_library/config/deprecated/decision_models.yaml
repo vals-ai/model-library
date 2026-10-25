@@ -22,6 +22,76 @@ deprecated:
     metadata:
       deprecated: true
 
+  decision/elephant-1:
+    company: Baseten
+    country: United States
+    label: elephant-1
+    release_date: 2026-10-21
+    open_source: true
+    documentation_url: https://openrouter.ai/baseten/elephant-1:free
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      temperature: false
+      tools: false
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: baseten/elephant-1-20261021:free
+    properties:
+      context_window: 16384
+      max_tokens: 0
+      reasoning_model: false
+    costs_per_million_token:
+      input: 0.0
+      output: 0.0
+      cache: null
+      batch: null
+      context: null
+
+  decision/mammoth-1:
+    company: Baseten
+    country: United States
+    label: mammoth-1
+    release_date: 2026-10-21
+    open_source: true
+    documentation_url: https://openrouter.ai/baseten/mammoth-1:free
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      temperature: false
+      tools: false
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: baseten/mammoth-1-20261021:free
+    properties:
+      context_window: 16384
+      max_tokens: 0
+      reasoning_model: false
+    costs_per_million_token:
+      input: 0.0
+      output: 0.0
+      cache: null
+      batch: null
+      context: null
+
   decision/decider-v1.1-27b:
     company: Perplexity
     country: United States

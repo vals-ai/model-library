@@ -4,14 +4,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 import os
-import time
 from typing import Any, Literal, Protocol, Self, cast
 
 import boto3
 from boto3.dynamodb.types import TypeDeserializer
 from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 
-from model_gateway.usage_ledger import schema
+from model_gateway.usage_ledger import redshift_statements, schema
+from model_gateway.usage_ledger.budgets.publisher import publish_spend_snapshot
 from model_gateway.usage_ledger.dynamodb_writer import serialize_item
 from model_gateway.usage_ledger.redshift_export import (
     LogicalExportWindow,
@@ -57,17 +57,19 @@ class DynamoDbQueryClient(Protocol):
 
 
 class S3PutObjectClient(Protocol):
+    def get_object(self, **kwargs: object) -> Mapping[str, object]: ...
+
     def put_object(self, **kwargs: object) -> Mapping[str, object]: ...
 
 
 class RedshiftDataClient(Protocol):
+    def execute_statement(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def get_statement_result(self, **kwargs: object) -> Mapping[str, object]: ...
+
     def batch_execute_statement(self, **kwargs: object) -> Mapping[str, object]: ...
 
     def describe_statement(self, **kwargs: object) -> Mapping[str, object]: ...
-
-
-class RedshiftStatementError(RuntimeError):
-    pass
 
 
 class _WindowRequest(BaseModel):
@@ -104,6 +106,9 @@ class RedshiftExportJobConfig:
     copy_role_arn: str
     redshift_schema_name: str
     export_prefix: str
+    budget_snapshot_bucket: str
+    budget_snapshot_key: str
+    stage: str
 
     @classmethod
     def from_env(cls) -> RedshiftExportJobConfig:
@@ -119,6 +124,9 @@ class RedshiftExportJobConfig:
             copy_role_arn=os.environ["GATEWAY_USAGE_REDSHIFT_COPY_ROLE_ARN"],
             redshift_schema_name=os.environ["GATEWAY_USAGE_REDSHIFT_SCHEMA_NAME"],
             export_prefix=os.environ["GATEWAY_USAGE_REDSHIFT_EXPORT_PREFIX"],
+            budget_snapshot_bucket=os.environ["GATEWAY_BUDGET_SNAPSHOT_BUCKET"],
+            budget_snapshot_key=os.environ["GATEWAY_BUDGET_SNAPSHOT_KEY"],
+            stage=os.environ["GATEWAY_STAGE"],
         )
 
 
@@ -236,6 +244,14 @@ def run_export_window(
     )
     row_count = sum(len(shard.rows) for shard in extracted.shards)
     if row_count == 0:
+        if refresh_analytics:
+            _publish_budget_snapshot(
+                config=config,
+                s3_client=s3_client,
+                redshift_data_client=redshift_data_client,
+                data_through=window.end,
+                idle=True,
+            )
         return 0
 
     manifest_s3_uri = write_export_window(
@@ -277,6 +293,13 @@ def run_export_window(
             statement_name=statement_name,
             config=config,
             redshift_data_client=redshift_data_client,
+        )
+    if refresh_analytics:
+        _publish_budget_snapshot(
+            config=config,
+            s3_client=s3_client,
+            redshift_data_client=redshift_data_client,
+            data_through=window.end,
         )
     return row_count
 
@@ -321,6 +344,12 @@ def run_export_event(
             config=config,
             redshift_data_client=redshift_data_client,
         )
+        _publish_budget_snapshot(
+            config=config,
+            s3_client=s3_client,
+            redshift_data_client=redshift_data_client,
+            data_through=None,
+        )
         return {"refreshed": True}
 
     if "operation" not in event:
@@ -347,6 +376,29 @@ def run_export_event(
     return {"loaded": rows > 0, "rows": rows}
 
 
+def _publish_budget_snapshot(
+    *,
+    config: RedshiftExportJobConfig,
+    s3_client: S3PutObjectClient,
+    redshift_data_client: RedshiftDataClient,
+    data_through: datetime | None,
+    idle: bool = False,
+) -> None:
+    publish_spend_snapshot(
+        s3_client=s3_client,
+        redshift_data_client=redshift_data_client,
+        stage=config.stage,
+        bucket=config.budget_snapshot_bucket,
+        key=config.budget_snapshot_key,
+        workgroup=config.redshift_workgroup_name,
+        database=config.redshift_database_name,
+        secret_arn=config.redshift_secret_arn,
+        schema=config.redshift_schema_name,
+        data_through=data_through,
+        idle=idle,
+    )
+
+
 def _execute_submission(
     statements: list[str],
     *,
@@ -361,7 +413,7 @@ def _execute_submission(
         Sqls=statements,
         StatementName=statement_name,
     )
-    _wait_for_statement(redshift_data_client, str(response["Id"]))
+    redshift_statements.wait_for_statement(redshift_data_client, str(response["Id"]))
 
 
 def _isoformat_utc(value: datetime) -> str:
@@ -459,19 +511,3 @@ def handler(
             boto3_client("redshift-data"),
         ),
     )
-
-
-def _wait_for_statement(
-    client: RedshiftDataClient,
-    statement_id: str,
-) -> None:
-    while True:
-        response = client.describe_statement(Id=statement_id)
-        status = str(response["Status"])
-        if status == "FINISHED":
-            return
-        if status in {"FAILED", "ABORTED"}:
-            raise RedshiftStatementError(
-                str(response.get("Error", "Redshift statement failed"))
-            )
-        time.sleep(1)

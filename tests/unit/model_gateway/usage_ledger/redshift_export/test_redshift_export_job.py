@@ -143,6 +143,9 @@ def _config(*, shards: int = 1) -> RedshiftExportJobConfig:
         copy_role_arn="arn:aws:iam::123456789012:role/copy",
         redshift_schema_name="gateway_usage",
         export_prefix="gateway-usage/dev/raw",
+        budget_snapshot_bucket="landing-bucket",
+        budget_snapshot_key="gateway-usage/dev/spend/current.json",
+        stage="dev",
     )
 
 

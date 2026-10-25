@@ -30,6 +30,7 @@ def _redshift_staging_arrow_schema() -> Any:
             ("question_id", pyarrow.string()),
             ("query_id", pyarrow.string()),
             ("query_id_normalized", pyarrow.string()),
+            ("attempt_id", pyarrow.string()),
             ("requested_model_key", pyarrow.string()),
             ("provider", pyarrow.string()),
             ("provider_endpoint", pyarrow.string()),

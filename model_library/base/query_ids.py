@@ -5,33 +5,26 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from collections.abc import Awaitable, Callable, Generator, Sequence
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
-from typing import Literal, NamedTuple, TypeVar
+from typing import Literal, NamedTuple
 
-import model_library
-from model_library.base.input import RawResponse
+from model_library.base.input import InputItem, SystemInput, ToolDefinition
 
 PromptCacheKeyMode = Literal["hash", "id"]
 
 
 class ResolvedQueryIds(NamedTuple):
-    run_id: str
-    question_id: str
+    run_id: str | None
+    question_id: str | None
     query_id: str
-    attempt_id: str
+    attempt_id: str | None
 
     def as_attributes(self) -> dict[str, str]:
-        return {
-            "run_id": self.run_id,
-            "question_id": self.question_id,
-            "query_id": self.query_id,
-            "attempt_id": self.attempt_id,
-        }
+        return {name: value for name, value in self._asdict().items() if value}
 
 
-InputT = TypeVar("InputT")
 _current_query_ids: ContextVar[ResolvedQueryIds | None] = ContextVar(
     "model_library_current_query_ids",
     default=None,
@@ -59,20 +52,11 @@ def resolve_query_ids(
     attempt_id: object | None,
 ) -> ResolvedQueryIds:
     """Resolve run, question, query, and attempt IDs for LLM query paths."""
-    settings = model_library.model_library_settings
-
     return ResolvedQueryIds(
-        _explicit_id(run_id, "run_id")
-        or _clean_id(settings.get("RUN_ID", None))
-        or uuid.uuid4().hex[:8],
-        _explicit_id(question_id, "question_id")
-        or _clean_id(settings.get("QUESTION_ID", None))
-        or _clean_id(settings.get("TASK_ID", None))
-        or uuid.uuid4().hex[:14],
+        _explicit_id(run_id, "run_id"),
+        _explicit_id(question_id, "question_id"),
         _clean_id(query_id) or uuid.uuid4().hex[:14],
-        _explicit_id(attempt_id, "attempt_id")
-        or _clean_id(settings.get("ATTEMPT_ID", None))
-        or uuid.uuid4().hex[:14],
+        _explicit_id(attempt_id, "attempt_id"),
     )
 
 
@@ -96,45 +80,19 @@ def get_current_query_id_attributes() -> dict[str, str]:
     return query_ids.as_attributes()
 
 
-def prompt_cache_key_prefix(input: Sequence[InputT]) -> Sequence[InputT]:
-    for index, item in enumerate(input):
-        if isinstance(item, RawResponse):
-            return input[:index]
-    return input
-
-
-async def resolve_prompt_cache_key(
-    *,
-    mode: PromptCacheKeyMode | None,
-    model_name: str,
-    input: Sequence[InputT],
-    parse_prompt_prefix: Callable[[Sequence[InputT]], Awaitable[object]],
-    run_id: object | None = None,
-    question_id: object | None = None,
-) -> str | None:
-    match mode:
-        case None:
-            return None
-        case "hash":
-            prefix = prompt_cache_key_prefix(input)
-            prompt_prefix: object = await parse_prompt_prefix(prefix) if prefix else []
-            return prompt_cache_key_from_prompt_prefix(
-                model_name=model_name,
-                prompt_prefix=prompt_prefix,
-            )
-        case "id":
-            return prompt_cache_key_from_query_ids(
-                model_name=model_name,
-                run_id=run_id,
-                question_id=question_id,
-            )
-
-
 def prompt_cache_key_from_prompt_prefix(
     *,
     model_name: str,
-    prompt_prefix: object,
+    input: Sequence[InputItem],
+    tools: Sequence[ToolDefinition],
 ) -> str:
+    system = [item.text for item in input if isinstance(item, SystemInput)]
+    tool_bodies = [tool.model_dump(mode="json") for tool in tools]
+    prompt_prefix = (
+        [system, tool_bodies]
+        if system or tool_bodies
+        else [item.model_dump(mode="json") for item in input[:1]]
+    )
     serialized_prefix = json.dumps(
         prompt_prefix,
         sort_keys=True,
@@ -144,27 +102,39 @@ def prompt_cache_key_from_prompt_prefix(
     return _hashed_prompt_cache_key(model_name=model_name, value=serialized_prefix)
 
 
+def prompt_identity(
+    *,
+    model_name: str,
+    run_id: str | None,
+    question_id: str | None,
+    input: Sequence[InputItem],
+    tools: Sequence[ToolDefinition],
+) -> tuple[str, str]:
+    """The caller's run and question IDs, with the prompt-prefix hash for missing ones."""
+    if run_id is not None and question_id is not None:
+        return run_id, question_id
+    prefix = prompt_cache_key_from_prompt_prefix(
+        model_name=model_name, input=input, tools=tools
+    )
+    return run_id or prefix, question_id or prefix
+
+
 def prompt_cache_key_from_query_ids(
     *,
     model_name: str,
-    run_id: object | None = None,
-    question_id: object | None = None,
+    input: Sequence[InputItem],
+    tools: Sequence[ToolDefinition],
 ) -> str:
-    if run_id is None or question_id is None:
-        query_ids = get_current_query_ids()
-        if query_ids is None:
-            raise ValueError("prompt_cache_key='id' requires resolved query IDs")
-        run_id = query_ids.run_id
-        question_id = query_ids.question_id
-
-    resolved_run_id = _explicit_id(run_id, "run_id")
-    resolved_question_id = _explicit_id(question_id, "question_id")
-    if resolved_run_id is None or resolved_question_id is None:
-        raise ValueError("prompt_cache_key='id' requires resolved query IDs")
-
-    return _hashed_prompt_cache_key(
+    query_ids = get_current_query_ids()
+    run_id, question_id = prompt_identity(
         model_name=model_name,
-        value=f"{resolved_run_id}:{resolved_question_id}",
+        run_id=query_ids and query_ids.run_id,
+        question_id=query_ids and query_ids.question_id,
+        input=input,
+        tools=tools,
+    )
+    return _hashed_prompt_cache_key(
+        model_name=model_name, value=f"{run_id}:{question_id}"
     )
 
 

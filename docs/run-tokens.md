@@ -11,13 +11,14 @@
   {
     "run_id": "run-123",
     "task_id": "task_0",
+    "attempt_id": "attempt-1",
     "allowed_models": ["openai/gpt-4o"],
     "identity": {"benchmark_name": "valsmith", "agent_name": "opencode"},
     "ttl_seconds": 9000
   }
   ```
   - Required:
-    - `run_id`, `task_id`
+    - `run_id`, `task_id`, `attempt_id` (a mint without `attempt_id` is still accepted and stamps no attempt; this allowance is removed after 2026-10-27)
     - `allowed_models`: registry keys, checked at mint
     - `ttl_seconds`: 1 to 604800 (7 days). There is no renew, so size it to outlast the task
   - Optional:
@@ -32,7 +33,7 @@
 - Run tokens may call only the provider routes in `allowed_operations` and `/registry`, which is filtered to `allowed_models`. Every other route returns 403.
 - Provider requests must name a model in `allowed_models`, and an embedding model in `allowed_embedding_models`.
 - Config overrides follow the static-key rules: any field except `custom_endpoint` and `registry_key`, which are refused for every caller.
-- The gateway stamps `run_id`, `question_id` (= `task_id`) and `identity` over what the sandbox sends.
+- The gateway stamps `run_id`, `question_id` (= `task_id`), `attempt_id` and `identity` over what the sandbox sends.
 - Run tokens cannot set `token_retry_params`: they reconfigure provider budgets shared across runs.
 - Run tokens cannot set `provider_config` on router entries with YAML settings (pool, tier, preference): it replaces the entry's whole config, which would drop them.
 

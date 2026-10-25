@@ -94,7 +94,9 @@ class RampModel(DelegateOnly):
         if client := self.provider_config.switchyard_client:
             # Per registry key, so a variant never shares a session with its pinned entry.
             session_id = prompt_cache_key_from_query_ids(
-                model_name=self._registry_key or f"ramp/{self.model_name}"
+                model_name=self._registry_key or f"ramp/{self.model_name}",
+                input=input,
+                tools=tools,
             )
             kwargs["prompt_cache_key"] = session_id
             kwargs["extra_headers"] = {

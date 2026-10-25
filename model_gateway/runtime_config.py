@@ -21,6 +21,7 @@ from urllib.parse import quote
 import httpx
 from pydantic import BaseModel, ConfigDict, SecretStr, field_validator
 
+from model_gateway.budgets.schema import BudgetPolicy
 from model_gateway.key_pool_config import PoolConfigSnapshot, PublishedPoolDocument
 from model_gateway.metrics import record_runtime_config_refresh
 from model_gateway.observability import worker_id
@@ -34,8 +35,7 @@ from model_library.register_models import (
 from model_library.settings import managed_settings_snapshot
 
 logger = logging.getLogger("model_proxy_server.runtime_config")
-
-SourceName = Literal["models", "credentials", "pools", "access"]
+SourceName = Literal["models", "credentials", "pools", "access", "budgets"]
 
 _NO_DEPLOYED_VERSION_STATUSES = frozenset({400, 404})
 
@@ -133,6 +133,7 @@ class RuntimeView:
     models: ModelSnapshot
     credentials: CredentialSnapshot | None
     pools: PoolConfigSnapshot | None
+    budgets: BudgetPolicy | None = None
     admin_api_key_names: frozenset[str] = frozenset()
     """From the access document; control tasks only, empty until one is published."""
 
@@ -173,6 +174,11 @@ def runtime_pool_snapshot() -> PoolConfigSnapshot | None:
     """The published pool config this request runs with; None without AppConfig."""
     view = _runtime_view_context.get()
     return None if view is None else view.pools
+
+
+def runtime_budget_policy() -> BudgetPolicy | None:
+    view = _runtime_view_context.get()
+    return None if view is None else view.budgets
 
 
 def runtime_admin_api_key_names() -> frozenset[str]:
@@ -238,6 +244,7 @@ class RuntimeConfigState:
         credentials: CredentialSnapshot | None = None,
         pools: PoolConfigSnapshot | None = None,
         admin_api_key_names: frozenset[str] | None = None,
+        budgets: BudgetPolicy | None = None,
     ) -> InstallResult:
         """Install valid sources independently in one immutable runtime view."""
         with self._lock:
@@ -309,12 +316,20 @@ class RuntimeConfigState:
                 else:
                     applied.add("access")
                     next_admin_names = admin_api_key_names
+            next_budgets = self._view.budgets
+            if budgets is not None:
+                if budgets == next_budgets:
+                    unchanged.add("budgets")
+                else:
+                    applied.add("budgets")
+                    next_budgets = budgets
 
             if applied:
                 self._view = RuntimeView(
                     models=next_models,
                     credentials=next_credentials,
                     pools=next_pools,
+                    budgets=next_budgets,
                     admin_api_key_names=next_admin_names,
                 )
             return InstallResult(
@@ -408,6 +423,7 @@ class RuntimeConfigManager:
         credential_profile: str,
         pool_profile: str,
         access_profile: str | None = None,
+        budget_profile: str | None = None,
         poll_interval_seconds: float = 5.0,
         source_timeout_seconds: float = 3.0,
     ) -> None:
@@ -417,6 +433,7 @@ class RuntimeConfigManager:
         self._credential_profile = credential_profile
         self._pool_profile = pool_profile
         self._access_profile = access_profile
+        self._budget_profile = budget_profile
         self._poll_interval_seconds = poll_interval_seconds
         self._source_timeout_seconds = source_timeout_seconds
         self._refresh_lock = asyncio.Lock()
@@ -430,7 +447,11 @@ class RuntimeConfigManager:
         rejected: set[SourceName] = set()
         candidates: dict[
             SourceName,
-            ModelSnapshot | CredentialSnapshot | PoolConfigSnapshot | frozenset[str],
+            ModelSnapshot
+            | CredentialSnapshot
+            | PoolConfigSnapshot
+            | frozenset[str]
+            | BudgetPolicy,
         ] = {}
 
         async def read(source: SourceName, profile: str) -> None:
@@ -461,6 +482,10 @@ class RuntimeConfigManager:
                             delivered.content
                         ).admin_api_key_names
                     )
+                elif source == "budgets":
+                    candidates[source] = BudgetPolicy.model_validate_json(
+                        delivered.content
+                    )
                 else:
                     candidates[source] = _parse_credential_snapshot(
                         delivered.content,
@@ -477,6 +502,12 @@ class RuntimeConfigManager:
                         and error.response.status_code in _NO_DEPLOYED_VERSION_STATUSES
                     ):
                         return
+                if (
+                    source == "budgets"
+                    and isinstance(error, httpx.HTTPStatusError)
+                    and error.response.status_code in _NO_DEPLOYED_VERSION_STATUSES
+                ):
+                    return
                 failed.add(source)
                 record_runtime_config_refresh(source=source, outcome="failed")
                 logger.warning(
@@ -492,12 +523,15 @@ class RuntimeConfigManager:
         ]
         if self._access_profile is not None:
             reads.append(read("access", self._access_profile))
+        if self._budget_profile is not None:
+            reads.append(read("budgets", self._budget_profile))
         await asyncio.gather(*reads)
         models = cast(ModelSnapshot | None, candidates.get("models"))
         credentials = cast(CredentialSnapshot | None, candidates.get("credentials"))
         pools = cast(PoolConfigSnapshot | None, candidates.get("pools"))
         admin_names = cast(frozenset[str] | None, candidates.get("access"))
-        installed = self.state.install(models, credentials, pools, admin_names)
+        budgets = cast(BudgetPolicy | None, candidates.get("budgets"))
+        installed = self.state.install(models, credentials, pools, admin_names, budgets)
         rejected.update(installed.rejected)
         for source in rejected:
             record_runtime_config_refresh(source=source, outcome="rejected")
@@ -543,6 +577,12 @@ class RuntimeConfigManager:
                     "Applied runtime configuration snapshot source=access "
                     "admin_api_key_names=%s worker_id=%s",
                     ",".join(sorted(candidate)),
+                    worker_id(),
+                )
+                record_runtime_config_refresh(source=source, outcome="applied")
+            elif isinstance(candidate, BudgetPolicy):
+                logger.info(
+                    "Applied runtime configuration snapshot source=budgets worker_id=%s",
                     worker_id(),
                 )
                 record_runtime_config_refresh(source=source, outcome="applied")
@@ -615,6 +655,7 @@ def runtime_config_manager_from_env(
         raise RuntimeError("GATEWAY_RUNTIME_REFRESH_SECONDS must be positive")
 
     access_profile = os.environ.get("GATEWAY_APPCONFIG_ACCESS_PROFILE") or None
+    budget_profile = os.environ.get("GATEWAY_APPCONFIG_BUDGET_PROFILE_ID") or None
 
     return RuntimeConfigManager(
         state=state,
@@ -628,6 +669,7 @@ def runtime_config_manager_from_env(
         credential_profile=required["GATEWAY_APPCONFIG_CREDENTIAL_PROFILE"],
         pool_profile=required["GATEWAY_APPCONFIG_POOL_PROFILE"],
         access_profile=access_profile,
+        budget_profile=budget_profile,
         poll_interval_seconds=poll_interval,
     )
 

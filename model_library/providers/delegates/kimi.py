@@ -28,7 +28,7 @@ from model_library.providers.openai import OpenAIConfig
 from model_library.register_models import register_provider
 from model_library.utils import default_httpx_client
 
-_KIMI_K3_PUBLIC_MODEL = "kimi-k3"
+_KIMI_K3_PUBLIC_PREFIX = "kimi-k3"
 _DEFAULT_ENDPOINT = "https://api.moonshot.ai/v1/"
 
 
@@ -42,6 +42,7 @@ class KimiConfig(ProviderConfig):
 @register_provider("kimi")
 class KimiModel(DelegateOnly):
     api_key_setting = "KIMI_API_KEY"
+
     provider_config = KimiConfig()
 
     def __init__(
@@ -124,7 +125,7 @@ class KimiModel(DelegateOnly):
         # https://platform.moonshot.ai/docs/guide/use-context-caching-feature-of-kimi-api
         if self.prompt_caching == "1h":
             extra["prompt_cache_options"] = {"mode": "implicit", "ttl": "1h"}
-        if self.model_name == _KIMI_K3_PUBLIC_MODEL:
+        if self.model_name.startswith(_KIMI_K3_PUBLIC_PREFIX):
             return extra
 
         thinking: dict[str, str] = {"type": "enabled" if self.reasoning else "disabled"}

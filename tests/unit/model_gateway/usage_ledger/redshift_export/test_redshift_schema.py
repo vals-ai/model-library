@@ -97,6 +97,7 @@ def test_fact_staging_performance_and_dimension_table_ddls_are_specific():
         "question_id varchar(65535)",
         "query_id varchar(65535)",
         "query_id_normalized varchar(65535)",
+        "attempt_id varchar(65535)",
         "requested_model_key varchar(2048) not null",
         "provider varchar(256) not null",
         "provider_endpoint varchar(64) not null",
@@ -295,11 +296,18 @@ def test_aggregate_refresh_sql_uses_missing_sentinel_and_excludes_non_additive_s
                 f"{dimension.fact_column} in ({redshift_schema.sql_literal(redshift_schema.MISSING_DIMENSION_VALUE)})"
                 in insert_sql
             )
-    assert "count(case when outcome = 'success' then 1 end) as request_count" in insert_sql
+    assert (
+        "count(case when outcome = 'success' then 1 end) as request_count" in insert_sql
+    )
     assert "count(case when outcome = 'error' then 1 end) as error_count" in insert_sql
     for field in (
-        "input_tokens", "output_tokens", "reasoning_tokens", "cache_read_tokens",
-        "cache_write_tokens", "total_input_tokens", "total_output_tokens",
+        "input_tokens",
+        "output_tokens",
+        "reasoning_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens",
+        "total_input_tokens",
+        "total_output_tokens",
     ):
         assert f"sum({field}) as {field}" in insert_sql
         assert f"count({field}) as {field}_recorded_count" in insert_sql
@@ -347,3 +355,22 @@ def test_aggregate_refresh_sql_covers_hour_and_day_bucket_branches():
     assert "date_trunc('day', completed_at::timestamp) as bucket_start_utc" in day_sql
     assert "dateadd(day, 1, date_trunc('day', completed_at::timestamp))" in day_sql
 
+
+def test_attempt_id_is_added_to_both_usage_events_tables_outside_the_ddl() -> None:
+    statements = [
+        sql for batch in redshift_schema.schema_statement_batches() for sql in batch
+    ]
+
+    assert not any("alter table" in sql for sql in statements)
+    assert redshift_schema.SCHEMA_COLUMN_ADDITIONS == (
+        {
+            "TableName": "usage_events_staging_v5",
+            "ColumnName": "attempt_id",
+            "ColumnType": "varchar(65535)",
+        },
+        {
+            "TableName": "usage_events",
+            "ColumnName": "attempt_id",
+            "ColumnType": "varchar(65535)",
+        },
+    )

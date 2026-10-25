@@ -41,6 +41,11 @@ TELEMETRY_DELIVERY_LOGGER_ROOTS = (
 HTTP_TRACE_EXCLUDED_ROUTES = frozenset({"/health/live", "/health/ready"})
 HTTP_TRACE_ALLOWED_ROUTES = frozenset(
     {
+        "/admin/budgets",
+        "/admin/budgets/bumps",
+        "/admin/budgets/bumps/history",
+        "/admin/budgets/overrides",
+        "/admin/budgets/overrides/history",
         "/admin/key-pools",
         "/benchmark-runs/acquire",
         "/benchmark-runs/release",

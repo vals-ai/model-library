@@ -9,6 +9,8 @@ import json
 import logging
 import random
 from collections.abc import Generator, Mapping, Sequence
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Any, Literal, cast
 
 import httpx
@@ -103,15 +105,20 @@ def _dump_request(request: BaseModel) -> dict[str, Any]:
     return data
 
 
+_CORRELATION_HEADERS = {
+    "run_id": "X-Run-Id",
+    "question_id": "X-Question-Id",
+    "query_id": "X-Query-Id",
+    "attempt_id": "X-Attempt-Id",
+}
+
+
 def _gateway_correlation_headers(body: Mapping[str, Any]) -> dict[str, str]:
-    headers = {
-        "X-Run-Id": str(body["run_id"])[:128],
-        "X-Question-Id": str(body["question_id"])[:128],
-        "X-Query-Id": str(body["query_id"])[:128],
+    return {
+        header: str(body[name])[:128]
+        for name, header in _CORRELATION_HEADERS.items()
+        if name in body
     }
-    if body.get("attempt_id") is not None:
-        headers["X-Attempt-Id"] = str(body["attempt_id"])[:128]
-    return headers
 
 
 def _gateway_retry_log_ids(body: Mapping[str, Any]) -> dict[str, str | None]:
@@ -291,6 +298,26 @@ async def _sleep_before_gateway_retry(
     await asyncio.sleep(delay)
 
 
+_scoped_gateway_token: ContextVar[str | None] = ContextVar(
+    "model_library_gateway_token", default=None
+)
+
+
+@contextmanager
+def gateway_token_scope(token: str) -> Generator[None]:
+    """Send every Gateway request in this context with ``token``."""
+    reset = _scoped_gateway_token.set(token)
+    try:
+        yield
+    finally:
+        _scoped_gateway_token.reset(reset)
+
+
+def current_gateway_token() -> str | None:
+    """The token of the enclosing ``gateway_token_scope``, if any."""
+    return _scoped_gateway_token.get()
+
+
 class GatewayLLM(LLM):
     """LLM that forwards all queries to a remote model-proxy server.
 
@@ -363,7 +390,10 @@ class GatewayLLM(LLM):
         request_timeout = client.timeout if timeout is None else timeout
         url = f"{model_library.model_library_settings.MODEL_GATEWAY_URL.rstrip('/')}{path}"
 
-        headers = _gateway_correlation_headers(body) if path == "/query" else None
+        headers = _gateway_correlation_headers(body) if path == "/query" else {}
+        scoped_token = current_gateway_token()
+        if scoped_token is not None:
+            headers["Authorization"] = f"Bearer {scoped_token}"
         retry_log_ids = _gateway_retry_log_ids(body)
         gateway_retry_attrs = {
             "gateway.path": path,

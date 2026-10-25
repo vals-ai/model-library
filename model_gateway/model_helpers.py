@@ -16,6 +16,7 @@ from model_library.base import (
     resolve_token_retry_params,
 )
 from model_library.base.input import FileWithId, InputItem, RawInput, RawResponse
+from model_library.base.query_ids import prompt_identity
 from model_library.registry_utils import (
     get_registry_config,
     get_registry_model,
@@ -106,10 +107,17 @@ def _uses_managed_key(
 
 
 def _pick_identity(body: QueryRequest) -> str:
+    run_id, question_id = prompt_identity(
+        model_name=body.model,
+        run_id=body.run_id,
+        question_id=body.question_id,
+        input=body.inputs,
+        tools=body.tools,
+    )
     if body.attempt_id is None:
-        return f"{body.run_id}{body.question_id}"
+        return f"{run_id}{question_id}"
     # A JSON list keeps ("ab", "c", "d") and ("a", "bc", "d") apart.
-    parts = [body.run_id, body.question_id, body.attempt_id]
+    parts = [run_id, question_id, body.attempt_id]
     return json.dumps(parts, separators=(",", ":"))
 
 

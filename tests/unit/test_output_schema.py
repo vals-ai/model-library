@@ -121,7 +121,7 @@ UNSUPPORTED_PROVIDER_MODELS = [
 ]
 
 UNSUPPORTED_BIG_THREE_MODELS = [
-    "openai/gpt-4o-2024-05-13",
+    "openai/o4-mini-deep-research",
     "openai/o3-deep-research",
 ]
 

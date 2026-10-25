@@ -148,6 +148,18 @@ decision-models:
     costs_per_million_token:
       input: 0.06
 
+  decision/drex-max:
+    provider_endpoint: nace-ai/drex-max-20261016  # pinned, dated; never an alias
+    label: Drex Max
+    company: Nace.AI
+    country: United States
+    documentation_url: https://openrouter.ai/nace-ai/drex-max
+    release_date: 2026-10-21
+    properties:
+      context_window: 262_144
+    costs_per_million_token:
+      input: 0.06
+
   decision/d1:
     provider_endpoint: liquid/d1-20260930  # pinned, dated; never an alias
     label: d1
@@ -267,3 +279,20 @@ decision-models:
       context_window: 524_288
     costs_per_million_token:
       input: 0.05
+
+  # Upstage also serves a non-ZDR endpoint (`upstage`); pinned to the ZDR one.
+  decision/solar-decide-flash:
+    provider_endpoint: upstage/solar-decide-flash-20261008  # pinned, dated; never an alias
+    label: Solar Decide Flash
+    company: Upstage
+    country: South Korea
+    documentation_url: https://openrouter.ai/upstage/solar-decide-flash
+    release_date: 2026-10-08
+    provider_properties:
+      openrouter_provider_only: [upstage/zdr]
+    properties:
+      context_window: 524_288
+    costs_per_million_token:
+      input: 0.05
+
+  # OpenRouter serves only the free launch-week variant; re-pin and re-price once Baseten lists a price.

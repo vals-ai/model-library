@@ -154,15 +154,13 @@ Invalid `IDENTITY` settings are omitted by the client when they are:
 
 | Field | Resolution and validation |
 | --- | --- |
-| `run_id` | When explicit `query(run_id=...)` is absent or `None`, use `RUN_ID`, then a generated ID. Explicit blank or whitespace-only values are rejected. |
-| `question_id` | When explicit `query(question_id=...)` is absent or `None`, use `QUESTION_ID`, then `TASK_ID` only when `QUESTION_ID` is unset or blank, then a generated ID. Explicit blank or whitespace-only values are rejected. |
+| `run_id` | Sent only when passed to `query(run_id=...)`. Explicit blank or whitespace-only values are rejected. |
+| `question_id` | Sent only when passed to `query(question_id=...)`. Explicit blank or whitespace-only values are rejected. |
 | `query_id` | Generated per query unless passed explicitly. There is no `QUERY_ID` env/settings fallback. Direct blank values are treated as absent. |
-| `attempt_id` | When explicit `query(attempt_id=...)` is absent or `None`, use `ATTEMPT_ID`, then a generated ID. Explicit blank or whitespace-only values are rejected. |
+| `attempt_id` | Sent only when passed to `query(attempt_id=...)`. Explicit blank or whitespace-only values are rejected. |
 
-- `RUN_ID`, `QUESTION_ID`, `TASK_ID`, and `ATTEMPT_ID` are read through `model_library_settings` and apply to all `LLM.query()` calls.
-- `RUN_ID` and `QUESTION_ID` stay separate top-level gateway fields.
-- `TASK_ID` is an alias fallback for `QUESTION_ID`.
-- Blank or whitespace-only `RUN_ID`, `QUESTION_ID`, and `TASK_ID` env values are ignored.
+- `RUN_ID`, `QUESTION_ID`, `TASK_ID`, and `ATTEMPT_ID` env/settings are not read; a run token carries run, task and attempt.
+- The Gateway fills omitted IDs for its ledger. Token retry requires `run_id` and `question_id`.
 
 Native `LLM.query()` resolves the same four IDs once per call. Provider, retry, and token-queue telemetry share the immutable internal group through retries and sleeps; query loggers include the attempt ID. Query kwargs and Gateway request fields remain flat. Standalone task-level retriers retain run/question attribution without inventing query or attempt IDs.
 

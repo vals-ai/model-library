@@ -341,3 +341,37 @@ async def test_an_emptied_pin_pool_fails_attempts_that_hold_a_key(
 
     with pytest.raises(KeyError, match="anthropic/pin"):
         await model_helpers.assigned_key_setting(_body("question-A"), store)
+
+
+def _body_without_ids(text: str, system: str | None = None) -> QueryRequest:
+    inputs = [{"kind": "text", "text": text}]
+    return QueryRequest.model_validate(
+        {
+            "model": MODEL,
+            "inputs": inputs if system is None else [{"kind": "system", "text": system}, *inputs],
+        }
+    )
+
+
+def test_calls_without_ids_pick_one_key_per_prompt_prefix() -> None:
+    assert len({_todays_pick(_body_without_ids("q", "shared rubric")) for _ in range(20)}) == 1
+    assert {_todays_pick(_body_without_ids("q", f"rubric {n}")) for n in range(20)} == {
+        KEY_1,
+        KEY_2,
+    }
+    assert {_todays_pick(_body_without_ids(f"question {n}")) for n in range(20)} == {
+        KEY_1,
+        KEY_2,
+    }
+
+
+def test_callers_run_id_stays_in_the_pick_without_question_id() -> None:
+    body = _body(question_id=None, attempt_id=None)
+    assert model_helpers._pick_identity(body).startswith("run-5")  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_call_without_attempt_saves_no_assignment() -> None:
+    store = InMemoryAssignmentStore()
+    body = _body(attempt_id=None)
+    assert await model_helpers.assigned_key_setting(body, store) == _todays_pick(body)
+    assert store._assignments == {}  # pyright: ignore[reportPrivateUsage]

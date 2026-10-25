@@ -36,6 +36,7 @@ _OPTIONAL_FACT_COLUMNS = frozenset(
         "run_id",
         "question_id",
         "query_id",
+        "attempt_id",
         "param_group",
         "config_hash",
         "benchmark_name",

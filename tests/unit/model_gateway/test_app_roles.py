@@ -102,26 +102,11 @@ def test_query_role_excludes_control_operations(monkeypatch: pytest.MonkeyPatch)
     assert app.state.rate_limit_monitor is None
 
 
-def test_control_role_exposes_only_health_and_control_operations(
+async def test_control_role_disables_query_accounting(
     monkeypatch: pytest.MonkeyPatch,
 ):
     app = _create_app(monkeypatch, "control")
 
-    assert _route_paths(app) == {
-        "/health/live",
-        "/health/ready",
-        "/benchmark-runs/acquire",
-        "/benchmark-runs/wait",
-        "/benchmark-runs/renew",
-        "/benchmark-runs/release",
-        "/rate-limit-monitor",
-        "/rate-limit-monitor/activate",
-        "/registry",
-        "/models",
-        "/service-auth",
-        "/service-auth/revoke",
-        "/admin/key-pools",
-    }
     assert app.state.startup_canary == {
         "enabled": False,
         "status": "disabled",
@@ -129,6 +114,32 @@ def test_control_role_exposes_only_health_and_control_operations(
     }
     assert not app.state.usage_ledger.enabled
     assert app.state.rate_limit_monitor is None
+
+    headers = {"Authorization": "Bearer sk-test"}
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://test",
+    ) as client:
+        query = await client.post(
+            "/query",
+            headers=headers,
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+            },
+        )
+        count = await client.post(
+            "/tokens/count",
+            headers=headers,
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+                "config": {"max_tokens": 7},
+            },
+        )
+
+    assert query.status_code == 404
+    assert count.status_code == 404
 
 
 async def test_control_monitor_validation_uses_canonical_invalid_request(

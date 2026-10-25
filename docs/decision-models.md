@@ -13,6 +13,7 @@ Models that take a `state` and typed `questions` and return a typed answer for e
 | `decision/decider-flash-v1.2` | `pplx-decider-flash-v1.2` on Perplexity (no dated snapshot exists) | $0.01 | 262,144 |
 | `decision/drex-v1.5` | `nace-ai/drex-v1.5-20261009` | $0.04 | 131,072 |
 | `decision/drex-v2.0` | `nace-ai/drex-v2.0-20261009` | $0.06 | 131,072 |
+| `decision/drex-max` | `nace-ai/drex-max-20261016` | $0.06 | 262,144 |
 | `decision/d1` | `liquid/d1-20260930` | $0.02 | 65,536 |
 | `decision/d1-ultra` | `liquid/d1-ultra-20261015` | $0.042 | 32,768 |
 | `decision/kev-4b` | `jaredpalmer/kev-4b-20260924` | $0.042 | 8,192 |
@@ -22,8 +23,9 @@ Models that take a `state` and typed `questions` and return a typed answer for e
 | `decision/clef` | `cloudflare/clef` on host `cloudflare` (no dated snapshot exists) | $0.24 | 65,536 |
 | `decision/clef-flash` | `cloudflare/clef-flash` on host `cloudflare` (no dated snapshot exists) | $0.038 | 24,576 |
 | `decision/solar-decide` | `upstage/solar-decide-20260928` on host `upstage/zdr` | $0.05 | 524,288 |
+| `decision/solar-decide-flash` | `upstage/solar-decide-flash-20261008` on host `upstage/zdr` | $0.05 | 524,288 |
 
-Output is free. OpenRouter prices and context windows are OpenRouter's; OpenAI's price is from its [Decisions guide](https://developers.openai.com/api/docs/guides/decisions#pricing-and-availability) and its context window is the largest input `/v1/decisions` accepted. Perplexity's prices and its 256K input limit are from its [API reference](https://docs.perplexity.ai/api-reference/decisions-post); it takes OpenRouter's request and answer shapes. Every OpenRouter key sends a pinned dated slug, never an alias, except Clef and Clef Flash, which OpenRouter serves only under an alias. `metadata.served_model` is the model OpenRouter reports, when it reports one. OpenRouter has reported TypeSafe, Inception and Microsoft as the serving providers (kept as `upstream_provider`); an entry with `provider_properties.openrouter_provider_only` is sent as `provider: {"only": [...]}` so OpenRouter routes only to those hosts (Clef's hosts differ in price and context; Upstage also serves Solar Decide without ZDR). OpenRouter marks the Decisions API "alpha", so its path may change.
+Output is free. OpenRouter prices and context windows are OpenRouter's; OpenAI's price is from its [Decisions guide](https://developers.openai.com/api/docs/guides/decisions#pricing-and-availability) and its context window is the largest input `/v1/decisions` accepted. Perplexity's prices and its 256K input limit are from its [API reference](https://docs.perplexity.ai/api-reference/decisions-post); it takes OpenRouter's request and answer shapes. Every OpenRouter key sends a pinned dated slug, never an alias, except Clef and Clef Flash, which OpenRouter serves only under an alias. `metadata.served_model` is the model OpenRouter reports, when it reports one. OpenRouter has reported TypeSafe, Inception, Microsoft and BaseTen as the serving providers (kept as `upstream_provider`); an entry with `provider_properties.openrouter_provider_only` is sent as `provider: {"only": [...]}` so OpenRouter routes only to those hosts (Clef's hosts differ in price and context; Upstage also serves Solar Decide and Solar Decide Flash without ZDR). OpenRouter marks the Decisions API "alpha", so its path may change.
 
 ## Calling one
 

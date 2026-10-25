@@ -209,7 +209,6 @@ qwen-3.8-models:
 
   alibaba/qwen3.8-max:
     label: Qwen 3.8 Max
-    open_source: true
     documentation_url: https://qwen.ai/blog?id=qwen3.8
     release_date: 2026-08-03
     supports:

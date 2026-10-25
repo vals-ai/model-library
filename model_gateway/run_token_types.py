@@ -1,4 +1,4 @@
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Self, cast
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
@@ -9,6 +9,21 @@ from model_library.registry_utils import (
 )
 
 MAX_TTL_SECONDS = 7 * 24 * 60 * 60
+
+# TODO(2026-10-27): remove with accept_legacy_attempt and the stamping skip in
+# run_tokens.py once every minter sends attempt_id and the tokens minted before
+# this deploy have expired.
+LEGACY_ATTEMPT_ID = ""
+
+
+def accept_legacy_attempt(data: object) -> object:
+    if not isinstance(data, dict):
+        return data
+    fields = cast(dict[str, Any], data)
+    if "attempt_id" in fields:
+        return fields
+    return {**fields, "attempt_id": LEGACY_ATTEMPT_ID}
+
 
 # The operations a token can be narrowed to, and the route each one covers.
 RUN_TOKEN_OPERATION_PATHS = {
@@ -45,8 +60,11 @@ def _known_operations(operations: list[str]) -> list[str]:
 class MintRunTokenRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    _accept_legacy_attempt = model_validator(mode="before")(accept_legacy_attempt)
+
     run_id: str
     task_id: str
+    attempt_id: str
     allowed_models: Annotated[list[str], AfterValidator(_known_models)]
     # `/embeddings` endpoint parameters, not registry keys.
     allowed_embedding_models: list[str] = []

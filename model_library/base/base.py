@@ -639,6 +639,8 @@ class LLM(ABC):
 
         async def default_retry() -> tuple[QueryResult, float]:
             if self._resolved_token_retry_params:
+                if ids.run_id is None or ids.question_id is None:
+                    raise ValueError("token retry requires run_id and question_id")
                 from model_library.retriers.token.token import TokenRetrier
 
                 manages_tokens = self._resolved_token_retry_params.limit is not None

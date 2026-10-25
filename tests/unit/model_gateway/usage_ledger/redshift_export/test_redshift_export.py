@@ -30,6 +30,7 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
                 "question_id": None,
                 "query_id": None,
                 "query_id_normalized": None,
+                "attempt_id": None,
                 "requested_model_key": "openai/gpt-4.1-mini",
                 "provider": "openai",
                 "provider_endpoint": "default",

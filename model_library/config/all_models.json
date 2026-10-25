@@ -1,4 +1,307 @@
 {
+    "kimi/kimi-k3.1-pro-max": {
+        "company": "Moonshot AI",
+        "country": "China",
+        "label": "Kimi K3.1 Pro (Max)",
+        "release_date": "2026-10-23",
+        "open_source": true,
+        "documentation_url": "https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": true,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "prompt_cache_key": "hash"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 262144,
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "kimi-k3.1-pro",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 1.0,
+                "write_markup": 1.0,
+                "write_1h_markup": 2.0
+            }
+        },
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k3.1-pro-max",
+        "slug": "kimi_kimi-k3.1-pro-max"
+    },
+    "kimi/kimi-k3.1-pro-low": {
+        "company": "Moonshot AI",
+        "country": "China",
+        "label": "Kimi K3.1 Pro (Low)",
+        "release_date": "2026-10-23",
+        "open_source": true,
+        "documentation_url": "https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": true,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "prompt_cache_key": "hash"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 262144,
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "kimi-k3.1-pro",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 1.0,
+                "write_markup": 1.0,
+                "write_1h_markup": 2.0
+            }
+        },
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k3.1-pro-low",
+        "slug": "kimi_kimi-k3.1-pro-low"
+    },
+    "kimi/kimi-k3.1-pro-high": {
+        "company": "Moonshot AI",
+        "country": "China",
+        "label": "Kimi K3.1 Pro (High)",
+        "release_date": "2026-10-23",
+        "open_source": true,
+        "documentation_url": "https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": true,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "prompt_cache_key": "hash"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "max_tokens": 262144,
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "kimi-k3.1-pro",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 1.0,
+                "write_markup": 1.0,
+                "write_1h_markup": 2.0
+            }
+        },
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k3.1-pro-high",
+        "slug": "kimi_kimi-k3.1-pro-high"
+    },
+    "kimi/kimi-k3.1-pro": {
+        "company": "Moonshot AI",
+        "country": "China",
+        "label": "Kimi K3.1 Pro",
+        "release_date": "2026-10-23",
+        "open_source": true,
+        "documentation_url": "https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": true,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "prompt_cache_key": "hash"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [
+            {
+                "kimi/kimi-k3.1-pro-low": {
+                    "label": "Kimi K3.1 Pro (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "kimi/kimi-k3.1-pro-high": {
+                    "label": "Kimi K3.1 Pro (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "kimi/kimi-k3.1-pro-max": {
+                    "label": "Kimi K3.1 Pro (Max)",
+                    "default_parameters": {
+                        "reasoning_effort": "max"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "max_tokens": 262144,
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "kimi-k3.1-pro",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read": 0.2,
+                "read_discount": 1.0,
+                "write_markup": 1.0,
+                "write_1h_markup": 2.0
+            }
+        },
+        "provider_name": "kimi",
+        "full_key": "kimi/kimi-k3.1-pro",
+        "slug": "kimi_kimi-k3.1-pro"
+    },
+    "decision/drex-max": {
+        "company": "Nace.AI",
+        "country": "United States",
+        "label": "Drex Max",
+        "release_date": "2026-10-21",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/nace-ai/drex-max",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "nace-ai/drex-max-20261016",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.06,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/drex-max",
+        "slug": "decision_drex-max"
+    },
     "openrouter/inception/mercury-3": {
         "company": "Inception",
         "country": "United States",
@@ -1196,6 +1499,52 @@
         "provider_name": "decision",
         "full_key": "decision/clef-omni",
         "slug": "decision_clef-omni"
+    },
+    "decision/solar-decide-flash": {
+        "company": "Upstage",
+        "country": "South Korea",
+        "label": "Solar Decide Flash",
+        "release_date": "2026-10-08",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/upstage/solar-decide-flash",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "openrouter_provider_only": [
+                "upstage/zdr"
+            ]
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "upstage/solar-decide-flash-20261008",
+        "properties": {
+            "context_window": 524288,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.05,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/solar-decide-flash",
+        "slug": "decision_solar-decide-flash"
     },
     "anthropic/claude-haiku-5-5-xhigh": {
         "company": "Anthropic",
@@ -9539,7 +9888,7 @@
         "country": "China",
         "label": "Qwen 3.8 Max (Medium)",
         "release_date": "2026-08-03",
-        "open_source": true,
+        "open_source": false,
         "documentation_url": "https://qwen.ai/blog?id=qwen3.8",
         "supports": {
             "images": true,
@@ -9596,7 +9945,7 @@
         "country": "China",
         "label": "Qwen 3.8 Max (Low)",
         "release_date": "2026-08-03",
-        "open_source": true,
+        "open_source": false,
         "documentation_url": "https://qwen.ai/blog?id=qwen3.8",
         "supports": {
             "images": true,
@@ -9653,7 +10002,7 @@
         "country": "China",
         "label": "Qwen 3.8 Max",
         "release_date": "2026-08-03",
-        "open_source": true,
+        "open_source": false,
         "documentation_url": "https://qwen.ai/blog?id=qwen3.8",
         "supports": {
             "images": true,
@@ -19705,72 +20054,6 @@
         "full_key": "bedrock/claude-opus-4-20250514-v1",
         "slug": "bedrock_claude-opus-4-20250514-v1"
     },
-    "openai/o4-mini-2025-04-16": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "o4 Mini",
-        "release_date": "2025-04-16",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/o4-mini",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [
-            {
-                "azure/o4-mini-2025-04-16": {
-                    "rate_limit": {
-                        "supports_live_monitoring": true
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "o4-mini-2025-04-16",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 100000,
-            "training_cutoff": "2024-05-31",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.1,
-            "output": 4.4,
-            "cache": {
-                "read": 0.275,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "openai",
-        "full_key": "openai/o4-mini-2025-04-16",
-        "slug": "openai_o4-mini-2025-04-16"
-    },
     "openai/o3-2025-04-16": {
         "company": "OpenAI",
         "country": "United States",
@@ -19837,64 +20120,6 @@
         "full_key": "openai/o3-2025-04-16",
         "slug": "openai_o3-2025-04-16"
     },
-    "azure/o4-mini-2025-04-16": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "o4 Mini",
-        "release_date": "2025-04-16",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/o4-mini",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "o4-mini-2025-04-16",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 100000,
-            "training_cutoff": "2024-05-31",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.1,
-            "output": 4.4,
-            "cache": {
-                "read": 0.275,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "azure",
-        "full_key": "azure/o4-mini-2025-04-16",
-        "slug": "azure_o4-mini-2025-04-16"
-    },
     "azure/o3-2025-04-16": {
         "company": "OpenAI",
         "country": "United States",
@@ -19952,73 +20177,6 @@
         "provider_name": "azure",
         "full_key": "azure/o3-2025-04-16",
         "slug": "azure_o3-2025-04-16"
-    },
-    "openai/gpt-4.1-nano-2025-04-14": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "GPT 4.1 Nano",
-        "release_date": "2025-04-14",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-4.1-nano",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [
-            {
-                "azure/gpt-4.1-nano-2025-04-14": {
-                    "rate_limit": {
-                        "supports_live_monitoring": true
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "temperature": 1.0,
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gpt-4.1-nano-2025-04-14",
-        "properties": {
-            "context_window": 1047576,
-            "max_tokens": 32768,
-            "training_cutoff": "2024-05-31",
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 0.1,
-            "output": 0.4,
-            "cache": {
-                "read": 0.025,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "openai",
-        "full_key": "openai/gpt-4.1-nano-2025-04-14",
-        "slug": "openai_gpt-4.1-nano-2025-04-14"
     },
     "openai/gpt-4.1-mini-2025-04-14": {
         "company": "OpenAI",
@@ -20153,65 +20311,6 @@
         "provider_name": "openai",
         "full_key": "openai/gpt-4.1-2025-04-14",
         "slug": "openai_gpt-4.1-2025-04-14"
-    },
-    "azure/gpt-4.1-nano-2025-04-14": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "GPT 4.1 Nano",
-        "release_date": "2025-04-14",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-4.1-nano",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gpt-4.1-nano-2025-04-14",
-        "properties": {
-            "context_window": 1047576,
-            "max_tokens": 32768,
-            "training_cutoff": "2024-05-31",
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 0.1,
-            "output": 0.4,
-            "cache": {
-                "read": 0.025,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "azure",
-        "full_key": "azure/gpt-4.1-nano-2025-04-14",
-        "slug": "azure_gpt-4.1-nano-2025-04-14"
     },
     "azure/gpt-4.1-mini-2025-04-14": {
         "company": "OpenAI",
@@ -20709,188 +20808,6 @@
         "full_key": "cohere/command-a-03-2025",
         "slug": "cohere_command-a-03-2025"
     },
-    "openai/o3-mini-2025-01-31": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "o3 Mini",
-        "release_date": "2025-01-31",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/o3-mini",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [
-            {
-                "azure/o3-mini-2025-01-31": {
-                    "rate_limit": {
-                        "supports_live_monitoring": true
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "o3-mini-2025-01-31",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 100000,
-            "training_cutoff": "2023-10",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.1,
-            "output": 4.4,
-            "cache": {
-                "read": 0.55,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "openai",
-        "full_key": "openai/o3-mini-2025-01-31",
-        "slug": "openai_o3-mini-2025-01-31"
-    },
-    "openai/o3-mini": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "o3 Mini",
-        "release_date": "2025-01-31",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/o3-mini",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "o3-mini",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 100000,
-            "training_cutoff": "2023-10",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.1,
-            "output": 4.4,
-            "cache": {
-                "read": 0.55,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "openai",
-        "full_key": "openai/o3-mini",
-        "slug": "openai_o3-mini"
-    },
-    "azure/o3-mini-2025-01-31": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "o3 Mini",
-        "release_date": "2025-01-31",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/o3-mini",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "o3-mini-2025-01-31",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 100000,
-            "training_cutoff": "2023-10",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.1,
-            "output": 4.4,
-            "cache": {
-                "read": 0.55,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "azure",
-        "full_key": "azure/o3-mini-2025-01-31",
-        "slug": "azure_o3-mini-2025-01-31"
-    },
     "bedrock/llama3-3-70b-instruct-v1": {
         "company": "Amazon",
         "country": "United States",
@@ -20936,189 +20853,6 @@
         "provider_name": "bedrock",
         "full_key": "bedrock/llama3-3-70b-instruct-v1",
         "slug": "bedrock_llama3-3-70b-instruct-v1"
-    },
-    "openai/o1-2024-12-17": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "o1",
-        "release_date": "2024-12-17",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/o1",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [
-            "openai/o1",
-            {
-                "azure/o1-2024-12-17": {
-                    "rate_limit": {
-                        "supports_live_monitoring": true
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "o1-2024-12-17",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 100000,
-            "training_cutoff": "2023-10",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 15.0,
-            "output": 60.0,
-            "cache": {
-                "read": 7.5,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "openai",
-        "full_key": "openai/o1-2024-12-17",
-        "slug": "openai_o1-2024-12-17"
-    },
-    "openai/o1": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "o1",
-        "release_date": "2024-12-17",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/o1",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "o1-2024-12-17",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 100000,
-            "training_cutoff": "2023-10",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 15.0,
-            "output": 60.0,
-            "cache": {
-                "read": 7.5,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "openai",
-        "full_key": "openai/o1",
-        "slug": "openai_o1"
-    },
-    "azure/o1-2024-12-17": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "o1",
-        "release_date": "2024-12-17",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/o1",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "o1-2024-12-17",
-        "properties": {
-            "context_window": 200000,
-            "max_tokens": 100000,
-            "training_cutoff": "2023-10",
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 15.0,
-            "output": 60.0,
-            "cache": {
-                "read": 7.5,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "azure",
-        "full_key": "azure/o1-2024-12-17",
-        "slug": "azure_o1-2024-12-17"
     },
     "cohere/command-r7b-12-2024": {
         "company": "Cohere",
@@ -21749,64 +21483,6 @@
         "provider_name": "azure",
         "full_key": "azure/gpt-4o-mini-2024-07-18",
         "slug": "azure_gpt-4o-mini-2024-07-18"
-    },
-    "openai/gpt-4o-2024-05-13": {
-        "company": "OpenAI",
-        "country": "United States",
-        "label": "GPT 4o (2024-05-13)",
-        "release_date": "2024-05-13",
-        "open_source": false,
-        "documentation_url": "https://platform.openai.com/docs/models/gpt-4o",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": false,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0,
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gpt-4o-2024-05-13",
-        "properties": {
-            "context_window": 128000,
-            "max_tokens": 16384,
-            "training_cutoff": "2023-10",
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 5.0,
-            "output": 15.0,
-            "cache": {
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 0.5
-            }
-        },
-        "provider_name": "openai",
-        "full_key": "openai/gpt-4o-2024-05-13",
-        "slug": "openai_gpt-4o-2024-05-13"
     },
     "baseten/deepseek-ai/DeepSeek-V4-Flash-0731": {
         "company": "DeepSeek",

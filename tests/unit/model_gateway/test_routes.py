@@ -542,6 +542,7 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
         "slug",
         "supports",
     }
+    assert "write_1h_markup" not in response_config["costs_per_million_token"]["cache"]
     assert set(response_config["supports"]) == {
         "audio",
         "files",
@@ -589,6 +590,7 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     assert "rate_limit" not in full_transcribe
     assert full_models["openai/gpt-4o"]["country"] == configs["openai/gpt-4o"].country
     assert full_models["openai/gpt-4o"].get("rate_limit") == expected_rate_limit
+    assert "write_1h_markup" in full_models["openai/gpt-4o"]["costs_per_million_token"]["cache"]
 
 
 def test_registry_snapshot_can_exclude_same_provider_alternative_keys():
@@ -2819,27 +2821,26 @@ def test_query_success_ledger_gate_preserves_success_wire(
         key: seen_kwargs[key]
         for key in ("run_id", "question_id", "query_id", "attempt_id")
     }
-    if run_id is None:
-        assert len(cast(str, ids["run_id"])) == 8
-    else:
-        assert ids["run_id"] == run_id
+    assert ids["run_id"] == run_id
+    assert ids["question_id"] is None
+    assert ids["attempt_id"] is None
+    assert len(cast(str, ids["query_id"])) == 14
     lookup_body = get_query_llm.await_args.args[1]
     assert lookup_body.run_id == run_id
     assert lookup_body.question_id is None
     assert lookup_body.query_id is None
     assert lookup_body.attempt_id is None
-    assert all(
-        len(cast(str, ids[key])) == 14
-        for key in ("question_id", "query_id", "attempt_id")
-    )
     if expected_writes:
         event = ledger.write_event.await_args.args[0]
         assert event["outcome"] == "success"
         assert "error" not in event
-        assert {key: event[key] for key in ids} == ids
         details = cast(dict[str, object], event["details"])
         request_snapshot = cast(dict[str, object], details["request"])
-        assert {key: request_snapshot[key] for key in ids} == ids
+        for recorded in (event, request_snapshot):
+            assert recorded["query_id"] == ids["query_id"]
+            assert len(cast(str, recorded["run_id"])) == 8
+            assert len(cast(str, recorded["question_id"])) == 14
+            assert len(cast(str, recorded["attempt_id"])) == 14
 
 
 def test_query_success_uses_config_restores_raw_history_and_returns_metadata():

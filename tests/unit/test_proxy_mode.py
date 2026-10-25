@@ -22,7 +22,11 @@ from model_library.base.base import (
     dump_gateway_config,
     resolve_token_retry_params,
 )
-from model_library.base.gateway import GatewayLLM
+from model_library.base.gateway import (
+    GatewayLLM,
+    current_gateway_token,
+    gateway_token_scope,
+)
 from model_library.registry_utils import (
     get_input_context_window_from_config,
     get_model_cost,
@@ -485,11 +489,20 @@ async def test_gateway_query_logs_started_and_completed_locally(caplog):
         ) as mock_post,
     ):
         await llm.query(
-            "hi", logger=logger, run_id="run", question_id="q", query_id="qry",
-            attempt_id="att", in_agent=True,
+            "hi",
+            logger=logger,
+            run_id="run",
+            question_id="q",
+            query_id="qry",
+            attempt_id="att",
+            in_agent=True,
         )
         await llm.query(
-            "hi", logger=logger, run_id="run", question_id="q", query_id="qry",
+            "hi",
+            logger=logger,
+            run_id="run",
+            question_id="q",
+            query_id="qry",
             attempt_id="att",
         )
 
@@ -506,7 +519,8 @@ async def test_gateway_query_logs_started_and_completed_locally(caplog):
         "attempt_id": "att",
     }
     assert any(
-        record.name == "test.gateway.local.<run=run><question=q><query=qry><attempt=att>"
+        record.name
+        == "test.gateway.local.<run=run><question=q><query=qry><attempt=att>"
         for record in caplog.records
     )
     assert sum(message.startswith("Query started:") for message in messages) == 1
@@ -1235,7 +1249,7 @@ def test_gateway_mode_metadata_helpers_read_loaded_snapshot():
         assert get_model_names() == ["openai/gpt-4o"]
 
 
-async def test_proxy_query_uses_settings_identity_and_ids_when_ids_are_not_explicit():
+async def test_proxy_query_uses_settings_identity_and_ignores_id_settings():
     llm = GatewayLLM("gpt-4o", "openai")
     response = httpx.Response(
         200,
@@ -1267,8 +1281,7 @@ async def test_proxy_query_uses_settings_identity_and_ids_when_ids_are_not_expli
 
     body = _load_json(mock_post.call_args[1]["content"])
     assert body["identity"] == identity
-    assert body["run_id"] == "run-from-settings"
-    assert body["question_id"] == "question-from-settings"
+    assert not {"run_id", "question_id"} & set(body)
     assert isinstance(body["query_id"], str)
     assert body["query_id"]
 
@@ -1308,7 +1321,7 @@ async def test_proxy_query_uses_instance_identity_unless_query_overrides_it():
     assert bodies[1]["identity"] == explicit_identity
 
 
-async def test_proxy_query_generates_run_question_query_and_attempt_ids_without_env_ids():
+async def test_proxy_query_sends_only_query_id_without_env_ids():
     llm = GatewayLLM("gpt-4o", "openai")
     response = httpx.Response(
         200,
@@ -1326,28 +1339,20 @@ async def test_proxy_query_generates_run_question_query_and_attempt_ids_without_
         await llm.query([TextInput(text="hi")])
 
     body = _load_json(mock_post.call_args[1]["content"])
-    assert isinstance(body["run_id"], str)
-    assert len(body["run_id"]) == 8
-    assert isinstance(body["question_id"], str)
-    assert len(body["question_id"]) == 14
-    assert isinstance(body["query_id"], str)
+    assert not {"run_id", "question_id", "attempt_id"} & set(body)
     assert len(body["query_id"]) == 14
-    assert isinstance(body["attempt_id"], str)
-    assert len(body["attempt_id"]) == 14
-    assert mock_post.call_args[1]["headers"]["X-Attempt-Id"] == body["attempt_id"]
+    assert set(mock_post.call_args[1]["headers"]) == {"X-Query-Id"}
 
 
 @pytest.mark.parametrize(
-    ("field", "setting", "header"),
+    ("field", "header"),
     [
-        ("run_id", "RUN_ID", "X-Run-Id"),
-        ("question_id", "QUESTION_ID", "X-Question-Id"),
-        ("attempt_id", "ATTEMPT_ID", "X-Attempt-Id"),
+        ("run_id", "X-Run-Id"),
+        ("question_id", "X-Question-Id"),
+        ("attempt_id", "X-Attempt-Id"),
     ],
 )
-async def test_proxy_query_forwards_each_id_from_settings_or_explicit(
-    field: str, setting: str, header: str
-):
+async def test_proxy_query_forwards_each_explicit_id(field: str, header: str):
     llm = GatewayLLM("gpt-4o", "openai")
     response = httpx.Response(
         200,
@@ -1355,59 +1360,33 @@ async def test_proxy_query_forwards_each_id_from_settings_or_explicit(
     )
 
     with (
-        patch(
-            "model_library.model_library_settings",
-            _GatewaySettings(**PROXY_ENV, **{setting: f"{field}-from-settings"}),
-        ),
+        patch("model_library.model_library_settings", _GatewaySettings(**PROXY_ENV)),
         patch(
             "httpx.AsyncClient.post",
             new_callable=AsyncMock,
             return_value=response,
         ) as mock_post,
     ):
-        await llm.query([TextInput(text="settings")])
-        await llm.query([TextInput(text="explicit")], **{field: f"{field}-explicit"})
+        await llm.query([TextInput(text="hi")], **{field: f"{field}-explicit"})
 
-    calls = mock_post.await_args_list
-    bodies = [_load_json(call.kwargs["content"]) for call in calls]
-    assert bodies[0][field] == f"{field}-from-settings"
-    assert calls[0].kwargs["headers"][header] == f"{field}-from-settings"
-    assert bodies[1][field] == f"{field}-explicit"
-    assert calls[1].kwargs["headers"][header] == f"{field}-explicit"
+    assert _load_json(mock_post.call_args.kwargs["content"])[field] == f"{field}-explicit"
+    assert mock_post.call_args.kwargs["headers"][header] == f"{field}-explicit"
 
 
-@pytest.mark.parametrize(
-    ("field", "setting"),
-    [
-        ("run_id", "RUN_ID"),
-        ("question_id", "QUESTION_ID"),
-        ("query_id", None),
-        ("attempt_id", "ATTEMPT_ID"),
-    ],
-)
-def test_resolve_query_ids_resolves_each_id_explicit_then_setting(
-    field: str, setting: str | None
-):
+@pytest.mark.parametrize("field", ["run_id", "question_id", "query_id", "attempt_id"])
+def test_resolve_query_ids_uses_only_explicit_ids(field: str):
     unset: dict[str, object | None] = {
         "run_id": None,
         "question_id": None,
         "query_id": None,
         "attempt_id": None,
     }
-    settings = {setting: f"{field}-from-settings"} if setting else {}
 
-    with patch("model_library.model_library_settings", _GatewaySettings(**settings)):
-        from_settings = resolve_query_ids(**unset)
-        explicit = resolve_query_ids(**{**unset, field: f"{field}-explicit"})
+    explicit = resolve_query_ids(**{**unset, field: f"{field}-explicit"})
 
-    if setting:
-        assert getattr(from_settings, field) == f"{field}-from-settings"
-    assert getattr(explicit, field) == f"{field}-explicit"
     assert explicit.as_attributes() == {
-        "run_id": explicit.run_id,
-        "question_id": explicit.question_id,
         "query_id": explicit.query_id,
-        "attempt_id": explicit.attempt_id,
+        field: f"{field}-explicit",
     }
 
 
@@ -1420,33 +1399,6 @@ async def test_proxy_query_rejects_each_blank_explicit_id(field: str):
         pytest.raises(ValueError, match=f"{field} must not be blank"),
     ):
         await llm.query([TextInput(text="hi")], **{field: " "})
-
-
-async def test_proxy_query_treats_blank_settings_ids_as_absent():
-    llm = GatewayLLM("gpt-4o", "openai")
-    response = httpx.Response(
-        200,
-        json={"output_text": "ok", "tool_calls": [], "metadata": {}},
-    )
-
-    with (
-        patch(
-            "model_library.model_library_settings",
-            _GatewaySettings(**PROXY_ENV, RUN_ID="", QUESTION_ID=" "),
-        ),
-        patch(
-            "httpx.AsyncClient.post",
-            new_callable=AsyncMock,
-            return_value=response,
-        ) as mock_post,
-    ):
-        await llm.query([TextInput(text="hi")])
-
-    body = _load_json(mock_post.call_args[1]["content"])
-    assert isinstance(body["run_id"], str)
-    assert len(body["run_id"]) == 8
-    assert isinstance(body["question_id"], str)
-    assert len(body["question_id"]) == 14
 
 
 @pytest.mark.parametrize(
@@ -1552,125 +1504,6 @@ async def test_proxy_query_preserves_identity_keys_and_ignores_query_id_env():
     body = _load_json(mock_post.call_args[1]["content"])
     assert body["identity"] == identity
     assert body["query_id"] != "query-from-settings"
-
-
-async def test_proxy_query_uses_task_id_setting_when_question_id_absent():
-    llm = GatewayLLM("gpt-4o", "openai")
-    response = httpx.Response(
-        200,
-        json={"output_text": "ok", "tool_calls": [], "metadata": {}},
-    )
-
-    with (
-        patch(
-            "model_library.model_library_settings",
-            _GatewaySettings(
-                **PROXY_ENV,
-                RUN_ID="run-from-settings",
-                TASK_ID="task-from-settings",
-            ),
-        ),
-        patch(
-            "httpx.AsyncClient.post",
-            new_callable=AsyncMock,
-            return_value=response,
-        ) as mock_post,
-    ):
-        await llm.query([TextInput(text="hi")])
-
-    body = _load_json(mock_post.call_args[1]["content"])
-    assert body["run_id"] == "run-from-settings"
-    assert body["question_id"] == "task-from-settings"
-
-
-async def test_proxy_query_uses_task_id_setting_when_question_id_blank():
-    llm = GatewayLLM("gpt-4o", "openai")
-    response = httpx.Response(
-        200,
-        json={"output_text": "ok", "tool_calls": [], "metadata": {}},
-    )
-
-    with (
-        patch(
-            "model_library.model_library_settings",
-            _GatewaySettings(
-                **PROXY_ENV,
-                QUESTION_ID=" ",
-                TASK_ID="task-from-settings",
-            ),
-        ),
-        patch(
-            "httpx.AsyncClient.post",
-            new_callable=AsyncMock,
-            return_value=response,
-        ) as mock_post,
-    ):
-        await llm.query([TextInput(text="hi")])
-
-    body = _load_json(mock_post.call_args[1]["content"])
-    assert body["question_id"] == "task-from-settings"
-
-
-async def test_proxy_query_question_id_setting_precedes_task_id_setting():
-    llm = GatewayLLM("gpt-4o", "openai")
-    response = httpx.Response(
-        200,
-        json={"output_text": "ok", "tool_calls": [], "metadata": {}},
-    )
-
-    with (
-        patch(
-            "model_library.model_library_settings",
-            _GatewaySettings(
-                **PROXY_ENV,
-                RUN_ID="run-from-settings",
-                QUESTION_ID="question-from-settings",
-                TASK_ID="task-from-settings",
-            ),
-        ),
-        patch(
-            "httpx.AsyncClient.post",
-            new_callable=AsyncMock,
-            return_value=response,
-        ) as mock_post,
-    ):
-        await llm.query([TextInput(text="hi")])
-
-    body = _load_json(mock_post.call_args[1]["content"])
-    assert body["question_id"] == "question-from-settings"
-
-
-async def test_proxy_query_explicit_none_ids_use_settings_ids():
-    llm = GatewayLLM("gpt-4o", "openai")
-    response = httpx.Response(
-        200,
-        json={"output_text": "ok", "tool_calls": [], "metadata": {}},
-    )
-
-    with (
-        patch(
-            "model_library.model_library_settings",
-            _GatewaySettings(
-                **PROXY_ENV,
-                RUN_ID="run-from-settings",
-                QUESTION_ID="question-from-settings",
-            ),
-        ),
-        patch(
-            "httpx.AsyncClient.post",
-            new_callable=AsyncMock,
-            return_value=response,
-        ) as mock_post,
-    ):
-        await llm.query(
-            [TextInput(text="hi")],
-            run_id=None,
-            question_id=None,
-        )
-
-    body = _load_json(mock_post.call_args[1]["content"])
-    assert body["run_id"] == "run-from-settings"
-    assert body["question_id"] == "question-from-settings"
 
 
 @pytest.mark.parametrize(
@@ -2947,3 +2780,46 @@ def test_gateway_correlation_headers_omit_a_missing_attempt_id():
     )
 
     assert headers == {"X-Run-Id": "run", "X-Question-Id": "q", "X-Query-Id": "qry"}
+
+
+async def _gateway_call(llm: GatewayLLM, settings: object) -> dict[str, Any]:
+    response = httpx.Response(
+        200, json={"output_text": "ok", "tool_calls": [], "metadata": {}}
+    )
+    with (
+        patch("model_library.model_library_settings", settings),
+        patch(
+            "httpx.AsyncClient.post", new_callable=AsyncMock, return_value=response
+        ) as mock_post,
+    ):
+        await llm.query("hi")
+    return mock_post.call_args[1]["headers"]
+
+
+async def test_gateway_query_in_token_scope_sends_the_scoped_token_per_request():
+    llm = _make_gateway()
+    with gateway_token_scope("mgwt_grading"):
+        headers = await _gateway_call(llm, _GatewaySettings(**PROXY_ENV))
+
+    assert headers["Authorization"] == "Bearer mgwt_grading"
+    client_auth = llm.get_client().headers["Authorization"]
+    assert client_auth.startswith("Bearer ") and client_auth != "Bearer mgwt_grading"
+
+
+async def test_gateway_query_outside_token_scope_uses_the_client_credentials():
+    headers = await _gateway_call(_make_gateway(), _GatewaySettings(**PROXY_ENV))
+
+    assert "Authorization" not in headers
+
+
+async def test_concurrent_token_scopes_do_not_leak_between_tasks():
+    async def observe(token: str) -> str | None:
+        with gateway_token_scope(token):
+            await asyncio.sleep(0)
+            return current_gateway_token()
+
+    assert await asyncio.gather(observe("mgwt_a"), observe("mgwt_b")) == [
+        "mgwt_a",
+        "mgwt_b",
+    ]
+    assert current_gateway_token() is None

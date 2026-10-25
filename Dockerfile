@@ -18,6 +18,8 @@ RUN uv sync --locked --no-dev --extra server --extra voice --no-editable
 
 # --- runtime stage ---
 FROM ${PYTHON_IMAGE}
+# Pick up distro ca-certificates updates (e.g. the eMudhra intermediate CA distrust) before base images refresh.
+RUN apt-get update && apt-get install -y --no-install-recommends --only-upgrade ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

@@ -4,14 +4,18 @@ from collections.abc import Callable
 from typing import Any, TypeVar, cast
 
 from fastapi import Request
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 
 from model_library.register_models import RegistryEntry
 from model_library.registry_utils import get_registry_config
 from model_library.retriers.token import utils as token_utils
 
 from model_gateway.errors import RunTokenAuthorizationError
-from model_gateway.run_token_types import MAX_TTL_SECONDS
+from model_gateway.run_token_types import (
+    LEGACY_ATTEMPT_ID,
+    MAX_TTL_SECONDS,
+    accept_legacy_attempt,
+)
 from model_gateway.types import GatewayRequestBase
 
 _BodyT = TypeVar("_BodyT", bound=GatewayRequestBase)
@@ -20,8 +24,11 @@ RUN_TOKEN_PREFIX = "mgwt_"
 
 
 class RunTokenClaims(BaseModel):
+    _accept_legacy_attempt = model_validator(mode="before")(accept_legacy_attempt)
+
     run_id: str
     task_id: str
+    attempt_id: str
     allowed_models: list[str]
     allowed_embedding_models: list[str] = []
     allowed_operations: list[str] | None = None
@@ -129,10 +136,13 @@ def run_token_authorized(model: type[_BodyT]) -> Callable[..., Any]:
             for field, value in (
                 ("run_id", claims.run_id),
                 ("question_id", claims.task_id),
+                ("attempt_id", claims.attempt_id),
                 ("identity", claims.identity),
             )
             if field in fields
         }
+        if claims.attempt_id == LEGACY_ATTEMPT_ID:  # TODO(2026-10-27): remove
+            updates.pop("attempt_id", None)
         return body.model_copy(update=updates)
 
     # FastAPI reads this annotation to parse `body` as the route's model.

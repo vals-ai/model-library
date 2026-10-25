@@ -269,7 +269,6 @@ deprecated:
 
   alibaba/qwen3-vl-plus-2025-09-23:
     label: Qwen 3 VL Plus
-    open_source: true
     release_date: 2025-09-23
     properties:
       context_window: 262_144

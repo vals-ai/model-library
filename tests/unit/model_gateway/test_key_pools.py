@@ -25,6 +25,7 @@ from model_library.settings import ModelLibrarySettings
         ("ANTHROPIC_API_KEY_2", "anthropic"),
         ("XAI_API_KEY", "grok"),
         ("MERCURY_API_KEY_2", "inception"),
+        ("KIMI_API_KEY_3", "kimi"),
         ("GCP_CREDS", None),
     ],
 )

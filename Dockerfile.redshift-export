@@ -10,6 +10,8 @@ RUN python -m pip install \
     --target ${LAMBDA_TASK_ROOT}
 
 COPY model_gateway/__init__.py ${LAMBDA_TASK_ROOT}/model_gateway/__init__.py
+COPY model_gateway/budgets/__init__.py ${LAMBDA_TASK_ROOT}/model_gateway/budgets/__init__.py
+COPY model_gateway/budgets/schema.py ${LAMBDA_TASK_ROOT}/model_gateway/budgets/schema.py
 COPY model_gateway/usage_ledger/ ${LAMBDA_TASK_ROOT}/model_gateway/usage_ledger/
 RUN python -c "import model_gateway.usage_ledger.redshift_export_job"
 

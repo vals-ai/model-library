@@ -33,7 +33,10 @@ from model_library.base import (
     ToolResult,
 )
 from model_library.base.output.builder import QueryResultBuilder
-from model_library.base.query_ids import PromptCacheKeyMode, resolve_prompt_cache_key
+from model_library.base.query_ids import (
+    PromptCacheKeyMode,
+    prompt_cache_key_from_query_ids,
+)
 from model_library.exceptions import (
     BackoffRetryException,
     BadInputError,
@@ -314,22 +317,16 @@ class MistralModel(LLM):
         if isinstance(last_message, AssistantMessage):
             input.append(TextInput(text="Please Continue."))
 
-        tools = await self.parse_tools(tools)
-
         body: dict[str, Any] = {
             "model": self.model_name,
             "messages": await self.parse_input(input),
-            "tools": tools,
+            "tools": await self.parse_tools(tools),
         }
 
-        prompt_cache_key = await resolve_prompt_cache_key(
-            mode=self.provider_config.prompt_cache_key,
-            model_name=self.model_name,
-            input=input,
-            parse_prompt_prefix=self.parse_input,
-        )
-        if prompt_cache_key is not None:
-            body["prompt_cache_key"] = prompt_cache_key
+        if self.provider_config.prompt_cache_key is not None:
+            body["prompt_cache_key"] = prompt_cache_key_from_query_ids(
+                model_name=self.model_name, input=input, tools=tools
+            )
 
         if self.reasoning:
             if self.reasoning_effort is not None:
