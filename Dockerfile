@@ -1,6 +1,6 @@
 # --- build stage: install dependencies ---
 ARG PYTHON_IMAGE=public.ecr.aws/docker/library/python:3.11.14-slim-bookworm
-ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.11.11
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff
 
 FROM ${UV_IMAGE} AS uv
 FROM ${PYTHON_IMAGE} AS builder
