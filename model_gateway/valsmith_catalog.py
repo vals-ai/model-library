@@ -28,8 +28,7 @@ class ValSmithPolicy(BaseModel):
         return value
 
 
-VALSMITH_OVERRIDES: dict[str, ValSmithPolicy] = {
-}
+VALSMITH_OVERRIDES: dict[str, ValSmithPolicy] = {}
 
 
 def _with_override(key: str, inherited: ValSmithPolicy) -> ValSmithPolicy:
