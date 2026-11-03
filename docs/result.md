@@ -22,6 +22,8 @@ Anthropic `model_context_window_exceeded` means generation filled the context wi
 
 Google disables SDK automatic continuation by default; a model can opt in through its provider config. A surfaced Google `CONTINUATION` maps to `max_tokens` and `TOO_MANY_TOOL_CALLS` remains `unknown`; raw provider reasons are retained.
 
+Google retains the latest reported usage metadata even when its stream chunk has no candidates. Chunks without usage metadata do not clear previously reported counts.
+
 ## QueryResultMetadata
 
 `QueryResultMetadata` stores token counts, cost, request duration, provider-specific `extra` values, `performance`, and `fallback`.
