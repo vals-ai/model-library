@@ -142,3 +142,9 @@ markers = [
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+
+[tool.uv]
+required-version = ">=0.13.5"
+exclude-newer = "7 days"
+exclude-newer-package = { certifi = false }
+constraint-dependencies = ["certifi>=2026.10.19"]

@@ -27,6 +27,9 @@ async def query_with_truncation_retry(
     - First, shortens to fit within the model's input context window using token count
     - Then retries on ``MaxContextWindowExceededError``, shortening by 10% each time
     - Also retries on ``MAX_TOKENS`` finish reason (output truncated), shortening by 5%
+
+    Once the document is empty, a further context or output limit failure is
+    raised to the caller because document truncation cannot reduce the prompt.
     """
     if llm.metadata is None and not llm._registry_key:  # pyright: ignore[reportPrivateUsage]
         raise ValueError("LLM has no registry key — use get_registry_model()")
@@ -47,10 +50,13 @@ async def query_with_truncation_retry(
 
     prompt = build_prompt(doc_text)
 
+    # Helper functions begin.
     def shorten(ratio: float) -> None:
         nonlocal doc_text, prompt
         doc_text = doc_text[: floor(len(doc_text) * ratio)]
         prompt = build_prompt(doc_text)
+
+    # Helper functions end.
 
     # truncate to fit input context window
     length = await llm.count_tokens(input=[TextInput(text=prompt)])
@@ -78,8 +84,12 @@ async def query_with_truncation_retry(
             return result, {k: v for k, v in truncation_record.items() if v > 0}
 
         except MaxContextWindowExceededError:
+            if not doc_text:
+                raise
             truncation_record["max_context_window_exceeded_truncation"] += 1
             shorten(0.90)
         except MaxOutputTokensExceededError:
+            if not doc_text:
+                raise
             truncation_record["max_output_tokens_exceeded_truncation"] += 1
             shorten(0.95)

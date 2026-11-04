@@ -1,9 +1,11 @@
 ARG LAMBDA_PYTHON_IMAGE=public.ecr.aws/lambda/python:3.12@sha256:2403867b308249173afa78a91834fc4ca197025af6653033321c0ed0703b5ead
 FROM ${LAMBDA_PYTHON_IMAGE}
 
+COPY --from=ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff /uv /bin/uv
+
 COPY requirements-redshift-export-lambda.txt ${LAMBDA_TASK_ROOT}/
-RUN python -m pip install \
-    --no-cache-dir \
+RUN uv pip install --exclude-newer "7 days" \
+    --no-cache \
     --require-hashes \
     --only-binary=:all: \
     --requirement ${LAMBDA_TASK_ROOT}/requirements-redshift-export-lambda.txt \
