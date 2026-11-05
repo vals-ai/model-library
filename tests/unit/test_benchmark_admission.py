@@ -7,6 +7,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+import model_library
+
 from model_gateway.benchmark_admission_types import (
     DEFAULT_BENCHMARK_WAIT_SECONDS,
     BenchmarkAdmissionOutcome,
@@ -24,6 +26,16 @@ from model_library.retriers.token.benchmark_queue import (
     HEARTBEAT_INTERVAL,
     HEARTBEAT_TTL,
 )
+
+
+@pytest.fixture(autouse=True)
+def operational_admission_key(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        model_library.model_library_settings,
+        "MODEL_GATEWAY_BENCHMARK_ADMISSION_API_KEY",
+        "operator-key",
+        raising=False,
+    )
 
 
 class FakeCoordinator:
@@ -134,7 +146,9 @@ def test_heartbeat_ttl_exceeds_wait_and_initial_renewal_margin() -> None:
     )
 
 
-async def test_context_uses_isolated_control_client() -> None:
+async def test_context_uses_isolated_control_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     model = _model()
     coordinator = FakeCoordinator(_response("acquired"))
     control_http_client = AsyncMock()
@@ -162,7 +176,8 @@ async def test_context_uses_isolated_control_client() -> None:
         ):
             pass
 
-    client_factory.assert_called_once_with(headers=dict(model.get_client().headers))
+    client_factory.assert_called_once_with()
+    assert control_http_client.auth.api_key == "operator-key"
     admission_client_type.assert_called_once_with(
         model,
         http_client=control_http_client,

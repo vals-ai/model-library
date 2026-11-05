@@ -4,11 +4,14 @@ import io
 import json
 import os
 import threading
+from collections.abc import Iterator
 from contextlib import nullcontext
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Literal, cast
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import UUID, uuid4
 
+import fakeredis.aioredis
 import httpx  # pyright: ignore[reportMissingImports]
 import pytest
 from pydantic import SecretStr, ValidationError  # pyright: ignore[reportMissingImports]
@@ -21,6 +24,7 @@ import model_gateway.app as gateway_app
 import model_gateway.model_helpers as model_helpers
 import model_gateway.route_helpers as route_helpers
 from model_gateway import startup_canary, telemetry_helpers
+from model_gateway.run_tokens import RunTokenClaims
 from model_library.base import (
     LLM,
     LLMConfig,
@@ -39,8 +43,68 @@ from model_library.register_models import (
     model_config_from_json,
 )
 from model_library.registry_utils import get_registry_model
-from tests.unit.model_gateway._support import HEADERS, _load_json, _make_client
+from model_library.retriers.token import utils as token_utils
+from tests.unit.model_gateway._support import (
+    HEADERS as OPERATIONAL_HEADERS,
+    RUN_HEADERS as HEADERS,
+    _load_json,
+    _make_client as _base_client,
+    attach_run_authority,
+)
+from tests.unit.model_gateway.test_app_roles import _quiet_lifecycle
 from tests.unit.test_structured_output_errors import InvalidJsonLLM
+
+
+RUN_CLAIMS = RunTokenClaims(
+    run_id="endpoint-run",
+    task_id="endpoint-task",
+    attempt_id="endpoint-attempt",
+    minted_by="endpoint-test",
+    managed_key_id=UUID(int=1),
+    # Egress filtering is covered in test_run_tokens.py.
+    allow_urls=True,
+    allow_provider_tools=True,
+    allowed_models=[
+        *get_model_registry(),
+        *get_transcription_registry(),
+        "nonexistent/model",
+        "unknown-provider/new-model",
+        "openai/moderation",
+    ],
+    allowed_embedding_models=["text-embedding-3-small", "text-embedding-3-large"],
+)
+
+
+@pytest.fixture(autouse=True)
+def _managed_run_token(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setenv(
+        "MODEL_GATEWAY_AUTH_DATABASE_SECRET",
+        '{"username":"endpoint","password":"endpoint","host":"localhost","port":5432}',
+    )
+    monkeypatch.setenv("MODEL_GATEWAY_AUTH_DATABASE_NAME", "endpoint")
+    monkeypatch.setenv("MODEL_GATEWAY_AUTH_POOL_SIZE", "1")
+    monkeypatch.setenv("MODEL_GATEWAY_AUTH_NAMESPACE", f"routes-{uuid4()}")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setattr(
+        "model_gateway.auth.get_run_token", AsyncMock(return_value=RUN_CLAIMS)
+    )
+    with patch.object(
+        gateway_app.ManagedAuthorityResolver,
+        "has_published_generation",
+        new_callable=AsyncMock,
+        return_value=True,
+    ):
+        yield
+
+
+def _attach_query_authority(client: TestClient, claims: RunTokenClaims) -> None:
+    attach_run_authority(client, claims)
+
+
+def _make_client(**kwargs: Any) -> TestClient:
+    client = _base_client(**kwargs)
+    _attach_query_authority(client, RUN_CLAIMS)
+    return client
 
 
 def _transcription_body(**overrides: object) -> dict[str, object]:
@@ -232,7 +296,7 @@ def test_metrics_http_span_uses_method_and_route_name():
     with patch.object(
         metrics.telemetry, "start_span", return_value=nullcontext()
     ) as span:
-        resp = client.get("/models", headers=HEADERS)
+        resp = client.get("/models", headers=OPERATIONAL_HEADERS)
 
     assert resp.status_code == 200
     assert span.call_args.args[0] == "GET /models"
@@ -282,6 +346,7 @@ def test_create_app_requires_gateway_keys_and_hmac_secret(
         main.create_app()
 
     client = _make_client(runtime_role="query")
+    cast(Any, client.app).state.managed_authority_ready.set()
     resp = client.get("/health/ready")
     assert resp.status_code == 200
     assert resp.json() == {"status": "ok"}
@@ -312,7 +377,12 @@ def test_lifespan_survives_malformed_otel_env():
         patch.dict(
             os.environ,
             {
+                "GATEWAY_RUNTIME_ROLE": "query",
+                "MODEL_GATEWAY_AUTH_DATABASE_SECRET": '{"username":"endpoint","password":"endpoint","host":"localhost","port":5432}',
+                "MODEL_GATEWAY_AUTH_DATABASE_NAME": "endpoint",
+                "MODEL_GATEWAY_AUTH_POOL_SIZE": "1",
                 "REDIS_URL": "redis://localhost:6379/0",
+                "MODEL_GATEWAY_AUTH_NAMESPACE": f"routes-{uuid4()}",
                 "GATEWAY_OTEL_ENABLED": "true",
                 "OTEL_EXPORTER_OTLP_TIMEOUT": "not-a-float",
             },
@@ -333,33 +403,75 @@ def test_lifespan_survives_malformed_otel_env():
     assert resp.json() == {"status": "ok"}
 
 
-async def test_startup_canary_executes_authenticated_local_query():
-
+async def test_startup_canary_mints_queries_and_revokes_local_child():
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
     requests: list[httpx.Request] = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    async def handler(request: httpx.Request) -> httpx.Response:
         requests.append(request)
+        if request.url.path in {"/service-auth", "/query"}:
+            assert (
+                await redis.exists(
+                    startup_canary.startup_canary_key(
+                        "gateway-startup-canary-release-a-unique"
+                    )
+                )
+                == 1
+            )
         if request.url.path == "/health/live":
             return httpx.Response(200, json={"status": "ok"})
+        if request.url.path == "/service-auth":
+            return httpx.Response(
+                200, json={"token": "mgwt-canary", "lease_id": "lease-canary"}
+            )
         if request.url.path == "/query":
             return httpx.Response(
                 200, json={"signed_history": "signed", "output_text": "ok"}
             )
+        if request.url.path == "/service-auth/revoke":
+            return httpx.Response(200, json={})
         return httpx.Response(404)
 
-    await startup_canary.execute_startup_canary(
-        api_key="sk-test",
-        base_url="http://127.0.0.1:8000",
-        model="openai/gpt-5.4-nano-2026-03-17",
-        max_tokens=16,
-        timeout_seconds=5,
-        wait_timeout_seconds=1,
-        transport=httpx.MockTransport(handler),
+    authority_ready = asyncio.Event()
+    authority_ready.set()
+    with patch.object(token_utils, "redis_client", redis):
+        await startup_canary.execute_startup_canary(
+            authority_ready=authority_ready,
+            managed_root="mgwk-canary",
+            control_url="http://control:8000",
+            base_url="http://127.0.0.1:8000",
+            run_id="gateway-startup-canary-release-a-unique",
+            model="openai/gpt-5.4-nano-2026-03-17",
+            max_tokens=16,
+            timeout_seconds=5,
+            wait_timeout_seconds=1,
+            transport=httpx.MockTransport(handler),
+        )
+    assert (
+        await redis.exists(
+            startup_canary.startup_canary_key("gateway-startup-canary-release-a-unique")
+        )
+        == 0
     )
 
-    query_request = requests[-1]
-    assert query_request.url.path == "/query"
-    assert query_request.headers["Authorization"] == "Bearer sk-test"
+    assert [request.url.path for request in requests] == [
+        "/health/live",
+        "/service-auth",
+        "/query",
+        "/service-auth/revoke",
+    ]
+    mint_request, query_request, revoke_request = requests[1:]
+    assert mint_request.url.host == "control"
+    assert mint_request.headers["Authorization"] == "Bearer mgwk-canary"
+    mint = _load_json(mint_request.content)
+    assert mint["run_id"] == "gateway-startup-canary-release-a-unique"
+    assert mint["task_id"].startswith("startup-query-")
+    assert mint["attempt_id"].startswith("startup-attempt-")
+    assert mint["allowed_models"] == ["openai/gpt-5.4-nano-2026-03-17"]
+    assert mint["allowed_operations"] == ["query"]
+    assert mint["ttl_seconds"] == 120
+    assert query_request.url.host == "127.0.0.1"
+    assert query_request.headers["Authorization"] == "Bearer mgwt-canary"
     body = _load_json(query_request.content)
     assert body["model"] == "openai/gpt-5.4-nano-2026-03-17"
     assert body["config"] == {
@@ -367,7 +479,10 @@ async def test_startup_canary_executes_authenticated_local_query():
         "temperature": 0,
         "reasoning_effort": "low",
     }
-    assert body["run_id"] == "gateway-startup-canary"
+    assert body["run_id"] == mint["run_id"]
+    assert revoke_request.url.host == "control"
+    assert revoke_request.headers["Authorization"] == "Bearer mgwk-canary"
+    assert _load_json(revoke_request.content) == {"lease_id": "lease-canary"}
 
 
 async def test_run_startup_canary_uses_doubled_output_budget():
@@ -377,17 +492,33 @@ async def test_run_startup_canary_uses_doubled_output_budget():
         "status": "pending",
         "error": "",
     }
+    app.state.managed_authority_ready = asyncio.Event()
+    app.state.managed_authority_ready.set()
+
+    async def execute_while_active(**kwargs: object) -> None:
+        assert app.state.startup_canary["run_id"] == kwargs["run_id"]
 
     with (
-        patch.dict(os.environ, {"GATEWAY_PORT": "8123"}),
+        patch.dict(
+            os.environ,
+            {
+                "GATEWAY_PORT": "8123",
+                "GATEWAY_STARTUP_CANARY_MANAGED_ROOT": "mgwk-canary",
+                "GATEWAY_STARTUP_CANARY_CONTROL_URL": "http://control:8000/",
+                "GATEWAY_RELEASE_ID": "release-a",
+            },
+        ),
         patch.object(
-            startup_canary, "execute_startup_canary", new_callable=AsyncMock
+            startup_canary, "execute_startup_canary", side_effect=execute_while_active
         ) as execute,
     ):
-        await startup_canary.run_startup_canary(app, "sk-test")
+        await startup_canary.run_startup_canary(app)
 
     execute.assert_awaited_once_with(
-        api_key="sk-test",
+        authority_ready=app.state.managed_authority_ready,
+        managed_root="mgwk-canary",
+        control_url="http://control:8000",
+        run_id=execute.await_args.kwargs["run_id"],
         base_url="http://127.0.0.1:8123",
         model="openai/gpt-5.4-nano-2026-03-17",
         max_tokens=32,
@@ -396,33 +527,80 @@ async def test_run_startup_canary_uses_doubled_output_budget():
         wait_timeout_seconds=30,
     )
     assert app.state.startup_canary["status"] == "passed"
+    assert execute.await_args.kwargs["run_id"].startswith(
+        "gateway-startup-canary-release-a-"
+    )
+    assert "run_id" not in app.state.startup_canary
+    with (
+        patch.dict(
+            os.environ,
+            {
+                "GATEWAY_STARTUP_CANARY_MANAGED_ROOT": "mgwk-canary",
+                "GATEWAY_STARTUP_CANARY_CONTROL_URL": "http://control:8000",
+                "GATEWAY_RELEASE_ID": "release-a",
+            },
+        ),
+        patch.object(
+            startup_canary, "execute_startup_canary", side_effect=RuntimeError("failed")
+        ) as failed_execute,
+        patch.object(startup_canary.telemetry, "record_exception"),
+    ):
+        await startup_canary.run_startup_canary(app)
+    assert failed_execute.await_args.kwargs["run_id"].startswith(
+        "gateway-startup-canary-release-a-"
+    )
+    assert app.state.startup_canary["status"] == "failed"
+    assert "run_id" not in app.state.startup_canary
 
 
 async def test_startup_canary_fails_without_signed_history():
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
         if request.url.path == "/health/live":
             return httpx.Response(200, json={"status": "ok"})
+        if request.url.path == "/service-auth":
+            return httpx.Response(
+                200, json={"token": "mgwt-canary", "lease_id": "lease-canary"}
+            )
+        if request.url.path == "/service-auth/revoke":
+            return httpx.Response(200, json={})
         return httpx.Response(200, json={"output_text": "ok"})
 
-    try:
-        await startup_canary.execute_startup_canary(
-            api_key="sk-test",
-            base_url="http://127.0.0.1:8000",
-            model="openai/gpt-5.4-nano-2026-03-17",
-            max_tokens=16,
-            timeout_seconds=5,
-            wait_timeout_seconds=1,
-            transport=httpx.MockTransport(handler),
+    authority_ready = asyncio.Event()
+    authority_ready.set()
+    with patch.object(token_utils, "redis_client", redis):
+        try:
+            await startup_canary.execute_startup_canary(
+                authority_ready=authority_ready,
+                managed_root="mgwk-canary",
+                control_url="http://control:8000",
+                base_url="http://127.0.0.1:8000",
+                run_id="gateway-startup-canary-release-a-unique",
+                model="openai/gpt-5.4-nano-2026-03-17",
+                max_tokens=16,
+                timeout_seconds=5,
+                wait_timeout_seconds=1,
+                transport=httpx.MockTransport(handler),
+            )
+        except RuntimeError as exc:
+            assert "signed_history" in str(exc)
+        else:
+            raise AssertionError("startup canary should fail without signed_history")
+    assert requests[-1].url.path == "/service-auth/revoke"
+    assert (
+        await redis.exists(
+            startup_canary.startup_canary_key("gateway-startup-canary-release-a-unique")
         )
-    except RuntimeError as exc:
-        assert "signed_history" in str(exc)
-    else:
-        raise AssertionError("startup canary should fail without signed_history")
+        == 0
+    )
 
 
 def test_health_ready_waits_for_enabled_startup_canary():
     client = _make_client(runtime_role="query")
+    cast(Any, client.app).state.managed_authority_ready.set()
     cast(Any, client.app).state.startup_canary = {
         "enabled": True,
         "status": "pending",
@@ -472,9 +650,17 @@ def test_lifespan_loads_model_registry_at_startup():
     with (
         patch.dict(
             os.environ,
-            {"REDIS_URL": "redis://localhost:6379/0"},
+            {
+                "GATEWAY_RUNTIME_ROLE": "query",
+                "MODEL_GATEWAY_AUTH_DATABASE_SECRET": '{"username":"endpoint","password":"endpoint","host":"localhost","port":5432}',
+                "MODEL_GATEWAY_AUTH_DATABASE_NAME": "endpoint",
+                "MODEL_GATEWAY_AUTH_POOL_SIZE": "1",
+                "REDIS_URL": "redis://localhost:6379/0",
+                "MODEL_GATEWAY_AUTH_NAMESPACE": f"routes-{uuid4()}",
+            },
             clear=True,
         ),
+        _quiet_lifecycle(),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
         patch.object(
             gateway_app, "get_model_names", return_value=["openai/gpt-4o"]
@@ -512,7 +698,7 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
             {"openai/gpt-4o-transcribe": transcribe},
         ),
     ):
-        resp = client.get("/registry", headers=HEADERS)
+        resp = client.get("/registry", headers=OPERATIONAL_HEADERS)
 
     assert resp.status_code == 200
     models = resp.json()["models"]
@@ -561,7 +747,7 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
         ),
     ):
         for query in ("include_excluded_fields=true", "include_transcription=true"):
-            legacy_resp = client.get(f"/registry?{query}", headers=HEADERS)
+            legacy_resp = client.get(f"/registry?{query}", headers=OPERATIONAL_HEADERS)
             assert legacy_resp.status_code == 200
             assert set(legacy_resp.json()["models"]) == {"openai/gpt-4o"}
             assert legacy_resp.json()["models"]["openai/gpt-4o"]["properties"]
@@ -572,7 +758,7 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
             }.isdisjoint(legacy_resp.json()["models"]["openai/gpt-4o"])
         full_resp = client.get(
             "/registry?include_excluded_fields=true&include_transcription=true",
-            headers=HEADERS,
+            headers=OPERATIONAL_HEADERS,
         )
 
     assert full_resp.status_code == 200
@@ -590,7 +776,10 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     assert "rate_limit" not in full_transcribe
     assert full_models["openai/gpt-4o"]["country"] == configs["openai/gpt-4o"].country
     assert full_models["openai/gpt-4o"].get("rate_limit") == expected_rate_limit
-    assert "write_1h_markup" in full_models["openai/gpt-4o"]["costs_per_million_token"]["cache"]
+    assert (
+        "write_1h_markup"
+        in full_models["openai/gpt-4o"]["costs_per_million_token"]["cache"]
+    )
 
 
 def test_registry_snapshot_can_exclude_same_provider_alternative_keys():
@@ -620,9 +809,11 @@ def test_registry_snapshot_can_exclude_same_provider_alternative_keys():
         "model_gateway.routes.models.get_registries",
         return_value=(registry, {}),
     ):
-        full = client.get("/registry", headers=HEADERS)
+        full = client.get("/registry", headers=OPERATIONAL_HEADERS)
         filtered = client.get(
-            "/registry", params={"include_alt_keys": "false"}, headers=HEADERS
+            "/registry",
+            params={"include_alt_keys": "false"},
+            headers=OPERATIONAL_HEADERS,
         )
 
     assert full.status_code == 200
@@ -665,14 +856,16 @@ def test_registry_snapshot_include_deprecated_serves_retired_entries():
             },
         ) as mock_deprecated,
     ):
-        default = client.get("/registry", headers=HEADERS)
+        default = client.get("/registry", headers=OPERATIONAL_HEADERS)
         included = client.get(
-            "/registry", params={"include_deprecated": "true"}, headers=HEADERS
+            "/registry",
+            params={"include_deprecated": "true"},
+            headers=OPERATIONAL_HEADERS,
         )
         filtered = client.get(
             "/registry",
             params={"include_deprecated": "true", "include_alt_keys": "false"},
-            headers=HEADERS,
+            headers=OPERATIONAL_HEADERS,
         )
 
     assert default.status_code == 200
@@ -705,9 +898,6 @@ def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
     )
 
     class FakeLLM:
-        async def ensure_resolved_token_retry(self, params, resolved):
-            seen["resolved_retry_limit"] = resolved.limit
-
         async def count_tokens(self, inputs, *, tools, **kwargs):
             seen["inputs"] = inputs
             seen["tools"] = tools
@@ -735,11 +925,6 @@ def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
             }
         ],
         "config": {"max_tokens": 7},
-        "token_retry_params": {
-            "input_modifier": 1,
-            "output_modifier": 1,
-            "limit": 1000,
-        },
     }
     assert client.post("/tokens/count", json=token_body).status_code == 401
 
@@ -759,7 +944,6 @@ def test_token_count_requires_auth_and_returns_count_with_restored_raw_input():
     assert seen_inputs[1].text == "count this"
     assert len(cast(list[object], seen["tools"])) == 1
     assert seen["kwargs"] == {}
-    assert seen["resolved_retry_limit"] == 1000
 
 
 def test_token_count_is_not_rejected_by_query_capacity_limit():
@@ -847,7 +1031,7 @@ def test_token_retry_status_requires_auth_and_returns_redis_status():
             return_value=status,
         ),
     ):
-        resp = client.get("/token-retry/status", headers=HEADERS)
+        resp = client.get("/token-retry/status", headers=OPERATIONAL_HEADERS)
 
     assert resp.status_code == 200
     assert resp.json() == {"models": []}
@@ -868,9 +1052,10 @@ def test_token_retry_status_is_cached_briefly_per_process():
             new_callable=AsyncMock,
             return_value=status,
         ) as get_status,
+        patch("model_gateway.routes.token_retry.TOKEN_RETRY_STATUS_CACHE_SECONDS", 60),
     ):
-        first = client.get("/token-retry/status", headers=HEADERS)
-        second = client.get("/token-retry/status", headers=HEADERS)
+        first = client.get("/token-retry/status", headers=OPERATIONAL_HEADERS)
+        second = client.get("/token-retry/status", headers=OPERATIONAL_HEADERS)
 
     assert first.status_code == 200
     assert second.status_code == 200
@@ -884,7 +1069,7 @@ def test_token_retry_status_returns_503_when_redis_is_not_configured():
         new_callable=AsyncMock,
         side_effect=Exception("redis client not set, run `set_redis_client`"),
     ):
-        resp = client.get("/token-retry/status", headers=HEADERS)
+        resp = client.get("/token-retry/status", headers=OPERATIONAL_HEADERS)
 
     assert resp.status_code == 503
     assert resp.json() == {
@@ -927,6 +1112,7 @@ def test_lifespan_starts_and_closes_usage_ledger():
             {
                 "GATEWAY_RUNTIME_ROLE": "query",
                 "GATEWAY_STARTUP_CANARY_ENABLED": "false",
+                "REDIS_URL": "redis://localhost:6379/0",
             },
         ),
         patch.object(
@@ -983,6 +1169,7 @@ def test_lifespan_close_continues_after_usage_ledger_close_failure():
                 "GATEWAY_RUNTIME_ROLE": "query",
                 "GATEWAY_STARTUP_CANARY_ENABLED": "false",
                 "REDIS_URL": "redis://localhost:6379/0",
+                "MODEL_GATEWAY_AUTH_NAMESPACE": f"routes-{uuid4()}",
             },
         ),
         patch.object(gateway_app.async_redis, "from_url", return_value=fake_redis),
@@ -1037,8 +1224,10 @@ def test_lifespan_flushes_delivery_metrics_after_telemetry_shutdown():
         patch.dict(
             os.environ,
             {
+                "GATEWAY_RUNTIME_ROLE": "query",
                 "GATEWAY_STARTUP_CANARY_ENABLED": "false",
                 "REDIS_URL": "redis://localhost:6379/0",
+                "MODEL_GATEWAY_AUTH_NAMESPACE": f"routes-{uuid4()}",
             },
         ),
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
@@ -1101,7 +1290,11 @@ def test_lifespan_closes_owned_redis_client():
     with (
         patch.dict(
             os.environ,
-            {"REDIS_URL": "redis://localhost:6379/0"},
+            {
+                "GATEWAY_RUNTIME_ROLE": "query",
+                "REDIS_URL": "redis://localhost:6379/0",
+                "MODEL_GATEWAY_AUTH_NAMESPACE": f"routes-{uuid4()}",
+            },
         ),
         patch.object(
             gateway_app.async_redis, "from_url", return_value=fake_redis
@@ -1138,7 +1331,9 @@ def test_auth_failure_trace_paths_match_protected_routes():
     protected_routes = {
         route.path
         for route in app.routes
-        if isinstance(route, APIRoute) and route.path not in auth.EXEMPT_PATHS
+        if isinstance(route, APIRoute)
+        and route.path not in auth.EXEMPT_PATHS
+        and not route.path.startswith("/admin/managed-auth")
     }
 
     assert auth.TRACE_AUTH_FAILURE_PATHS == protected_routes
@@ -1155,7 +1350,9 @@ def test_http_trace_allowed_routes_match_protected_routes():
     protected_routes = {
         route.path
         for route in app.routes
-        if isinstance(route, APIRoute) and route.path not in auth.EXEMPT_PATHS
+        if isinstance(route, APIRoute)
+        and route.path not in auth.EXEMPT_PATHS
+        and not route.path.startswith("/admin/managed-auth")
     }
 
     assert telemetry.HTTP_TRACE_ALLOWED_ROUTES == protected_routes
@@ -1493,9 +1690,7 @@ def test_query_returns_invalid_structured_output_provider_exception_envelope():
     ledger.write_event = AsyncMock()
     with (
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
-        patch.object(
-            gateway_app, "create_usage_ledger_from_env", return_value=ledger
-        ),
+        patch.object(gateway_app, "create_usage_ledger_from_env", return_value=ledger),
         patch.object(gateway_app.telemetry, "record_exception") as record_exception,
         patch.object(route_helpers, "emit_model_success") as emit_success,
     ):
@@ -2016,6 +2211,11 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
                 os.environ,
                 {
                     "GATEWAY_RUNTIME_ROLE": "query",
+                    "MODEL_GATEWAY_AUTH_DATABASE_SECRET": '{"username":"endpoint","password":"endpoint","host":"localhost","port":5432}',
+                    "MODEL_GATEWAY_AUTH_DATABASE_NAME": "endpoint",
+                    "MODEL_GATEWAY_AUTH_POOL_SIZE": "1",
+                    "MODEL_GATEWAY_AUTH_NAMESPACE": f"routes-{uuid4()}",
+                    "REDIS_URL": "redis://localhost:6379/0",
                     "GATEWAY_OTEL_ENABLED": "true",
                     "SENTRY_DSN": "https://public@example.com/1",
                     "SENTRY_OTLP_COLLECTOR_URL": f"http://127.0.0.1:{server.server_port}",
@@ -2028,9 +2228,41 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
                 gateway_app, "get_model_names", return_value=["openai/gpt-4o"]
             ),
             patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+            patch(
+                "model_gateway.auth.get_run_token",
+                AsyncMock(
+                    return_value=RUN_CLAIMS.model_copy(
+                        update={
+                            "run_id": "run-a",
+                            "task_id": "question-a",
+                            "attempt_id": "attempt-a",
+                            "identity": {
+                                "email": "user@example.com",
+                                "benchmark_name": "swebench",
+                                "agent_name": "swe-agent",
+                            },
+                        }
+                    )
+                ),
+            ),
         ):
             app = main.create_app()
             with TestClient(app) as client:
+                _attach_query_authority(
+                    client,
+                    RUN_CLAIMS.model_copy(
+                        update={
+                            "run_id": "run-a",
+                            "task_id": "question-a",
+                            "attempt_id": "attempt-a",
+                            "identity": {
+                                "email": "user@example.com",
+                                "benchmark_name": "swebench",
+                                "agent_name": "swe-agent",
+                            },
+                        }
+                    ),
+                )
                 resp = client.post(
                     "/query",
                     json={
@@ -2161,7 +2393,7 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
 
 def test_models_returns_list():
     client = _make_client()
-    resp = client.get("/models", headers=HEADERS)
+    resp = client.get("/models", headers=OPERATIONAL_HEADERS)
     assert resp.status_code == 200
     data = resp.json()
     assert isinstance(data, list)
@@ -2556,65 +2788,27 @@ def test_moderation_success_uses_config_and_returns_response():
     assert start_span.call_args.kwargs == {"kind": "client"}
 
 
-def test_query_initializes_token_retry_on_server_side_and_reuses_token_model():
-    from model_library.base.output import QueryResult
-
-    created_models: list[Any] = []
-
-    class FakeLLM:
-        def __init__(self):
-            self.token_retry_params = None
-            self._resolved_token_retry_params = None
-            self.init_count = 0
-            self.query_count = 0
-
-        async def ensure_resolved_token_retry(
-            self,
-            token_retry_params,
-            resolved_token_retry_params,
-        ):
-            if self._resolved_token_retry_params != resolved_token_retry_params:
-                self.token_retry_params = token_retry_params
-                self._resolved_token_retry_params = resolved_token_retry_params
-                self.init_count += 1
-
-        async def query(self, inputs, **kwargs):
-            self.query_count += 1
-            return QueryResult(output_text="pong", history=inputs)
-
-    def fake_get_registry_model(model, config):
-        llm = FakeLLM()
-        created_models.append(llm)
-        return llm
-
+def test_run_token_rejects_provider_retry_configuration_before_query_lookup():
     client = _make_client()
-    body = {
-        "model": "openai/gpt-4o",
-        "inputs": [{"kind": "text", "text": "hi"}],
-        "token_retry_params": {
-            "input_modifier": 1,
-            "output_modifier": 2,
-            "use_dynamic_estimate": False,
-            "limit": 1000,
-            "limit_refresh_seconds": 60,
-        },
-        "run_id": "run",
-        "question_id": "question",
-    }
-    with patch.object(
-        model_helpers, "get_registry_model", side_effect=fake_get_registry_model
-    ):
-        first = client.post("/query", json=body, headers=HEADERS)
-        second = client.post("/query", json=body, headers=HEADERS)
+    with patch.object(model_helpers, "get_registry_model") as get_registry_model:
+        response = client.post(
+            "/query",
+            json={
+                "model": "openai/gpt-4o",
+                "inputs": [{"kind": "text", "text": "hi"}],
+                "token_retry_params": {
+                    "input_modifier": 1,
+                    "output_modifier": 2,
+                    "use_dynamic_estimate": False,
+                    "limit": 1000,
+                    "limit_refresh_seconds": 60,
+                },
+            },
+            headers=HEADERS,
+        )
 
-    assert first.status_code == 200
-    assert second.status_code == 200
-    assert len(created_models) == 1
-    assert created_models[0].init_count == 1
-    assert created_models[0].query_count == 2
-    assert created_models[0]._resolved_token_retry_params.limit == 1000
-    assert created_models[0].token_retry_params.output_modifier == 2
-    assert not created_models[0].token_retry_params.use_dynamic_estimate
+    assert response.status_code == 403
+    get_registry_model.assert_not_called()
 
 
 def test_query_rejects_malformed_raw_history_with_400():
@@ -2772,11 +2966,28 @@ def test_query_sign_history_failure_does_not_write_usage_ledger():
 
 
 @pytest.mark.parametrize(
-    ("client_host", "run_id", "expected_writes"),
-    [("testclient", None, 1), ("127.0.0.1", "gateway-startup-canary", 0)],
+    ("client_host", "run_id", "active_run_id", "expected_writes"),
+    [
+        ("testclient", None, None, 1),
+        (
+            "127.0.0.1",
+            "gateway-startup-canary-release-a-test",
+            "gateway-startup-canary-release-a-test",
+            0,
+        ),
+        (
+            "127.0.0.1",
+            "gateway-startup-canary-release-a-other",
+            "gateway-startup-canary-release-a-test",
+            1,
+        ),
+    ],
 )
 def test_query_success_ledger_gate_preserves_success_wire(
-    client_host: str, run_id: str | None, expected_writes: int
+    client_host: str,
+    run_id: str | None,
+    active_run_id: str | None,
+    expected_writes: int,
 ):
     from model_library.base.output import QueryResult, QueryResultMetadata
 
@@ -2795,22 +3006,31 @@ def test_query_success_ledger_gate_preserves_success_wire(
     ledger.start = AsyncMock()
     ledger.close = AsyncMock()
     ledger.write_event = AsyncMock()
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
     with (
         patch.object(gateway_app, "create_usage_ledger_from_env", return_value=ledger),
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
+        patch.object(token_utils, "redis_client", redis),
         patch(
             "model_gateway.routes.query.get_query_llm",
             wraps=model_helpers.get_query_llm,
         ) as get_query_llm,
     ):
         client = _make_client(client=(client_host, 50000))
+        if active_run_id is not None:
+            client.app.state.startup_canary["enabled"] = True
+            client.app.state.startup_canary["run_id"] = active_run_id
+            asyncio.run(
+                redis.set(startup_canary.startup_canary_key(active_run_id), "1", ex=120)
+            )
+        claims = RUN_CLAIMS.model_copy(update={"run_id": run_id or RUN_CLAIMS.run_id})
+        _attach_query_authority(client, claims)
         body: dict[str, object] = {
             "model": "openai/gpt-4o",
             "inputs": [{"kind": "text", "text": "hi"}],
         }
-        if run_id is not None:
-            body["run_id"] = run_id
-        response = client.post("/query", json=body, headers=HEADERS)
+        with patch("model_gateway.auth.get_run_token", AsyncMock(return_value=claims)):
+            response = client.post("/query", json=body, headers=HEADERS)
 
     assert response.status_code == 200
     assert response.json()["output_text"] == "ok"
@@ -2821,15 +3041,15 @@ def test_query_success_ledger_gate_preserves_success_wire(
         key: seen_kwargs[key]
         for key in ("run_id", "question_id", "query_id", "attempt_id")
     }
-    assert ids["run_id"] == run_id
-    assert ids["question_id"] is None
-    assert ids["attempt_id"] is None
+    assert ids["run_id"] == claims.run_id
+    assert ids["question_id"] == claims.task_id
+    assert ids["attempt_id"] == claims.attempt_id
     assert len(cast(str, ids["query_id"])) == 14
     lookup_body = get_query_llm.await_args.args[1]
-    assert lookup_body.run_id == run_id
-    assert lookup_body.question_id is None
+    assert lookup_body.run_id == claims.run_id
+    assert lookup_body.question_id == claims.task_id
     assert lookup_body.query_id is None
-    assert lookup_body.attempt_id is None
+    assert lookup_body.attempt_id == claims.attempt_id
     if expected_writes:
         event = ledger.write_event.await_args.args[0]
         assert event["outcome"] == "success"
@@ -2838,9 +3058,9 @@ def test_query_success_ledger_gate_preserves_success_wire(
         request_snapshot = cast(dict[str, object], details["request"])
         for recorded in (event, request_snapshot):
             assert recorded["query_id"] == ids["query_id"]
-            assert len(cast(str, recorded["run_id"])) == 8
-            assert len(cast(str, recorded["question_id"])) == 14
-            assert len(cast(str, recorded["attempt_id"])) == 14
+            assert recorded["run_id"] == claims.run_id
+            assert recorded["question_id"] == claims.task_id
+            assert recorded["attempt_id"] == claims.attempt_id
 
 
 def test_query_success_uses_config_restores_raw_history_and_returns_metadata():
@@ -2986,8 +3206,6 @@ def test_actual_query_parse_error_transports_result_and_writes_usage(caplog):
     assert "output_text" not in stored_result
     assert "history" not in stored_result
     assert model.output_text not in str(caught.value)
-
-
 
 
 def test_invalid_decision_request_is_not_a_retriable_5xx():

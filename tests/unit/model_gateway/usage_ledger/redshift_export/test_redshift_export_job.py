@@ -144,7 +144,9 @@ def _config(*, shards: int = 1) -> RedshiftExportJobConfig:
         redshift_schema_name="gateway_usage",
         export_prefix="gateway-usage/dev/raw",
         budget_snapshot_bucket="landing-bucket",
-        budget_snapshot_key="gateway-usage/dev/spend/current.json",
+        managed_budget_snapshot_key="gateway-usage/dev/managed-spend/current.json",
+        project_alert_snapshot_key="gateway-usage/dev/spend/project-alerts-current.json",
+        managed_database_secret_arn="arn:aws:secretsmanager:us-east-1:123456789012:secret:managed-db",
         stage="dev",
     )
 

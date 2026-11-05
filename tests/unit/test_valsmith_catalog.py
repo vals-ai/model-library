@@ -1,10 +1,11 @@
 from decimal import Decimal
 from unittest.mock import AsyncMock, patch
+from uuid import UUID
 
-from model_gateway.run_tokens import RunTokenClaims, sha256_hex
+from model_gateway.run_tokens import RunTokenClaims
 from model_gateway.valsmith_catalog import VALSMITH_OVERRIDES, ValSmithPolicy
 from model_library.register_models import get_model_registry, model_config_from_json
-from tests.unit.model_gateway._support import HEADERS, _make_client
+from tests.unit.model_gateway._support import HEADERS, _make_client, attach_run_authority
 
 
 def test_catalog_preserves_prices_families_and_caller_scope(monkeypatch):
@@ -69,14 +70,16 @@ def test_catalog_preserves_prices_families_and_caller_scope(monkeypatch):
     assert renamed["pricing_revision"] == catalog["pricing_revision"]
 
     registry[root_key].metadata.available_for_everyone = False
+    key_id = UUID(int=1)
     claims = RunTokenClaims(
         run_id="test-run",
         task_id="test-task",
         attempt_id="test-attempt",
         allowed_models=[high_key],
         minted_by="test",
-        minted_with=sha256_hex("sk-test"),
+        managed_key_id=key_id,
     )
+    attach_run_authority(client, claims)
     with patch("model_gateway.auth.get_run_token", AsyncMock(return_value=claims)):
         scoped = client.get(
             "/registry?include_valsmith=true",

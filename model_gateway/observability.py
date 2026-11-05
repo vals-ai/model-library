@@ -9,7 +9,8 @@ import os
 import socket
 import threading
 import time
-from collections.abc import Callable, MutableMapping
+from collections.abc import Callable, Generator, MutableMapping
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -24,6 +25,14 @@ DEFAULT_STAGE = "unknown"
 DEFAULT_SERVICE = "gateway"
 
 _latest_runtime_snapshot: dict[str, int] | None = None
+
+
+@contextmanager
+def log_failure(logger: logging.Logger, message: str) -> Generator[None, None, None]:
+    try:
+        yield
+    except Exception:
+        logger.exception(message)
 
 
 class RequestLogFields(TypedDict):

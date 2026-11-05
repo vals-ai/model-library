@@ -13,7 +13,7 @@ from model_library.base import (
     QueryResult,
     ToolDefinition,
 )
-from model_library.base.query_ids import prompt_cache_key_from_query_ids
+from model_library.base.router import RouterLLM
 from model_library.register_models import register_provider
 
 
@@ -25,7 +25,7 @@ class OpenRouterConfig(ProviderConfig):
 
 
 @register_provider("openrouter")
-class OpenRouterModel(DelegateOnly):
+class OpenRouterModel(DelegateOnly, RouterLLM):
     api_key_setting = "OPENROUTER_API_KEY"
 
     provider_config = OpenRouterConfig()
@@ -87,12 +87,7 @@ class OpenRouterModel(DelegateOnly):
             settings = {k: v for k, v in settings.items() if v is not None}
             if settings:
                 extra_body["plugins"] = [{"id": plugin_id, **settings}]
-            # One session per task attempt, so the served model sticks within it.
-            extra_body["session_id"] = prompt_cache_key_from_query_ids(
-                model_name=self._registry_key or f"openrouter/{self.model_name}",
-                input=input,
-                tools=tools,
-            )
+            extra_body["session_id"] = self.router_session_id(input, tools)
             # Claude upstreams cache only with a breakpoint; others cache on their own.
             if self.prompt_caching != "off":
                 extra_body["cache_control"] = {"type": "ephemeral"}

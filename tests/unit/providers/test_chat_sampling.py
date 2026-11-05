@@ -209,8 +209,9 @@ async def test_leaf_config_sampling_and_raw_kwargs_override(
 @pytest.mark.parametrize(
     "reasoning,provider,expected",
     [
-        (False, "anthropic", {"temperature": 0.4}),
+        (False, "anthropic", {}),
         (True, "anthropic", {}),
+        (False, "minimax", {"temperature": 0.4, "top_p": 0.8}),
         (True, "minimax", {"top_p": 0.8}),
     ],
 )
@@ -270,13 +271,13 @@ async def test_anthropic_disabled_config_does_not_gate_raw_kwargs(caplog):
 
 
 async def test_registry_inherited_temperature_can_be_overridden_with_raw_none(caplog):
-    model = get_registry_model("anthropic/claude-sonnet-4-5-20250929")
-    assert isinstance(model, AnthropicModel)
-    assert model.temperature == 1
+    model = get_registry_model("mistralai/mistral-large-2512")
+    assert isinstance(model, MistralModel)
+    assert model.temperature is not None
     with caplog.at_level(logging.WARNING, logger="llm"):
         inherited = await model.build_body(_INPUT, tools=[])
         raw_none = await model.build_body(_INPUT, tools=[], temperature=None)
-    assert inherited["temperature"] == 1
+    assert inherited["temperature"] == model.temperature
     assert raw_none["temperature"] is None
     assert _warnings(caplog) == []
 
@@ -442,7 +443,6 @@ async def test_anthropic_native_fallback_owns_extras_after_assembly(
         "claude-test",
         config=LLMConfig(
             max_tokens=4096,
-            temperature=0.4,
             provider_config=AnthropicConfig(fallback_models=["claude-fallback"]),
         ),
     )

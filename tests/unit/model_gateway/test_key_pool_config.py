@@ -172,4 +172,4 @@ def test_without_appconfig_the_gateway_manages_no_keys():
     body = QueryRequest(model=MODEL, inputs=[], run_id="run-a", question_id="q-1")
 
     assert model_helpers.managed_api_keys(MODEL) == ()
-    assert model_helpers._managed_api_key(body) is None  # pyright: ignore[reportPrivateUsage]
+    assert model_helpers.managed_api_key_value(body) is None

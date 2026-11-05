@@ -32,10 +32,10 @@ glm-models:
       top_p: 0.95
       reasoning_effort: max
     costs_per_million_token:
-      input: 0.075
-      output: 0.25
+      input: 0.15
+      output: 0.50
       cache:
-        read: 0.015
+        read: 0.03
     provider_endpoint: glm-5.3-flash
   zai/glm-5.3:
     label: GLM 5.3

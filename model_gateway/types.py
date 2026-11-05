@@ -15,6 +15,7 @@ from model_library import telemetry
 from model_library.base import LLMConfig, TokenRetryParams, dump_llm_config
 from model_library.base.input import FileWithId, InputItem, ToolDefinition
 from model_library.base.output import QueryResult
+from model_library.providers.anthropic import uses_workload_identity
 from model_library.rate_limits import RateLimit
 
 
@@ -63,6 +64,26 @@ class GatewayRequestBase(BaseModel):
                 "provider_config.access_programs cannot be set; use a registry key"
             )
         return config
+
+    @model_validator(mode="after")
+    def _keep_registry_workload_identity(self) -> Self:
+        # The registry entry, not the request, decides whether a model federates.
+        provider_config = self.config.provider_config
+        if isinstance(provider_config, dict):
+            requested = provider_config.get("workload_identity")
+        elif provider_config is not None and (
+            "workload_identity" in provider_config.model_fields_set
+        ):
+            requested = getattr(provider_config, "workload_identity", None)
+        else:
+            requested = None
+        if requested is not None and bool(requested) != uses_workload_identity(
+            self.model
+        ):
+            raise ValueError(
+                "provider_config.workload_identity must match the registry entry"
+            )
+        return self
 
     def config_dict(self) -> dict[str, Any]:
         return dump_llm_config(self.config)

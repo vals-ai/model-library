@@ -15,6 +15,10 @@ def _client() -> TestClient:
         )
     )
 
+    @app.get("/registry")
+    async def registry(request: Request) -> dict[str, str]:
+        return {"api_key_name": request.state.gateway_api_key_name}
+
     @app.get("/protected")
     async def protected(request: Request) -> dict[str, str]:
         return {"api_key_name": request.state.gateway_api_key_name}
@@ -26,10 +30,10 @@ def test_auth_resolves_configured_api_key_name() -> None:
     client = _client()
 
     default_response = client.get(
-        "/protected", headers={"Authorization": "Bearer key-default"}
+        "/registry", headers={"Authorization": "Bearer key-default"}
     )
     security_response = client.get(
-        "/protected", headers={"Authorization": "Bearer key-security"}
+        "/registry", headers={"Authorization": "Bearer key-security"}
     )
 
     assert default_response.status_code == 200
@@ -38,7 +42,8 @@ def test_auth_resolves_configured_api_key_name() -> None:
     assert security_response.json() == {"api_key_name": "security-testing"}
 
 
+
 def test_auth_rejects_unknown_api_key() -> None:
-    response = _client().get("/protected", headers={"Authorization": "Bearer unknown"})
+    response = _client().get("/registry", headers={"Authorization": "Bearer unknown"})
 
     assert response.status_code == 401

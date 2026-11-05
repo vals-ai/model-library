@@ -12,8 +12,12 @@ from model_gateway.capacity import (
 )
 
 
-def test_capacity_middleware_is_query_only():
+def test_model_call_predicate_includes_passthrough_routes():
     assert capacity.MODEL_CALL_PATHS == frozenset({"/query"})
+    assert capacity.is_model_call("/query")
+    assert capacity.is_model_call("/passthrough/openai/v1/responses")
+    assert capacity.is_model_call("/passthrough/google/v1beta/models/model:generateContent")
+    assert not capacity.is_model_call("/passthrough")
 
 
 @pytest.mark.asyncio

@@ -17,6 +17,7 @@ from model_library.base import (
 )
 from model_library.base.input import FileWithId, InputItem, RawInput, RawResponse
 from model_library.base.query_ids import prompt_identity
+from model_library.providers.anthropic import uses_workload_identity
 from model_library.registry_utils import (
     get_registry_config,
     get_registry_model,
@@ -83,7 +84,7 @@ def managed_api_keys(model: str) -> tuple[ManagedApiKey, ...]:
     """The keys that serve `model`, labelled `pool_1`, `pool_2`, ... by position.
 
     A model whose matched pool is empty has no managed keys here; its query
-    fails in `_managed_api_key`.
+    fails in `managed_api_key_value`.
     """
     config = current_pool_config()
     try:
@@ -99,9 +100,12 @@ def managed_api_keys(model: str) -> tuple[ManagedApiKey, ...]:
 def _uses_managed_key(
     body: QueryRequest | TokenCountRequest | BenchmarkAcquireRequest,
 ) -> TypeGuard[QueryRequest]:
+    # Federated models hold no pooled key: none is picked, assigned or read for
+    # them. Admission (`approved_identities_only`) is decided elsewhere.
     return (
         body.config.custom_api_key is None
         and isinstance(body, QueryRequest)
+        and not uses_workload_identity(body.model)
         and not any(isinstance(item, FileWithId) for item in body.inputs)
     )
 
@@ -136,7 +140,7 @@ def _pick_managed_key_setting(body: QueryRequest, config: PoolConfig) -> str | N
     return pool[bisect_right(bounds, int.from_bytes(digest, "big") % bounds[-1])]
 
 
-def _managed_api_key(
+def managed_api_key_value(
     body: QueryRequest | TokenCountRequest | BenchmarkAcquireRequest,
     *,
     key_setting: str | None = None,
@@ -262,7 +266,7 @@ def get_gateway_llm(
     `managed_key_setting` is an attempt's assigned key; None picks by hash.
     """
     model_config = dump_llm_config(body.config)
-    managed_api_key = _managed_api_key(body, key_setting=managed_key_setting)
+    managed_api_key = managed_api_key_value(body, key_setting=managed_key_setting)
     if managed_api_key is not None:
         model_config["custom_api_key"] = managed_api_key
 

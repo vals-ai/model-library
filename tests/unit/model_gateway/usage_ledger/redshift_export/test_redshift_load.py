@@ -128,6 +128,7 @@ def test_finalize_can_defer_analytics_refresh_for_backfill() -> None:
     assert "merge into gateway_usage.usage_event_performance_v3" in sql
     assert "delete from gateway_usage.usage_events_staging_v5" in sql
     assert "usage_agg_" not in sql
+    assert "usage_run_agg_1d" not in sql
     assert "usage_dimension_values" not in sql
 
 
@@ -202,3 +203,28 @@ def test_copy_sql_uses_manifest_and_role_literals() -> None:
 
     assert "s3://bucket/o''hare/manifest.json" in sql
     assert "arn:aws:iam::123456789012:role/o''hare" in sql
+
+
+def test_finalize_refreshes_run_aggregate_over_the_whole_utc_day() -> None:
+    sql = "\n".join(
+        finalize_window_statements(
+            _load(
+                start=datetime(2026, 5, 29, 12, 35, tzinfo=UTC),
+                end=datetime(2026, 5, 29, 12, 40, tzinfo=UTC),
+            ),
+            schema=redshift_schema.WAREHOUSE_SCHEMA,
+        )
+    )
+
+    assert (
+        "delete from gateway_usage.usage_run_agg_1d\n"
+        "where bucket_start_utc >= '2026-05-29T00:00:00Z'\n"
+        "  and bucket_start_utc < '2026-05-30T00:00:00Z';"
+    ) in sql
+    insert_sql = sql[sql.index("insert into gateway_usage.usage_run_agg_1d") :]
+    assert "where completed_at >= '2026-05-29T00:00:00Z'" in insert_sql
+    assert "and completed_at < '2026-05-30T00:00:00Z'" in insert_sql
+    assert "'2026-05-29T12:40:00Z' as data_through_utc" in insert_sql
+    assert sql.index("insert into gateway_usage.usage_run_agg_1d") > sql.index(
+        "insert into gateway_usage.usage_agg_1d"
+    )

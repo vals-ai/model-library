@@ -17,7 +17,8 @@ class GatewaySettings:
         pass
 
 
-def test_query_trailing_slash_does_not_redirect_or_reach_model_lookup():
+def test_control_role_does_not_mount_query_with_or_without_trailing_slash(monkeypatch):
+    monkeypatch.setenv("GATEWAY_RUNTIME_ROLE", "control")
     with patch.object(gateway_app, "model_library_settings", GatewaySettings()):
         app = gateway_app.create_app()
 
@@ -41,4 +42,5 @@ def test_query_trailing_slash_does_not_redirect_or_reach_model_lookup():
     get_query_llm.assert_not_awaited()
 
     canonical_response = client.post("/query", json=request_body, headers=headers)
-    assert canonical_response.status_code == 400
+    assert canonical_response.status_code == 404
+    get_query_llm.assert_not_awaited()

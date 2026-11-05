@@ -14,16 +14,3 @@ poolside-models:
     default_parameters:
       temperature: 1.0
 
-  vercel/poolside/laguna-s-2.1:
-    label: Laguna S 2.1
-    release_date: 2026-07-20
-    documentation_url: https://vercel.com/ai-gateway/models/laguna-s-2.1
-    properties:
-      context_window: 1_000_000
-      reasoning_model: true
-      max_tokens: 131_072
-    costs_per_million_token:
-      input: 0.1
-      output: 0.2
-      cache:
-        read: 0.01

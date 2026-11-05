@@ -1,6 +1,6 @@
 import logging
 from importlib import import_module
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -113,7 +113,6 @@ async def test_nonterminal_outcome_preserves_token_deduction(
         await redis.hset(run_meta_key, mapping={"outcome": outcome})
     retrier = make_retrier(run_id)
 
-    with patch("asyncio.sleep", new_callable=AsyncMock):
-        await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
+    await retrier._pre_function()  # pyright: ignore[reportPrivateUsage]
 
     assert await redis.get(TOKEN_KEY) == "850"

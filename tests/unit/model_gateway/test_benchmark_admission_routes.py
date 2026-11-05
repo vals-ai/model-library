@@ -2,7 +2,7 @@ import asyncio
 import logging
 import os
 from types import SimpleNamespace
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fakeredis import aioredis
@@ -15,6 +15,7 @@ from model_gateway.benchmark_admission_types import BenchmarkAcquireRequest
 from model_gateway.cache import ModelCache
 from model_gateway.types import QueryRequest, TokenCountRequest
 from tests.unit.model_gateway._support import HEADERS, _make_client
+from tests.unit.model_gateway.test_app_roles import QuietAuthorityPublisher
 from model_library.base import (
     FileWithId,
     LLMConfig,
@@ -138,6 +139,33 @@ async def test_gateway_paths_share_identity_but_only_provider_ops_start_token_re
     assert llm.token_retry_params == params
     assert llm.init_calls == [resolved_params]
     assert resolved_params.requests_per_minute == 77
+def _control_lifecycle_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name, value in {
+        "MODEL_GATEWAY_AUTH_DATABASE_SECRET": '{"username":"local","password":"local","host":"localhost","port":5432}',
+        "MODEL_GATEWAY_AUTH_NAMESPACE": "benchmark-admission-test",
+        "MODEL_GATEWAY_AUTH_DATABASE_NAME": "gateway_auth",
+        "MODEL_GATEWAY_AUTH_POOL_SIZE": "1",
+        "DESCOPE_PROJECT_ID": "local",
+        "DESCOPE_EXPECTED_ISSUER": "https://issuer.example",
+        "DESCOPE_ORGANIZATION_ID": "local",
+        "DESCOPE_MACHINE_ACCESS_KEY_ID": "local-machine",
+        "DESCOPE_MACHINE_SERVICE_OWNER_ID": "00000000-0000-0000-0000-000000000002",
+        "DESCOPE_MANAGEMENT_CREDENTIAL": "local",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(
+        gateway_app,
+        "HumanVerifier",
+        MagicMock(return_value=SimpleNamespace(aclose=AsyncMock())),
+    )
+    monkeypatch.setattr(
+        gateway_app,
+        "HumanReconciler",
+        MagicMock(return_value=SimpleNamespace(run=lambda stop: stop.wait())),
+    )
+    monkeypatch.setattr(gateway_app, "ManagedAuthorityPublisher", QuietAuthorityPublisher)
+
+
 async def test_admission_routes_coordinate_through_shared_redis(
     redis,
     monkeypatch: pytest.MonkeyPatch,
@@ -145,6 +173,7 @@ async def test_admission_routes_coordinate_through_shared_redis(
     llm = FakeLLM()
     resolve_llm = MagicMock(return_value=llm)
     monkeypatch.setenv("REDIS_URL", "redis://shared-benchmark-admission")
+    _control_lifecycle_settings(monkeypatch)
 
     with (
         patch.object(
@@ -218,6 +247,7 @@ async def test_control_role_serves_authenticated_admission_through_lifespan(
     lifecycle_redis = aioredis.FakeRedis(decode_responses=True)
     monkeypatch.setenv("GATEWAY_RUNTIME_ROLE", "control")
     monkeypatch.setenv("REDIS_URL", "redis://control-benchmark-admission")
+    _control_lifecycle_settings(monkeypatch)
     monkeypatch.setattr(token_utils, "redis_client", None)
 
     with (

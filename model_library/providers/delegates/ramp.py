@@ -13,14 +13,13 @@ from model_library.base import (
     QueryResult,
     ToolDefinition,
 )
-from model_library.base.query_ids import prompt_cache_key_from_query_ids
 from model_library.exceptions import (
     NoRetryException,
     ProviderErrorPayload,
     exception_http_status_code,
     exception_to_provider_error,
 )
-from model_library.providers.openai import OpenAIConfig
+from model_library.base.router import RouterLLM
 from model_library.register_models import register_provider
 
 
@@ -45,7 +44,7 @@ SWITCHYARD_SESSION_HEADERS = {"claude-code": "X-Claude-Code-Session-Id"}
 
 
 @register_provider("ramp")
-class RampModel(DelegateOnly):
+class RampModel(DelegateOnly, RouterLLM):
     api_key_setting = "RAMP_API_KEY"
 
     provider_config = RampConfig()
@@ -67,9 +66,6 @@ class RampModel(DelegateOnly):
                 or "https://api.router.com/v1",
                 "custom_api_key": config.custom_api_key
                 or SecretStr(self._api_key_from(model_library_settings)),
-                # Ramp routes on prompt_cache_key: one key per task attempt, so the
-                # served model sticks within it.
-                "provider_config": OpenAIConfig(prompt_cache_key="id"),
             }
         )
 
@@ -91,14 +87,9 @@ class RampModel(DelegateOnly):
         **kwargs: object,
     ) -> QueryResult:
         self.enable_router_mode()
+        session_id = self.router_session_id(input, tools)
+        kwargs["prompt_cache_key"] = session_id
         if client := self.provider_config.switchyard_client:
-            # Per registry key, so a variant never shares a session with its pinned entry.
-            session_id = prompt_cache_key_from_query_ids(
-                model_name=self._registry_key or f"ramp/{self.model_name}",
-                input=input,
-                tools=tools,
-            )
-            kwargs["prompt_cache_key"] = session_id
             kwargs["extra_headers"] = {
                 **cast(dict[str, str], kwargs.get("extra_headers") or {}),
                 "X-Gateway-Client": client,

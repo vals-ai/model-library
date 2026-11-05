@@ -8,6 +8,10 @@ class RunTokenAuthorizationError(Exception):
     """A run token was presented for work its claims do not cover."""
 
 
+class EgressPolicyError(Exception):
+    """A run token's egress policy blocks a URL that the request cannot work without."""
+
+
 class AssignedKeyUnavailableError(Exception):
     """The provider key serving a request has no value."""
 
@@ -50,6 +54,8 @@ def map_exception_to_error(
     exc: Exception, *, provider: str | None = None
 ) -> ErrorResponse:
     msg = str(exc)
+    if isinstance(exc, EgressPolicyError):
+        return ErrorResponse(403, ErrorBody(code="egress_denied", message=msg))
     if isinstance(exc, AssignedKeyUnavailableError):
         return ErrorResponse(
             409, ErrorBody(code="assigned_key_unavailable", message=msg)

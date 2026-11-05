@@ -46,14 +46,16 @@ def walk_provider_modules(callback: Callable[[Any], None]):
         callback(mod)
 
 
-def mock_llm_subclasses(method_name: str, mock_func: Callable[..., Any]):
+def mock_llm_subclasses(
+    method_name: str, mock_func: Callable[..., Any], monkeypatch: pytest.MonkeyPatch
+):
     """Mock a specific method on all LLM subclasses."""
 
     def apply_mock(mod: ModuleType):
         for name in dir(mod):
             obj = getattr(mod, name)
             if isinstance(obj, type) and issubclass(obj, LLM) and obj is not LLM:
-                setattr(obj, method_name, mock_func)
+                monkeypatch.setattr(obj, method_name, mock_func)
 
     walk_provider_modules(apply_mock)
 
@@ -64,9 +66,10 @@ def mock_all_get_client():
 
     mock_client = MagicMock(return_value=AsyncMock())
 
-    mock_llm_subclasses("get_client", mock_client)
-
-    yield
+    # A private patcher, so tests that request `monkeypatch` keep their own teardown order.
+    with pytest.MonkeyPatch.context() as patcher:
+        mock_llm_subclasses("get_client", mock_client, patcher)
+        yield
 
 
 @pytest.fixture(autouse=True)

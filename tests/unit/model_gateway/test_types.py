@@ -58,3 +58,25 @@ def test_request_with_its_own_api_key_may_set_access_programs():
     )
 
     assert request.config.custom_api_key is not None
+
+
+
+@pytest.mark.parametrize("custom_api_key", [None, "sk-own"])
+def test_request_cannot_turn_on_workload_identity(custom_api_key: str | None):
+    config: dict[str, object] = {"provider_config": {"workload_identity": True}}
+    if custom_api_key is not None:
+        config["custom_api_key"] = custom_api_key
+
+    with pytest.raises(ValidationError, match="must match the registry entry"):
+        QueryRequest.model_validate(
+            {"model": "anthropic/claude-opus-5-5", "inputs": [], "config": config}
+        )
+
+
+def test_request_matching_the_registry_workload_identity_is_accepted():
+    config = {"provider_config": {"workload_identity": False}}
+    request = QueryRequest.model_validate(
+        {"model": "anthropic/claude-opus-5-5", "inputs": [], "config": config}
+    )
+
+    assert request.config.provider_config == {"workload_identity": False}

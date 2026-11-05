@@ -29,8 +29,10 @@ from google.genai.types import (
     ThinkingConfig,
     ThinkingLevel,
     Tool,
+    ToolCall as GenaiToolCall,
     ToolConfig,
     ToolListUnion,
+    ToolType,
     UploadFileConfig,
 )
 from google.oauth2 import service_account
@@ -139,6 +141,22 @@ class GoogleConfig(ProviderConfig):
     # Sampling eligibility is governed separately by supports_temperature.
     uses_thinking_budget: bool = False
     automatic_continuation: bool = False
+
+
+def _search_queries(tool_call: GenaiToolCall) -> list[str]:
+    """Queries of a streamed server-side GOOGLE_SEARCH_WEB invocation."""
+    if tool_call.tool_type != ToolType.GOOGLE_SEARCH_WEB:
+        return []
+    queries = cast(list[str], (tool_call.args or {}).get("queries", []))
+    return [q.strip() for q in queries if q.strip()]
+
+
+def _streams_server_side_tool_calls(model_name: str) -> bool:
+    """Gemini 3+ streams native search as `tool_call` parts when asked; Gemini 2.x
+    rejects `include_server_side_tool_invocations` (400) and only reports grounding
+    metadata, which is billed per grounded prompt."""
+    name = model_name.lower().removeprefix("models/")
+    return not (name.startswith("gemini-1") or name.startswith("gemini-2"))
 
 
 @register_provider("google")
@@ -304,6 +322,8 @@ class GoogleModel(LLM):
                     new_input.append(item.input)
                 case SystemInput():
                     raise UnexpectedSystemInputError()
+                case _:
+                    raise AssertionError(type(item))
 
         # in case content user item is the last item
         flush_content_user()
@@ -444,7 +464,9 @@ class GoogleModel(LLM):
 
         if tools:
             generation_config.tools = cast(ToolListUnion, await self.parse_tools(tools))
-            if any(is_native_web_search(t.body) for t in tools):
+            if any(is_native_web_search(t.body) for t in tools) and (
+                _streams_server_side_tool_calls(self.model_name)
+            ):
                 generation_config.tool_config = ToolConfig(
                     include_server_side_tool_invocations=True
                 )
@@ -497,6 +519,8 @@ class GoogleModel(LLM):
         metadata: GenerateContentResponseUsageMetadata | None = None
         response_id: str | None = None
         grounding_metadata: GroundingMetadata | None = None
+        # (tool_call id, query) per streamed server-side search
+        search_calls: list[tuple[str | None, str]] = []
 
         stream = await self.get_client().aio.models.generate_content_stream(**body)
         contents: list[Content | None] = []
@@ -526,6 +550,12 @@ class GoogleModel(LLM):
             meaningful_content = False
             if content and content.parts:
                 for part in content.parts:
+                    if tool_call := cast(
+                        GenaiToolCall | None, getattr(part, "tool_call", None)
+                    ):
+                        search_calls.extend(
+                            (tool_call.id, q) for q in _search_queries(tool_call)
+                        )
                     if part.function_call:
                         meaningful_content = True
                         if not part.function_call.name:
@@ -573,16 +603,27 @@ class GoogleModel(LLM):
             query_logger.error("The function call was malformed")
             raise RetryException("The function call was malformed")
 
+        # Streamed tool_call parts are the search record; grounding_metadata is
+        # absent when the turn ends in a function call and can drop queries, so it
+        # is only the fallback.
+        if not search_calls and grounding_metadata:
+            search_calls = [
+                (None, q.strip())
+                for q in grounding_metadata.web_search_queries or []
+                if q.strip()
+            ]
         provider_tool_events: list[ProviderToolEvent] = []
-        if grounding_metadata and grounding_metadata.web_search_queries:
+        if search_calls:
+            grounding_chunks = (
+                grounding_metadata.grounding_chunks if grounding_metadata else None
+            )
             sources: list[JsonValue] = [
                 chunk.web.uri
-                for chunk in (grounding_metadata.grounding_chunks or [])
+                for chunk in grounding_chunks or []
                 if chunk.web and chunk.web.uri
             ]
-            queries = grounding_metadata.web_search_queries
-            n = len(queries)
-            for i, query in enumerate(queries):
+            n = len(search_calls)
+            for i, (call_id, query) in enumerate(search_calls):
                 provider_tool_events.append(
                     ProviderToolEvent.web_search(
                         provider="google",
@@ -590,6 +631,7 @@ class GoogleModel(LLM):
                         query=query,
                         sources=sources,
                         sequence=i - n,  # negative: sorts before function tool calls
+                        id=call_id,
                     )
                 )
 
@@ -619,6 +661,21 @@ class GoogleModel(LLM):
                 reasoning_tokens=metadata.thoughts_token_count or 0,
                 cache_read_tokens=cache_read_tokens,
             )
+        if search_calls:
+            queries = [q for _, q in search_calls]
+            unique_queries = len(set(queries))
+            # usage_metadata has no search counter. Gemini 3+ bills each unique
+            # query; Gemini 2.x bills the grounded prompt once.
+            result_metadata.web_search_requests = (
+                unique_queries
+                if _streams_server_side_tool_calls(self.model_name)
+                else 1
+            )
+            # Counts only: query text is prompt-derived and the usage ledger does not redact extra.
+            call_ids = {cid for cid, _ in search_calls if cid}
+            # Grounding-metadata fallback has no call ids; count its queries instead.
+            result_metadata.extra["google_search_calls"] = len(call_ids) or len(queries)
+            result_metadata.extra["google_unique_queries"] = unique_queries
         return result_builder.build(
             finish_reason=mapped_finish_reason,
             history=[*input, RawResponse(response=contents)],
@@ -698,7 +755,6 @@ class GoogleModel(LLM):
         """
         Future Cost considerations
         Per 1000 prompts:
-        - Google Search
         - Google Maps
         """
         # Implicit caching (automatically enabled on Gemini 2.5 models, no cost saving guarantee)
@@ -719,6 +775,11 @@ class GoogleModel(LLM):
             batch or self.provider_config.service_tier == "flex",
             bill_reasoning=True,
         )
+
+    @override
+    def _web_search_per_1k(self) -> float:
+        """Gemini 3+ bills per query, Gemini 2.x per grounded prompt."""
+        return 14.0 if _streams_server_side_tool_calls(self.model_name) else 35.0
 
     @deprecated("Use query(output_schema=...) instead")
     @override

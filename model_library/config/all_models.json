@@ -1,4 +1,519 @@
 {
+    "openrouter/tencent/hy4": {
+        "company": "Tencent",
+        "country": "China",
+        "label": "Hy4 (OpenRouter)",
+        "release_date": "2026-11-03",
+        "open_source": true,
+        "documentation_url": "https://hy.tencent.ai/research/hy4",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "openrouter_provider_only": [
+                "tencent"
+            ]
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.9,
+            "top_p": 1.0
+        },
+        "provider_endpoint": "tencent/hy4",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.417,
+            "output": 1.2505,
+            "cache": {
+                "read": 0.021,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "openrouter",
+        "full_key": "openrouter/tencent/hy4",
+        "slug": "openrouter_tencent_hy4"
+    },
+    "openai/gpt-6.1-terra-xhigh": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Terra (Extra High)",
+        "release_date": "2026-10-26",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "supports_prompt_cache_options": true,
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-6.1-terra",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 5.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 2.0,
+                "output": 7.5,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-terra-xhigh",
+        "slug": "openai_gpt-6.1-terra-xhigh"
+    },
+    "openai/gpt-6.1-terra-medium": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Terra (Medium)",
+        "release_date": "2026-10-26",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "supports_prompt_cache_options": true,
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "gpt-6.1-terra",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 5.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 2.0,
+                "output": 7.5,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-terra-medium",
+        "slug": "openai_gpt-6.1-terra-medium"
+    },
+    "openai/gpt-6.1-terra-max": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Terra (Max)",
+        "release_date": "2026-10-26",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "supports_prompt_cache_options": true,
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6.1-terra",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 5.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 2.0,
+                "output": 7.5,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-terra-max",
+        "slug": "openai_gpt-6.1-terra-max"
+    },
+    "openai/gpt-6.1-terra-low": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Terra (Low)",
+        "release_date": "2026-10-26",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "supports_prompt_cache_options": true,
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "gpt-6.1-terra",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 5.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 2.0,
+                "output": 7.5,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-terra-low",
+        "slug": "openai_gpt-6.1-terra-low"
+    },
+    "openai/gpt-6.1-terra-high": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Terra (High)",
+        "release_date": "2026-10-26",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "supports_prompt_cache_options": true,
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-6.1-terra",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 5.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 2.0,
+                "output": 7.5,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-terra-high",
+        "slug": "openai_gpt-6.1-terra-high"
+    },
+    "openai/gpt-6.1-terra": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.1 Terra",
+        "release_date": "2026-10-26",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.1-terra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "supports_prompt_cache_options": true,
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-6.1-terra-low": {
+                    "label": "GPT-6.1 Terra (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.1-terra-medium": {
+                    "label": "GPT-6.1 Terra (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.1-terra-high": {
+                    "label": "GPT-6.1 Terra (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.1-terra-xhigh": {
+                    "label": "GPT-6.1 Terra (Extra High)",
+                    "default_parameters": {
+                        "reasoning_effort": "xhigh"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.1-terra-max": {
+                    "label": "GPT-6.1 Terra (Max)",
+                    "default_parameters": {
+                        "reasoning_effort": "max"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6.1-terra",
+        "properties": {
+            "context_window": 1050000,
+            "max_tokens": 128000,
+            "training_cutoff": "2026-06",
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 1.0,
+            "output": 5.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 2.0,
+                "output": 7.5,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.1-terra",
+        "slug": "openai_gpt-6.1-terra"
+    },
     "kimi/kimi-k3.1-pro-max": {
         "company": "Moonshot AI",
         "country": "China",
@@ -999,6 +1514,63 @@
         "full_key": "decision/d1-ultra",
         "slug": "decision_d1-ultra"
     },
+    "baseten/nemotron-3.5-super-vl-120b-a12b": {
+        "company": "NVIDIA",
+        "country": "United States",
+        "label": "Nemotron 3.5 Super VL",
+        "release_date": "2026-10-15",
+        "open_source": true,
+        "documentation_url": "https://www.baseten.co/library/nemotron-35-super-vl/",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "api_base": "https://inference.baseten.co/v1"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 1.0,
+            "top_p": 0.95,
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 262144,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.2,
+            "output": 0.5,
+            "cache": {
+                "read": 0.04,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
+        },
+        "provider_name": "baseten",
+        "full_key": "baseten/nemotron-3.5-super-vl-120b-a12b",
+        "slug": "baseten_nemotron-3.5-super-vl-120b-a12b"
+    },
     "decision/jev-1.14": {
         "company": "TypeSafe",
         "country": "United States",
@@ -1080,10 +1652,10 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 2.0,
-            "output": 10.0,
+            "input": 4.0,
+            "output": 20.0,
             "cache": {
-                "read": 0.1,
+                "read": 0.2,
                 "read_discount": 0.1,
                 "write_markup": 1.0
             },
@@ -1136,10 +1708,10 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 2.0,
-            "output": 10.0,
+            "input": 4.0,
+            "output": 20.0,
             "cache": {
-                "read": 0.1,
+                "read": 0.2,
                 "read_discount": 0.1,
                 "write_markup": 1.0
             },
@@ -1192,10 +1764,10 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 2.0,
-            "output": 10.0,
+            "input": 4.0,
+            "output": 20.0,
             "cache": {
-                "read": 0.1,
+                "read": 0.2,
                 "read_discount": 0.1,
                 "write_markup": 1.0
             },
@@ -1273,10 +1845,10 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 2.0,
-            "output": 10.0,
+            "input": 4.0,
+            "output": 20.0,
             "cache": {
-                "read": 0.1,
+                "read": 0.2,
                 "read_discount": 0.1,
                 "write_markup": 1.0
             },
@@ -1581,7 +2153,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "xhigh"
         },
         "provider_endpoint": "claude-haiku-5-5",
@@ -1658,7 +2229,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "medium"
         },
         "provider_endpoint": "claude-haiku-5-5",
@@ -1735,7 +2305,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-haiku-5-5",
@@ -1812,7 +2381,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "low"
         },
         "provider_endpoint": "claude-haiku-5-5",
@@ -1889,7 +2457,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-haiku-5-5",
@@ -2007,7 +2574,6 @@
         ],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-haiku-5-5",
@@ -2837,7 +3403,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -2863,7 +3429,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "xhigh"
         },
         "provider_endpoint": "claude-sonnet-5-5",
@@ -2906,7 +3471,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -2930,7 +3495,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-sonnet-5-5",
@@ -2973,7 +3537,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -2999,7 +3563,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "medium"
         },
         "provider_endpoint": "claude-sonnet-5-5",
@@ -3042,7 +3605,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -3068,7 +3631,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-sonnet-5-5",
@@ -3111,7 +3673,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -3137,7 +3699,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "low"
         },
         "provider_endpoint": "claude-sonnet-5-5",
@@ -3180,7 +3741,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -3206,7 +3767,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-sonnet-5-5",
@@ -3249,7 +3809,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -3324,7 +3884,6 @@
         ],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-sonnet-5-5",
@@ -4604,7 +5163,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4630,7 +5189,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "xhigh"
         },
         "provider_endpoint": "claude-opus-5-5",
@@ -4673,7 +5231,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4696,7 +5254,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-5-5",
@@ -4739,7 +5296,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4765,7 +5322,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "medium"
         },
         "provider_endpoint": "claude-opus-5-5",
@@ -4808,7 +5364,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4834,7 +5390,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-5-5",
@@ -4877,7 +5432,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4903,7 +5458,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "low"
         },
         "provider_endpoint": "claude-opus-5-5",
@@ -4946,7 +5500,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -4972,7 +5526,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-opus-5-5",
@@ -5015,7 +5568,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -5090,7 +5643,6 @@
         ],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-5-5",
@@ -5628,255 +6180,6 @@
         "full_key": "decision/jev-1.13.0",
         "slug": "decision_jev-1.13.0"
     },
-    "google/gemini-3.8-flash-cyber-medium": {
-        "company": "Google",
-        "country": "United States",
-        "label": "Gemini 3.8 Flash Cyber (Medium)",
-        "release_date": "2026-09-16",
-        "open_source": false,
-        "documentation_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber",
-        "supports": {
-            "images": true,
-            "audio": true,
-            "transcription": false,
-            "videos": true,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": true,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "use_vertex": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "medium"
-        },
-        "provider_endpoint": "gemini-3.8-flash-cyber",
-        "properties": {
-            "context_window": 1048576,
-            "max_tokens": 65536,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.5,
-            "output": 7.5,
-            "cache": {
-                "read": 0.15,
-                "read_discount": 0.1,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 1.0
-            }
-        },
-        "provider_name": "google",
-        "full_key": "google/gemini-3.8-flash-cyber-medium",
-        "slug": "google_gemini-3.8-flash-cyber-medium"
-    },
-    "google/gemini-3.8-flash-cyber-low": {
-        "company": "Google",
-        "country": "United States",
-        "label": "Gemini 3.8 Flash Cyber (Low)",
-        "release_date": "2026-09-16",
-        "open_source": false,
-        "documentation_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber",
-        "supports": {
-            "images": true,
-            "audio": true,
-            "transcription": false,
-            "videos": true,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": true,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "use_vertex": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "low"
-        },
-        "provider_endpoint": "gemini-3.8-flash-cyber",
-        "properties": {
-            "context_window": 1048576,
-            "max_tokens": 65536,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.5,
-            "output": 7.5,
-            "cache": {
-                "read": 0.15,
-                "read_discount": 0.1,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 1.0
-            }
-        },
-        "provider_name": "google",
-        "full_key": "google/gemini-3.8-flash-cyber-low",
-        "slug": "google_gemini-3.8-flash-cyber-low"
-    },
-    "google/gemini-3.8-flash-cyber-high": {
-        "company": "Google",
-        "country": "United States",
-        "label": "Gemini 3.8 Flash Cyber (High)",
-        "release_date": "2026-09-16",
-        "open_source": false,
-        "documentation_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber",
-        "supports": {
-            "images": true,
-            "audio": true,
-            "transcription": false,
-            "videos": true,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": true,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "use_vertex": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gemini-3.8-flash-cyber",
-        "properties": {
-            "context_window": 1048576,
-            "max_tokens": 65536,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.5,
-            "output": 7.5,
-            "cache": {
-                "read": 0.15,
-                "read_discount": 0.1,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 1.0
-            }
-        },
-        "provider_name": "google",
-        "full_key": "google/gemini-3.8-flash-cyber-high",
-        "slug": "google_gemini-3.8-flash-cyber-high"
-    },
-    "google/gemini-3.8-flash-cyber": {
-        "company": "Google",
-        "country": "United States",
-        "label": "Gemini 3.8 Flash Cyber",
-        "release_date": "2026-09-16",
-        "open_source": false,
-        "documentation_url": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber",
-        "supports": {
-            "images": true,
-            "audio": true,
-            "transcription": false,
-            "videos": true,
-            "files": true,
-            "temperature": false,
-            "tools": true,
-            "output_schema": true
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": true,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {
-            "use_vertex": true
-        },
-        "alternative_keys": [
-            {
-                "google/gemini-3.8-flash-cyber-low": {
-                    "label": "Gemini 3.8 Flash Cyber (Low)",
-                    "default_parameters": {
-                        "reasoning_effort": "low"
-                    }
-                }
-            },
-            {
-                "google/gemini-3.8-flash-cyber-medium": {
-                    "label": "Gemini 3.8 Flash Cyber (Medium)",
-                    "default_parameters": {
-                        "reasoning_effort": "medium"
-                    }
-                }
-            },
-            {
-                "google/gemini-3.8-flash-cyber-high": {
-                    "label": "Gemini 3.8 Flash Cyber (High)",
-                    "default_parameters": {
-                        "reasoning_effort": "high"
-                    }
-                }
-            }
-        ],
-        "default_parameters": {
-            "reasoning_effort": "high"
-        },
-        "provider_endpoint": "gemini-3.8-flash-cyber",
-        "properties": {
-            "context_window": 1048576,
-            "max_tokens": 65536,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.5,
-            "output": 7.5,
-            "cache": {
-                "read": 0.15,
-                "read_discount": 0.1,
-                "write_markup": 1.0
-            },
-            "batch": {
-                "input_discount": 0.5,
-                "output_discount": 0.5,
-                "cache_discount": 1.0
-            }
-        },
-        "provider_name": "google",
-        "full_key": "google/gemini-3.8-flash-cyber",
-        "slug": "google_gemini-3.8-flash-cyber"
-    },
     "together/deepseek-ai/DeepSeek-V4.1-Flash": {
         "company": "DeepSeek",
         "country": "China",
@@ -5971,10 +6274,10 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 0.22,
-            "output": 0.66,
+            "input": 0.3,
+            "output": 1.2,
             "cache": {
-                "read": 0.007,
+                "read": 0.006,
                 "read_discount": 0.5,
                 "write_markup": 1.0
             },
@@ -7581,7 +7884,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -7598,7 +7901,8 @@
             "fallback_models": [
                 "claude-opus-5",
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -7607,7 +7911,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "xhigh"
         },
         "provider_endpoint": "claude-fable-5-1",
@@ -7650,7 +7953,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -7664,7 +7967,8 @@
         "provider_properties": {
             "supports_compute_effort": true,
             "supports_auto_thinking": true,
-            "fallback_models": []
+            "fallback_models": [],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -7673,7 +7977,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-fable-5-1",
@@ -7716,7 +8019,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -7733,7 +8036,8 @@
             "fallback_models": [
                 "claude-opus-5",
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -7742,7 +8046,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "medium"
         },
         "provider_endpoint": "claude-fable-5-1",
@@ -7785,7 +8088,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -7802,7 +8105,8 @@
             "fallback_models": [
                 "claude-opus-5",
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -7811,7 +8115,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-fable-5-1",
@@ -7854,7 +8157,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -7871,7 +8174,8 @@
             "fallback_models": [
                 "claude-opus-5",
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -7880,7 +8184,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "low"
         },
         "provider_endpoint": "claude-fable-5-1",
@@ -7923,7 +8226,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -7940,7 +8243,8 @@
             "fallback_models": [
                 "claude-opus-5",
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -7949,7 +8253,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-fable-5-1",
@@ -7992,7 +8295,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -8009,7 +8312,8 @@
             "fallback_models": [
                 "claude-opus-5",
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -8067,7 +8371,6 @@
         ],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-fable-5-1",
@@ -8198,10 +8501,10 @@
             "reasoning_model": true
         },
         "costs_per_million_token": {
-            "input": 0.075,
-            "output": 0.25,
+            "input": 0.15,
+            "output": 0.5,
             "cache": {
-                "read": 0.015,
+                "read": 0.03,
                 "read_discount": 1.0,
                 "write_markup": 1.0
             }
@@ -10310,7 +10613,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -10326,7 +10629,8 @@
             "supports_auto_thinking": true,
             "fallback_models": [
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -10335,7 +10639,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "xhigh"
         },
         "provider_endpoint": "claude-opus-5",
@@ -10378,7 +10681,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -10392,7 +10695,8 @@
         "provider_properties": {
             "supports_compute_effort": true,
             "supports_auto_thinking": true,
-            "fallback_models": []
+            "fallback_models": [],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -10401,7 +10705,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-5",
@@ -10444,7 +10747,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -10460,7 +10763,8 @@
             "supports_auto_thinking": true,
             "fallback_models": [
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -10469,7 +10773,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "medium"
         },
         "provider_endpoint": "claude-opus-5",
@@ -10512,7 +10815,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -10528,7 +10831,8 @@
             "supports_auto_thinking": true,
             "fallback_models": [
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -10537,7 +10841,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-5",
@@ -10580,7 +10883,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -10596,7 +10899,8 @@
             "supports_auto_thinking": true,
             "fallback_models": [
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -10605,7 +10909,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "low"
         },
         "provider_endpoint": "claude-opus-5",
@@ -10648,7 +10951,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -10664,7 +10967,8 @@
             "supports_auto_thinking": true,
             "fallback_models": [
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -10673,7 +10977,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-opus-5",
@@ -10716,7 +11019,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -10732,7 +11035,8 @@
             "supports_auto_thinking": true,
             "fallback_models": [
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -10790,7 +11094,6 @@
         ],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-5",
@@ -10935,59 +11238,6 @@
         "provider_name": "google",
         "full_key": "google/gemini-3.5-flash-lite",
         "slug": "google_gemini-3.5-flash-lite"
-    },
-    "vercel/poolside/laguna-s-2.1": {
-        "company": "Poolside",
-        "country": "United States",
-        "label": "Laguna S 2.1",
-        "release_date": "2026-07-20",
-        "open_source": true,
-        "documentation_url": "https://vercel.com/ai-gateway/models/laguna-s-2.1",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": false,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
-        "provider_endpoint": "poolside/laguna-s-2.1",
-        "properties": {
-            "context_window": 1000000,
-            "max_tokens": 131072,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 0.1,
-            "output": 0.2,
-            "cache": {
-                "read": 0.01,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "provider_name": "vercel",
-        "full_key": "vercel/poolside/laguna-s-2.1",
-        "slug": "vercel_poolside_laguna-s-2.1"
     },
     "baseten/laguna-s-2.1-int4": {
         "company": "Poolside",
@@ -12350,7 +12600,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -12363,7 +12613,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -12372,7 +12623,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "xhigh"
         },
         "provider_endpoint": "claude-sonnet-5",
@@ -12415,7 +12665,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -12428,7 +12678,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -12437,7 +12688,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "medium"
         },
         "provider_endpoint": "claude-sonnet-5",
@@ -12480,7 +12730,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -12493,7 +12743,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -12502,7 +12753,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "low"
         },
         "provider_endpoint": "claude-sonnet-5",
@@ -12545,7 +12795,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -12558,7 +12808,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -12567,7 +12818,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-sonnet-5",
@@ -12610,7 +12860,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -12623,7 +12873,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -12665,7 +12916,6 @@
         ],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-sonnet-5",
@@ -12973,7 +13223,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -12987,7 +13237,8 @@
         "provider_properties": {
             "supports_compute_effort": true,
             "supports_auto_thinking": true,
-            "fallback_models": []
+            "fallback_models": [],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": false,
@@ -12996,7 +13247,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-fable-5",
@@ -13039,7 +13289,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -13055,7 +13305,8 @@
             "supports_auto_thinking": true,
             "fallback_models": [
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": false,
@@ -13064,7 +13315,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-fable-5",
@@ -13107,7 +13357,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -13123,7 +13373,8 @@
             "supports_auto_thinking": true,
             "fallback_models": [
                 "claude-opus-4-8"
-            ]
+            ],
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": false,
@@ -13149,7 +13400,6 @@
         ],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-fable-5",
@@ -13436,7 +13686,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -13449,7 +13699,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -13458,7 +13709,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "medium"
         },
         "provider_endpoint": "claude-opus-4-8",
@@ -13501,7 +13751,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -13514,7 +13764,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -13523,7 +13774,6 @@
         "alternative_keys": [],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-opus-4-8",
@@ -13566,7 +13816,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -13579,7 +13829,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -13605,7 +13856,6 @@
         ],
         "default_parameters": {
             "max_tokens": 128000,
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-4-8",
@@ -15126,7 +15376,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -15139,7 +15389,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -15147,7 +15398,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-opus-4-7",
@@ -15190,7 +15440,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -15203,7 +15453,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -15220,7 +15471,6 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-4-7",
@@ -16515,7 +16765,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -16528,7 +16778,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -16537,7 +16788,6 @@
         "alternative_keys": [
         ],
         "default_parameters": {
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-sonnet-4-6",
@@ -16894,7 +17144,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -16907,7 +17157,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -16915,7 +17166,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-4-6",
@@ -16958,7 +17208,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -16971,7 +17221,8 @@
         },
         "provider_properties": {
             "supports_compute_effort": true,
-            "supports_auto_thinking": true
+            "supports_auto_thinking": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -16987,7 +17238,6 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0,
             "compute_effort": "max"
         },
         "provider_endpoint": "claude-opus-4-6",
@@ -17470,7 +17720,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -17482,7 +17732,8 @@
             "ignored_for_cost": false
         },
         "provider_properties": {
-            "supports_compute_effort": true
+            "supports_compute_effort": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -17490,7 +17741,6 @@
         },
         "alternative_keys": [],
         "default_parameters": {
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-opus-4-5-20251101",
@@ -17533,7 +17783,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -17545,7 +17795,8 @@
             "ignored_for_cost": false
         },
         "provider_properties": {
-            "supports_compute_effort": true
+            "supports_compute_effort": true,
+            "computer_tool_type": "computer_20251124"
         },
         "rate_limit": {
             "supports_live_monitoring": true,
@@ -17561,7 +17812,6 @@
             }
         ],
         "default_parameters": {
-            "temperature": 1.0,
             "compute_effort": "high"
         },
         "provider_endpoint": "claude-opus-4-5-20251101",
@@ -17877,7 +18127,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -17888,15 +18138,15 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "computer_tool_type": "computer_20250124"
+        },
         "rate_limit": {
             "supports_live_monitoring": true,
             "cache_read_counts_toward_limit": false
         },
         "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
+        "default_parameters": {},
         "provider_endpoint": "claude-haiku-4-5-20251001",
         "properties": {
             "context_window": 200000,
@@ -17937,7 +18187,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -17948,7 +18198,9 @@
             "available_as_evaluator": false,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "computer_tool_type": "computer_20250124"
+        },
         "rate_limit": {
             "supports_live_monitoring": true,
             "cache_read_counts_toward_limit": false
@@ -17962,9 +18214,7 @@
                 }
             }
         ],
-        "default_parameters": {
-            "temperature": 1.0
-        },
+        "default_parameters": {},
         "provider_endpoint": "claude-haiku-4-5-20251001",
         "properties": {
             "context_window": 200000,
@@ -18103,7 +18353,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -18114,15 +18364,15 @@
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "computer_tool_type": "computer_20250124"
+        },
         "rate_limit": {
             "supports_live_monitoring": true,
             "cache_read_counts_toward_limit": false
         },
         "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 1.0
-        },
+        "default_parameters": {},
         "provider_endpoint": "claude-sonnet-4-5-20250929",
         "properties": {
             "context_window": 1000000,
@@ -18175,7 +18425,7 @@
             "transcription": false,
             "videos": false,
             "files": true,
-            "temperature": true,
+            "temperature": false,
             "tools": true,
             "output_schema": true
         },
@@ -18186,7 +18436,9 @@
             "available_as_evaluator": true,
             "ignored_for_cost": false
         },
-        "provider_properties": {},
+        "provider_properties": {
+            "computer_tool_type": "computer_20250124"
+        },
         "rate_limit": {
             "supports_live_monitoring": true,
             "cache_read_counts_toward_limit": false
@@ -18200,9 +18452,7 @@
                 }
             }
         ],
-        "default_parameters": {
-            "temperature": 1.0
-        },
+        "default_parameters": {},
         "provider_endpoint": "claude-sonnet-4-5-20250929",
         "properties": {
             "context_window": 1000000,
@@ -21003,57 +21253,6 @@
         "provider_name": "amazon",
         "full_key": "amazon/amazon.nova-micro-v1:0",
         "slug": "amazon_amazon.nova-micro-v1:0"
-    },
-    "amazon/amazon.nova-lite-v1:0": {
-        "company": "Amazon",
-        "country": "United States",
-        "label": "Nova Lite",
-        "release_date": "2024-12-03",
-        "open_source": false,
-        "documentation_url": "https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": true,
-            "files": false,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": false,
-            "cache_read_counts_toward_limit": false
-        },
-        "alternative_keys": [],
-        "default_parameters": {},
-        "provider_endpoint": "amazon.nova-lite-v1:0",
-        "properties": {
-            "context_window": 300000,
-            "max_tokens": 0,
-            "training_cutoff": null,
-            "reasoning_model": false
-        },
-        "costs_per_million_token": {
-            "input": 0.06,
-            "output": 0.24,
-            "cache": {
-                "read": 0.015,
-                "read_discount": 1.0,
-                "write_markup": 1.0
-            }
-        },
-        "provider_name": "amazon",
-        "full_key": "amazon/amazon.nova-lite-v1:0",
-        "slug": "amazon_amazon.nova-lite-v1:0"
     },
     "openai/gpt-4o-2024-11-20": {
         "company": "OpenAI",

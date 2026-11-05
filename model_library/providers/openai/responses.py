@@ -7,8 +7,16 @@ from collections.abc import AsyncIterator, Hashable, Mapping, Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 from openai import APIConnectionError
-from openai.types.responses import ResponseFunctionToolCall, ResponseOutputRefusal
-from openai.types.responses.response_function_web_search import ActionSearch
+from openai.types.responses import (
+    ResponseComputerToolCall,
+    ResponseFunctionToolCall,
+    ResponseOutputRefusal,
+)
+from openai.types.responses.response_function_web_search import (
+    ActionFind,
+    ActionOpenPage,
+    ActionSearch,
+)
 from openai.types.responses.response import Response
 from openai.types.responses.response_stream_event import ResponseStreamEvent
 from openai.types.responses.tool_param import ToolParam as ResponsesToolParam
@@ -16,6 +24,8 @@ from pydantic import BaseModel, JsonValue
 
 from model_library.base import (
     Citation,
+    ComputerCall,
+    ComputerCallOutput,
     FileInput,
     FileWithBase64,
     FileWithId,
@@ -42,6 +52,7 @@ from model_library.exceptions import (
     ContentFilterError,
     ImmediateRetryException,
     ModelNoOutputError,
+    NoMatchingToolCallError,
     UnexpectedSystemInputError,
     handle_empty_response,
 )
@@ -139,14 +150,14 @@ def map_openai_responses_finish_reason(
 async def get_tool_call_ids(
     model: OpenAIModel, input: Sequence[InputItem]
 ) -> list[str]:
-    calls = [
-        call
+    return [
+        call.call_id if isinstance(call, ResponseComputerToolCall) else call.id
         for item in input
         if isinstance(item, RawResponse)
         for call in item.response
-        if isinstance(call, ResponseFunctionToolCall)
+        if isinstance(call, (ResponseFunctionToolCall, ResponseComputerToolCall))
+        if call.id
     ]
-    return [call.id for call in calls if call.id]
 
 
 async def parse_input(
@@ -186,6 +197,29 @@ async def parse_input(
                         ),
                     }
                 )
+            case ComputerCallOutput():
+                if item.output_text is not None:
+                    raise BadInputError(
+                        "OpenAI computer use does not support text tool results"
+                    )
+                assert item.screenshot_url is not None
+                if item.call_id not in tool_call_ids:
+                    raise NoMatchingToolCallError()
+                output: dict[str, Any] = {
+                    "type": "computer_call_output",
+                    "call_id": item.call_id,
+                    "output": {
+                        "type": "computer_screenshot",
+                        "image_url": item.screenshot_url,
+                    },
+                }
+                if item.screenshot_detail is not None:
+                    output["output"]["detail"] = item.screenshot_detail
+                if item.acknowledged_safety_checks:
+                    output["acknowledged_safety_checks"] = (
+                        item.acknowledged_safety_checks
+                    )
+                new_input.append(output)
             case RawResponse():
                 new_input.extend(item.response)
             case RawInput():
@@ -196,7 +230,10 @@ async def parse_input(
 
 
 async def parse_image(model: OpenAIModel, image: FileInput) -> dict[str, Any]:
-    base_dict: dict[str, Any] = {"type": "input_image", "detail": "auto"}
+    base_dict: dict[str, Any] = {
+        "type": "input_image",
+        "detail": image.detail or "auto",
+    }
     match image:
         case FileWithBase64():
             base_dict["image_url"] = f"data:{image.mime};base64,{image.base64}"
@@ -238,7 +275,13 @@ async def parse_tools(
             parsed_tools.append(model.search_tool)
             continue
         if not isinstance(body, ToolBody):
-            parsed_tools.append(body)
+            if (
+                isinstance(body, dict)
+                and cast(dict[str, Any], body).get("type") == "computer"
+            ):
+                parsed_tools.append({"type": "computer"})
+                continue
+            parsed_tools.append(cast(Any, body))
             continue
         parsed_tools.append(
             cast(
@@ -249,10 +292,46 @@ async def parse_tools(
     return parsed_tools
 
 
-def search_tool(model: OpenAIModel) -> dict[str, str]:
-    if model.provider in ("grok", "xai"):
-        return {"type": "web_search"}
-    return {"type": "web_search_preview"}
+def _record_web_search_usage(
+    response: Response,
+    provider_tool_events: list[ProviderToolEvent],
+    metadata: QueryResultMetadata,
+) -> None:
+    """Set billable native web searches from the provider's own counter and keep the
+    raw counters (not typed in the SDK yet) in `extra` so fees can be recomputed.
+
+    OpenAI: `tool_usage.web_search.num_requests` (search actions only; open_page and
+    find_in_page are free). xAI: `server_side_tool_usage_details.web_search_calls`,
+    which also bills page reads. Without a counter, fall back to the search events.
+    """
+    usage_extra = cast(
+        dict[str, Any],
+        (getattr(response.usage, "model_extra", None) or {}) if response.usage else {},
+    )
+    tool_usage = cast(dict[str, Any], getattr(response, "model_extra", None) or {}).get(
+        "tool_usage"
+    )
+    details = usage_extra.get("server_side_tool_usage_details")
+    if tool_usage:
+        metadata.extra["openai_tool_usage"] = tool_usage
+    if details:
+        metadata.extra["xai_server_side_tool_usage"] = details
+    if (ticks := usage_extra.get("cost_in_usd_ticks")) is not None:
+        metadata.extra["xai_cost_usd"] = ticks / 1e10
+    if tool_usage:
+        searches = tool_usage.get("web_search", {}).get("num_requests")
+    elif details:
+        searches = details.get("web_search_calls")
+    else:
+        searches = sum(
+            1
+            for e in provider_tool_events
+            if e.type == "web_search_call"
+            and (
+                e.name == "web_search" or e.provider in ("xai", "grok")
+            )  # xAI bills page reads
+        )
+    metadata.web_search_requests = searches or None
 
 
 async def _check_deep_research_args(
@@ -298,6 +377,24 @@ async def build_body(
         await _check_deep_research_args(model, tools, **kwargs)
 
     parsed_tools: list[Any] = await model.parse_tools(tools)
+    present_types = {
+        "web_search" if tool_type == "web_search_preview" else tool_type
+        for tool in parsed_tools
+        if isinstance(tool, dict)
+        and (tool_type := cast(dict[str, Any], tool).get("type"))
+    }
+    for hosted_tool in model.hosted_tools or []:
+        if hosted_tool["type"] not in present_types:
+            parsed_tools.append(dict(hosted_tool))
+    has_web_search = any(
+        isinstance(tool, dict)
+        and cast(dict[str, Any], tool).get("type")
+        in {"web_search", "web_search_preview"}
+        for tool in parsed_tools
+    )
+    if model.force_web_search and not has_web_search:
+        parsed_tools.append(model.search_tool)
+        has_web_search = True
     if model.tool_call_mode != "default":
         if model.tool_call_mode == "auto":
             allowed_callers = ["code_mode", "direct"]
@@ -343,10 +440,16 @@ async def build_body(
         if model.reasoning_context is not None:
             body["reasoning"]["context"] = model.reasoning_context
 
+    if model.provider == "openai" and has_web_search:
+        body["include"] = [*body.get("include", []), "web_search_call.action.sources"]
+
     if model.verbosity is not None:
         body["text"] = {"format": {"type": "text"}, "verbosity": model.verbosity}
 
     apply_common_body(model, body, input, tools, sampling)
+
+    if model.context_management:
+        body["context_management"] = [dict(entry) for entry in model.context_management]
 
     if model.access_programs:
         # Write into kwargs["extra_body"] so the final body.update(kwargs) keeps
@@ -496,6 +599,7 @@ async def query(
     )
 
     tool_calls: list[ToolCall] = []
+    computer_calls: list[ComputerCall] = []
     provider_tool_events: list[ProviderToolEvent] = []
     citations: list[Citation] = []
     parsed_reasoning = None
@@ -511,6 +615,27 @@ async def query(
         if output.type == "reasoning":
             parsed_reasoning = " ".join(s.text for s in output.summary) or None
             continue
+        if output.type == "computer_call":
+            assert isinstance(output, ResponseComputerToolCall)
+            output = response.output[i] = output.model_copy(
+                update={"actions": output.actions or []}
+            )
+            output.__pydantic_fields_set__.discard("action")
+            computer_calls.append(
+                ComputerCall(
+                    call_id=output.call_id,
+                    provider="openai",
+                    actions=[
+                        action.model_dump(mode="json")
+                        for action in output.actions or []
+                    ],
+                    pending_safety_checks=[
+                        check.model_dump(mode="json")
+                        for check in (output.pending_safety_checks or [])
+                    ],
+                )
+            )
+            continue
         if output.type == "code_mode_output":  # pyright: ignore[reportUnnecessaryComparison]
             code_mode_result = getattr(output, "result", None)
             if code_mode_result is not None:
@@ -519,6 +644,17 @@ async def query(
                     if isinstance(code_mode_result, str)
                     else json.dumps(code_mode_result)
                 )
+            continue
+        if output.type == "compaction":
+            provider_tool_events.append(
+                ProviderToolEvent(
+                    id=output.id,
+                    provider=model.provider,
+                    type="compaction",
+                    name="compaction",
+                    sequence=i,
+                )
+            )
             continue
         if output.type == "web_search_call":
             if isinstance(output.action, ActionSearch):
@@ -539,6 +675,19 @@ async def query(
                         status=output.status,
                     )
                 )
+            else:
+                action = cast(ActionOpenPage | ActionFind | None, output.action)
+                provider_tool_events.append(
+                    ProviderToolEvent(
+                        id=output.id,
+                        provider=model.provider,
+                        type="web_search_call",
+                        name=action.type if action else "web_search_call",
+                        status=output.status,
+                        input=action.url if action else None,
+                        sequence=i,
+                    )
+                )
             continue
         if output.type != "function_call":
             continue
@@ -557,7 +706,9 @@ async def query(
         )
 
     mapped_finish_reason = map_openai_responses_finish_reason(
-        response.status, finish_reason, has_tool_calls=bool(tool_calls)
+        response.status,
+        finish_reason,
+        has_tool_calls=bool(tool_calls or computer_calls),
     )
 
     parsed_response_text = response.output_text or None
@@ -575,6 +726,7 @@ async def query(
         not result_builder.has_output_text
         and not result_builder.has_reasoning
         and not tool_calls
+        and not computer_calls
         and not provider_tool_events
     )
     if no_useful_content:
@@ -608,6 +760,7 @@ async def query(
             cache_read_tokens=cache_read_tokens,
             cache_write_tokens=cache_write_tokens,
         )
+    _record_web_search_usage(response, provider_tool_events, result_metadata)
     if model.router_mode:
         routing: dict[str, Any] = {}
         capture_routing(routing, response)
@@ -621,6 +774,7 @@ async def query(
     result = result_builder.build(
         finish_reason=mapped_finish_reason,
         tool_calls=tool_calls,
+        computer_calls=computer_calls,
         provider_tool_events=provider_tool_events,
         history=[*input, RawResponse(response=response.output)],
         extras=QueryResultExtras(

@@ -9,7 +9,9 @@ from anthropic import (
     RateLimitError,
     transform_schema,
 )
-from anthropic.types.beta import BetaContentBlock
+from anthropic.lib.credentials import WorkloadIdentityCredentials
+from anthropic.types.beta import BetaContentBlock, BetaMessage
+from anthropic.types.beta.beta_server_tool_usage import BetaServerToolUsage
 from anthropic.types.beta.beta_fallback_block import BetaFallbackBlock
 from anthropic.types.beta.beta_fallback_message_iteration_usage import (
     BetaFallbackMessageIterationUsage,
@@ -30,6 +32,8 @@ from model_library import model_library_settings
 from model_library.agent.tool import is_native_web_search
 from model_library.base import (
     LLM,
+    ComputerCall,
+    ComputerCallOutput,
     FileBase,
     FileInput,
     FileWithBase64,
@@ -82,6 +86,7 @@ from model_library.providers.openai import OpenAIModel
 from model_library.register_models import register_provider
 from model_library.utils import (
     create_anthropic_client_with_defaults,
+    default_aiohttp_httpx2_client,
 )
 
 register_retryable_exceptions(RateLimitError, InternalServerError)
@@ -91,12 +96,26 @@ ANTHROPIC_FILES_BETA = "files-api-2025-04-14"
 ANTHROPIC_INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14"
 ANTHROPIC_SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-06-01"
 ANTHROPIC_TASK_BUDGET_BETA = "task-budgets-2026-03-13"
+COMPUTER_BETAS = {
+    "computer_20250124": "computer-use-2025-01-24",
+    "computer_20251124": "computer-use-2025-11-24",
+}
 BETWEEN_TOOLS_THINKING = {"type": "between_tools"}
 BETWEEN_TOOLS_UNSUPPORTED_EFFORTS = frozenset({"xhigh", "max"})
 # Anthropic rejects an assistant message whose final block is thinking, so a turn that ran out of
 # tokens mid-thought is replayed with this block appended.
 TRUNCATED_THINKING_MARKER = "[response cut off at the output token limit]"
 EMPTY_TEXT_MARKER = "[empty response]"
+
+
+def _computer_betas(body: dict[str, Any]) -> list[str]:
+    betas: list[str] = []
+    for tool in cast(list[dict[str, Any]], body.get("tools", [])):
+        tool_type = tool.get("type")
+        beta = COMPUTER_BETAS.get(tool_type) if isinstance(tool_type, str) else None
+        if beta is not None and beta not in betas:
+            betas.append(beta)
+    return betas
 
 
 def _strip_fallback_blocks(
@@ -143,6 +162,21 @@ def map_anthropic_finish_reason(
     return FinishReasonInfo(reason=reason, raw=stop_reason)
 
 
+def parse_computer_screenshot(url: str) -> dict[str, Any]:
+    if url[:5].lower() != "data:":
+        return {
+            "type": "image",
+            "source": {"type": "url", "url": url},
+        }
+
+    header, data = url.split(",", 1)
+    media_type = header[5:].split(";", 1)[0]
+    return {
+        "type": "image",
+        "source": {"type": "base64", "media_type": media_type, "data": data},
+    }
+
+
 class AnthropicConfig(ProviderConfig):
     supports_compute_effort: bool = False
     supports_auto_thinking: bool = False
@@ -150,6 +184,8 @@ class AnthropicConfig(ProviderConfig):
     task_budget_tokens: int | None = None
     returns_thinking_truncated_turns: bool = False
     fallback_models: list[str] = Field(default_factory=list)
+    computer_tool_type: Literal["computer_20250124", "computer_20251124"] | None = None
+    workload_identity: bool = False
 
     @model_validator(mode="after")
     def validate_fallback_models(self) -> "AnthropicConfig":
@@ -160,11 +196,84 @@ class AnthropicConfig(ProviderConfig):
         return self
 
 
+# `workload_identity` models run in a workspace that bans static API keys. They
+# authenticate by workload identity federation: the Gateway's AWS role gets a JWT from
+# STS and the SDK exchanges it for a short-lived Anthropic access token.
+_CYBER_ID_SETTINGS = (
+    "ANTHROPIC_CYBER_FEDERATION_RULE_ID",
+    "ANTHROPIC_CYBER_ORGANIZATION_ID",
+    "ANTHROPIC_CYBER_SERVICE_ACCOUNT_ID",
+    "ANTHROPIC_CYBER_WORKSPACE_ID",
+)
+
+
+def uses_workload_identity(registry_key: str) -> bool:
+    """Whether the registry entry authenticates by federation instead of a key."""
+    from model_library.registry_utils import get_registry_config
+
+    entry = get_registry_config(registry_key)
+    return (
+        entry is not None
+        and getattr(entry.provider_properties, "workload_identity", None) is True
+    )
+
+
+def _cyber_client_key() -> str:
+    """Stands in for the key in the client registry slot: CVP models share one federated
+    client per set of federation IDs, and never a client built from a static key."""
+    ids = (getattr(model_library_settings, name) for name in _CYBER_ID_SETTINGS)
+    return "workload-identity:" + ":".join(ids)
+
+
+def cyber_credentials() -> WorkloadIdentityCredentials:
+    import boto3
+
+    sts = cast(Any, boto3.client("sts"))  # pyright: ignore[reportUnknownMemberType]
+
+    def identity_token() -> str:
+        response = sts.get_web_identity_token(
+            Audience=["https://api.anthropic.com"],
+            SigningAlgorithm="RS256",
+            DurationSeconds=900,
+        )
+        return cast(str, response["WebIdentityToken"])
+
+    return WorkloadIdentityCredentials(
+        identity_token_provider=identity_token,
+        federation_rule_id=model_library_settings.ANTHROPIC_CYBER_FEDERATION_RULE_ID,
+        organization_id=model_library_settings.ANTHROPIC_CYBER_ORGANIZATION_ID,
+        service_account_id=model_library_settings.ANTHROPIC_CYBER_SERVICE_ACCOUNT_ID,
+        workspace_id=model_library_settings.ANTHROPIC_CYBER_WORKSPACE_ID,
+    )
+
+
 @register_provider("anthropic")
 class AnthropicModel(LLM):
     api_key_setting = "ANTHROPIC_API_KEY"
 
     provider_config = AnthropicConfig()
+
+    @override
+    def _client_initialization(
+        self, config: LLMConfig
+    ) -> tuple[str, str | None] | None:
+        if not self._is_cyber():
+            return super()._client_initialization(config)
+        # The OpenAI-compatible path takes only an API key.
+        if not config.native:
+            raise ValueError(f"{config.registry_key} requires the native client")
+        return _cyber_client_key(), config.custom_endpoint
+
+    def _is_cyber(self) -> bool:
+        return self.provider_config.workload_identity
+
+    @override
+    def _client_registry_namespace(self) -> str:
+        # Federated clients never share a slot with static-key clients, whatever key
+        # material a request supplies.
+        if self._is_cyber():
+            return f"{self.provider}:workload-identity"
+        return super()._client_registry_namespace()
 
     def _get_default_api_key(self) -> str:
         return self._api_key_from(model_library_settings)
@@ -174,6 +283,16 @@ class AnthropicModel(LLM):
         self, api_key: str | None = None, base_url: str | None = None
     ) -> AsyncAnthropic:
         if not self.has_client():
+            if self._is_cyber():
+                self.assign_client(
+                    AsyncAnthropic(
+                        base_url=base_url,
+                        credentials=cyber_credentials(),
+                        http_client=default_aiohttp_httpx2_client(),
+                        max_retries=3,
+                    )
+                )
+                return super().get_client()
             assert api_key
             headers: dict[str, str] = {}
             client = create_anthropic_client_with_defaults(
@@ -223,18 +342,13 @@ class AnthropicModel(LLM):
         return fallback_models
 
     async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
-        raw_responses = [x for x in input if isinstance(x, RawResponse)]
-        tool_call_ids: list[str] = []
-
-        calls = [
-            y
-            for x in raw_responses
-            if isinstance(x.response, ParsedBetaMessage)
-            for y in x.response.content  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-            if isinstance(y, BetaToolUseBlock)
+        return [
+            block.id
+            for item in input
+            if isinstance(item, RawResponse) and isinstance(item.response, BetaMessage)
+            for block in item.response.content
+            if isinstance(block, BetaToolUseBlock)
         ]
-        tool_call_ids.extend([x.id for x in calls])
-        return tool_call_ids
 
     def _last_container_id(self, input: Sequence[InputItem]) -> str | None:
         """Most recent code-execution container id in history, needed to resume a paused turn."""
@@ -295,6 +409,33 @@ class AnthropicModel(LLM):
                         "type": "tool_result",
                         "tool_use_id": item.tool_call.id,
                         "content": [{"type": "text", "text": item.result}],
+                    }
+                )
+                continue
+
+            if isinstance(item, ComputerCallOutput):
+                if item.call_id not in tool_call_ids:
+                    raise NoMatchingToolCallError()
+                if item.acknowledged_safety_checks:
+                    raise BadInputError(
+                        "Anthropic computer use does not support safety acknowledgements"
+                    )
+                if content_user and content_user[-1]["type"] != "tool_result":
+                    flush_content_user()
+                tool_result_content: list[dict[str, Any]] = []
+                if item.output_text is not None:
+                    tool_result_content.append(
+                        {"type": "text", "text": item.output_text}
+                    )
+                if item.screenshot_url is not None:
+                    tool_result_content.append(
+                        parse_computer_screenshot(item.screenshot_url)
+                    )
+                content_user.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": item.call_id,
+                        "content": tool_result_content,
                     }
                 )
                 continue
@@ -448,8 +589,20 @@ class AnthropicModel(LLM):
             if is_native_web_search(body):
                 parsed_tools.append(self.search_tool)
                 continue
+            if isinstance(body, dict):
+                computer_body = cast(dict[str, Any], body)
+                if computer_body.get("type") == "computer":
+                    tool_type = self.provider_config.computer_tool_type
+                    if tool_type is None:
+                        raise BadInputError(
+                            f"Anthropic computer use is not supported for {self.model_name}"
+                        )
+                    parsed_tools.append(
+                        {**computer_body, "type": tool_type, "name": tool.name}
+                    )
+                    continue
             if not isinstance(body, ToolBody):
-                parsed_tools.append(body)
+                parsed_tools.append(cast(dict[str, Any], body))
                 continue
             parsed_tools.append(
                 {
@@ -561,10 +714,13 @@ class AnthropicModel(LLM):
         if output_config:
             body["output_config"] = output_config
 
-        # Extended thinking excludes temperature; MiniMax also accepts top_p.
-        eligible_sampling = ("temperature",) if not self.reasoning else ()
+        # Anthropic API version 2026-10-21 rejects sampling fields. MiniMax accepts
+        # top_p, and temperature without extended thinking.
+        eligible_sampling: tuple[str, ...] = ()
         if self.provider == "minimax":
-            eligible_sampling += ("top_p",)
+            eligible_sampling = (
+                ("top_p",) if self.reasoning else ("temperature", "top_p")
+            )
         body.update(self._sampling_from_config(eligible_sampling))
 
         if output_schema is not None:
@@ -635,7 +791,7 @@ class AnthropicModel(LLM):
                 if key in stream_kwargs:
                     request_extra_body.setdefault(key, stream_kwargs.pop(key))
         if is_anthropic_endpoint:
-            betas = [ANTHROPIC_FILES_BETA]
+            betas = [ANTHROPIC_FILES_BETA, *_computer_betas(body)]
             if not self.provider_config.supports_auto_thinking:
                 betas.append(ANTHROPIC_INTERLEAVED_THINKING_BETA)
 
@@ -709,9 +865,16 @@ class AnthropicModel(LLM):
         except APIConnectionError:
             raise ImmediateRetryException("Failed to connect to Anthropic")
 
+        typed_computer_tools = {
+            tool.name
+            for tool in tools
+            if isinstance(tool.body, dict)
+            and cast(dict[str, Any], tool.body).get("type") == "computer"
+        }
         text_parts: list[str] = []
         reasoning_parts: list[str] = []
         tool_calls: list[ToolCall] = []
+        computer_calls: list[ComputerCall] = []
         provider_tool_events: list[ProviderToolEvent] = []
         fallback_blocks: list[BetaFallbackBlock] = []
         web_search_queries: dict[str, str] = {}
@@ -721,14 +884,23 @@ class AnthropicModel(LLM):
             elif content.type == "thinking":
                 reasoning_parts.append(content.thinking)
             elif content.type == "tool_use":
-                tool_calls.append(
-                    ToolCall(
-                        id=content.id,
-                        name=content.name,
-                        args=cast(Any, content.input),
-                        sequence=i,
+                if content.name in typed_computer_tools:
+                    computer_calls.append(
+                        ComputerCall(
+                            call_id=content.id,
+                            provider="anthropic",
+                            actions=[cast(dict[str, Any], content.input)],
+                        )
                     )
-                )
+                else:
+                    tool_calls.append(
+                        ToolCall(
+                            id=content.id,
+                            name=content.name,
+                            args=cast(Any, content.input),
+                            sequence=i,
+                        )
+                    )
             elif isinstance(content, BetaFallbackBlock):
                 fallback_blocks.append(content)
             if (
@@ -778,6 +950,7 @@ class AnthropicModel(LLM):
             result_builder.has_output_text
             or result_builder.has_reasoning
             or bool(tool_calls)
+            or bool(computer_calls)
             or bool(provider_tool_events)
         )
         truncated_inside_thinking = (
@@ -811,6 +984,9 @@ class AnthropicModel(LLM):
 
         usage = message.usage
         output_token_details = getattr(usage, "output_tokens_details", None)
+        server_tool_use = cast(
+            BetaServerToolUsage | None, getattr(usage, "server_tool_use", None)
+        )
         reasoning_tokens = (
             stream_thinking_tokens
             or getattr(output_token_details, "thinking_tokens", None)
@@ -873,14 +1049,32 @@ class AnthropicModel(LLM):
                 )
                 if usage.cache_creation
                 else None,
+                web_search_requests=(
+                    server_tool_use.web_search_requests
+                    if server_tool_use
+                    else sum(
+                        1
+                        for e in provider_tool_events
+                        if e.type == "web_search_tool_result" and e.status != "error"
+                    )
+                )
+                or None,
                 fallback=fallback,
-                extra={"anthropic_response_model": message.model},
+                extra={
+                    "anthropic_response_model": message.model,
+                    **(
+                        {"anthropic_server_tool_use": server_tool_use.model_dump()}
+                        if server_tool_use
+                        else {}
+                    ),
+                },
             ),
             extras=QueryResultExtras(
                 provider_response_id=message.id,
                 provider_request_id=getattr(message, "_request_id", None),
             ),
             tool_calls=tool_calls,
+            computer_calls=computer_calls,
             provider_tool_events=provider_tool_events,
             history=[*input, RawResponse(response=message)],
         )
@@ -991,7 +1185,13 @@ class AnthropicModel(LLM):
             body["messages"] = _strip_fallback_blocks(cast(list[Any], body["messages"]))
 
             client = self.get_client()
-            response = await client.messages.count_tokens(**body)
+            native_betas = _computer_betas(body)
+            if native_betas:
+                response = await client.beta.messages.count_tokens(
+                    **body, betas=native_betas
+                )
+            else:
+                response = await client.messages.count_tokens(**body)
 
             return response.input_tokens
         except Exception as e:
@@ -1005,16 +1205,14 @@ class AnthropicModel(LLM):
         batch: bool = False,
         bill_reasoning: bool = True,
     ) -> QueryResultCost | None:
-        """
-        Future Cost considerations
-        Per 1000 calls:
-        - Web Search
-        Free:
-        - Web Fetch
-        """
+        """Web fetch is free."""
         # a server-side fallback response is billed at the serving model's price
         return await super()._calculate_cost(
             metadata,
             batch,
             bill_reasoning=False or metadata.reasoning_tokens is not None,
         )
+
+    @override
+    def _web_search_per_1k(self) -> float:
+        return 10.0

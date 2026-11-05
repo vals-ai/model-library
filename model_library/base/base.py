@@ -38,6 +38,10 @@ from tiktoken.core import Encoding
 from typing_extensions import deprecated
 
 import model_library.telemetry as telemetry
+from model_library.base.computer import (
+    validate_computer_provider,
+    validate_computer_tools,
+)
 from model_library.base.input import (
     FileInput,
     FileWithId,
@@ -56,6 +60,7 @@ from model_library.base.output import (
 )
 from model_library.base.query_deadline import query_deadline_scope
 from model_library.base.query_ids import resolve_query_ids, scoped_query_ids
+from model_library.base.router import RouterLLM
 from model_library.base.query_logging import (
     log_query_completed,
     log_query_started,
@@ -593,6 +598,8 @@ class LLM(ABC):
         # join input with history and validate SystemInput placement
         input = normalize_query_input(current_input, history=history)
 
+        validate_computer_provider(self.provider, validate_computer_tools(tools), input)
+
         log_query_started(
             query_logger,
             input=current_input,
@@ -813,6 +820,13 @@ class LLM(ABC):
         """Calculate cost for a query"""
         from model_library.registry_utils import compute_model_cost
 
+        if self.is_router:
+            return (
+                self.router_cost(metadata, batch=batch, bill_reasoning=bill_reasoning)
+                if isinstance(self, RouterLLM)
+                else None
+            )
+
         model = (
             metadata.fallback.served_model if metadata.fallback else self._registry_key
         )
@@ -828,7 +842,12 @@ class LLM(ABC):
             batch=batch,
             bill_reasoning=bill_reasoning,
             cache_ttl="1h" if self.prompt_caching == "1h" else "5m",
+            web_search_per_1k=self._web_search_per_1k(),
         )
+
+    def _web_search_per_1k(self) -> float | None:
+        """Provider's native web search fee in USD per 1k `web_search_requests`."""
+        return None
 
     @abstractmethod
     async def _query_impl(

@@ -4,7 +4,6 @@ import asyncio
 import time
 import uuid
 from collections.abc import Awaitable, Callable
-from datetime import UTC, datetime
 from typing import Annotated, TypeVar, cast
 
 from fastapi import Depends, FastAPI, Request
@@ -23,9 +22,10 @@ from model_gateway.model_helpers import (
     provider_from_model,
     require_raw_input_secret,
 )
+from model_gateway.request_budget import budget_refusal, usage_event_builder
 from model_gateway.route_helpers import GatewayOperation, ok_response
-from model_gateway.run_tokens import run_token_authorized
-from model_gateway.runtime_config import runtime_budget_policy
+from model_gateway.run_tokens import enforce_run_token_egress, run_token_authorized
+from model_gateway.startup_canary import STARTUP_CANARY_RUN_PREFIX, startup_canary_key
 from model_gateway.telemetry_helpers import (
     query_config_params,
     query_telemetry_attributes,
@@ -38,11 +38,10 @@ from model_gateway.types import (
     query_result_response_body,
 )
 from model_gateway.usage_ledger.details import snapshot_usage_request
-from model_gateway.usage_ledger.schema import identity_email_value
-from model_gateway.usage_ledger.store import build_usage_event
 from model_library.base import LLM, dump_gateway_config, dump_llm_config
 from model_library.base.output import QueryResult
 from model_library.base.query_ids import resolve_query_ids
+from model_library.retriers.token import utils as token_utils
 
 _T = TypeVar("_T")
 
@@ -56,12 +55,14 @@ def _provider_operation_deadline(request: Request) -> float:
     return request_deadline - PROVIDER_OPERATION_TIMEOUT_SLACK_SECONDS
 
 
-def _is_local_startup_canary(request: Request, body: QueryRequest) -> bool:
+async def _is_local_startup_canary(request: Request, body: QueryRequest) -> bool:
     client = request.client
     return (
-        body.run_id == "gateway-startup-canary"
+        body.run_id is not None
+        and body.run_id.startswith(STARTUP_CANARY_RUN_PREFIX)
         and client is not None
         and client.host in {"127.0.0.1", "::1", "localhost"}
+        and await token_utils.redis_client.exists(startup_canary_key(body.run_id)) != 0
     )
 
 
@@ -71,6 +72,10 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
         request: Request,
         body: Annotated[QueryRequest, Depends(run_token_authorized(QueryRequest))],
     ):
+        is_startup_canary = (
+            request.app.state.usage_ledger.enabled
+            and await _is_local_startup_canary(request, body)
+        )
         start = time.perf_counter()
         lookup_body = body
         ids = resolve_query_ids(
@@ -86,15 +91,13 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
             "attempt_id": uuid.uuid4().hex[:14],
         } | ids.as_attributes()
         body = body.model_copy(update=id_attrs)
-        if request.app.state.budget_service.blocked(
-            runtime_budget_policy(),
-            identity_email_value(body.identity),
-            datetime.now(UTC),
-        ):
+        event_builder = usage_event_builder(request)
+        refusal = await budget_refusal(request)
+        if refusal is not None:
             return JSONResponse(
-                status_code=402,
+                status_code=refusal.status,
                 content=ErrorBody(
-                    code="budget_exceeded", message="Email spending budget exceeded"
+                    code=refusal.code, message=refusal.message
                 ).model_dump(exclude_none=True),
             )
         usage_request = snapshot_usage_request(body)
@@ -199,12 +202,10 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 result, signed_history=signed_history, failed=error is not None
             )
 
-            if request.app.state.usage_ledger.enabled and not _is_local_startup_canary(
-                request, body
-            ):
+            if request.app.state.usage_ledger.enabled and not is_startup_canary:
 
                 async def write_usage_event() -> None:
-                    usage_event = build_usage_event(
+                    usage_event = event_builder(
                         body=body,
                         config=config,
                         query_params=query_params,
@@ -256,6 +257,7 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 operation.add_event("restore_history_start")
                 LLM.restore_raw_fields(body.inputs, secret=secret or None)
                 operation.add_event("restore_history_done")
+                enforce_run_token_egress(request, body, llm)
 
             await run_phase(
                 "restore_history",
@@ -331,7 +333,7 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 else None,
             }
             # Enable only for controlled deployment-drain tests; keep disabled otherwise.
-            if False and not _is_local_startup_canary(request, body):
+            if False and not is_startup_canary:
                 _DEPLOY_TEST_RESPONSE_DELAY_SECONDS = 60
                 telemetry.add_event(
                     "deploy_test_response_delay_start",

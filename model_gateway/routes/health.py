@@ -15,6 +15,7 @@ def register_health_routes(
     valid_keys: set[str],
     hmac_secret: bytes,
     control_enabled: bool = False,
+    query_enabled: bool,
 ) -> None:
     @app.get("/health/live")
     async def health_live():
@@ -37,6 +38,11 @@ def register_health_routes(
                 )
             monitor = cast(RateLimitMonitor, app.state.rate_limit_monitor)
             monitor.check_health()
+        if query_enabled and not app.state.managed_authority_ready.is_set():
+            return JSONResponse(
+                status_code=503,
+                content={"status": "managed authority unpublished"},
+            )
         canary = cast(dict[str, str | bool], app.state.startup_canary)
         if canary["enabled"] and canary["status"] != "passed":
             return JSONResponse(

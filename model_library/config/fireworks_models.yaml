@@ -43,10 +43,10 @@ deepseek-models:
       reasoning_effort: max
       top_p: 1
     costs_per_million_token:
-      input: 0.22
-      output: 0.66
+      input: 0.30
+      output: 1.20
       cache:
-        read: 0.007
+        read: 0.006
 openai-models:
   base-config:
     company: OpenAI

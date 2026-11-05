@@ -198,7 +198,7 @@ async def test_anthropic_prompt_caching_disabled_sends_no_cache_control(
 
 
 @pytest.mark.parametrize(
-    "model_key", ["bedrock/claude-opus-4-20250514-v1", "amazon/amazon.nova-lite-v1:0"]
+    "model_key", ["bedrock/claude-opus-4-20250514-v1", "amazon/amazon.nova-micro-v1:0"]
 )
 async def test_bedrock_cache_point_on_trailing_tool_result(model_key: str):
     model = get_registry_model(model_key)

@@ -113,10 +113,9 @@ def test_binary_provider_file_and_raw_sanitization_never_preview_content() -> No
     assert base64_file.sanitize_content(show_content=True) == expected_base64
     assert bytes_file.sanitize_content() == expected_bytes
     assert bytes_file.sanitize_content(show_content=True) == expected_bytes
-    assert provider_file.sanitize_content() == provider_file.model_dump(mode="json")
-    assert provider_file.sanitize_content(
-        show_content=True
-    ) == provider_file.model_dump(mode="json")
+    expected_provider = provider_file.model_dump(mode="json", exclude={"detail"})
+    assert provider_file.sanitize_content() == expected_provider
+    assert provider_file.sanitize_content(show_content=True) == expected_provider
 
     expected_raw_input = {
         "kind": "raw_input",

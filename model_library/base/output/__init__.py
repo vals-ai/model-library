@@ -12,6 +12,7 @@ from model_library.base.output.performance import (
 )
 from model_library.base.output.result import (
     Citation,
+    ComputerCall,
     FallbackHop,
     FallbackInfo,
     FinishReason,
@@ -40,6 +41,7 @@ __all__ = [
     "FinishReason",
     "FinishReasonInfo",
     "Citation",
+    "ComputerCall",
     "FallbackHop",
     "FallbackInfo",
     "QueryResultExtras",

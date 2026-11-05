@@ -5,6 +5,7 @@ from typing import Any, cast
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fakeredis import aioredis
 from starlette.testclient import TestClient
 from starlette.types import Message, Receive, Scope, Send
 from uvicorn import Config
@@ -573,18 +574,19 @@ def test_create_app_lifespan_logs_process_lifecycle(
         async def close(self) -> None:
             return None
 
-    class FakeRedis:
-        async def aclose(self) -> None:
-            return None
-
-    fake_redis = FakeRedis()
+    fake_redis = aioredis.FakeRedis(decode_responses=True)
     rate_limit_monitor = MagicMock(spec=["start", "close", "check_health"])
     _enable_gateway_observability_logs(caplog)
     with (
         patch.dict(
             "os.environ",
             {
+                "GATEWAY_RUNTIME_ROLE": "query",
                 "GATEWAY_STARTUP_CANARY_ENABLED": "false",
+                "MODEL_GATEWAY_AUTH_NAMESPACE": "observability-test",
+                "MODEL_GATEWAY_AUTH_DATABASE_SECRET": '{"username":"endpoint","password":"endpoint","host":"localhost","port":5432}',
+                "MODEL_GATEWAY_AUTH_DATABASE_NAME": "endpoint",
+                "MODEL_GATEWAY_AUTH_POOL_SIZE": "1",
                 "REDIS_URL": "redis://localhost:6379/0",
                 "GATEWAY_STAGE": "preview-test",
                 "GATEWAY_SERVICE": "gateway-test",

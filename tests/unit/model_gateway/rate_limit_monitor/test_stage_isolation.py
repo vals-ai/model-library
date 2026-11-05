@@ -2,8 +2,9 @@ import math
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import AsyncExitStack
+from types import SimpleNamespace
 from typing import cast
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from fakeredis import FakeServer, aioredis
@@ -13,6 +14,7 @@ from model_gateway.rate_limit_monitor.manager import RateLimitMonitor
 from model_gateway.rate_limit_monitor.state import RateLimitMonitorStore
 from model_gateway.rate_limit_monitor.types import MonitorFacts, MonitorSourceFacts
 from tests.unit.model_gateway._support import _make_client
+from tests.unit.model_gateway.test_app_roles import QuietAuthorityPublisher
 from tests.unit.model_gateway.rate_limit_monitor.state._support import (
     MODEL,
     _claim_generation,
@@ -28,6 +30,33 @@ async def stage_store(
 ) -> AsyncIterator[StoreFactory]:
     server = FakeServer()
     monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("MODEL_GATEWAY_AUTH_NAMESPACE", "stage-isolation-test")
+    monkeypatch.setenv(
+        "MODEL_GATEWAY_AUTH_DATABASE_SECRET",
+        '{"username":"local","password":"local","host":"localhost","port":5432}',
+    )
+    monkeypatch.setenv("MODEL_GATEWAY_AUTH_DATABASE_NAME", "gateway_auth")
+    monkeypatch.setenv("MODEL_GATEWAY_AUTH_POOL_SIZE", "1")
+    for name, value in {
+        "DESCOPE_PROJECT_ID": "local",
+        "DESCOPE_EXPECTED_ISSUER": "https://issuer.example",
+        "DESCOPE_ORGANIZATION_ID": "local",
+        "DESCOPE_MACHINE_ACCESS_KEY_ID": "local-machine",
+        "DESCOPE_MACHINE_SERVICE_OWNER_ID": "00000000-0000-0000-0000-000000000002",
+        "DESCOPE_MANAGEMENT_CREDENTIAL": "local",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(
+        gateway_app,
+        "HumanVerifier",
+        Mock(return_value=SimpleNamespace(aclose=AsyncMock())),
+    )
+    monkeypatch.setattr(
+        gateway_app,
+        "HumanReconciler",
+        Mock(return_value=SimpleNamespace(run=lambda stop: stop.wait())),
+    )
+    monkeypatch.setattr(gateway_app, "ManagedAuthorityPublisher", QuietAuthorityPublisher)
     monkeypatch.setattr(
         gateway_app.async_redis,
         "from_url",

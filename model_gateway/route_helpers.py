@@ -18,6 +18,7 @@ from model_gateway.metrics import (
     emit_model_success,
     record_gateway_phase,
 )
+from model_gateway.run_token_types import requires_approved_identity
 from model_gateway.telemetry_helpers import error_telemetry_attributes, latency_ms
 from model_gateway.types import ProviderError
 from model_library import model_library_settings
@@ -154,9 +155,13 @@ class GatewayOperation:
     ) -> T | ProviderError:
         self.add_event("provider_call_start")
         phase_start = time.perf_counter()
-        capture_enabled = self.operation != "rate_limit" and (
-            model_library_settings.get("GATEWAY_FAILED_EXCHANGE_CAPTURE_ENABLED", "")
+        capture_enabled = (
+            self.operation != "rate_limit"
+            and model_library_settings.get(
+                "GATEWAY_FAILED_EXCHANGE_CAPTURE_ENABLED", ""
+            )
             == "true"
+            and not requires_approved_identity(self.dimensions.get("Model", ""))
         )
         active_capture = None
         try:

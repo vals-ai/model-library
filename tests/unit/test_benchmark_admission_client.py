@@ -12,7 +12,8 @@ from model_gateway.benchmark_admission_types import (
     BenchmarkCoordinatorError,
 )
 from model_library.base.base import LLMConfig, TokenRetryParams
-from model_library.base.gateway import GatewayLLM
+from model_library.base.gateway import GatewayLLM, gateway_token_scope
+from model_library.retriers.token.benchmark_admission import _BenchmarkOperationalAuth
 from model_library.retriers.token.benchmark_admission_client import (
     GatewayBenchmarkAdmissionClient,
 )
@@ -86,23 +87,29 @@ async def test_client_uses_model_transport_and_run_id_contract(
         raise AssertionError(f"Unexpected path: {path}")
 
     monkeypatch.setattr(model_library, "model_library_settings", GatewaySettings())
-    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
+    async with httpx.AsyncClient(
+        transport=httpx.MockTransport(handler),
+        auth=_BenchmarkOperationalAuth("operator-key"),
+    ) as http_client:
         model = _model()
         setattr(model, "_registry_key", registry_key)
-        monkeypatch.setattr(model, "get_client", lambda: http_client)
-        client = GatewayBenchmarkAdmissionClient(model)
+        client = GatewayBenchmarkAdmissionClient(model, http_client=http_client)
 
-        await client.acquire(
-            run_id="run-123",
-            token_retry_params=_token_retry_params(),
-            total_requests=12,
-            early_release=True,
-            immediate_queue_release=True,
-        )
-        await client.wait(run_id="run-123")
-        await client.renew(run_id=" run-123 ")
-        await client.release(run_id="run-123", outcome="finished")
+        with gateway_token_scope("workload-token"):
+            await client.acquire(
+                run_id="run-123",
+                token_retry_params=_token_retry_params(),
+                total_requests=12,
+                early_release=True,
+                immediate_queue_release=True,
+            )
+            await client.wait(run_id="run-123")
+            await client.renew(run_id=" run-123 ")
+            await client.release(run_id="run-123", outcome="finished")
 
+    assert [request.headers["Authorization"] for request in requests] == [
+        "Bearer operator-key"
+    ] * 4
     assert [request.url.path for request in requests] == [
         "/benchmark-runs/acquire",
         "/benchmark-runs/wait",
@@ -158,9 +165,8 @@ async def test_acquire_serializes_raw_byok_config(
     monkeypatch.setattr(model_library, "model_library_settings", GatewaySettings())
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         model = _model(LLMConfig(custom_api_key=SecretStr("byok-secret")))
-        monkeypatch.setattr(model, "get_client", lambda: http_client)
 
-        await GatewayBenchmarkAdmissionClient(model).acquire(
+        await GatewayBenchmarkAdmissionClient(model, http_client=http_client).acquire(
             run_id="run-123",
             token_retry_params=_token_retry_params(),
             total_requests=None,
@@ -183,9 +189,10 @@ async def test_release_returns_authoritative_terminal_outcome(
     monkeypatch.setattr(model_library, "model_library_settings", GatewaySettings())
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         model = _model()
-        monkeypatch.setattr(model, "get_client", lambda: http_client)
 
-        released = await GatewayBenchmarkAdmissionClient(model).release(
+        released = await GatewayBenchmarkAdmissionClient(
+            model, http_client=http_client
+        ).release(
             run_id="run-123",
             outcome="cancelled",
         )
@@ -204,8 +211,7 @@ async def test_client_rejects_mismatched_run_id_response(
     monkeypatch.setattr(model_library, "model_library_settings", GatewaySettings())
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         model = _model()
-        monkeypatch.setattr(model, "get_client", lambda: http_client)
-        client = GatewayBenchmarkAdmissionClient(model)
+        client = GatewayBenchmarkAdmissionClient(model, http_client=http_client)
 
         with pytest.raises(BenchmarkCoordinatorError, match="identity"):
             await client.acquire(
@@ -228,7 +234,8 @@ async def test_client_maps_gateway_error(
     monkeypatch.setattr(model_library, "model_library_settings", GatewaySettings())
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as http_client:
         model = _model()
-        monkeypatch.setattr(model, "get_client", lambda: http_client)
 
         with pytest.raises(BenchmarkCoordinatorError, match="invalid admission"):
-            await GatewayBenchmarkAdmissionClient(model).renew(run_id="run-123")
+            await GatewayBenchmarkAdmissionClient(
+                model, http_client=http_client
+            ).renew(run_id="run-123")

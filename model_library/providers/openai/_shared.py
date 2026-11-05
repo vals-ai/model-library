@@ -9,6 +9,7 @@ from openai.types.responses.response import Response
 from pydantic import BaseModel
 
 from model_library.base import (
+    ComputerCallOutput,
     FileBase,
     FileInput,
     InputItem,
@@ -30,7 +31,12 @@ if TYPE_CHECKING:
 def iter_input_groups(
     input: Sequence[InputItem],
 ) -> Iterator[
-    list[TextInput | FileInput] | SystemInput | ToolResult | RawInput | RawResponse
+    list[TextInput | FileInput]
+    | SystemInput
+    | ToolResult
+    | ComputerCallOutput
+    | RawInput
+    | RawResponse
 ]:
     content: list[TextInput | FileInput] = []
     for item in input:
@@ -128,6 +134,8 @@ def capture_routing(
         routing["served_model"] = response.model
     if provider := (response.model_extra or {}).get("provider"):
         routing["upstream_provider"] = provider
+    if response.service_tier:
+        routing["service_tier"] = response.service_tier
     if response.usage is not None:
         cost = (response.usage.model_extra or {}).get("cost")
         if cost is not None:

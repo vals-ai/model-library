@@ -85,6 +85,8 @@ class Metadata(BaseModel):
     deprecated: bool = False
     available_for_everyone: bool = True
     internal_only: bool = False
+    # Only run tokens minted for approved identities may call the model.
+    approved_identities_only: bool = Field(default=False, exclude_if=lambda v: not v)
     available_as_evaluator: bool = False
     ignored_for_cost: bool = False
     router: bool = Field(default=False, exclude_if=lambda v: not v)

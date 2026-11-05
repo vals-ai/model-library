@@ -11,13 +11,11 @@ from model_library.base import (
     LLMConfig,
     ProviderConfig,
     QueryResult,
-    QueryResultCost,
-    QueryResultMetadata,
     ToolDefinition,
 )
-from model_library.base.query_ids import prompt_cache_key_from_query_ids
+from model_library.base.router import RouterLLM
 from model_library.register_models import register_provider
-from model_library.registry_utils import compute_model_cost, get_registry_config
+from model_library.registry_utils import get_registry_config
 
 
 class DigitalOceanConfig(ProviderConfig):
@@ -25,7 +23,7 @@ class DigitalOceanConfig(ProviderConfig):
 
 
 @register_provider("digitalocean")
-class DigitalOceanModel(DelegateOnly):
+class DigitalOceanModel(DelegateOnly, RouterLLM):
     api_key_setting = "DIGITAL_OCEAN_API_KEY"
     provider_config = DigitalOceanConfig()
 
@@ -73,11 +71,7 @@ class DigitalOceanModel(DelegateOnly):
         if self.is_router:
             self.enable_router_mode()
             kwargs["extra_headers"] = {
-                "X-Model-Affinity": prompt_cache_key_from_query_ids(
-                    model_name=self._registry_key or self.model_name,
-                    input=input,
-                    tools=tools,
-                )
+                "X-Model-Affinity": self.router_session_id(input, tools)
             }
 
         return await super()._query_impl(
@@ -89,17 +83,6 @@ class DigitalOceanModel(DelegateOnly):
         )
 
     @override
-    async def _calculate_cost(
-        self,
-        metadata: QueryResultMetadata,
-        batch: bool = False,
-        bill_reasoning: bool = True,
-    ) -> QueryResultCost | None:
-        if not self.is_router:
-            return await super()._calculate_cost(metadata, batch, bill_reasoning)
-        if not metadata.served_model:
-            return None
-        served_key = f"digitalocean/{metadata.served_model}"
-        if get_registry_config(served_key) is None:
-            return None
-        return compute_model_cost(served_key, metadata)
+    def _served_model_cost_key(self, served_model: str) -> str | None:
+        key = f"digitalocean/{served_model}"
+        return key if get_registry_config(key) else None

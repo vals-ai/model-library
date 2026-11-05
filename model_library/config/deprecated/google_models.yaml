@@ -21,6 +21,66 @@ deprecated:
   base-config:
     metadata:
       deprecated: true
+
+  google/gemini-3.8-flash-cyber:
+    company: Google
+    country: United States
+    label: Gemini 3.8 Flash Cyber
+    release_date: 2026-09-16
+    open_source: false
+    documentation_url: https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber
+    supports:
+      images: true
+      audio: true
+      transcription: false
+      videos: true
+      files: true
+      temperature: false
+      tools: true
+      output_schema: true
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: true
+      ignored_for_cost: false
+    provider_properties:
+      use_vertex: true
+    alternative_keys:
+    - google/gemini-3.8-flash-cyber-low:
+        label: Gemini 3.8 Flash Cyber (Low)
+        default_parameters:
+          reasoning_effort: low
+    - google/gemini-3.8-flash-cyber-medium:
+        label: Gemini 3.8 Flash Cyber (Medium)
+        default_parameters:
+          reasoning_effort: medium
+    - google/gemini-3.8-flash-cyber-high:
+        label: Gemini 3.8 Flash Cyber (High)
+        default_parameters:
+          reasoning_effort: high
+    default_parameters:
+      reasoning_effort: high
+    provider_endpoint: gemini-3.8-flash-cyber
+    properties:
+      context_window: 1048576
+      max_tokens: 65536
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.5
+      output: 7.5
+      cache:
+        read: 0.15
+        write: null
+        read_discount: 0.1
+        write_markup: 1.0
+        write_1h_markup: null
+      batch:
+        input: null
+        output: null
+        input_discount: 0.5
+        output_discount: 0.5
+        cache_discount: 1.0
+      context: null
   google/gemini-3-pro-preview:
     company: Google
     country: United States

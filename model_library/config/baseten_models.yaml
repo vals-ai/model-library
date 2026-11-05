@@ -70,6 +70,40 @@ deepseek-models:
       cache:
         read: 0.028
 
+nemotron-models:
+  baseten/nemotron-3.5-super-vl-120b-a12b:
+    company: NVIDIA
+    country: United States
+    label: Nemotron 3.5 Super VL
+    release_date: 2026-10-15
+    documentation_url: https://www.baseten.co/library/nemotron-35-super-vl/
+    provider_endpoint: nvidia/NVIDIA-Nemotron-3.5-Super-VL-120B-A12B
+    rate_limit:
+      supports_live_monitoring: true
+    supports:
+      images: true
+      output_schema: true
+    metadata:
+      available_for_everyone: true
+      ignored_for_cost: false
+    provider_properties:
+      api_base: https://inference.baseten.co/v1
+    # Baseten serves this model with thinking off unless reasoning_effort is set;
+    # every non-"none" value enables full thinking.
+    default_parameters:
+      reasoning_effort: high
+      temperature: 1.0
+      top_p: 0.95
+    properties:
+      context_window: 1_048_576
+      max_tokens: 262_144
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.20
+      output: 0.50
+      cache:
+        read: 0.04
+
 laguna-models:
   baseten/laguna-s-2.1-int4:
     label: Laguna S 2.1 INT4

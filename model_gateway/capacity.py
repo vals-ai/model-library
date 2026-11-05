@@ -19,17 +19,20 @@ from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
 
 from model_gateway.metrics import record_capacity, record_rejection
+from model_gateway.run_token_types import PASSTHROUGH_PREFIX
 
 MAX_ACTIVE_REQUESTS_PER_WORKER = 225
 MAX_QUEUED_REQUESTS_PER_WORKER = 250
 QUEUE_TIMEOUT_SECONDS = 10
-# Leave 60 seconds after the application timeout for best-effort response handling
-# before the 3,600-second target deregistration window closes.
-REQUEST_TIMEOUT_SECONDS = 3540
+REQUEST_TIMEOUT_SECONDS = 3900
 MAX_CAPACITY_IDENTITY_BODY_BYTES = 64 * 1024
 
 T = TypeVar("T")
 MODEL_CALL_PATHS = frozenset({"/query"})
+
+
+def is_model_call(path: str) -> bool:
+    return path in MODEL_CALL_PATHS or path.startswith(f"{PASSTHROUGH_PREFIX}/")
 
 
 class CapacityRejectedError(Exception):
@@ -238,7 +241,7 @@ def create_capacity_middleware() -> Callable[
     async def capacity_middleware(
         request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        if request.url.path not in MODEL_CALL_PATHS:
+        if not is_model_call(request.url.path):
             return await call_next(request)
         limiter = cast(GatewayCapacityLimiter, request.app.state.capacity_limiter)
 

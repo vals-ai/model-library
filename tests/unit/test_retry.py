@@ -922,6 +922,11 @@ async def test_immediate_retry_exhausted_is_not_retriable():
             "The upstream model stream ended unexpectedly before completing the response.",
             True,
         ),
+        (
+            "critical error: invalid response object from python async generator; "
+            "application-logic-mismatch: invalid value: integer `-1`, expected u32",
+            True,
+        ),
     ],
 )
 async def test_retry_by_exception_message(

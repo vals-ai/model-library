@@ -9,7 +9,7 @@ base-config:
     images: true
     files: true
     tools: true
-    temperature: true
+    temperature: false
     output_schema: true
   properties:
     reasoning_model: false
@@ -23,8 +23,6 @@ base-config:
       output_discount: 0.5
       cache_discount: 0.5
   documentation_url: https://docs.claude.com/en/docs/about-claude/models/overview
-  default_parameters:
-    temperature: 1
 
 claude-fable-5-models:
   anthropic/claude-fable-5:
@@ -43,6 +41,7 @@ claude-fable-5-models:
     rate_limit:
       supports_live_monitoring: false
     provider_properties:
+      computer_tool_type: computer_20251124
       supports_auto_thinking: true
       supports_compute_effort: true
       fallback_models:
@@ -74,6 +73,7 @@ claude-fable-5-1-models:
         read: 0.25
         write: 12.5
     provider_properties:
+      computer_tool_type: computer_20251124
       supports_auto_thinking: true
       supports_compute_effort: true
       fallback_models:
@@ -112,8 +112,6 @@ claude-haiku-5-5-models:
     label: Claude Haiku 5.5
     release_date: 2026-10-07
     provider_endpoint: claude-haiku-5-5
-    supports:
-      temperature: false
     properties:
       context_window: 1_000_000
       max_tokens: 128_000
@@ -276,6 +274,7 @@ claude-opus-5-models:
         read: 0.5
         write: 6.25
     provider_properties:
+      computer_tool_type: computer_20251124
       supports_auto_thinking: true
       supports_compute_effort: true
       fallback_models:
@@ -323,6 +322,7 @@ claude-opus-4-8-models:
         read: 0.5
         write: 6.25
     provider_properties:
+      computer_tool_type: computer_20251124
       supports_auto_thinking: true
       supports_compute_effort: true
     default_parameters:
@@ -352,6 +352,7 @@ claude-opus-4-7-models:
         read: 0.5
         write: 6.25
     provider_properties:
+      computer_tool_type: computer_20251124
       supports_auto_thinking: true
       supports_compute_effort: true
     default_parameters:
@@ -377,6 +378,7 @@ claude-opus-models:
         read: 0.5
         write: 6.25
     provider_properties:
+      computer_tool_type: computer_20251124
       supports_auto_thinking: true
       supports_compute_effort: true
     alternative_keys:
@@ -401,6 +403,7 @@ claude-opus-models:
         read: 0.5
         write: 6.25
     provider_properties:
+      computer_tool_type: computer_20251124
       supports_compute_effort: true
     alternative_keys:
       - anthropic/claude-opus-4-5-20251101-thinking:
@@ -422,6 +425,7 @@ claude-sonnet-models:
         read: 0.2
         write: 2.5
     provider_properties:
+      computer_tool_type: computer_20251124
       supports_auto_thinking: true
       supports_compute_effort: true
     default_parameters:
@@ -460,6 +464,7 @@ claude-sonnet-models:
         read: 0.3
         write: 3.75
     provider_properties:
+      computer_tool_type: computer_20251124
       supports_auto_thinking: true
       supports_compute_effort: true
     default_parameters:
@@ -489,6 +494,8 @@ claude-sonnet-models:
           read: 0.6
           write: 7.50
           write_1h_markup: 2
+    provider_properties:
+      computer_tool_type: computer_20250124
     alternative_keys:
       - anthropic/claude-sonnet-4-5-20250929-thinking:
           properties:
@@ -507,6 +514,8 @@ claude-haiku-models:
       cache:
         read: 0.1
         write: 1.25
+    provider_properties:
+      computer_tool_type: computer_20250124
     alternative_keys:
       - anthropic/claude-haiku-4-5-20251001-thinking:
           properties:

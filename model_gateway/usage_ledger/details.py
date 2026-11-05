@@ -32,7 +32,7 @@ def build_usage_event_details(
     result: QueryResult,
 ) -> dict[str, object]:
     result_data = _model_json(
-        result, exclude={"history", "output_parsed", "tool_calls"}
+        result, exclude={"history", "output_parsed", "tool_calls", "computer_calls"}
     )
     _replace_with_length(result_data, "output_text")
     result_data["output_parsed_length"] = content_length(result.output_parsed)
@@ -40,6 +40,9 @@ def build_usage_event_details(
     result_data["tool_calls"] = [
         tool_call.sanitize_content(show_content=False)
         for tool_call in result.tool_calls
+    ]
+    result_data["computer_calls"] = [
+        call.sanitize_content(show_content=False) for call in result.computer_calls
     ]
     for provider_event in result_data["provider_tool_events"]:
         _replace_with_length(provider_event, "input")

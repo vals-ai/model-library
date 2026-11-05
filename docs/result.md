@@ -11,6 +11,7 @@
 | `finish_reason` | Normalized stop/length/tool-call/error reason plus raw provider value |
 | `metadata` | `QueryResultMetadata`: token usage, cost, duration, and per-query performance telemetry |
 | `tool_calls` | Normalized tool calls returned by the model for local/tool-call execution |
+| `computer_calls` | Native OpenAI or Anthropic computer actions, call IDs, and pending safety checks. |
 | `history` | Provider-ready conversation history for follow-up calls |
 | `extras.response_id` | Legacy compatibility field for provider response/body/message IDs, when available. Prefer `provider_response_id` / `provider_request_id`. |
 | `extras.provider_response_id` | Canonical provider response/body/message ID, when available. |
@@ -29,6 +30,8 @@ Google disables SDK automatic continuation by default; a model can opt in throug
 `fallback` is `None` unless a provider-side fallback model served the response. It is a `FallbackInfo` with `requested_model`, `served_model`, and `hops` (one `FallbackHop` per model attempt: `model`, `served`, `trigger`/`category` for hops that declined, and `usage` as a token-only `QueryResultMetadata`). Top-level token counts and cost are the served hop's, priced at `served_model`. If cost calculation fails (for example `served_model` is not in the registry), the query still succeeds with `cost=None` and a warning is logged.
 
 OpenAI router and `access_programs` calls retain `served_model`. Other direct OpenAI Responses calls record the provider-reported model in `extra["openai_response_model"]`; Anthropic calls use `extra["anthropic_response_model"]`. ATIF uses these fields as the step model.
+
+`web_search_requests` holds billable native web search units: OpenAI `tool_usage.web_search.num_requests`, xAI `server_side_tool_usage_details.web_search_calls` and Anthropic `usage.server_tool_use.web_search_requests` when reported, otherwise a count of search events. Google has no counter, so Gemini 3+ derives unique queries and Gemini 2.x reports 1 per grounded prompt. Raw OpenAI/xAI/Anthropic counters and Google's derived `google_search_calls`/`google_unique_queries` are kept in `extra`. Each provider's `_web_search_per_1k` hardcodes its fee (OpenAI $10, Anthropic $10, xAI $5, Gemini 3+ $14, Gemini 2.x $35 per 1k) and `compute_model_cost` sets `QueryResultCost.web_search`, included in `total`.
 
 `QueryResultMetadata` values can be summed for aggregate token, cost, and duration totals. Per-query `extra` values, `fallback`, and performance telemetry are not aggregated when metadata values are summed.
 
@@ -246,3 +249,5 @@ gaps cannot produce token-level inter-token latency (ITL), time per output token
 
 Timing fields ending in `_seconds` are rounded to three decimals.
 `QueryResultCost` handles cost precision separately.
+
+See [computer use](computer-use.md) for native actions and screenshot continuation.

@@ -1,0 +1,53 @@
+base-config:
+  documentation_url: https://vercel.com/ai-gateway/models
+  open_source: false
+
+
+deprecated:
+  base-config:
+    metadata:
+      deprecated: true
+
+  vercel/poolside/laguna-s-2.1:
+    company: Poolside
+    country: United States
+    label: Laguna S 2.1
+    release_date: 2026-07-20
+    open_source: true
+    documentation_url: https://vercel.com/ai-gateway/models/laguna-s-2.1
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: false
+      cache_read_counts_toward_limit: true
+    alternative_keys: []
+    default_parameters:
+      temperature: 1.0
+    provider_endpoint: poolside/laguna-s-2.1
+    properties:
+      context_window: 1000000
+      max_tokens: 131072
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.1
+      output: 0.2
+      cache:
+        read: 0.01
+        write: null
+        read_discount: 1.0
+        write_markup: 1.0
+        write_1h_markup: null
+      batch: null
+      context: null

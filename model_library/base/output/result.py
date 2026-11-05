@@ -3,7 +3,7 @@
 """
 
 from enum import Enum
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from pydantic import (
     BaseModel,
@@ -24,7 +24,7 @@ from model_library.base.output.performance import (
 )
 from model_library.rate_limits import RateLimit
 from model_library.base.utils import add_optional
-from model_library.utils import SecondsMetric, ValsModel
+from model_library.utils import SecondsMetric, ValsModel, content_length
 
 __all__ = [
     "FinishReason",
@@ -34,6 +34,7 @@ __all__ = [
     "QueryResultCost",
     "RateLimit",
     "QueryResultMetadata",
+    "ComputerCall",
     "QueryResult",
 ]
 
@@ -120,6 +121,7 @@ class QueryResultCost(ValsModel):
     reasoning: float | None = None
     cache_read: float | None = None
     cache_write: float | None = None
+    web_search: float | None = None
     total_override: float | None = None
 
     @field_validator(
@@ -128,6 +130,7 @@ class QueryResultCost(ValsModel):
         "reasoning",
         "cache_read",
         "cache_write",
+        "web_search",
         "total_override",
         mode="after",
     )
@@ -150,6 +153,7 @@ class QueryResultCost(ValsModel):
                     self.reasoning,
                     self.cache_read,
                     self.cache_write,
+                    self.web_search,
                 ],
             )
         )
@@ -195,6 +199,7 @@ class QueryResultCost(ValsModel):
             reasoning=add_optional(self.reasoning, other.reasoning),
             cache_read=add_optional(self.cache_read, other.cache_read),
             cache_write=add_optional(self.cache_write, other.cache_write),
+            web_search=add_optional(self.web_search, other.web_search),
             total_override=total_override,
         )
 
@@ -209,7 +214,7 @@ class QueryResultCost(ValsModel):
 
         return (
             f"{format_cost(self.total)} "
-            + f"(uncached input: {format_cost(self.input)} | output: {format_cost(self.output)} | reasoning: {format_cost(self.reasoning)} | cache_read: {format_cost(self.cache_read)} | cache_write: {format_cost(self.cache_write)})"
+            + f"(uncached input: {format_cost(self.input)} | output: {format_cost(self.output)} | reasoning: {format_cost(self.reasoning)} | cache_read: {format_cost(self.cache_read)} | cache_write: {format_cost(self.cache_write)} | web_search: {format_cost(self.web_search)})"
         )
 
 
@@ -258,6 +263,13 @@ class QueryResultMetadata(ValsModel):
     cache_read_tokens: int | None = None
     cache_write_tokens: int | None = None
     cache_write_1h_tokens: int | None = None
+    web_search_requests: int | None = Field(
+        default=None,
+        description=(
+            "Billable native web search units for this query, from the provider's "
+            "counter or derived from its search events; None when none were observed."
+        ),
+    )
     fallback: FallbackInfo | None = None
     served_model: str | None = Field(
         default=None,
@@ -339,6 +351,10 @@ class QueryResultMetadata(ValsModel):
                 int | None,
                 add_optional(self.cache_write_1h_tokens, other.cache_write_1h_tokens),
             ),
+            web_search_requests=cast(
+                int | None,
+                add_optional(self.web_search_requests, other.web_search_requests),
+            ),
             duration_seconds=self.default_duration_seconds
             + other.default_duration_seconds,
             cost=cast(QueryResultCost | None, add_optional(self.cost, other.cost)),
@@ -384,6 +400,22 @@ class ProviderToolEvent(ValsModel):
         )
 
 
+class ComputerCall(ValsModel):
+    call_id: str
+    provider: Literal["openai", "anthropic"]
+    actions: list[dict[str, Any]]
+    pending_safety_checks: list[dict[str, Any]] = Field(default_factory=list)
+
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            "call_id": self.call_id,
+            "provider": self.provider,
+            "actions_length": content_length(self.actions),
+            "pending_safety_checks_length": content_length(self.pending_safety_checks),
+        }
+
+
 class QueryResult(ValsModel):
     """
     Result of a query
@@ -398,6 +430,7 @@ class QueryResult(ValsModel):
     )
     metadata: QueryResultMetadata = Field(default_factory=QueryResultMetadata)
     tool_calls: list[ToolCall] = Field(default_factory=list)
+    computer_calls: list[ComputerCall] = Field(default_factory=list)
     provider_tool_events: list[ProviderToolEvent] = Field(default_factory=list)
     history: list[InputItem] = Field(default_factory=list)
     extras: QueryResultExtras = Field(default_factory=QueryResultExtras)
@@ -427,3 +460,5 @@ class QueryResult(ValsModel):
         yield "metadata", attrs.pop("metadata", None)
         if self.tool_calls:
             yield "tool_calls", self.tool_calls
+        if self.computer_calls:
+            yield "computer_calls", self.computer_calls

@@ -271,6 +271,7 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(
     assert sentry_init_kwargs["instrumenter"] == "otel"
     assert sentry_init_kwargs["enable_logs"]
     assert sentry_init_kwargs["send_default_pii"]
+    assert sentry_init_kwargs["include_local_variables"] is False
     assert sentry_init_kwargs["before_send"] is telemetry._before_send  # pyright: ignore[reportPrivateUsage]
     assert (
         sentry_init_kwargs["before_send_transaction"]
@@ -325,6 +326,18 @@ def test_configure_telemetry_initializes_sentry_otlp_exporter(
         "sentry_sdk.*",
     ]
     assert telemetry.is_enabled()
+
+
+def test_sentry_release_span_processor_ends_real_sdk_spans():
+    provider = TracerProvider()
+    provider.add_span_processor(
+        telemetry._SentryReleaseSpanProcessor("abc123")  # pyright: ignore[reportPrivateUsage]
+    )
+
+    with provider.get_tracer("test").start_as_current_span("span") as span:
+        pass
+
+    assert getattr(span, "attributes") == {"sentry.release": "abc123"}
 
 
 def test_should_trace_http_route_only_allows_gateway_routes():

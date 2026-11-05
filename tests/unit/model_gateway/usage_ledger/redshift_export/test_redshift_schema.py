@@ -107,6 +107,14 @@ def test_fact_staging_performance_and_dimension_table_ddls_are_specific():
         "agent_name varchar(1024)",
         "identity_email varchar(1024)",
         "api_key_name varchar(512)",
+        "managed_key_id varchar(128)",
+        "budget_id varchar(128)",
+        "owner_issuer varchar(2048)",
+        "owner_subject varchar(2048)",
+        "service_id varchar(128)",
+        "project_id varchar(128)",
+        "project_org_id varchar(128)",
+        "project_environment varchar(128)",
         "outcome varchar(16) not null",
         "error_type varchar(256)",
         "input_tokens bigint,",
@@ -212,6 +220,7 @@ def test_schema_statement_batches_include_required_tables_without_control_state(
         "usage_agg_5m",
         "usage_agg_1h",
         "usage_agg_1d",
+        "usage_run_agg_1d",
         "usage_dimension_values",
         "analytics_dimensions",
     ):
@@ -280,7 +289,10 @@ def test_aggregate_refresh_sql_uses_missing_sentinel_and_excludes_non_additive_s
         "dateadd(minute, (floor(date_part(minute, completed_at::timestamp) / 5) * 5)::integer"
         in insert_sql
     )
-    assert "coalesce(provider, '__missing__') as provider" in insert_sql
+    assert "coalesce(provider, '__missing__') as provider," in insert_sql
+    assert (
+        "coalesce(requested_model_key, '__missing__') as provider_model," in insert_sql
+    )
     assert (
         "coalesce(requested_model_key, '__missing__') as provider_model" in insert_sql
     )
@@ -356,21 +368,111 @@ def test_aggregate_refresh_sql_covers_hour_and_day_bucket_branches():
     assert "dateadd(day, 1, date_trunc('day', completed_at::timestamp))" in day_sql
 
 
-def test_attempt_id_is_added_to_both_usage_events_tables_outside_the_ddl() -> None:
+def test_schema_statement_batches_leave_column_additions_to_migration() -> None:
     statements = [
         sql for batch in redshift_schema.schema_statement_batches() for sql in batch
     ]
 
     assert not any("alter table" in sql for sql in statements)
-    assert redshift_schema.SCHEMA_COLUMN_ADDITIONS == (
-        {
-            "TableName": "usage_events_staging_v5",
-            "ColumnName": "attempt_id",
-            "ColumnType": "varchar(65535)",
-        },
-        {
-            "TableName": "usage_events",
-            "ColumnName": "attempt_id",
-            "ColumnType": "varchar(65535)",
-        },
+
+
+def test_run_aggregate_table_is_keyed_by_run_day_grader_provider_and_model() -> None:
+    ddl = redshift_schema.run_aggregate_table_ddl()
+
+    assert "create table if not exists gateway_usage.usage_run_agg_1d" in ddl
+    for column in (
+        "bucket_start_utc timestamptz not null",
+        "bucket_end_utc timestamptz not null",
+        "run_id varchar(65535) not null",
+        "is_grader boolean not null",
+        "provider varchar(256) not null",
+        "provider_model varchar(2048) not null",
+        "request_count bigint not null",
+        "cost_usd_sum decimal(38,12),",
+        "data_through_utc timestamptz not null",
+        "refreshed_at timestamptz not null",
+    ):
+        assert column in ddl
+    assert "project_id" not in ddl
+    assert "sortkey (bucket_start_utc, run_id);" in ddl
+    assert "usage_run_agg_1d" not in redshift_schema.AGGREGATE_TABLE_BY_GRAIN.values()
+    for grain in redshift_schema.AGGREGATE_GRAINS:
+        assert "run_id" not in redshift_schema.aggregate_table_ddl(grain)
+
+
+def test_schema_statement_batches_create_run_aggregate_after_grain_aggregates() -> None:
+    statements = [
+        sql for batch in redshift_schema.schema_statement_batches() for sql in batch
+    ]
+
+    run_ddl = redshift_schema.run_aggregate_table_ddl()
+    assert (run_ddl,) in redshift_schema.schema_statement_batches()
+    assert statements.index(run_ddl) == (
+        statements.index(redshift_schema.aggregate_table_ddl("1d")) + 1
     )
+
+
+def test_run_aggregate_refresh_sums_each_run_per_utc_day_inside_the_window() -> None:
+    delete_sql = redshift_schema.run_aggregate_delete_sql(
+        start_parameter="'2026-05-29T00:00:00Z'",
+        end_parameter="'2026-05-30T00:00:00Z'",
+    )
+    insert_sql = redshift_schema.run_aggregate_insert_sql(
+        start_parameter="'2026-05-29T00:00:00Z'",
+        end_parameter="'2026-05-30T00:00:00Z'",
+        data_through_expression="'2026-05-29T12:40:00Z'",
+    )
+
+    assert delete_sql == (
+        "delete from gateway_usage.usage_run_agg_1d\n"
+        "where bucket_start_utc >= '2026-05-29T00:00:00Z'\n"
+        "  and bucket_start_utc < '2026-05-30T00:00:00Z';"
+    )
+    assert "insert into gateway_usage.usage_run_agg_1d" in insert_sql
+    assert "from gateway_usage.usage_events" in insert_sql
+    assert "where completed_at >= '2026-05-29T00:00:00Z'" in insert_sql
+    assert "and completed_at < '2026-05-30T00:00:00Z'" in insert_sql
+    assert "and run_id is not null" in insert_sql
+    assert "date_trunc('day', completed_at::timestamp) as bucket_start_utc" in insert_sql
+    assert "dateadd(day, 1, date_trunc('day', completed_at::timestamp))" in insert_sql
+    assert "coalesce(provider, '__missing__') as provider," in insert_sql
+    assert (
+        "coalesce(requested_model_key, '__missing__') as provider_model," in insert_sql
+    )
+    assert (
+        "count(case when outcome = 'success' then 1 end) as request_count" in insert_sql
+    )
+    assert "sum(cost_usd) as cost_usd_sum" in insert_sql
+    assert "'2026-05-29T12:40:00Z' as data_through_utc" in insert_sql
+    assert "getdate() as refreshed_at" in insert_sql
+    assert "then 0 else 1 end as reserved_dimension_guard" in insert_sql
+    assert "project_id" not in insert_sql
+
+
+def test_run_aggregate_refresh_splits_grader_calls_from_every_other_agent() -> None:
+    insert_sql = redshift_schema.run_aggregate_insert_sql()
+
+    assert "coalesce(agent_name = 'grader', false) as is_grader" in insert_sql
+    assert insert_sql.rstrip().endswith(
+        "group by\n"
+        "  bucket_start_utc,\n"
+        "  bucket_end_utc,\n"
+        "  run_id,\n"
+        "  is_grader,\n"
+        "  provider,\n"
+        "  provider_model;"
+    )
+    assert "agent_name," not in insert_sql
+
+
+def test_run_aggregate_sql_builders_reject_unsafe_expressions() -> None:
+    with pytest.raises(ValueError, match="SQL identifier"):
+        redshift_schema.run_aggregate_table_ddl("gateway_usage; drop schema x; --")
+
+    with pytest.raises(ValueError, match="SQL expression"):
+        redshift_schema.run_aggregate_delete_sql(start_parameter=":start; drop table x")
+
+    with pytest.raises(ValueError, match="SQL expression"):
+        redshift_schema.run_aggregate_insert_sql(
+            data_through_expression=":data_through_utc; drop table x"
+        )

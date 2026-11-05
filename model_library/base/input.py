@@ -11,6 +11,7 @@ from pydantic import (
     computed_field,
     field_serializer,
     field_validator,
+    model_validator,
 )
 
 from model_library.utils import ValsModel, content_length, content_preview
@@ -31,11 +32,15 @@ def _sanitize_content_field(
     return {f"{field}_length": content_length(value)}
 
 
+ImageDetail = Literal["auto", "low", "high", "original"]
+
+
 class FileBase(ValsModel):
     kind: Literal["file_base"] = "file_base"
     type: Literal["image", "file"]
     name: str
     mime: str
+    detail: ImageDetail | None = None
 
     @property
     def image_format(self) -> str:
@@ -224,6 +229,35 @@ class ToolResult(ValsModel):
         }
 
 
+class ComputerCallOutput(ValsModel):
+    kind: Literal["computer_call_output"] = "computer_call_output"
+    call_id: str
+    screenshot_url: str | None = None
+    output_text: str | None = None
+    screenshot_detail: ImageDetail | None = None
+    acknowledged_safety_checks: list[dict[str, Any]] = Field(default_factory=list)
+
+    @override
+    def sanitize_content(self, *, show_content: bool = False) -> dict[str, object]:
+        return {
+            "kind": self.kind,
+            "call_id": self.call_id,
+            "screenshot_url_length": content_length(self.screenshot_url),
+            **_sanitize_content_field(
+                "output_text", self.output_text, show_content=show_content
+            ),
+            "acknowledged_safety_checks_length": content_length(
+                self.acknowledged_safety_checks
+            ),
+        }
+
+    @model_validator(mode="after")
+    def _require_result(self) -> "ComputerCallOutput":
+        if self.screenshot_url is None and self.output_text is None:
+            raise ValueError("ComputerCallOutput requires a screenshot or output_text")
+        return self
+
+
 class SystemInput(ValsModel):
     """System prompt input item. Must be first in the input sequence if present. At most one allowed."""
 
@@ -277,7 +311,13 @@ class RawInput(ValsModel):
 
 
 InputItem = Annotated[
-    SystemInput | TextInput | FileInput | ToolResult | RawInput | RawResponse,
+    SystemInput
+    | TextInput
+    | FileInput
+    | ToolResult
+    | ComputerCallOutput
+    | RawInput
+    | RawResponse,
     Field(discriminator="kind"),
 ]
 
@@ -322,4 +362,11 @@ def normalize_query_input(
                 active_capture.register_request_payload(item.base64, item.type)
             elif isinstance(item, FileWithBytes):
                 active_capture.register_request_payload(item.data, item.type)
+            elif (
+                isinstance(item, ComputerCallOutput) and item.screenshot_url is not None
+            ):
+                # Redact only the image bytes; an http(s) URL carries none.
+                if item.screenshot_url[:5].lower() == "data:":
+                    _, data = item.screenshot_url.split(",", 1)
+                    active_capture.register_request_payload(data, "image")
     return all_input

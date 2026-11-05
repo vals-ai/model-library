@@ -1,13 +1,16 @@
 import asyncio
 import json
 import os
+import threading
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 from inspect import isawaitable
 from typing import Any, cast
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, patch
+from uuid import UUID
 
+import fakeredis.aioredis
 import pytest
 from boto3.dynamodb.types import TypeSerializer
 from botocore.exceptions import ClientError
@@ -16,7 +19,8 @@ from starlette.testclient import TestClient
 
 from model_gateway import app as gateway_app
 from model_gateway import metrics
-from model_gateway import model_helpers
+from model_gateway import model_helpers, startup_canary
+from model_gateway.run_tokens import RunTokenClaims
 from model_gateway.runtime_config import CredentialSnapshot, RuntimeConfigState
 from model_gateway.usage_ledger import store as ledger_store
 from model_gateway.usage_ledger import schema as ledger_schema
@@ -47,6 +51,8 @@ from model_library.base.output import (
     QueryResultPerformance,
     CompressedQueryResultPerformance,
 )
+from model_library.retriers.token import utils as token_utils
+from tests.unit.model_gateway._support import RUN_HEADERS, attach_run_authority
 
 
 @pytest.fixture(autouse=True)
@@ -684,7 +690,6 @@ def test_build_usage_event_preserves_absent_performance_as_null():
     assert details["result"]["metadata"]["performance"] is None
 
 
-
 def test_failed_event_preserves_error_result_and_unknown_measurements():
     request = QueryRequest(model="openai/gpt-4o", inputs=[TextInput(text="hello")])
     result = QueryResult(
@@ -766,6 +771,7 @@ def test_success_event_omits_absent_measurements():
     details = cast(dict[str, Any], event["details"])
     assert "total_input_tokens" not in details["result"]["metadata"]
     assert "total_output_tokens" not in details["result"]["metadata"]
+
 
 def test_build_usage_event_records_worker_and_runtime_namespace(
     monkeypatch: pytest.MonkeyPatch,
@@ -2137,7 +2143,38 @@ async def test_dynamodb_usage_ledger_enforced_mode_raises_on_write_failure():
         await ledger.write_event({})
 
 
-def test_query_writes_success_usage_event_when_ledger_is_configured():
+@pytest.fixture
+def managed_ledger_claims(monkeypatch: pytest.MonkeyPatch) -> RunTokenClaims:
+    claims = RunTokenClaims(
+        run_id="run-a",
+        task_id="question-a",
+        attempt_id="attempt-a",
+        identity={
+            "email": "user@example.com",
+            "benchmark_name": "swebench",
+            "agent_name": "swe-agent",
+        },
+        allowed_models=["openai/gpt-4o"],
+        minted_by="ledger-test",
+        managed_key_id=UUID(int=1),
+        allow_urls=True,
+        allow_provider_tools=True,
+    )
+    monkeypatch.setattr(
+        "model_gateway.auth.get_run_token", AsyncMock(return_value=claims)
+    )
+    monkeypatch.setenv(
+        "MODEL_GATEWAY_AUTH_DATABASE_SECRET",
+        '{"username":"endpoint","password":"endpoint","host":"localhost","port":5432}',
+    )
+    monkeypatch.setenv("MODEL_GATEWAY_AUTH_DATABASE_NAME", "endpoint")
+    monkeypatch.setenv("MODEL_GATEWAY_AUTH_POOL_SIZE", "1")
+    return claims
+
+
+def test_query_writes_success_usage_event_when_ledger_is_configured(
+    managed_ledger_claims: RunTokenClaims,
+):
     from model_gateway import main
     from model_library.base.base import LLM
     from model_library.base.input import RawInput
@@ -2178,6 +2215,7 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
         app = main.create_app()
         app.state.usage_ledger = fake_ledger
         client = TestClient(app)
+        attach_run_authority(client, managed_ledger_claims)
         response = client.post(
             "/query",
             json={
@@ -2193,7 +2231,7 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
                 },
                 "config": {"custom_api_key": "sk-provider"},
             },
-            headers={"Authorization": "Bearer sk-test"},
+            headers=RUN_HEADERS,
         )
 
     assert response.status_code == 200
@@ -2204,7 +2242,7 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
     assert event["query_id"] == "query-a"
     assert event[ledger_schema.IDENTITY_EMAIL] == "user@example.com"
     assert "identity" not in event
-    assert event["api_key_name"] == "test"
+    assert event["api_key_name"] == "run-token:ledger-test"
     assert "api_key_fingerprint" not in event
     assert event["provider_endpoint"] == "default"
     assert event["input_tokens"] == 12
@@ -2235,7 +2273,10 @@ def test_query_writes_success_usage_event_when_ledger_is_configured():
     assert result_data["metadata"]["out_tokens"] == 3
 
 
-def test_local_startup_canary_query_skips_usage_ledger():
+def test_local_startup_canary_query_skips_usage_ledger(
+    managed_ledger_claims: RunTokenClaims,
+    monkeypatch: pytest.MonkeyPatch,
+):
     from model_gateway import main
 
     class ServerSettings:
@@ -2248,48 +2289,127 @@ def test_local_startup_canary_query_skips_usage_ledger():
         def unset(self, key: str) -> None:
             pass
 
+    entered_provider = threading.Event()
+    release_provider = threading.Event()
+
     class FakeLLM:
         async def query(self, _inputs: Any, **_kwargs: Any) -> QueryResult:
+            if not entered_provider.is_set():
+                entered_provider.set()
+                await asyncio.to_thread(release_provider.wait)
             return QueryResult(output_text="ok", history=[])
 
     fake_ledger = FakeUsageLedger()
+    server = fakeredis.FakeServer()
+    producer_redis = fakeredis.aioredis.FakeRedis(server=server, decode_responses=True)
+    consumer_redis = fakeredis.aioredis.FakeRedis(server=server, decode_responses=True)
     with (
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
     ):
+        producer_app = main.create_app()
         app = main.create_app()
         app.state.usage_ledger = fake_ledger
         client = TestClient(app, client=("127.0.0.1", 50000))
-        response = client.post(
+        canary_claims = managed_ledger_claims.model_copy(
+            update={
+                "run_id": "gateway-startup-canary-release-a-test",
+                "task_id": "startup-query-test",
+                "attempt_id": "startup-attempt-test",
+            }
+        )
+        producer_app.state.startup_canary["enabled"] = True
+        producer_app.state.startup_canary["run_id"] = canary_claims.run_id
+        assert "run_id" not in app.state.startup_canary
+        asyncio.run(
+            producer_redis.set(
+                startup_canary.startup_canary_key(canary_claims.run_id), "1", ex=120
+            )
+        )
+        monkeypatch.setattr(token_utils, "redis_client", consumer_redis)
+        monkeypatch.setattr(
+            "model_gateway.auth.get_run_token", AsyncMock(return_value=canary_claims)
+        )
+        attach_run_authority(client, canary_claims)
+        responses: list[Any] = []
+        request_thread = threading.Thread(
+            target=lambda: responses.append(
+                client.post(
+                    "/query",
+                    json={
+                        "model": "openai/gpt-4o",
+                        "inputs": [{"kind": "text", "text": "hi"}],
+                    },
+                    headers=RUN_HEADERS,
+                )
+            )
+        )
+        request_thread.start()
+        try:
+            assert entered_provider.wait(timeout=5)
+            remote_response = TestClient(app).post(
+                "/query",
+                json={
+                    "model": "openai/gpt-4o",
+                    "inputs": [{"kind": "text", "text": "hi"}],
+                },
+                headers=RUN_HEADERS,
+            )
+            assert remote_response.status_code == 200
+            assert len(fake_ledger.events) == 1
+            asyncio.run(
+                producer_redis.delete(
+                    startup_canary.startup_canary_key(canary_claims.run_id)
+                )
+            )
+        finally:
+            release_provider.set()
+            request_thread.join(timeout=5)
+        assert not request_thread.is_alive()
+        assert responses[0].status_code == 200
+        assert len(fake_ledger.events) == 1
+
+        ordinary_claims = canary_claims.model_copy(
+            update={"run_id": "gateway-startup-canary-release-a-ordinary"}
+        )
+        monkeypatch.setattr(
+            "model_gateway.auth.get_run_token", AsyncMock(return_value=ordinary_claims)
+        )
+        attach_run_authority(client, ordinary_claims)
+        ordinary_response = client.post(
             "/query",
             json={
                 "model": "openai/gpt-4o",
                 "inputs": [{"kind": "text", "text": "hi"}],
-                "run_id": "gateway-startup-canary",
-                "question_id": "startup-test",
             },
-            headers={"Authorization": "Bearer sk-test"},
+            headers=RUN_HEADERS,
         )
-        assert response.status_code == 200
-        assert fake_ledger.events == []
+        assert ordinary_response.status_code == 200
+        assert len(fake_ledger.events) == 2
+        assert fake_ledger.events[-1]["run_id"] == ordinary_claims.run_id
 
-        remote_response = TestClient(app).post(
+        producer_app.state.startup_canary.pop("run_id")
+        monkeypatch.setattr(
+            "model_gateway.auth.get_run_token", AsyncMock(return_value=canary_claims)
+        )
+        attach_run_authority(client, canary_claims)
+        after_canary_response = client.post(
             "/query",
             json={
                 "model": "openai/gpt-4o",
                 "inputs": [{"kind": "text", "text": "hi"}],
-                "run_id": "gateway-startup-canary",
-                "question_id": "startup-test",
             },
-            headers={"Authorization": "Bearer sk-test"},
+            headers=RUN_HEADERS,
         )
+        assert after_canary_response.status_code == 200
+        assert len(fake_ledger.events) == 3
+        assert fake_ledger.events[-1]["run_id"] == canary_claims.run_id
 
-    assert remote_response.status_code == 200
-    assert len(fake_ledger.events) == 1
 
-
-def test_query_marks_usage_ledger_phase_when_enforced_write_fails():
+def test_query_marks_usage_ledger_phase_when_enforced_write_fails(
+    managed_ledger_claims: RunTokenClaims,
+):
     from model_gateway import main
 
     class ServerSettings:
@@ -2324,6 +2444,7 @@ def test_query_marks_usage_ledger_phase_when_enforced_write_fails():
         app = main.create_app()
         app.state.usage_ledger = FailingUsageLedger()
         client = TestClient(app, raise_server_exceptions=False)
+        attach_run_authority(client, managed_ledger_claims)
         response = client.post(
             "/query",
             json={
@@ -2332,7 +2453,7 @@ def test_query_marks_usage_ledger_phase_when_enforced_write_fails():
                 "run_id": "run-a",
                 "question_id": "question-a",
             },
-            headers={"Authorization": "Bearer sk-test"},
+            headers=RUN_HEADERS,
         )
 
     assert response.status_code == 500
@@ -2345,7 +2466,9 @@ def test_query_marks_usage_ledger_phase_when_enforced_write_fails():
     ) in events
 
 
-def test_query_does_not_write_usage_event_on_provider_error():
+def test_query_does_not_write_usage_event_on_provider_error(
+    managed_ledger_claims: RunTokenClaims,
+):
     from model_gateway import main
 
     class ServerSettings:
@@ -2371,6 +2494,7 @@ def test_query_does_not_write_usage_event_on_provider_error():
         app = main.create_app()
         app.state.usage_ledger = fake_ledger
         client = TestClient(app, raise_server_exceptions=False)
+        attach_run_authority(client, managed_ledger_claims)
         response = client.post(
             "/query",
             json={
@@ -2379,7 +2503,7 @@ def test_query_does_not_write_usage_event_on_provider_error():
                 "run_id": "run-a",
                 "question_id": "question-a",
             },
-            headers={"Authorization": "Bearer sk-test"},
+            headers=RUN_HEADERS,
         )
 
     assert response.status_code == 200

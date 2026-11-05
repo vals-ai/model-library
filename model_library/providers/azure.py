@@ -8,12 +8,12 @@ from typing_extensions import override
 from model_library import model_library_settings
 from model_library.base import (
     LLMConfig,
-    QueryResultCost,
     QueryResultMetadata,
 )
+from model_library.base.router import RouterLLM
 from model_library.providers.openai import OpenAIModel, completions
 from model_library.register_models import register_provider
-from model_library.registry_utils import compute_model_cost, get_registry_config
+from model_library.registry_utils import get_registry_config
 from model_library.utils import default_httpx2_client
 
 ROUTING_FEE_PER_M_INPUT_TOKENS = 0.14
@@ -30,7 +30,7 @@ def _served_model_key(served_model: str) -> str | None:
 
 
 @register_provider("azure")
-class AzureOpenAIModel(OpenAIModel):
+class AzureOpenAIModel(OpenAIModel, RouterLLM):
     # The key travels with an endpoint and API version, not as one setting.
     api_key_setting = None
 
@@ -82,20 +82,9 @@ class AzureOpenAIModel(OpenAIModel):
             self.router_mode = True
 
     @override
-    async def _calculate_cost(
-        self,
-        metadata: QueryResultMetadata,
-        batch: bool = False,
-        bill_reasoning: bool = True,
-    ) -> QueryResultCost | None:
-        if not self.is_router:
-            return await super()._calculate_cost(metadata, batch, bill_reasoning)
-        served_key = metadata.served_model and _served_model_key(metadata.served_model)
-        if not served_key or not (cost := compute_model_cost(served_key, metadata)):
-            return None
-        routing_fee = (
-            ROUTING_FEE_PER_M_INPUT_TOKENS * metadata.total_input_tokens / 1_000_000
-        )
-        return QueryResultCost(
-            input=0, output=0, total_override=cost.total + routing_fee
-        )
+    def _served_model_cost_key(self, served_model: str) -> str | None:
+        return _served_model_key(served_model)
+
+    @override
+    def _router_fee(self, metadata: QueryResultMetadata) -> float:
+        return ROUTING_FEE_PER_M_INPUT_TOKENS * metadata.total_input_tokens / 1_000_000

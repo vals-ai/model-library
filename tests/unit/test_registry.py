@@ -279,3 +279,48 @@ async def test_none_costs():
     metadata = QueryResultMetadata(in_tokens=100, out_tokens=50)
     result = await model._calculate_cost(metadata)
     assert result is None
+
+
+@pytest.mark.parametrize(
+    "model_key,fee",
+    [
+        ("openai/gpt-5.5", 0.04),
+        ("anthropic/claude-sonnet-4-6", 0.04),
+        ("grok/grok-4.5", 0.02),
+        ("google/gemini-3.5-flash", 0.056),
+        ("google/gemini-2.5-pro", 0.14),
+    ],
+)
+async def test_web_search_fee_hardcoded_per_provider(model_key: str, fee: float):
+    from model_library.base import QueryResultMetadata
+
+    model = get_registry_model(model_key)
+    cost = await model._calculate_cost(  # pyright: ignore[reportPrivateUsage]
+        QueryResultMetadata(in_tokens=0, out_tokens=0, web_search_requests=4)
+    )
+    assert cost is not None
+    assert cost.web_search == pytest.approx(fee)
+    assert cost.total == pytest.approx(fee)
+
+
+def test_registry_cost_has_no_web_search_fee():
+    from model_library.base import QueryResultMetadata
+    from model_library.registry_utils import compute_model_cost
+
+    cost = compute_model_cost(
+        "openai/gpt-5.5",
+        QueryResultMetadata(in_tokens=0, out_tokens=0, web_search_requests=1),
+    )
+    assert cost is not None
+    assert cost.web_search is None
+
+
+async def test_web_search_cost_absent_without_searches():
+    from model_library.base import QueryResultMetadata
+
+    model = get_registry_model("openai/gpt-5.5")
+    cost = await model._calculate_cost(  # pyright: ignore[reportPrivateUsage]
+        QueryResultMetadata(in_tokens=1000, out_tokens=0)
+    )
+    assert cost is not None
+    assert cost.web_search is None

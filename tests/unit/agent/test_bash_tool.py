@@ -204,7 +204,7 @@ class TestBashToolExecute:
         )
 
         for _ in range(50):
-            if pid_file.exists():
+            if pid_file.exists() and pid_file.read_text().strip():
                 break
             await asyncio.sleep(0.05)
         assert pid_file.exists()
@@ -254,7 +254,7 @@ class TestBashToolExecute:
         )
         await launched.wait()
         for _ in range(50):
-            if pid_file.exists():
+            if pid_file.exists() and pid_file.read_text().strip():
                 break
             await asyncio.sleep(0.05)
         assert pid_file.exists()

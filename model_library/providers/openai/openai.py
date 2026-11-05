@@ -62,6 +62,9 @@ OpenAIToolCallMode = Literal["default", "auto", "code_mode"]
 class OpenAIConfig(ProviderConfig):
     use_completions: bool = False
     deep_research: bool = False
+    force_web_search: bool = False
+    hosted_tools: list[dict[str, Any]] | None = None
+    context_management: list[dict[str, Any]] | None = None
     tool_call_mode: OpenAIToolCallMode = "default"
     verbosity: Literal["low", "medium", "high"] | None = None
     prompt_cache_retention: Literal["24h", "in_memory"] | None = None
@@ -121,6 +124,9 @@ class OpenAIModel(LLM):
             self._api = completions
 
         self.deep_research = self.provider_config.deep_research
+        self.force_web_search = self.provider_config.force_web_search
+        self.context_management = self.provider_config.context_management
+        self.hosted_tools = self.provider_config.hosted_tools
         self.tool_call_mode = self.provider_config.tool_call_mode
         self.verbosity = self.provider_config.verbosity
         self.prompt_cache_retention = self.provider_config.prompt_cache_retention
@@ -164,7 +170,7 @@ class OpenAIModel(LLM):
     @property
     @override
     def search_tool(self) -> dict[str, str]:
-        return responses.search_tool(self)
+        return {"type": "web_search"}
 
     @override
     async def parse_tools(self, tools: Sequence[ToolDefinition]) -> list[Any]:
@@ -327,7 +333,6 @@ class OpenAIModel(LLM):
         - File Search Storage
         Per 1000:
         - File Search Tool Call (responses api)
-        - Web Search Tool Call
         """
 
         # Prompt Caching works automatically on all your API requests (no code changes required) and has no additional fees associated with it
@@ -338,3 +343,7 @@ class OpenAIModel(LLM):
         return await super()._calculate_cost(
             metadata, batch or self.service_tier == "flex", bill_reasoning=True
         )
+
+    @override
+    def _web_search_per_1k(self) -> float:
+        return 10.0

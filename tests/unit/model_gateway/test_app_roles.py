@@ -1,7 +1,10 @@
 import asyncio
+import os
 from collections.abc import Iterator
 from contextlib import contextmanager
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+from uuid import uuid4
 
 from httpx import ASGITransport, AsyncClient
 import pytest
@@ -50,9 +53,38 @@ async def _wait_for_metrics_stop(
     await stop.wait()
 
 
+class QuietAuthorityPublisher:
+    def __init__(self, *_args, **_kwargs):
+        self._stop = asyncio.Event()
+
+    async def run(self) -> None:
+        await self._stop.wait()
+
+    async def stop(self) -> None:
+        self._stop.set()
+
+
 @contextmanager
 def _quiet_lifecycle() -> Iterator[None]:
+    async def wait_for_stop(stop: asyncio.Event) -> None:
+        await stop.wait()
+
     with (
+        patch.dict(os.environ, {
+            "MODEL_GATEWAY_AUTH_DATABASE_SECRET": '{"username":"local","password":"local","host":"localhost","port":5432}',
+            "MODEL_GATEWAY_AUTH_NAMESPACE": f"app-roles-{uuid4()}",
+            "MODEL_GATEWAY_AUTH_DATABASE_NAME": "unused",
+            "MODEL_GATEWAY_AUTH_POOL_SIZE": "1",
+            "DESCOPE_PROJECT_ID": "local",
+            "DESCOPE_EXPECTED_ISSUER": "https://issuer.example",
+            "DESCOPE_ORGANIZATION_ID": "local",
+            "DESCOPE_MANAGEMENT_CREDENTIAL": "local",
+            "DESCOPE_MACHINE_ACCESS_KEY_ID": "local-machine",
+            "DESCOPE_MACHINE_SERVICE_OWNER_ID": "00000000-0000-0000-0000-000000000002",
+        }),
+        patch.object(gateway_app, "HumanVerifier", return_value=SimpleNamespace(aclose=AsyncMock())),
+        patch.object(gateway_app, "HumanReconciler", return_value=SimpleNamespace(run=wait_for_stop)),
+        patch.object(gateway_app, "ManagedAuthorityPublisher", QuietAuthorityPublisher),
         patch.object(
             gateway_app,
             "publish_metrics_periodically",
@@ -192,6 +224,7 @@ async def test_control_enabled_lifespan_starts_one_monitor_and_closes_before_red
         events.append("redis")
 
     redis_client.aclose = AsyncMock(side_effect=close_redis)
+    redis_client.hget = AsyncMock(return_value="v1:ready")
     store = object()
     monitor = MagicMock(spec=["start", "close"])
 
@@ -242,7 +275,7 @@ async def test_control_enabled_lifespan_requires_redis(
     app = _create_app(monkeypatch, role)
 
     with (
-        _quiet_lifecycle(),
+        patch.dict(os.environ, {"REDIS_URL": ""}),
         patch.object(gateway_app, "RateLimitMonitor") as monitor_factory,
         pytest.raises(RuntimeError, match="REDIS_URL"),
     ):
@@ -265,6 +298,7 @@ async def test_query_lifespan_with_redis_does_not_create_monitor(
         app = _create_app(monkeypatch, "query")
     redis_client = MagicMock()
     redis_client.aclose = AsyncMock()
+    redis_client.hget = AsyncMock(return_value="v1:ready")
 
     with (
         _quiet_lifecycle(),
@@ -282,7 +316,7 @@ async def test_query_lifespan_with_redis_does_not_create_monitor(
 async def test_query_lifespan_closes_rate_limit_service_before_telemetry(
     monkeypatch: pytest.MonkeyPatch,
 ):
-    monkeypatch.delenv("REDIS_URL", raising=False)
+    monkeypatch.setenv("REDIS_URL", "redis://query.test")
     events: list[str] = []
     rate_limit_probe_service = MagicMock(spec=["close"])
 
@@ -298,9 +332,23 @@ async def test_query_lifespan_closes_rate_limit_service_before_telemetry(
         return_value=rate_limit_probe_service,
     ):
         app = _create_app(monkeypatch, "query")
+    passthrough_client = MagicMock(spec=["aclose"])
+
+    async def close_passthrough_client() -> None:
+        events.append("passthrough_client")
+
+    passthrough_client.aclose = AsyncMock(side_effect=close_passthrough_client)
+    app.state.passthrough_client = passthrough_client
 
     telemetry_shutdown = MagicMock(side_effect=lambda: events.append("telemetry"))
     with (
+        patch.object(
+            gateway_app.async_redis,
+            "from_url",
+            return_value=MagicMock(
+                aclose=AsyncMock(), hget=AsyncMock(return_value="v1:ready")
+            ),
+        ),
         _quiet_lifecycle(),
         patch.object(
             gateway_app.telemetry,
@@ -312,8 +360,9 @@ async def test_query_lifespan_closes_rate_limit_service_before_telemetry(
             pass
 
     rate_limit_probe_service.close.assert_awaited_once_with()
+    passthrough_client.aclose.assert_awaited_once_with()
     telemetry_shutdown.assert_called_once_with()
-    assert events == ["rate_limit_probe_service", "telemetry"]
+    assert events == ["rate_limit_probe_service", "passthrough_client", "telemetry"]
 
 
 @pytest.mark.parametrize("role", ["control", "combined"])
@@ -322,6 +371,8 @@ async def test_control_enabled_readiness_requires_redis(
     role: str,
 ):
     app = _create_app(monkeypatch, role)
+    if role == "combined":
+        app.state.managed_authority_ready.set()
     monitor = MagicMock(spec=["check_health"])
     app.state.rate_limit_monitor = monitor
     monkeypatch.setattr(token_utils, "redis_client", None)
@@ -339,6 +390,8 @@ async def test_control_enabled_readiness_checks_redis_and_monitor(
     role: str,
 ):
     app = _create_app(monkeypatch, role)
+    if role == "combined":
+        app.state.managed_authority_ready.set()
     monitor = MagicMock(spec=["check_health"])
     app.state.rate_limit_monitor = monitor
     redis_client = MagicMock()
@@ -358,6 +411,8 @@ async def test_terminal_monitor_makes_control_enabled_readiness_unhealthy(
     role: str,
 ):
     app = _create_app(monkeypatch, role)
+    if role == "combined":
+        app.state.managed_authority_ready.set()
     monitor = MagicMock(spec=["check_health"])
     monitor.check_health.side_effect = RuntimeError("monitor failed")
     app.state.rate_limit_monitor = monitor
@@ -377,6 +432,7 @@ async def test_query_readiness_does_not_depend_on_redis(
 ):
     app = _create_app(monkeypatch, "query")
     monkeypatch.setattr(token_utils, "redis_client", None)
+    app.state.managed_authority_ready.set()
 
     response = await _get_readiness(app)
 
@@ -402,6 +458,7 @@ async def test_initial_runtime_refresh_failure_closes_manager_and_aborts_startup
         return_value=RefreshResult(**{outcome: frozenset({"credentials"})})
     )
     manager.aclose = AsyncMock()
+    monkeypatch.setenv("REDIS_URL", "redis://query.test")
     with patch.object(
         gateway_app, "runtime_config_manager_from_env", return_value=manager
     ):
@@ -411,6 +468,11 @@ async def test_initial_runtime_refresh_failure_closes_manager_and_aborts_startup
         _quiet_lifecycle(),
         pytest.raises(
             RuntimeError, match="Initial runtime configuration refresh failed"
+        ),
+        patch.object(
+            gateway_app.async_redis,
+            "from_url",
+            return_value=MagicMock(aclose=AsyncMock()),
         ),
     ):
         async with app.router.lifespan_context(app):

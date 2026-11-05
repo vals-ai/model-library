@@ -1,12 +1,12 @@
 import asyncio
 import logging
 from asyncio import CancelledError
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import asynccontextmanager
 from typing import cast
 
 import httpx
-
+import model_library
 from model_gateway.benchmark_admission_types import (
     BenchmarkAdmissionOutcome,
     BenchmarkAdmissionResponse,
@@ -22,6 +22,17 @@ from model_library.utils import gateway_httpx_client
 CancellationCheck = Callable[[], Awaitable[bool]]
 HEARTBEAT_INTERVAL_SECONDS = 2
 logger = logging.getLogger(__name__)
+
+
+class _BenchmarkOperationalAuth(httpx.Auth):
+    def __init__(self, api_key: str) -> None:
+        self.api_key = api_key
+
+    def auth_flow(
+        self, request: httpx.Request
+    ) -> Generator[httpx.Request, httpx.Response, None]:
+        request.headers["Authorization"] = f"Bearer {self.api_key}"
+        yield request
 
 
 class BenchmarkAdmissionCancelled(RuntimeError):
@@ -210,7 +221,11 @@ async def gateway_benchmark_admission(
         yield None
         return
 
-    control_http_client = gateway_httpx_client(headers=dict(model.get_client().headers))
+    api_key = (
+        model_library.model_library_settings.MODEL_GATEWAY_BENCHMARK_ADMISSION_API_KEY
+    )
+    control_http_client = gateway_httpx_client()
+    control_http_client.auth = _BenchmarkOperationalAuth(api_key)
     async with control_http_client:
         async with _gateway_benchmark_admission(
             model,

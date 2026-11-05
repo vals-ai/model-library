@@ -23,10 +23,10 @@ class GatewayBenchmarkAdmissionClient:
         self,
         model: GatewayLLM,
         *,
-        http_client: httpx.AsyncClient | None = None,
+        http_client: httpx.AsyncClient,
     ) -> None:
         self.gateway = model
-        self.http_client = http_client or model.get_client()
+        self.http_client = http_client
         self.model = model.gateway_model_key
 
     async def acquire(

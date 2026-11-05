@@ -43,6 +43,14 @@ USAGE_EVENT_FACT_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "agent_name",
     "identity_email",
     "api_key_name",
+    "managed_key_id",
+    "budget_id",
+    "owner_issuer",
+    "owner_subject",
+    "service_id",
+    "project_id",
+    "project_org_id",
+    "project_environment",
     "outcome",
     "error_type",
     "input_tokens",
@@ -90,6 +98,9 @@ AGGREGATE_TABLE_BY_GRAIN: Final[dict[AggregateGrain, str]] = {
     "1h": "usage_agg_1h",
     "1d": "usage_agg_1d",
 }
+RUN_AGGREGATE_TABLE_NAME: Final = "usage_run_agg_1d"
+RUN_AGGREGATE_GRAIN: Final[AggregateGrain] = "1d"
+GRADER_AGENT_NAME: Final = "grader"
 
 
 class AnalyticsDimension(NamedTuple):
@@ -170,6 +181,17 @@ ANALYTICS_DIMENSIONS: Final[tuple[AnalyticsDimension, ...]] = (
         True,
         "API key name",
         60,
+    ),
+    AnalyticsDimension(
+        "budget_id",
+        "budget_id",
+        "budget_id",
+        "varchar(128)",
+        True,
+        True,
+        False,
+        "Budget ID",
+        70,
     ),
 )
 
@@ -254,6 +276,14 @@ def usage_events_column_sql(*, include_batch_id: bool = False) -> str:
   agent_name varchar(1024),
   identity_email varchar(1024),
   api_key_name varchar(512),
+  managed_key_id varchar(128),
+  budget_id varchar(128),
+  owner_issuer varchar(2048),
+  owner_subject varchar(2048),
+  service_id varchar(128),
+  project_id varchar(128),
+  project_org_id varchar(128),
+  project_environment varchar(128),
 
   outcome varchar(16) not null,
   error_type varchar(256),
@@ -310,10 +340,21 @@ sortkey (completed_at);"""
 SCHEMA_COLUMN_ADDITIONS: Final[tuple[dict[str, str], ...]] = tuple(
     {
         "TableName": table_name,
-        "ColumnName": "attempt_id",
-        "ColumnType": "varchar(65535)",
+        "ColumnName": column_name,
+        "ColumnType": column_type,
     }
     for table_name in (USAGE_EVENTS_STAGING_TABLE_NAME, "usage_events")
+    for column_name, column_type in (
+        ("attempt_id", "varchar(65535)"),
+        ("managed_key_id", "varchar(128)"),
+        ("budget_id", "varchar(128)"),
+        ("owner_issuer", "varchar(2048)"),
+        ("owner_subject", "varchar(2048)"),
+        ("service_id", "varchar(128)"),
+        ("project_id", "varchar(128)"),
+        ("project_org_id", "varchar(128)"),
+        ("project_environment", "varchar(128)"),
+    )
 )
 
 
@@ -381,6 +422,40 @@ def aggregate_table_ddl_by_grain(
     schema: str = WAREHOUSE_SCHEMA,
 ) -> dict[AggregateGrain, str]:
     return {grain: aggregate_table_ddl(grain, schema) for grain in AGGREGATE_GRAINS}
+
+
+def _run_aggregate_dimensions() -> tuple[AnalyticsDimension, ...]:
+    return tuple(
+        dimension
+        for dimension in ANALYTICS_DIMENSIONS
+        if dimension.dimension_kind in ("provider", "provider_model")
+    )
+
+
+def run_aggregate_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:
+    table = qualified_table_name(RUN_AGGREGATE_TABLE_NAME, schema)
+    dimension_columns = _indent(
+        [
+            f"{dimension.source_column} {dimension.aggregate_column_type} not null,"
+            for dimension in _run_aggregate_dimensions()
+        ]
+    )
+    return f"""create table if not exists {table} (
+  bucket_start_utc timestamptz not null,
+  bucket_end_utc timestamptz not null,
+
+  run_id varchar(65535) not null,
+  is_grader boolean not null,
+{dimension_columns}
+
+  request_count bigint not null,
+  cost_usd_sum decimal(38,12),
+
+  data_through_utc timestamptz not null,
+  refreshed_at timestamptz not null
+)
+diststyle auto
+sortkey (bucket_start_utc, run_id);"""
 
 
 def usage_dimension_values_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:
@@ -457,7 +532,32 @@ def aggregate_delete_sql(
     start_parameter: str = ":start_bucket",
     end_parameter: str = ":end_bucket",
 ) -> str:
-    table = qualified_table_name(aggregate_table_name(grain), schema)
+    return _bucket_window_delete_sql(
+        qualified_table_name(aggregate_table_name(grain), schema),
+        start_parameter=start_parameter,
+        end_parameter=end_parameter,
+    )
+
+
+def run_aggregate_delete_sql(
+    schema: str = WAREHOUSE_SCHEMA,
+    *,
+    start_parameter: str = ":start_bucket",
+    end_parameter: str = ":end_bucket",
+) -> str:
+    return _bucket_window_delete_sql(
+        qualified_table_name(RUN_AGGREGATE_TABLE_NAME, schema),
+        start_parameter=start_parameter,
+        end_parameter=end_parameter,
+    )
+
+
+def _bucket_window_delete_sql(
+    table: str,
+    *,
+    start_parameter: str,
+    end_parameter: str,
+) -> str:
     start_expression = _validate_sql_expression(start_parameter)
     end_expression = _validate_sql_expression(end_parameter)
     return f"""delete from {table}
@@ -666,6 +766,85 @@ group by
 {dimension_group_by_columns};"""
 
 
+def run_aggregate_insert_sql(
+    schema: str = WAREHOUSE_SCHEMA,
+    *,
+    start_parameter: str = ":start_bucket",
+    end_parameter: str = ":end_bucket",
+    data_through_expression: str = ":data_through_utc",
+) -> str:
+    run_aggregate_table = qualified_table_name(RUN_AGGREGATE_TABLE_NAME, schema)
+    fact_table = qualified_table_name("usage_events", schema)
+    start_expression = _validate_sql_expression(start_parameter)
+    end_expression = _validate_sql_expression(end_parameter)
+    data_through_sql = _validate_sql_expression(data_through_expression)
+    missing = sql_literal(MISSING_DIMENSION_VALUE)
+    grader = sql_literal(GRADER_AGENT_NAME)
+    dimensions = _run_aggregate_dimensions()
+    dimension_columns = _indent(
+        [f"{dimension.source_column}," for dimension in dimensions]
+    )
+    dimension_bucket_columns = _indent(
+        [
+            f"coalesce({dimension.fact_column}, {missing}) as {dimension.source_column},"
+            for dimension in dimensions
+        ],
+        spaces=4,
+    )
+    dimension_group_by_columns = ",\n".join(
+        f"  {dimension.source_column}" for dimension in dimensions
+    )
+    bucket_start = _bucket_start_expression(RUN_AGGREGATE_GRAIN)
+    bucket_end = _bucket_end_expression(RUN_AGGREGATE_GRAIN, bucket_start)
+    reserved_dimension_guard = _reserved_dimension_guard_sql(
+        fact_table, start_expression, end_expression
+    )
+    return f"""insert into {run_aggregate_table} (
+  bucket_start_utc,
+  bucket_end_utc,
+  run_id,
+  is_grader,
+{dimension_columns}
+  request_count,
+  cost_usd_sum,
+  data_through_utc,
+  refreshed_at
+)
+select
+  bucket_start_utc,
+  bucket_end_utc,
+  run_id,
+  is_grader,
+{dimension_columns}
+  count(case when outcome = 'success' then 1 end) as request_count,
+  sum(cost_usd) as cost_usd_sum,
+  {data_through_sql} as data_through_utc,
+  getdate() as refreshed_at
+from (
+  select
+    {bucket_start} as bucket_start_utc,
+    {bucket_end} as bucket_end_utc,
+    run_id,
+    coalesce(agent_name = {grader}, false) as is_grader,
+{dimension_bucket_columns}
+    outcome,
+    cost_usd
+  from {fact_table}
+  where completed_at >= {start_expression}
+    and completed_at < {end_expression}
+    and run_id is not null
+) as bucketed
+cross join (
+  {reserved_dimension_guard}
+) as reserved_dimension_guard
+group by
+  bucket_start_utc,
+  bucket_end_utc,
+  run_id,
+  is_grader,
+{dimension_group_by_columns};"""
+
+
 def schema_statement_batches(
     schema: str = WAREHOUSE_SCHEMA,
 ) -> tuple[tuple[str, ...], ...]:
@@ -678,6 +857,7 @@ def schema_statement_batches(
         usage_events_table_ddl(schema),
         usage_event_performance_table_ddl(schema),
         *aggregate_ddls,
+        run_aggregate_table_ddl(schema),
         usage_dimension_values_table_ddl(schema),
         analytics_dimensions_table_ddl(schema),
     )

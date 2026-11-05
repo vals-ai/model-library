@@ -165,6 +165,49 @@ gpt-6-models:
           default_parameters:
             reasoning_effort: "max"
 
+  openai/gpt-6.1-terra:
+    label: GPT-6.1 Terra
+    documentation_url: "https://developers.openai.com/api/docs/models/\
+      gpt-6.1-terra"
+    release_date: 2026-10-26
+    properties:
+      training_cutoff: "2026-06"
+    costs_per_million_token:
+      input: 1
+      output: 5
+      cache:
+        read_discount: 0.05
+      context:
+        input: 2
+        output: 7.5
+        cache:
+          read_discount: 0.05
+    default_parameters:
+      reasoning_effort: "max"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-6.1-terra-low:
+          label: GPT-6.1 Terra (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - openai/gpt-6.1-terra-medium:
+          label: GPT-6.1 Terra (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
+      - openai/gpt-6.1-terra-high:
+          label: GPT-6.1 Terra (High)
+          default_parameters:
+            reasoning_effort: "high"
+      - openai/gpt-6.1-terra-xhigh:
+          label: GPT-6.1 Terra (Extra High)
+          default_parameters:
+            reasoning_effort: "xhigh"
+      - openai/gpt-6.1-terra-max:
+          label: GPT-6.1 Terra (Max)
+          default_parameters:
+            reasoning_effort: "max"
+
   openai/gpt-6-luna:
     label: GPT-6 Luna
     documentation_url: "https://developers.openai.com/api/docs/models/\

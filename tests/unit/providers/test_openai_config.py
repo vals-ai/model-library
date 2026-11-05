@@ -2,7 +2,7 @@ import json
 import logging
 from collections.abc import AsyncIterator, Sequence
 from types import SimpleNamespace
-from typing import Literal
+from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -2497,3 +2497,97 @@ async def test_azure_responses_query_uses_owner_client_override():
     assert create.call_args.kwargs["azure_endpoint"] == "https://test.openai.azure.com"
     client.responses.create.assert_awaited_once()
     assert result.output_text == "from Azure"
+
+
+@pytest.mark.parametrize(
+    ("tools", "expected"),
+    [
+        ([], [{"type": "web_search"}]),
+        (
+            [ToolDefinition(name="web_search", body={"type": "web_search"})],
+            [{"type": "web_search"}],
+        ),
+    ],
+)
+async def test_force_web_search_adds_tool_once(
+    tools: list[ToolDefinition], expected: list[dict[str, str]]
+):
+    model = OpenAIModel(
+        "gpt-4o",
+        config=LLMConfig(provider_config=OpenAIConfig(force_web_search=True)),
+    )
+
+    body = await model.build_body(_INPUT, tools=tools)
+
+    assert body["tools"] == expected
+
+
+@pytest.mark.parametrize(
+    ("tools", "expected"),
+    [
+        (
+            [],
+            [
+                {"type": "web_search", "return_token_budget": "unlimited"},
+                {"type": "code_interpreter", "container": {"type": "auto"}},
+            ],
+        ),
+        (
+            [ToolDefinition(name="web_search", body={"type": "web_search"})],
+            [
+                {"type": "web_search"},
+                {"type": "code_interpreter", "container": {"type": "auto"}},
+            ],
+        ),
+        (
+            [
+                ToolDefinition(
+                    name="web_search", body={"type": "web_search_preview"}
+                )
+            ],
+            [
+                {"type": "web_search_preview"},
+                {"type": "code_interpreter", "container": {"type": "auto"}},
+            ],
+        ),
+    ],
+)
+async def test_hosted_tools_added_unless_type_present(
+    tools: list[ToolDefinition], expected: list[dict[str, Any]]
+):
+    model = OpenAIModel(
+        "gpt-4o",
+        config=LLMConfig(
+            provider_config=OpenAIConfig(
+                hosted_tools=[
+                    {"type": "web_search", "return_token_budget": "unlimited"},
+                    {"type": "code_interpreter", "container": {"type": "auto"}},
+                ]
+            )
+        ),
+    )
+
+    body = await model.build_body(_INPUT, tools=tools)
+
+    assert body["tools"] == expected
+
+
+async def test_context_management_is_sent_when_configured():
+    model = OpenAIModel(
+        "gpt-4o",
+        config=LLMConfig(
+            provider_config=OpenAIConfig(
+                context_management=[{"type": "compaction"}]
+            )
+        ),
+    )
+
+    body = await model.build_body(_INPUT, tools=[])
+
+    assert body["context_management"] == [{"type": "compaction"}]
+
+
+async def test_context_management_is_omitted_by_default():
+    body = await OpenAIModel("gpt-4o").build_body(_INPUT, tools=[])
+
+    assert "context_management" not in body

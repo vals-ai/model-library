@@ -21,6 +21,7 @@ from model_library.base.output.performance import (
 
 if TYPE_CHECKING:
     from model_library.base.output.result import (
+        ComputerCall,
         FinishReasonInfo,
         ProviderToolEvent,
         QueryResult,
@@ -379,6 +380,7 @@ class QueryResultBuilder:
         finish_reason: FinishReasonInfo | None = None,
         metadata: QueryResultMetadata | None = None,
         tool_calls: list[ToolCall] | None = None,
+        computer_calls: list[ComputerCall] | None = None,
         provider_tool_events: list[ProviderToolEvent] | None = None,
         history: list[InputItem] | None = None,
         extras: QueryResultExtras | None = None,
@@ -412,6 +414,7 @@ class QueryResultBuilder:
             or FinishReasonInfo(reason=FinishReason.UNKNOWN, raw=None),
             metadata=result_metadata,
             tool_calls=tool_calls or [],
+            computer_calls=computer_calls or [],
             provider_tool_events=provider_tool_events or [],
             history=history or [],
             extras=extras or QueryResultExtras(),

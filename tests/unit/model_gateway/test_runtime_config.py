@@ -3,6 +3,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import httpx
 import openai
@@ -476,7 +477,8 @@ async def test_removed_managed_field_does_not_fall_back_to_environment(
         await worker.aclose()
 
 
-async def test_flat_aggregate_secret_preserves_existing_top_level_fields():
+async def test_flat_aggregate_secret_preserves_existing_top_level_fields(monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     now = datetime.now(UTC)
     agent = MutableAgent(
         _model_payload(revision=1, label="Current", originated_at=now),
@@ -558,6 +560,10 @@ async def test_asgi_middleware_keeps_in_flight_request_on_old_runtime_pair(
     monkeypatch.setattr(
         gateway_app, "runtime_config_manager_from_env", lambda _state: None
     )
+    async def pass_auth(request: Any, call_next: Any) -> Any:
+        return await call_next(request)
+
+    monkeypatch.setattr(gateway_app, "create_auth_middleware", lambda _keys: pass_auth)
     app = gateway_app.create_app()
     state = app.state.runtime_config_state
     state.install(
@@ -719,3 +725,18 @@ async def test_unchanged_model_payload_is_not_reparsed(
         assert len(parses) == 1
     finally:
         await worker.aclose()
+
+
+def test_access_document_without_approved_identities_denies_everyone() -> None:
+    from model_gateway.runtime_config import AccessDocument
+
+    legacy = AccessDocument.model_validate_json('{"admin_api_key_names": ["admin"]}')
+    listed = AccessDocument.model_validate_json(
+        '{"admin_api_key_names": [], "approved_identity_minters": ["tracker"],'
+        ' "approved_identity_emails": [" Person@Example.com ", "person@example.com"]}'
+    )
+
+    assert not legacy.admits("tracker", "person@example.com")
+    assert listed.approved_identity_emails == frozenset({"person@example.com"})
+    assert listed.admits("tracker", "Person@example.com")
+    assert not listed.admits("other", "person@example.com")

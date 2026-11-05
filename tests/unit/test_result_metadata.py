@@ -910,3 +910,24 @@ class TestQueryResultMetadataAddition:
 
         assert result.total_input_tokens == 300 + 25 + 5
         assert result.total_output_tokens == 150 + 50
+
+
+def test_web_search_requests_and_cost_are_additive():
+    a = QueryResultMetadata(
+        in_tokens=1,
+        out_tokens=1,
+        web_search_requests=2,
+        cost=QueryResultCost(input=0.0, output=0.0, web_search=0.02),
+    )
+    b = QueryResultMetadata(in_tokens=1, out_tokens=1)
+    c = QueryResultMetadata(
+        in_tokens=1,
+        out_tokens=1,
+        web_search_requests=1,
+        cost=QueryResultCost(input=0.0, output=0.0, web_search=0.01),
+    )
+    total = a + b + c
+    assert total.web_search_requests == 3
+    assert total.cost is not None
+    assert total.cost.web_search == pytest.approx(0.03)
+    assert total.cost.total == pytest.approx(0.03)

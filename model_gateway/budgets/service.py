@@ -1,20 +1,27 @@
-"""Background transfer of recorded spend into a local query-time budget view."""
+"""Managed spend admission from Redis and control-side S3 snapshot publication."""
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING, Protocol, TypedDict, cast
+from decimal import Decimal
+from enum import StrEnum
+from typing import Protocol, TypedDict, cast
+from uuid import UUID
 
 import boto3
 from botocore.exceptions import ClientError
+from pydantic import ValidationError
 from redis.asyncio import Redis
+from redis.exceptions import RedisError
 
-from model_gateway.budgets.bumps import effective_limit, grant_amount
-from model_gateway.budgets.schema import BudgetPolicy, SpendSnapshot, period_bounds
-
-if TYPE_CHECKING:
-    from model_gateway.budgets.bump_service import BumpService
+from model_gateway.budgets.schema import (
+    BudgetPeriod,
+    SpendSnapshot,
+    managed_key_spend_id,
+    period_bounds,
+)
+from model_gateway.managed_auth.runtime import RuntimeAuthority
 
 
 class BudgetS3Body(Protocol):
@@ -49,6 +56,24 @@ return 1
 """
 
 
+def _current_spend(
+    snapshot: SpendSnapshot, period: BudgetPeriod, spend_id: str, now: datetime
+) -> Decimal:
+    """Recorded spend this period; $0 until the snapshot covers the period or scope."""
+    recorded = snapshot.periods[period]
+    if (recorded.start, recorded.end) != period_bounds(period, now):
+        return Decimal(0)
+    return recorded.spend_usd.get(spend_id, Decimal(0))
+
+
+class BudgetDecision(StrEnum):
+    ALLOWED = "allowed"
+    EXHAUSTED = "exhausted"
+    KEY_EXHAUSTED = "key_exhausted"
+    MISSING = "missing"
+    UNREADABLE = "unreadable"
+
+
 class BudgetService:
     def __init__(
         self,
@@ -62,35 +87,75 @@ class BudgetService:
         self.redis: BudgetRedis | None = cast(BudgetRedis | None, redis)
         self.bucket = bucket
         self.key = key
-        self.redis_key = f"gateway:budgets:{stage}:spend"
-        self.snapshot: SpendSnapshot | None = None
+        self.redis_key = f"gateway:budgets:{stage}:managed-spend-v2"
         self._s3: BudgetS3Client | None = None
-        self.bump_service: BumpService | None = None
 
-    def blocked(
-        self, policy: BudgetPolicy | None, email: str | None, now: datetime
-    ) -> bool:
-        if policy is None or email is None or self.snapshot is None:
-            return False
-        if self.bump_service is not None and self.bump_service.snapshot is None:
-            return False
-        period = self.snapshot.periods[policy.period]
-        start, end = period_bounds(policy.period, now)
-        if period.start != start or period.end != end:
-            return False
-        limit = policy.email_overrides.get(email, policy.default_limit_usd)
-        if self.bump_service is not None:
-            snapshot = self.bump_service.snapshot
-            if snapshot is not None:
-                grant = snapshot.bumps.get(email)
-                if (
-                    grant is not None
-                    and grant.period == policy.period
-                    and grant.period_start == start
-                    and grant.period_end == end
-                ):
-                    limit = effective_limit(limit, grant_amount(grant))
-        return period.spend_usd.get(email, 0) >= limit
+    async def managed_decision(
+        self,
+        authority: RuntimeAuthority,
+        now: datetime,
+    ) -> BudgetDecision:
+        if self.redis is None:
+            return BudgetDecision.UNREADABLE
+        try:
+            payload = await self.redis.get(self.redis_key)
+            if payload is None:
+                return BudgetDecision.MISSING
+            snapshot = self._parse_snapshot(payload)
+        except (RedisError, ValidationError, ValueError):
+            logger.exception("Managed budget snapshot unreadable stage=%s", self.stage)
+            return BudgetDecision.UNREADABLE
+
+        project_limit = authority.project_limit
+        if project_limit is not None and project_limit.total_limit_usd is not None:
+            if snapshot.total_spend_usd is None:
+                return BudgetDecision.MISSING
+            spend = snapshot.total_spend_usd.get(
+                str(authority.project.project_id), Decimal(0)
+            )
+            if spend >= project_limit.total_limit_usd:
+                return BudgetDecision.EXHAUSTED
+        elif project_limit is not None:
+            spend = _current_spend(
+                snapshot,
+                project_limit.period,
+                str(authority.project.project_id),
+                now,
+            )
+            limit = project_limit.base_limit_usd + sum(
+                (
+                    increase.increase_usd
+                    for increase in project_limit.temporary_increases
+                    if increase.period_start <= now < increase.period_end
+                ),
+                Decimal(0),
+            )
+            if spend >= limit:
+                return BudgetDecision.EXHAUSTED
+
+        key_limit = authority.key_limit
+        if key_limit is not None:
+            spend = _current_spend(
+                snapshot, key_limit.period, managed_key_spend_id(authority.key_id), now
+            )
+            if spend >= key_limit.limit_usd:
+                return BudgetDecision.KEY_EXHAUSTED
+        return BudgetDecision.ALLOWED
+
+    async def project_total_spend(self, project_id: UUID) -> Decimal | None:
+        if self.redis is None:
+            return None
+        try:
+            payload = await self.redis.get(self.redis_key)
+            if payload is None:
+                return None
+            totals = self._parse_snapshot(payload).total_spend_usd
+        except (RedisError, ValidationError, ValueError):
+            logger.exception("Managed budget snapshot unreadable stage=%s", self.stage)
+            return None
+        if totals is None:
+            return None
+        return totals.get(str(project_id), Decimal(0))
 
     async def refresh_control_once(self) -> None:
         if self.bucket is None or self.key is None or self.redis is None:
@@ -112,44 +177,20 @@ class BudgetService:
         await self.redis.eval(
             REPLACE_IF_NEWER, 1, self.redis_key, snapshot.revision, payload
         )
-        await self.read_shared_snapshot()
 
     async def run_control(self, stop: asyncio.Event) -> None:
-        await self._run(stop, self.refresh_control_once)
-
-    async def refresh_query_once(self) -> None:
-        await self.read_shared_snapshot()
-
-    async def run_query(self, stop: asyncio.Event) -> None:
-        await self._run(stop, self.refresh_query_once)
-
-    async def read_shared_snapshot(self) -> SpendSnapshot | None:
-        if self.redis is None:
-            return self.snapshot
-        payload = await self.redis.get(self.redis_key)
-        if payload is not None:
-            self._retain_snapshot(self._parse_snapshot(payload))
-        return self.snapshot
-
-    def _parse_snapshot(self, payload: bytes | str) -> SpendSnapshot:
-        snapshot = SpendSnapshot.model_validate_json(payload)
-        if snapshot.stage != self.stage:
-            raise ValueError("budget snapshot stage does not match gateway stage")
-        return snapshot
-
-    def _retain_snapshot(self, snapshot: SpendSnapshot) -> None:
-        if self.snapshot is None or snapshot.revision >= self.snapshot.revision:
-            self.snapshot = snapshot
-
-    async def _run(
-        self, stop: asyncio.Event, refresh: Callable[[], Awaitable[None]]
-    ) -> None:
         while not stop.is_set():
             try:
-                await refresh()
+                await self.refresh_control_once()
             except Exception:
                 logger.exception("Budget snapshot refresh failed stage=%s", self.stage)
             try:
                 await asyncio.wait_for(stop.wait(), timeout=5)
             except TimeoutError:
                 pass
+
+    def _parse_snapshot(self, payload: bytes | str) -> SpendSnapshot:
+        snapshot = SpendSnapshot.model_validate_json(payload)
+        if snapshot.stage != self.stage:
+            raise ValueError("budget snapshot stage does not match gateway stage")
+        return snapshot

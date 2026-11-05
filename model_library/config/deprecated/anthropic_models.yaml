@@ -6,7 +6,7 @@ base-config:
     images: true
     files: true
     tools: true
-    temperature: true
+    temperature: false
     output_schema: true
   properties:
     reasoning_model: false
@@ -19,8 +19,6 @@ base-config:
       input_discount: 0.5
       output_discount: 0.5
   documentation_url: https://docs.claude.com/en/docs/about-claude/models/overview
-  default_parameters:
-    temperature: 1
 
 
 
@@ -49,7 +47,6 @@ deprecated:
       transcription: false
       videos: false
       files: true
-      temperature: true
       tools: true
       output_schema: false
     metadata:
@@ -72,8 +69,6 @@ deprecated:
     - anthropic/claude-opus-4-1-20250805-thinking:
         properties:
           reasoning_model: true
-    default_parameters:
-      temperature: 1.0
     provider_endpoint: claude-opus-4-1-20250805
 
   anthropic/claude-sonnet-4-20250514:
@@ -101,8 +96,6 @@ deprecated:
       - anthropic/claude-sonnet-4-20250514-thinking:
           properties:
             reasoning_model: true
-          supports:
-            temperature: false
 
   anthropic/claude-opus-4-20250514:
     label: Claude Opus 4 (Nonthinking)

@@ -1,17 +1,28 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
+import json
 import os
-from typing import Any, Literal, Protocol, Self, cast
+from typing import Any, Literal, Protocol, Self, TypedDict, cast
 
 import boto3
 from boto3.dynamodb.types import TypeDeserializer
 from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
+from sqlalchemy.ext.asyncio import create_async_engine
 
+from model_gateway.budgets.schema import period_bounds
+from model_gateway.managed_auth.budget_sources import list_key_spend_sources
+from model_gateway.managed_auth.database import DatabaseSecret, build_database_url
+from model_gateway.managed_auth.store import ManagedAuthStore
 from model_gateway.usage_ledger import redshift_statements, schema
-from model_gateway.usage_ledger.budgets.publisher import publish_spend_snapshot
+from model_gateway.usage_ledger.budgets.managed_publisher import (
+    publish_managed_spend_snapshot,
+    publish_project_alert_snapshot,
+    read_alert_publication_token,
+)
 from model_gateway.usage_ledger.dynamodb_writer import serialize_item
 from model_gateway.usage_ledger.redshift_export import (
     LogicalExportWindow,
@@ -50,6 +61,14 @@ _PROJECTION_EXPRESSION = ", ".join(
     ".".join(_PROJECTION_ALIAS_BY_SEGMENT[segment] for segment in path)
     for path in _EXPORT_SOURCE_PATHS
 )
+
+
+class _SecretValueResponse(TypedDict):
+    SecretString: str
+
+
+class _SecretsManagerClient(Protocol):
+    def get_secret_value(self, *, SecretId: str) -> _SecretValueResponse: ...
 
 
 class DynamoDbQueryClient(Protocol):
@@ -107,7 +126,9 @@ class RedshiftExportJobConfig:
     redshift_schema_name: str
     export_prefix: str
     budget_snapshot_bucket: str
-    budget_snapshot_key: str
+    managed_budget_snapshot_key: str
+    project_alert_snapshot_key: str
+    managed_database_secret_arn: str
     stage: str
 
     @classmethod
@@ -125,7 +146,13 @@ class RedshiftExportJobConfig:
             redshift_schema_name=os.environ["GATEWAY_USAGE_REDSHIFT_SCHEMA_NAME"],
             export_prefix=os.environ["GATEWAY_USAGE_REDSHIFT_EXPORT_PREFIX"],
             budget_snapshot_bucket=os.environ["GATEWAY_BUDGET_SNAPSHOT_BUCKET"],
-            budget_snapshot_key=os.environ["GATEWAY_BUDGET_SNAPSHOT_KEY"],
+            managed_budget_snapshot_key=os.environ[
+                "GATEWAY_MANAGED_BUDGET_SNAPSHOT_KEY"
+            ],
+            project_alert_snapshot_key=os.environ["GATEWAY_PROJECT_ALERT_SNAPSHOT_KEY"],
+            managed_database_secret_arn=os.environ[
+                "MODEL_GATEWAY_AUTH_DATABASE_SECRET_ARN"
+            ],
             stage=os.environ["GATEWAY_STAGE"],
         )
 
@@ -245,7 +272,7 @@ def run_export_window(
     row_count = sum(len(shard.rows) for shard in extracted.shards)
     if row_count == 0:
         if refresh_analytics:
-            _publish_budget_snapshot(
+            _publish_managed_budget_snapshot(
                 config=config,
                 s3_client=s3_client,
                 redshift_data_client=redshift_data_client,
@@ -295,13 +322,19 @@ def run_export_window(
             redshift_data_client=redshift_data_client,
         )
     if refresh_analytics:
-        _publish_budget_snapshot(
+        _publish_managed_budget_snapshot(
             config=config,
             s3_client=s3_client,
             redshift_data_client=redshift_data_client,
             data_through=window.end,
         )
     return row_count
+
+
+def _batch_namespace(stage: str, base: str | None) -> str | None:
+    if stage in ("dev", "prod"):
+        return base
+    return f"{stage}-{base}" if base else stage
 
 
 def run_export_job(
@@ -320,6 +353,7 @@ def run_export_job(
         s3_client=s3_client,
         redshift_data_client=redshift_data_client,
         loaded_at=current_time,
+        batch_namespace=_batch_namespace(config.stage, None),
     )
 
 
@@ -344,7 +378,7 @@ def run_export_event(
             config=config,
             redshift_data_client=redshift_data_client,
         )
-        _publish_budget_snapshot(
+        _publish_managed_budget_snapshot(
             config=config,
             s3_client=s3_client,
             redshift_data_client=redshift_data_client,
@@ -370,13 +404,13 @@ def run_export_event(
         s3_client=s3_client,
         redshift_data_client=redshift_data_client,
         loaded_at=now,
-        batch_namespace="backfill",
+        batch_namespace=_batch_namespace(config.stage, "backfill"),
         refresh_analytics=False,
     )
     return {"loaded": rows > 0, "rows": rows}
 
 
-def _publish_budget_snapshot(
+def _publish_managed_budget_snapshot(
     *,
     config: RedshiftExportJobConfig,
     s3_client: S3PutObjectClient,
@@ -384,19 +418,72 @@ def _publish_budget_snapshot(
     data_through: datetime | None,
     idle: bool = False,
 ) -> None:
-    publish_spend_snapshot(
-        s3_client=s3_client,
-        redshift_data_client=redshift_data_client,
-        stage=config.stage,
-        bucket=config.budget_snapshot_bucket,
-        key=config.budget_snapshot_key,
-        workgroup=config.redshift_workgroup_name,
-        database=config.redshift_database_name,
-        secret_arn=config.redshift_secret_arn,
-        schema=config.redshift_schema_name,
-        data_through=data_through,
-        idle=idle,
+    alert_publication_token: tuple[int, str | None] | Exception
+    try:
+        alert_publication_token = read_alert_publication_token(
+            s3_client,
+            config.budget_snapshot_bucket,
+            config.project_alert_snapshot_key,
+            config.stage,
+        )
+    except Exception as exc:
+        alert_publication_token = exc
+    secrets_client = cast(
+        _SecretsManagerClient, cast(Any, boto3).client("secretsmanager")
     )
+    secret = secrets_client.get_secret_value(
+        SecretId=config.managed_database_secret_arn
+    )
+    database_url = build_database_url(
+        cast(DatabaseSecret, json.loads(secret["SecretString"])),
+        os.environ["MODEL_GATEWAY_AUTH_DATABASE_NAME"],
+    )
+
+    async def publish_sources() -> None:
+        engine = create_async_engine(database_url)
+        try:
+            now = datetime.now(UTC)
+            store = ManagedAuthStore(engine)
+            policies, extras = await store.list_project_allowance_sources(now)
+            key_ids = await list_key_spend_sources(engine)
+            result = publish_managed_spend_snapshot(
+                s3_client=s3_client,
+                redshift_data_client=redshift_data_client,
+                project_starts={
+                    policy.project.project_id: policy.total_started_at
+                    or period_bounds(policy.period, policy.created_at)[0]
+                    for policy in policies
+                },
+                key_ids=key_ids,
+                stage=config.stage,
+                bucket=config.budget_snapshot_bucket,
+                key=config.managed_budget_snapshot_key,
+                as_of=now,
+                workgroup=config.redshift_workgroup_name,
+                database=config.redshift_database_name,
+                secret_arn=config.redshift_secret_arn,
+                schema=config.redshift_schema_name,
+                data_through=data_through,
+                idle=idle,
+            )
+            if isinstance(alert_publication_token, Exception):
+                raise alert_publication_token
+            if result is not None:
+                identities = await store.list_project_alert_identities()
+                publish_project_alert_snapshot(
+                    s3_client=s3_client,
+                    bucket=config.budget_snapshot_bucket,
+                    key=config.project_alert_snapshot_key,
+                    result=result,
+                    policies=policies,
+                    extras=extras,
+                    identities=identities,
+                    publication_token=alert_publication_token,
+                )
+        finally:
+            await engine.dispose()
+
+    asyncio.run(publish_sources())
 
 
 def _execute_submission(

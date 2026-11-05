@@ -93,6 +93,10 @@ class XAIModel(DelegateOnly):
         )
 
     @override
+    def _web_search_per_1k(self) -> float:
+        return 5.0
+
+    @override
     async def count_tokens(
         self,
         input: Sequence[InputItem],

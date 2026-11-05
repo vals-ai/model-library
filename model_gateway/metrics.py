@@ -768,7 +768,7 @@ def create_metrics_middleware() -> Callable[
     async def metrics_middleware(
         request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        route = request.url.path
+        route = telemetry.http_route(request.url.path)
         method = request.method
         status_code = 500
         start = time.perf_counter()

@@ -15,7 +15,7 @@ from model_library.base import (
     QueryResultMetadata,
     ToolDefinition,
 )
-from model_library.base.query_ids import prompt_cache_key_from_query_ids
+from model_library.base.router import RouterLLM
 from model_library.rate_limits import RateLimit, RateLimitCapacity, TokenRateLimit
 from model_library.register_models import register_provider
 
@@ -29,7 +29,7 @@ class FireworksConfig(ProviderConfig):
 
 
 @register_provider("fireworks")
-class FireworksModel(DelegateOnly):
+class FireworksModel(DelegateOnly, RouterLLM):
     api_key_setting = "FIREWORKS_API_KEY"
 
     provider_config = FireworksConfig()
@@ -84,11 +84,7 @@ class FireworksModel(DelegateOnly):
     ) -> QueryResult:
         if self.is_router:
             self.enable_router_mode()
-            kwargs["prompt_cache_key"] = prompt_cache_key_from_query_ids(
-                model_name=self._registry_key or f"fireworks/{self.model_name}",
-                input=input,
-                tools=tools,
-            )
+            kwargs["prompt_cache_key"] = self.router_session_id(input, tools)
             preference = self.provider_config.firerouter_routing_preference
             if preference is not None:
                 kwargs["extra_headers"] = {"x-routing-preference": str(preference)}

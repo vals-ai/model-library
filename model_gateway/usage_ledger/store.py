@@ -22,6 +22,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 
 import model_library.telemetry as telemetry
 import model_gateway.usage_ledger.schema as ledger_schema
+from model_gateway.usage_ledger.attribution import ManagedUsageAttribution
 from model_gateway.metrics import (
     param_group,
     record_usage_ledger_sqs_batch_send,
@@ -1096,6 +1097,47 @@ def build_usage_event(
     if agent_name:
         event[ledger_schema.AGENT_INDEX_PK] = ledger_schema.agent_pk(agent_name, shard)
         event[ledger_schema.AGENT_INDEX_SK] = dimension_sk
+    return event
+
+
+def build_managed_usage_event(
+    *,
+    attribution: ManagedUsageAttribution,
+    body: QueryRequest,
+    config: Mapping[str, Any],
+    query_params: Mapping[str, object | None],
+    dimensions: Mapping[str, str],
+    result: QueryResult,
+    error: ProviderError | None,
+    request: Mapping[str, object],
+    api_key_name: str,
+    provider_key_name: str | None,
+    pool_revision: int | None,
+    completed_at: datetime | None = None,
+) -> dict[str, object]:
+    event = build_usage_event(
+        body=body,
+        config=config,
+        query_params=query_params,
+        dimensions=dimensions,
+        result=result,
+        error=error,
+        request=request,
+        api_key_name=api_key_name,
+        provider_key_name=provider_key_name,
+        pool_revision=pool_revision,
+        completed_at=completed_at,
+    )
+    event.update(
+        managed_key_id=attribution.managed_key_id,
+        budget_id=attribution.budget_id,
+        owner_issuer=attribution.owner_issuer,
+        owner_subject=attribution.owner_subject,
+        service_id=attribution.service_id,
+        project_id=attribution.project_id,
+        project_org_id=attribution.project_org_id,
+        project_environment=attribution.project_environment,
+    )
     return event
 
 

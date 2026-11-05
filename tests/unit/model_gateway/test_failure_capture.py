@@ -17,6 +17,7 @@ from model_gateway.metrics import model_dimensions
 from model_gateway.route_helpers import GatewayOperation
 from model_gateway.types import ProviderError
 from model_library.base import (
+    ComputerCallOutput,
     FileWithBase64,
     FileWithBytes,
     FileWithUrl,
@@ -462,6 +463,34 @@ def test_registered_files_redact_raw_and_canonical_wire_forms() -> None:
     assert b"<file omitted;" in request
 
 
+@pytest.mark.parametrize("header", ["data:image/png;base64,", "data:image/png,", "DATA:image/png;base64,"])
+def test_computer_screenshot_redacts_image_and_keeps_request(header: str) -> None:
+    encoded = base64.b64encode(b"screenshot-bytes" * 3).decode()
+    inputs = [
+        ComputerCallOutput(
+            call_id="call-1",
+            screenshot_url=header + encoded,
+        )
+    ]
+    body = b'{"image_url":"' + header.encode() + encoded.encode() + b'"}'
+
+    with core.capture(enabled=True) as active:
+        assert active is not None
+        normalize_query_input(inputs)
+        attempt = active.attempt("test")
+        attempt.request_bytes(body, representation="test_request")
+        attempt.finish()
+        artifact = active.finalize()
+        assert artifact is not None
+        records = _records(artifact.path.read_bytes())
+
+    request = _payload(records, "request.bytes")
+    assert request.startswith(b'{"image_url":"' + header.encode())
+    assert len(request) == len(body)
+    assert encoded.encode() not in request
+    assert b"<image omitted;" in request
+
+
 def test_overlapping_file_payloads_are_fully_redacted() -> None:
     with core.capture(enabled=True) as active:
         assert active is not None
@@ -843,3 +872,27 @@ def test_shutdown_cancellation_waits_for_compression_before_cleanup(
 
     assert spool.closed
     assert list(tmp_path.iterdir()) == []
+
+
+async def test_approved_identity_model_failure_is_not_captured(
+    monkeypatch: pytest.MonkeyPatch,
+    runtime: tuple[_Sentry, list[core.CaptureStats]],
+) -> None:
+    monkeypatch.setenv("GATEWAY_FAILED_EXCHANGE_CAPTURE_ENABLED", "true")
+    monkeypatch.setattr(
+        route_helpers, "requires_approved_identity", lambda model: model == "test/model"
+    )
+    monkeypatch.setattr(
+        core.tempfile,
+        "SpooledTemporaryFile",
+        lambda **_kwargs: pytest.fail("approved-identity model created a spool"),
+    )
+    sentry, _ = runtime
+    retrier = ExponentialBackoffRetrier(logging.getLogger("test"), max_tries=1)
+    result = await _operation().provider_call(
+        retrier.execute(AsyncMock(side_effect=RetryException("failed"))),
+        span_attrs={},
+    )
+    assert isinstance(result, ProviderError)
+    assert len(sentry.exceptions) == 1
+    assert sentry.attachments == []

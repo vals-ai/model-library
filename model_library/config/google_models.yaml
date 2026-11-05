@@ -117,10 +117,10 @@ gemini-3-models:
     provider_properties:
       automatic_continuation: true
     costs_per_million_token:
-      input: 2.0
-      output: 10.0
+      input: 4.0
+      output: 20.0
       cache:
-        read: 0.10
+        read: 0.20
       batch:
         cache_discount: 0.5
     alternative_keys:
@@ -164,38 +164,6 @@ gemini-3-models:
             reasoning_effort: "medium"
       - google/gemini-3.8-flash-high:
           label: Gemini 3.8 Flash (High)
-          default_parameters:
-            reasoning_effort: "high"
-
-  google/gemini-3.8-flash-cyber:
-    label: Gemini 3.8 Flash Cyber
-    release_date: 2026-09-16
-    documentation_url: >-
-      https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-8-flash-cyber
-    metadata:
-      available_as_evaluator: true
-    properties:
-      context_window: 1048576
-      max_tokens: 65536
-      reasoning_model: true
-    costs_per_million_token:
-      input: 1.50
-      output: 7.50
-      cache:
-        read: 0.15
-    provider_properties:
-      use_vertex: true
-    alternative_keys:
-      - google/gemini-3.8-flash-cyber-low:
-          label: Gemini 3.8 Flash Cyber (Low)
-          default_parameters:
-            reasoning_effort: "low"
-      - google/gemini-3.8-flash-cyber-medium:
-          label: Gemini 3.8 Flash Cyber (Medium)
-          default_parameters:
-            reasoning_effort: "medium"
-      - google/gemini-3.8-flash-cyber-high:
-          label: Gemini 3.8 Flash Cyber (High)
           default_parameters:
             reasoning_effort: "high"
 

@@ -19,6 +19,7 @@ from openai.types.completion_usage import CompletionUsage
 from pydantic import BaseModel
 
 from model_library.base import (
+    ComputerCallOutput,
     FileInput,
     FileWithBase64,
     FileWithId,
@@ -37,6 +38,7 @@ from model_library.base import (
     ToolDefinition,
     ToolResult,
 )
+from model_library.base.computer import is_computer_tool
 from model_library.base.output.builder import QueryResultBuilder
 from model_library.exceptions import (
     BadInputError,
@@ -82,6 +84,28 @@ def map_openai_completions_finish_reason(
     return FinishReasonInfo(reason=reason, raw=finish_reason)
 
 
+def merge_reasoning_fragments(
+    fragments: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    blocks: list[dict[str, Any]] = []
+    for fragment in fragments:
+        if not blocks or (
+            blocks[-1].get("signature")
+            or blocks[-1].get("data")
+            or blocks[-1].get("type") != fragment.get("type")
+            or blocks[-1].get("index") != fragment.get("index")
+        ):
+            blocks.append(dict(fragment))
+            continue
+        last = blocks[-1]
+        for key, value in fragment.items():
+            if key in ("text", "summary") and isinstance(value, str):
+                last[key] = (last.get(key) or "") + value
+            elif value is not None:
+                last[key] = value
+    return blocks
+
+
 async def get_tool_call_ids(
     model: OpenAIModel, input: Sequence[InputItem]
 ) -> list[str]:
@@ -121,6 +145,8 @@ async def parse_input(
                 new_input.append({"role": "user", "content": content})
             continue
         match item:
+            case ComputerCallOutput():
+                raise BadInputError("Computer use requires the OpenAI Responses API")
             case ToolResult():
                 validate_tool_result(item, tool_call_ids)
                 new_input.append(
@@ -202,6 +228,8 @@ async def build_body(
     sampling: dict[str, object],
     **kwargs: object,
 ) -> dict[str, Any]:
+    if any(is_computer_tool(tool) for tool in tools):
+        raise BadInputError("Computer use requires the OpenAI Responses API")
     body: dict[str, Any] = {
         "model": model.model_name,
         "messages": await model.parse_input(input),
@@ -302,6 +330,7 @@ async def query(
 
     finish_reason: str | None = None
     refusal: str | None = None
+    reasoning_details: list[dict[str, Any]] = []
     metadata: QueryResultMetadata = QueryResultMetadata()
     routing: dict[str, Any] | None = {} if model.router_mode else None
 
@@ -428,6 +457,7 @@ async def query(
                 raw_reasoning = getattr(message, "reasoning")
                 if raw_reasoning is not None:
                     result_builder.set_reasoning(cast(str, raw_reasoning))
+            reasoning_details = getattr(message, "reasoning_details", None) or []
             raw_tool_calls = cast(
                 list[ChatCompletionMessageToolCall], message.tool_calls or []
             )
@@ -472,6 +502,9 @@ async def query(
                         result_builder.append_reasoning_delta(
                             cast(str, raw_reasoning_delta)
                         )
+                reasoning_details += (
+                    getattr(choice.delta, "reasoning_details", None) or []
+                )
 
                 if choice.delta and choice.delta.tool_calls:
                     for tool_call_chunk in choice.delta.tool_calls:
@@ -595,6 +628,10 @@ async def query(
     )
     if reasoning_text or preserve_empty_reasoning:
         setattr(final_message, "reasoning_content", reasoning_text or "")
+    if model.router_mode and reasoning_details:
+        if model.stream_completions:
+            reasoning_details = merge_reasoning_fragments(reasoning_details)
+        setattr(final_message, "reasoning_details", reasoning_details)
 
     result = result_builder.build(
         finish_reason=mapped_finish_reason,

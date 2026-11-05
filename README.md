@@ -2,22 +2,22 @@
 
 Open-source model library for interacting with a variety of LLM providers. Originally developed for internal use at [vals.ai](https://vals.ai/) benchmarks. This tool is designed to be a general-purpose solution for projects that need a unified interface for multiple model providers.
 
-Requires Python 3.11+.
+Requires Python 3.11+ and uv.
 
 ```bash
-pip install model-library
+uv pip install --exclude-newer "7 days" --exclude-newer-package certifi=false model-library
 ```
 
 For a Gateway-only client, install the separate `model-library-client` distribution instead of `model-library` in a fresh environment. From this repository checkout:
 
 ```bash
-python -m pip install -e packages/client
+uv pip install --exclude-newer "7 days" --exclude-newer-package certifi=false -e packages/client
 ```
 
 Or install a locally built client wheel into that environment:
 
 ```bash
-uv pip install --python /path/to/client-venv/bin/python "/path/to/model_library_client-<version>-py3-none-any.whl"
+uv pip install --exclude-newer "7 days" --exclude-newer-package certifi=false --python /path/to/client-venv/bin/python "/path/to/model_library_client-<version>-py3-none-any.whl"
 ```
 
 Both distributions expose the same `model_library` imports and overlap on installed files; do not install them together. The full `model-library` install remains the default for native provider calls. The client has no provider-SDK requirements of its own, but cannot remove SDKs required by other packages or override a transitive requirement for the full library. For a published client version, install `model-library-client` from PyPI; otherwise use a checkout or local wheel. See [Gateway](docs/gateway.md) for supported client usage and limitations.

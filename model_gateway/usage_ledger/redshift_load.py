@@ -129,6 +129,16 @@ def analytics_refresh_statements(
                 data_through_expression=data_through,
             )
         ),
+        *_run_aggregate_refresh_statements(
+            schema,
+            start_expression=_timestamp_literal(
+                _aggregate_refresh_start(redshift_schema.RUN_AGGREGATE_GRAIN, start)
+            ),
+            end_expression=_timestamp_literal(
+                _aggregate_refresh_end(redshift_schema.RUN_AGGREGATE_GRAIN, start, end)
+            ),
+            data_through_expression=data_through,
+        ),
         *usage_dimension_values_refresh_statements(schema),
     ]
 
@@ -308,6 +318,28 @@ def _aggregate_refresh_statements(
         ),
         redshift_schema.aggregate_insert_sql(
             grain,
+            schema,
+            start_parameter=start_expression,
+            end_parameter=end_expression,
+            data_through_expression=data_through_expression,
+        ),
+    )
+
+
+def _run_aggregate_refresh_statements(
+    schema: str,
+    *,
+    start_expression: str,
+    end_expression: str,
+    data_through_expression: str,
+) -> tuple[str, str]:
+    return (
+        redshift_schema.run_aggregate_delete_sql(
+            schema,
+            start_parameter=start_expression,
+            end_parameter=end_expression,
+        ),
+        redshift_schema.run_aggregate_insert_sql(
             schema,
             start_parameter=start_expression,
             end_parameter=end_expression,

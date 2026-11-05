@@ -308,6 +308,7 @@ def compute_model_cost(
     batch: bool = False,
     bill_reasoning: bool = True,
     cache_ttl: Literal["5m", "1h"] = "5m",
+    web_search_per_1k: float | None = None,
 ) -> QueryResultCost | None:
     costs = get_model_cost(model_str)
     if not costs:
@@ -373,6 +374,9 @@ def compute_model_cost(
         if metadata.cache_write_tokens is not None
         and cache_write_cost
         and cache_write_1h_cost
+        else None,
+        web_search=web_search_per_1k * metadata.web_search_requests / 1000
+        if web_search_per_1k and metadata.web_search_requests
         else None,
     )
 

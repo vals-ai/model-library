@@ -413,6 +413,7 @@ RETRIABLE_EXCEPTION_CODES = [
     "download multimodal file timed out",  # transient DashScope multimodal fetch timeout
     "h2 protocol error",  # HTTP/2 body read failure sent as a stream error event (Together)
     "stream ended unexpectedly",  # upstream stream cut mid-response, sent as a stream error event (Together)
+    "invalid response object from python async generator",  # transient mid-stream server error after HTTP 200 (Baseten)
     "unknown error, 999",
     "unknown error, 715",
     "unknown error, 722",

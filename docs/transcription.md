@@ -1,6 +1,6 @@
 # Speech-to-text
 
-Install the dedicated voice SDKs with `pip install 'model-library[voice]'`.
+Install the dedicated voice SDKs with `uv pip install --exclude-newer "7 days" --exclude-newer-package certifi=false 'model-library[voice]'`.
 
 The library supports complete-file speech-to-text through `transcribe_audio()`.
 Standalone speech-to-text providers subclass `TranscriptionOnly`; the base

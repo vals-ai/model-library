@@ -1,14 +1,18 @@
-"""Shared policy and spend snapshot contracts for email budgets."""
+"""Managed budget period and spend snapshot contracts."""
 
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Literal, Self
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from model_gateway.usage_ledger.schema import canonical_email_value
 
 BudgetPeriod = Literal["daily", "weekly", "monthly"]
+
+
+def managed_key_spend_id(key_id: UUID) -> str:
+    return f"key:{key_id}"
 
 
 def _utc_datetime(value: datetime) -> datetime:
@@ -32,31 +36,6 @@ def period_bounds(period: BudgetPeriod, now: datetime) -> tuple[datetime, dateti
     else:
         end = start.replace(month=start.month + 1)
     return start, end
-
-
-class BudgetPolicy(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    period: BudgetPeriod
-    default_limit_usd: Decimal = Field(ge=0, allow_inf_nan=False)
-    email_overrides: dict[str, Decimal]
-
-    @field_validator("email_overrides")
-    @classmethod
-    def _canonical_overrides(cls, overrides: dict[str, Decimal]) -> dict[str, Decimal]:
-        canonical_overrides: dict[str, Decimal] = {}
-        for email, limit in overrides.items():
-            canonical = canonical_email_value(email)
-            if canonical is None or canonical in canonical_overrides:
-                raise ValueError(
-                    f"invalid or duplicate budget email override: {email!r}"
-                )
-            if not limit.is_finite() or limit < 0:
-                raise ValueError(
-                    f"budget email override must be nonnegative: {email!r}"
-                )
-            canonical_overrides[canonical] = limit
-        return canonical_overrides
 
 
 class PeriodSpend(BaseModel):
@@ -87,6 +66,7 @@ class SpendSnapshot(BaseModel):
     generated_at: datetime
     data_through: datetime
     periods: dict[BudgetPeriod, PeriodSpend]
+    total_spend_usd: dict[str, Decimal] | None = None
 
     @field_validator("generated_at", "data_through")
     @classmethod

@@ -7,6 +7,7 @@ extras installed; when disabled or unavailable, every helper is a no-op.
 
 from __future__ import annotations
 
+import re
 import hashlib
 import json
 import logging
@@ -41,11 +42,6 @@ TELEMETRY_DELIVERY_LOGGER_ROOTS = (
 HTTP_TRACE_EXCLUDED_ROUTES = frozenset({"/health/live", "/health/ready"})
 HTTP_TRACE_ALLOWED_ROUTES = frozenset(
     {
-        "/admin/budgets",
-        "/admin/budgets/bumps",
-        "/admin/budgets/bumps/history",
-        "/admin/budgets/overrides",
-        "/admin/budgets/overrides/history",
         "/admin/key-pools",
         "/benchmark-runs/acquire",
         "/benchmark-runs/release",
@@ -56,6 +52,12 @@ HTTP_TRACE_ALLOWED_ROUTES = frozenset(
         "/files/upload",
         "/models",
         "/moderation",
+        "/passthrough/anthropic/v1/messages",
+        "/passthrough/google/v1beta/models/{model}:generateContent",
+        "/passthrough/google/v1beta/models/{model}:streamGenerateContent",
+        "/passthrough/openai/v1/responses",
+        "/passthrough/openrouter/api/v1/chat/completions",
+        "/passthrough/openrouter/api/v1/models",
         "/query",
         "/rate-limit",
         "/rate-limit-monitor",
@@ -200,6 +202,9 @@ class _SentryReleaseSpanProcessor:
 
     def on_start(self, span: Any, parent_context: object | None = None) -> None:
         span.set_attribute("sentry.release", self._release)
+
+    def _on_ending(self, span: object) -> None:
+        pass
 
     def on_end(self, span: object) -> None:
         pass
@@ -355,6 +360,9 @@ def configure_telemetry(app: object | None = None) -> bool:
             instrumenter=INSTRUMENTER.OTEL,
             enable_logs=True,
             send_default_pii=True,
+            # Exception frames carry prompts and completions in their locals; events
+            # go out without them. Failed-exchange attachments stay separately gated.
+            include_local_variables=False,
             before_send=_before_send,
             before_send_transaction=_before_send_transaction,
             before_send_log=_before_send_log,
@@ -948,6 +956,19 @@ def _sanitize_value(value: object) -> AttributeValue | None:
     if isinstance(value, str):
         return value[:MAX_ATTRIBUTE_LENGTH]
     return str(value)[:MAX_ATTRIBUTE_LENGTH]
+
+
+_GOOGLE_PASSTHROUGH_PATH = re.compile(
+    r"^/passthrough/google/v1beta/models/[^/:]+:(generateContent|streamGenerateContent)$"
+)
+
+
+def http_route(path: str) -> str:
+    """The route template for a request path, so a model in the URL doesn't make a new route."""
+    match = _GOOGLE_PASSTHROUGH_PATH.match(path)
+    if match is None:
+        return path
+    return f"/passthrough/google/v1beta/models/{{model}}:{match.group(1)}"
 
 
 def should_trace_http_route(route: str) -> bool:

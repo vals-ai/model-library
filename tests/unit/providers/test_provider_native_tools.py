@@ -14,6 +14,7 @@ from google.genai.types import (
 )
 from openai.types.responses import (
     Response,
+    ResponseCompactionItem,
     ResponseCompletedEvent,
     ResponseOutputItemAddedEvent,
     ResponseOutputMessage,
@@ -27,6 +28,7 @@ from openai.types.responses.response_function_web_search import (
 
 from model_library.agent.metadata import TurnSummary
 from model_library.agent.tool import ProviderTool
+from model_library.base import LLMConfig
 from model_library.base.input import TextInput
 from model_library.base.output import FinishReason, FinishReasonInfo, QueryResult
 from model_library.base.output.result import ProviderToolEvent
@@ -35,7 +37,6 @@ from model_library.providers.openai import OpenAIModel
 from model_library.providers.xai import XAIModel
 
 from tests.unit.agent.helpers import DoneTool, make_agent, make_metadata, mock_llm
-
 
 
 def _make_web_search_response(
@@ -74,6 +75,10 @@ def _make_web_search_response(
                 ],
             )
         )
+    return _response_with_items(output)
+
+
+def _response_with_items(output: list[object], **extra: object) -> Response:
     return Response.model_construct(
         id="resp_1",
         created_at=0.0,
@@ -86,6 +91,7 @@ def _make_web_search_response(
         tools=[],
         incomplete_details=None,
         usage=None,
+        **extra,
     )
 
 
@@ -160,6 +166,20 @@ async def _parse_streaming_response(response):
 
 
 # --- Parser tests ---
+
+
+async def test_compaction_item_maps_to_provider_tool_event():
+    response = _make_web_search_response()
+    response.output.insert(
+        0,
+        ResponseCompactionItem(id="cmp_1", type="compaction", encrypted_content="x"),
+    )
+
+    result = await _parse_response(response)
+
+    compactions = [e for e in result.provider_tool_events if e.type == "compaction"]
+    assert [(e.id, e.sequence) for e in compactions] == [("cmp_1", 0)]
+    assert result.output_text == "The answer is 42."
 
 
 async def test_web_search_call_maps_to_provider_tool_events():
@@ -431,6 +451,7 @@ def _make_text_chunk(text: str) -> GenerateContentResponse:
     candidate.grounding_metadata = None
     part = MagicMock(spec=Part)
     part.function_call = None
+    part.tool_call = None
     part.text = text
     part.thought = False
     candidate.content = MagicMock(spec=Content)
@@ -439,8 +460,10 @@ def _make_text_chunk(text: str) -> GenerateContentResponse:
     return chunk
 
 
-async def _parse_google_response(chunks: list[GenerateContentResponse]) -> QueryResult:
-    model = GoogleModel("gemini-2.5-flash")
+async def _parse_google_response(
+    chunks: list[GenerateContentResponse], model_name: str = "gemini-3.5-flash"
+) -> QueryResult:
+    model = GoogleModel(model_name)
     mock_client = MagicMock()
 
     async def fake_stream():
@@ -563,6 +586,7 @@ def _make_anthropic_web_search_message(
     usage.cache_read_input_tokens = None
     usage.cache_creation_input_tokens = None
     usage.iterations = None
+    usage.server_tool_use = None
     message.usage = usage
     return message
 
@@ -755,6 +779,7 @@ async def test_anthropic_web_search_only_response_does_not_raise():
     usage.cache_read_input_tokens = None
     usage.cache_creation_input_tokens = None
     usage.iterations = None
+    usage.server_tool_use = None
     message.usage = usage
 
     result = await _parse_anthropic_response(message)
@@ -779,6 +804,7 @@ async def test_anthropic_truly_empty_response_raises():
     usage.cache_read_input_tokens = None
     usage.cache_creation_input_tokens = None
     usage.iterations = None
+    usage.server_tool_use = None
     message.usage = usage
 
     with pytest.raises(ModelNoOutputError):
@@ -827,6 +853,7 @@ async def test_anthropic_web_search_error_maps_to_provider_tool_event():
     usage.cache_read_input_tokens = None
     usage.cache_creation_input_tokens = None
     usage.iterations = None
+    usage.server_tool_use = None
     message.usage = usage
 
     # Must not raise ModelNoOutputError despite having no text/tool_calls
@@ -907,6 +934,31 @@ async def test_native_web_search_google_build_body_injects_tool_config():
     assert config.tool_config.include_server_side_tool_invocations is True
 
 
+def test_google_streams_server_side_tool_calls_only_on_gemini_3_plus():
+    from model_library.providers.google.google import _streams_server_side_tool_calls
+
+    assert _streams_server_side_tool_calls("gemini-3.5-flash")
+    assert not _streams_server_side_tool_calls("models/gemini-2.5-flash")
+
+
+async def test_native_web_search_google_build_body_no_tool_config_for_gemini_2():
+    """Gemini 2.x rejects include_server_side_tool_invocations, so it stays on grounding metadata."""
+    from model_library.agent.tool import NativeWebSearch
+    from model_library.base.input import TextInput, SystemInput
+    from model_library.providers.google.google import GoogleModel
+
+    model = GoogleModel("gemini-2.5-flash")
+    tool = NativeWebSearch()
+    body = await model.build_body(
+        [SystemInput(text="sys"), TextInput(text="hi")],
+        tools=[tool.definition],
+    )
+
+    config = body["config"]
+    assert config.tools
+    assert config.tool_config is None
+
+
 async def test_native_web_search_google_build_body_no_tool_config_without_native_search():
     """Google build_body does NOT inject tool_config when NativeWebSearch is absent."""
     from model_library.base.input import TextInput, SystemInput
@@ -923,7 +975,7 @@ async def test_native_web_search_google_build_body_no_tool_config_without_native
 
 
 async def test_native_web_search_openai_parse_tools():
-    """OpenAI parse_tools maps NativeWebSearch to web_search_preview (Responses API)."""
+    """OpenAI parse_tools maps NativeWebSearch to web_search (Responses API)."""
     from model_library.agent.tool import NativeWebSearch
     from model_library.providers.openai import OpenAIModel
 
@@ -931,7 +983,39 @@ async def test_native_web_search_openai_parse_tools():
     tool = NativeWebSearch()
     result = await model.parse_tools([tool.definition])
 
-    assert result == [{"type": "web_search_preview"}]
+    assert result == [{"type": "web_search"}]
+
+
+async def test_native_web_search_openai_build_body_requests_sources():
+    from model_library.agent.tool import NativeWebSearch
+
+    model = OpenAIModel("gpt-5.5", config=LLMConfig(reasoning=True))
+    body = await model.build_body(
+        [TextInput(text="hello")], tools=[NativeWebSearch().definition]
+    )
+    assert body["include"] == [
+        "reasoning.encrypted_content",
+        "web_search_call.action.sources",
+    ]
+
+    body = await model.build_body([TextInput(text="hello")], tools=[])
+    assert body["include"] == ["reasoning.encrypted_content"]
+
+    model = OpenAIModel("gpt-4.1")
+    body = await model.build_body(
+        [TextInput(text="hello")], tools=[NativeWebSearch().definition]
+    )
+    assert body["include"] == ["web_search_call.action.sources"]
+
+
+async def test_native_web_search_xai_build_body_does_not_request_sources():
+    from model_library.agent.tool import NativeWebSearch
+
+    model = XAIModel("grok-4.7", config=LLMConfig(reasoning=True))
+    body = await model.build_body(
+        [TextInput(text="hello")], tools=[NativeWebSearch().definition]
+    )
+    assert body["include"] == ["reasoning.encrypted_content"]
 
 
 async def test_native_web_search_openai_raises_on_completions_path():
@@ -1014,7 +1098,7 @@ async def test_openai_deep_research_accepts_native_web_search_sentinel():
     body = await model.build_body(
         [TextInput(text="research")], tools=[tool.definition], background=True
     )
-    assert body["tools"] == [{"type": "web_search_preview"}]
+    assert body["tools"] == [{"type": "web_search"}]
 
 
 async def test_unsupported_provider_preserves_raw_provider_tool_passthrough():
@@ -1032,3 +1116,264 @@ async def test_unsupported_provider_preserves_raw_provider_tool_passthrough():
     # Should not raise — raw dict body is not the NativeWebSearch sentinel
     result = await model.parse_tools([raw_tool])
     assert result == [{"type": "web_search_preview"}]
+
+
+# ---------------------------------------------------------------------------
+# Billable native web search counts (metadata.web_search_requests)
+# ---------------------------------------------------------------------------
+
+
+def _web_search_item(action: object, item_id: str) -> ResponseFunctionWebSearch:
+    return ResponseFunctionWebSearch.model_construct(
+        id=item_id, type="web_search_call", status="completed", action=action
+    )
+
+
+async def test_openai_web_search_requests_uses_tool_usage_counter():
+    """OpenAI's `tool_usage.web_search.num_requests` wins over the item count."""
+    response = _response_with_items(
+        [_web_search_item(ActionSearch(type="search", query="q"), "ws_1")],
+        tool_usage={"web_search": {"num_requests": 4}},
+    )
+    result = await _parse_response(response)
+    assert result.metadata.web_search_requests == 4
+    assert result.metadata.extra["openai_tool_usage"] == {
+        "web_search": {"num_requests": 4}
+    }
+
+
+async def test_openai_web_search_requests_is_none_when_counter_is_zero():
+    """OpenAI sends `num_requests: 0` on every response, including ones without search."""
+    message = ResponseOutputMessage(
+        id="msg_1",
+        type="message",
+        role="assistant",
+        status="completed",
+        content=[ResponseOutputText(annotations=[], text="hi", type="output_text")],
+    )
+    response = _response_with_items(
+        [message], tool_usage={"web_search": {"num_requests": 0}}
+    )
+    result = await _parse_response(response)
+    assert result.metadata.web_search_requests is None
+
+
+async def test_openai_web_search_requests_falls_back_to_search_items_only():
+    """Without a counter, only `search` actions count; open_page/find_in_page are free."""
+    from openai.types.responses.response_function_web_search import ActionOpenPage
+
+    response = _response_with_items(
+        [
+            _web_search_item(ActionSearch(type="search", query="q1"), "ws_1"),
+            _web_search_item(ActionOpenPage(type="open_page", url="https://x"), "ws_2"),
+            _web_search_item(ActionSearch(type="search", query="q2"), "ws_3"),
+        ]
+    )
+    result = await _parse_response(response)
+    assert result.metadata.web_search_requests == 2
+    assert [e.name for e in result.provider_tool_events] == [
+        "web_search",
+        "open_page",
+        "web_search",
+    ]
+    assert result.provider_tool_events[1].input == "https://x"
+
+
+async def test_openai_web_search_call_without_action():
+    """OpenAI can return a `web_search_call` with no `action`."""
+    response = _response_with_items(
+        [
+            _web_search_item(None, "ws_1"),
+            _web_search_item(ActionSearch(type="search", query="q"), "ws_2"),
+        ]
+    )
+    result = await _parse_response(response)
+    assert result.metadata.web_search_requests == 1
+    assert [(e.name, e.input) for e in result.provider_tool_events] == [
+        ("web_search_call", None),
+        ("web_search", "q"),
+    ]
+
+
+async def test_openai_web_search_requests_is_none_without_searches():
+    result = await _parse_response(
+        _response_with_items(
+            [
+                ResponseOutputMessage(
+                    id="msg_1",
+                    type="message",
+                    role="assistant",
+                    status="completed",
+                    content=[
+                        ResponseOutputText(annotations=[], text="hi", type="output_text")
+                    ],
+                )
+            ]
+        )
+    )
+    assert result.metadata.web_search_requests is None
+
+
+async def test_xai_web_search_requests_uses_server_side_tool_usage():
+    """xAI reports `usage.server_side_tool_usage_details.web_search_calls`."""
+    from openai.types.responses.response_usage import ResponseUsage
+
+    usage = ResponseUsage.model_validate(
+        {
+            "input_tokens": 100,
+            "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+            "output_tokens": 10,
+            "output_tokens_details": {"reasoning_tokens": 0},
+            "total_tokens": 110,
+            "num_server_side_tools_used": 3,
+            "server_side_tool_usage_details": {"web_search_calls": 3, "x_search_calls": 0},
+            "cost_in_usd_ticks": 286720000,
+        }
+    )
+    response = _response_with_items(
+        [_web_search_item(ActionSearch(type="search", query="q"), "ws_1")]
+    )
+    response.usage = usage
+    result = await _parse_response(response)
+    assert result.metadata.web_search_requests == 3
+    assert result.metadata.extra["xai_server_side_tool_usage"] == {
+        "web_search_calls": 3,
+        "x_search_calls": 0,
+    }
+    assert result.metadata.extra["xai_cost_usd"] == pytest.approx(0.0286720)
+
+
+async def test_xai_web_search_requests_is_none_when_counter_is_zero():
+    from openai.types.responses.response_usage import ResponseUsage
+
+    response = _response_with_items(
+        [
+            ResponseOutputMessage(
+                id="msg_1",
+                type="message",
+                role="assistant",
+                status="completed",
+                content=[ResponseOutputText(annotations=[], text="hi", type="output_text")],
+            )
+        ]
+    )
+    response.usage = ResponseUsage.model_validate(
+        {
+            "input_tokens": 100,
+            "input_tokens_details": {"cached_tokens": 0, "cache_write_tokens": 0},
+            "output_tokens": 10,
+            "output_tokens_details": {"reasoning_tokens": 0},
+            "total_tokens": 110,
+            "server_side_tool_usage_details": {"web_search_calls": 0},
+        }
+    )
+    result = await _parse_response(response)
+    assert result.metadata.web_search_requests is None
+
+
+async def test_anthropic_web_search_requests_is_none_when_counter_is_zero():
+    from anthropic.types.beta.beta_server_tool_usage import BetaServerToolUsage
+
+    message = _make_anthropic_web_search_message()
+    message.usage.server_tool_use = BetaServerToolUsage(
+        web_search_requests=0, web_fetch_requests=0
+    )
+    result = await _parse_anthropic_response(message)
+    assert result.metadata.web_search_requests is None
+
+
+async def test_anthropic_web_search_requests_uses_usage_counter():
+    message = _make_anthropic_web_search_message()
+    from anthropic.types.beta.beta_server_tool_usage import BetaServerToolUsage
+
+    message.usage.server_tool_use = BetaServerToolUsage(
+        web_search_requests=3, web_fetch_requests=0
+    )
+    result = await _parse_anthropic_response(message)
+    assert result.metadata.web_search_requests == 3
+    assert result.metadata.extra["anthropic_server_tool_use"] == {
+        "web_search_requests": 3,
+        "web_fetch_requests": 0,
+    }
+
+
+async def test_anthropic_web_search_requests_falls_back_to_result_blocks():
+    result = await _parse_anthropic_response(_make_anthropic_web_search_message())
+    assert result.metadata.web_search_requests == 1
+
+
+def _make_search_tool_call_chunk(queries: list[str], call_id: str) -> GenerateContentResponse:
+    """Streamed server-side search invocation (include_server_side_tool_invocations)."""
+    from google.genai.types import Content, Part, ToolCall, ToolType
+
+    chunk = MagicMock(spec=GenerateContentResponse)
+    chunk.response_id = None
+    chunk.usage_metadata = None
+    candidate = MagicMock(spec=Candidate)
+    candidate.finish_reason = None
+    candidate.grounding_metadata = None
+    part = MagicMock(spec=Part)
+    part.function_call = None
+    part.text = None
+    part.tool_call = ToolCall(
+        id=call_id, tool_type=ToolType.GOOGLE_SEARCH_WEB, args={"queries": queries}
+    )
+    candidate.content = MagicMock(spec=Content)
+    candidate.content.parts = [part]
+    chunk.candidates = [candidate]
+    return chunk
+
+
+async def test_google_gemini_2_bills_once_per_grounded_prompt():
+    """Gemini 2.x only reports grounding metadata and is priced per grounded prompt."""
+    chunk = _make_grounding_chunk("https://example.com")
+    chunk.candidates[0].grounding_metadata.web_search_queries = ["a", "b", "c"]
+    result = await _parse_google_response(
+        [_make_text_chunk("The answer."), chunk], model_name="gemini-2.5-flash"
+    )
+    assert result.metadata.web_search_requests == 1
+    assert result.metadata.extra["google_search_calls"] == 3
+    assert result.metadata.extra["google_unique_queries"] == 3
+
+
+async def test_google_web_search_requests_counts_unique_streamed_queries():
+    """Google bills unique non-empty queries across GOOGLE_SEARCH_WEB tool_calls."""
+    result = await _parse_google_response(
+        [
+            _make_search_tool_call_chunk(["a", "b"], "call_1"),
+            _make_search_tool_call_chunk(["a", ""], "call_2"),
+            _make_text_chunk("The answer."),
+        ]
+    )
+    assert result.metadata.web_search_requests == 2
+    assert result.metadata.extra["google_search_calls"] == 2
+    assert result.metadata.extra["google_unique_queries"] == 2
+    assert "google_search_queries" not in result.metadata.extra
+    assert [e.id for e in result.provider_tool_events] == ["call_1", "call_1", "call_2"]
+    assert all(e.output == [] for e in result.provider_tool_events)
+
+
+async def test_google_tool_call_queries_win_over_grounding_metadata():
+    """grounding_metadata drops queries; the streamed tool_call parts are the record."""
+    grounding = _make_grounding_chunk("https://example.com")
+    result = await _parse_google_response(
+        [
+            _make_search_tool_call_chunk(["a", "b", "c"], "call_1"),
+            _make_text_chunk("The answer."),
+            grounding,
+        ]
+    )
+    assert result.metadata.web_search_requests == 3
+    assert all(e.output == ["https://example.com"] for e in result.provider_tool_events)
+
+
+async def test_google_web_search_requests_falls_back_to_grounding_queries():
+    chunk = _make_grounding_chunk("https://example.com")
+    chunk.candidates[0].grounding_metadata.web_search_queries = ["a", "a", "b"]
+    result = await _parse_google_response([_make_text_chunk("The answer."), chunk])
+    assert result.metadata.web_search_requests == 2
+
+
+async def test_google_web_search_requests_is_none_without_grounding():
+    result = await _parse_google_response([_make_text_chunk("The answer.")])
+    assert result.metadata.web_search_requests is None

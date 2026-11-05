@@ -6,7 +6,7 @@ import io
 import time
 from typing import Annotated, cast
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 
 import model_library.telemetry as telemetry
 from model_library.base import LLM, dump_gateway_config, dump_llm_config
@@ -14,7 +14,7 @@ from model_library.base import LLM, dump_gateway_config, dump_llm_config
 from model_gateway import model_helpers
 from model_gateway.cache import ModelCache
 from model_gateway.metrics import model_dimensions
-from model_gateway.run_tokens import run_token_authorized
+from model_gateway.run_tokens import enforce_run_token_egress, run_token_authorized
 from model_gateway.route_helpers import (
     EmbeddingModel,
     GatewayOperation,
@@ -40,6 +40,7 @@ from model_gateway.types import (
 def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
     @app.post("/tokens/count")
     async def count_tokens(
+        request: Request,
         body: Annotated[
             TokenCountRequest,
             Depends(run_token_authorized(TokenCountRequest)),
@@ -83,6 +84,7 @@ def register_provider_ops_routes(app: FastAPI, *, cache: ModelCache) -> None:
             except (KeyError, TypeError, ValueError) as exc:
                 error_phase = "restore_history"
                 raise ValueError(f"Invalid signed raw history blob: {exc}") from exc
+            enforce_run_token_egress(request, body, llm)
 
             tokens_or_error = await operation.provider_call(
                 llm.count_tokens(body.inputs, tools=body.tools),
