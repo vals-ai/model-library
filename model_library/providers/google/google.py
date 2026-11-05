@@ -508,6 +508,8 @@ class GoogleModel(LLM):
             chunks.append(chunk)
             if chunk.response_id:
                 response_id = chunk.response_id
+            if chunk.usage_metadata:
+                metadata = chunk.usage_metadata
             candidates = chunk.candidates
             if not candidates:
                 if (
@@ -551,8 +553,6 @@ class GoogleModel(LLM):
                         meaningful_content = True
                         result_builder.append_content_delta(part.text)
 
-            if chunk.usage_metadata:
-                metadata = chunk.usage_metadata
             if content and meaningful_content:
                 contents.append(content)
             if candidates[0].finish_reason:

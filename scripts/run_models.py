@@ -27,6 +27,7 @@ from model_library.registry_utils import (
 )
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import retry_decorator
+
 CONCURRENCY_PER_PROVIDER = 10
 MAX_RETRIES = 5
 DEFAULT_TIMEOUT = 240
@@ -72,6 +73,8 @@ failed_model_names: dict[str, list[str]] = defaultdict(
 skipped_model_names: dict[str, list[str]] = defaultdict(
     list
 )  # provider -> [cli_only_model_names]
+
+
 def smoke_model_config(model: str, pins: Mapping[str, str]) -> LLMConfig:
     """Build the direct-smoke config, with the key `pins` names for the model."""
     key_setting = pins.get(model)
