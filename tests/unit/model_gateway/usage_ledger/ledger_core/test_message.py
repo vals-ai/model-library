@@ -68,6 +68,7 @@ def test_serialize_usage_event_message_wraps_versioned_event_and_preserves_numbe
     assert envelope["event"]["usage_event_id"] == event["usage_event_id"]
     assert envelope["event"]["details"] == event["details"]
     assert envelope["event"]["cost_usd"] == "0.003"
+    assert envelope["event"]["standard_cost_usd"] == "0.003"
     assert "provider-response-1" in message
     assert "provider-request-1" in message
 
@@ -76,6 +77,7 @@ def test_serialize_usage_event_message_wraps_versioned_event_and_preserves_numbe
     assert decoded["details"] == event["details"]
     assert decoded["input_tokens"] == 4
     assert decoded["cost_usd"] == Decimal("0.003")
+    assert decoded["standard_cost_usd"] == Decimal("0.003")
 
 
 def test_real_producer_event_survives_sqs_normalization() -> None:
@@ -145,6 +147,7 @@ def test_failed_result_round_trips_without_inventing_usage() -> None:
     assert "total_input_tokens" not in restored
     assert "input_tokens" not in restored
     assert "cost_usd" not in restored
+    assert "standard_cost_usd" not in restored
     assert restored["details"] == event["details"]
 
 @pytest.mark.parametrize(
@@ -162,6 +165,7 @@ def test_serialize_usage_event_message_formats_cost_usd_extremes_and_preserves_o
     event = {
         "usage_event_id": "evt-1",
         "cost_usd": cost_value,
+        "standard_cost_usd": cost_value,
         "duration_seconds": Decimal("1.2300"),
     }
 
@@ -169,10 +173,12 @@ def test_serialize_usage_event_message_formats_cost_usd_extremes_and_preserves_o
 
     envelope = json.loads(message)
     assert envelope["event"]["cost_usd"] == wire_cost
+    assert envelope["event"]["standard_cost_usd"] == wire_cost
     assert envelope["event"]["duration_seconds"] == "1.2300"
 
     decoded = deserialize_usage_event_message(message)
     assert decoded["cost_usd"] == decoded_cost
+    assert decoded["standard_cost_usd"] == decoded_cost
     assert decoded["duration_seconds"] == Decimal("1.2300")
 
 
@@ -213,3 +219,26 @@ def test_complete_serialized_event_has_exact_300_000_byte_limit() -> None:
     assert len(oversized.encode("utf-8")) == MAX_USAGE_LEDGER_MESSAGE_BYTES + 1
     with pytest.raises(UsageLedgerMessageTooLarge):
         serialize_usage_event_message(event)
+
+
+def test_ledger_completed_at_is_the_time_the_response_was_priced_at() -> None:
+    request = QueryRequest(
+        model="deepseek/deepseek-v4-flash", inputs=[TextInput(text="hello")]
+    )
+    priced_at = datetime(2026, 11, 7, 2, 0, 0, 123456, tzinfo=UTC)
+    event = build_usage_event(
+        body=request,
+        config=request.config_dict(),
+        query_params={},
+        dimensions={},
+        result=QueryResult(
+            output_text="ok", metadata=QueryResultMetadata(completed_at=priced_at)
+        ),
+        error=None,
+        request=snapshot_usage_request(request),
+        api_key_name="test",
+        provider_key_name=None,
+        pool_revision=None,
+    )
+
+    assert datetime.fromisoformat(str(event["completed_at"])) == priced_at

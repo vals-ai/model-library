@@ -27,7 +27,9 @@ Google disables SDK automatic continuation by default; a model can opt in throug
 
 `QueryResultMetadata` stores token counts, cost, request duration, provider-specific `extra` values, `performance`, and `fallback`.
 
-`fallback` is `None` unless a provider-side fallback model served the response. It is a `FallbackInfo` with `requested_model`, `served_model`, and `hops` (one `FallbackHop` per model attempt: `model`, `served`, `trigger`/`category` for hops that declined, and `usage` as a token-only `QueryResultMetadata`). Top-level token counts and cost are the served hop's, priced at `served_model`. If cost calculation fails (for example `served_model` is not in the registry), the query still succeeds with `cost=None` and a warning is logged.
+`fallback` is `None` unless a fallback model (server- or client-side) served the response. It is a `FallbackInfo` with `requested_model`, `served_model`, and `hops` (one `FallbackHop` per model attempt: `model`, `served`, `trigger`/`category` for hops that declined, and `usage` as a token-only `QueryResultMetadata`). Top-level token counts are the served hop's, priced at `served_model`; Anthropic `cost` also adds each declined hop Anthropic bills, at that hop's model price. If cost calculation fails (for example `served_model` is not in the registry), the query still succeeds with `cost=None` and a warning is logged.
+
+An Anthropic refusal sets `extra.anthropic_refusal_stop_details` to the response's `stop_details` as `category`, `recommended_model`, and `has_fallback_credit_token`; the credit token itself is never recorded. A refusal with no output raises `ContentFilterError` carrying that result as `.query_result`.
 
 OpenAI router and `access_programs` calls retain `served_model`. Other direct OpenAI Responses calls record the provider-reported model in `extra["openai_response_model"]`; Anthropic calls use `extra["anthropic_response_model"]`. ATIF uses these fields as the step model.
 
@@ -132,9 +134,7 @@ offset, and ordering. This is an application-level field encoding, not HTTP
 Model Library validation accepts both representations without implicitly
 changing either one. Uncompressed objects validate as `QueryResultPerformance`;
 compressed JSON validates as `CompressedQueryResultPerformance`. Usage-ledger
-storage keeps the compressed timeline. Model Gateway responses send only
-`time_to_first_token_ms`, so clients receive `QueryResultPerformance` with an
-empty `timeline`.
+storage and Model Gateway responses both carry the compressed form.
 
 Adding `QueryResultMetadata` values discards `performance`
 because separate query timelines cannot be merged into one coherent clock.

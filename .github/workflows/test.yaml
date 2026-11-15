@@ -26,3 +26,6 @@ jobs:
 
       - name: Run tests
         run: make test
+
+      - name: Verify managed identity bearer boundaries
+        run: uv run pytest -q tests/integration/model_gateway/test_managed_identity.py

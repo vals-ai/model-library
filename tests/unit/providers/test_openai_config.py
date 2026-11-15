@@ -1332,6 +1332,82 @@ async def test_null_assistant_history_field_normalization_preserves_tool_calls()
     assert final_message.response.tool_calls == [raw_tool_call]
 
 
+async def test_responses_history_replays_malformed_tool_call_arguments_as_empty_object():
+    response = _responses_response(
+        response_id="resp_truncated_args",
+        output=[
+            ResponseFunctionToolCall(
+                id="fc_1",
+                call_id="call_1",
+                type="function_call",
+                name="lookup",
+                arguments='{"q": "x"',
+            )
+        ],
+    )
+    model = OpenAIModel("gpt-4o-mini")
+    mock_client = MagicMock()
+    mock_client.responses.create = AsyncMock(return_value=response)
+
+    with patch.object(model, "get_client", return_value=mock_client):
+        result = await model._query_impl(  # pyright: ignore[reportPrivateUsage]
+            [TextInput(text="look up x")],
+            tools=[],
+            stream=False,
+            query_logger=MagicMock(),
+        )
+
+    assert result.tool_calls[0].args == '{"q": "x"'
+    final_message = result.history[-1]
+    assert isinstance(final_message, RawResponse)
+    replayed = final_message.response[0]
+    assert isinstance(replayed, ResponseFunctionToolCall)
+    assert replayed.arguments == "{}"
+
+
+async def test_history_replays_malformed_tool_call_arguments_as_empty_object():
+    model = OpenAIModel(
+        "compatible-test-model",
+        config=LLMConfig(provider_config=OpenAIConfig(stream_completions=False)),
+        use_completions=True,
+    )
+    response = ChatCompletion(
+        id="cmpl_truncated_args",
+        created=0,
+        model="compatible-test-model",
+        object="chat.completion",
+        choices=[
+            Choice(
+                finish_reason="tool_calls",
+                index=0,
+                message=ChatCompletionMessage(
+                    role="assistant",
+                    content=None,
+                    tool_calls=[
+                        ChatCompletionMessageToolCall(
+                            id="call_1",
+                            type="function",
+                            function=Function(name="lookup", arguments='{"q": "x"'),
+                        )
+                    ],
+                ),
+            )
+        ],
+        usage=None,
+    )
+
+    result = await _query_chat_completion(model, response)
+
+    assert result.tool_calls[0].args == '{"q": "x"'
+    final_message = result.history[-1]
+    assert isinstance(final_message, RawResponse)
+    assert isinstance(final_message.response, ChatCompletionMessage)
+    assert final_message.response.tool_calls is not None
+    replayed = final_message.response.tool_calls[0]
+    assert isinstance(replayed, ChatCompletionMessageToolCall)
+    assert replayed.function.arguments == "{}"
+
+
 @pytest.mark.parametrize(
     ("model_class", "model_name"),
     [
@@ -2570,6 +2646,19 @@ async def test_hosted_tools_added_unless_type_present(
     body = await model.build_body(_INPUT, tools=tools)
 
     assert body["tools"] == expected
+
+
+async def test_openai_build_body_requests_code_interpreter_outputs():
+    model = OpenAIModel(
+        "gpt-5.5",
+        config=LLMConfig(reasoning=True),
+    )
+    model.hosted_tools = [{"type": "code_interpreter", "container": {"type": "auto"}}]
+    body = await model.build_body([TextInput(text="hello")], tools=[])
+    assert body["include"] == [
+        "reasoning.encrypted_content",
+        "code_interpreter_call.outputs",
+    ]
 
 
 async def test_context_management_is_sent_when_configured():

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import TYPE_CHECKING, Any, NoReturn
+from typing import TYPE_CHECKING, Any, NoReturn, cast
 
 if TYPE_CHECKING:
     from model_library.base.output import (
@@ -15,6 +15,7 @@ from httpcore import ReadError as HTTPCoreReadError
 from httpx import ConnectError as HTTPXConnectError
 from httpx import ReadError as HTTPXReadError
 from httpx import RemoteProtocolError
+from openai import APIStatusError as OpenAIStatusError
 
 ProviderErrorPayload = dict[str, str | int]
 
@@ -87,13 +88,14 @@ class ImmediateRetryExhaustedError(NoRetryException):
         return exception_to_provider_error(self.original)
 
 
-class RateLimitException(BackoffRetryException):
+class RateLimitError(BackoffRetryException):
     """Raised when the rate limit is exceeded"""
 
+    status_code: int = 429
     DEFAULT_MESSAGE: str = "Rate limit exceeded."
 
     def __init__(self, message: str | None = None):
-        super().__init__(message or RateLimitException.DEFAULT_MESSAGE)
+        super().__init__(message or RateLimitError.DEFAULT_MESSAGE)
 
 
 class MaxOutputTokensExceededError(NoRetryException):
@@ -131,13 +133,21 @@ class ContentFilterError(NoRetryException):
 
     DEFAULT_MESSAGE: str = "Model's content filter triggered"
 
-    def __init__(self, message: str | None = None):
+    def __init__(
+        self, message: str | None = None, *, query_result: QueryResult | None = None
+    ):
+        self.query_result = query_result
         super().__init__(message or ContentFilterError.DEFAULT_MESSAGE)
+
+    @property
+    def usage_metadata(self) -> QueryResultMetadata | None:
+        return self.query_result.metadata if self.query_result is not None else None
 
 
 # List of regex patterns to match context window exceeded errors
 # This was made after forcing context window errors on a model from each provider
 CONTEXT_WINDOW_PATTERN = re.compile(
+    r"context_length_exceeded|"  # openai error code, in the body `error_text` appends
     r"maximum context length is \d+ tokens|"
     r"context length is \d+ tokens|"
     r"exceed.* context (limit|window|length)|"
@@ -165,8 +175,20 @@ CONTEXT_WINDOW_PATTERN = re.compile(
 )
 
 
+def error_text(e: Exception) -> str:
+    """`str(e)` plus the provider body, which openai>=3.38 leaves out of `str(e)`."""
+    message = str(e)
+    if isinstance(e, OpenAIStatusError) and e.body is not None:
+        body = str(e.body)
+        if body not in message:
+            return f"{message} - {body}"
+    return message
+
+
 def is_context_window_error(e: Exception) -> bool:
-    return CONTEXT_WINDOW_PATTERN.search(str(e).lower()) is not None
+    if isinstance(e, MaxContextWindowExceededError):
+        return True
+    return CONTEXT_WINDOW_PATTERN.search(error_text(e).lower()) is not None
 
 
 REFUSAL_TEXT_ERROR_PATTERN = re.compile(
@@ -202,16 +224,39 @@ def is_content_filter_error(e: Exception) -> bool:
         )
     ):
         return True
-    message = str(e)
+    message = error_text(e)
     if "DataInspectionFailed" in message:
         return True
     if "output blocked by content filtering policy" in message.lower():
         return True
-    if REFUSAL_TEXT_ERROR_PATTERN.match(message):
+    if REFUSAL_TEXT_ERROR_PATTERN.match(str(e)):
         return True
     return (
         getattr(e, "code", None) == "invalid_prompt"
         and "violating our usage policy" in message
+    )
+
+
+def is_rate_limit_error(e: Exception) -> bool:
+    """Whether a provider reported a rate limit via an HTTP 429 or an error code/type.
+
+    In-stream errors arrive after an HTTP 200: OpenAI raises a bare ``APIError``
+    with ``code="rate_limit_exceeded"`` and Anthropic an ``APIStatusError`` whose
+    body error type is ``rate_limit_error``. Google puts the HTTP status in ``code``.
+    """
+    code = getattr(e, "code", None)
+    body = getattr(e, "body", None)
+    error = cast(dict[str, Any], body).get("error") if isinstance(body, dict) else None
+    error_type = (
+        cast(dict[str, Any], error).get("type") if isinstance(error, dict) else None
+    )
+    status_codes = (
+        getattr(e, "status_code", None),
+        getattr(getattr(e, "response", None), "status_code", None),
+        code,
+    )
+    return 429 in status_codes or any(
+        "rate_limit" in str(value or "") for value in (code, error_type)
     )
 
 
@@ -441,7 +486,7 @@ def is_retriable_error(e: Exception) -> bool:
     if any(isinstance(e, exception) for exception in RETRIABLE_EXCEPTIONS):
         return True
 
-    error_message = str(e).lower()
+    error_message = error_text(e).lower()
     if not RETRIABLE_STATUS_CODES.isdisjoint(
         _MESSAGE_NUMBER_PATTERN.findall(error_message)
     ):

@@ -26,9 +26,9 @@ REQUEST = decision_request(
     ("model_key", "key_env"),
     [
         ("decision/jev-1.13.0", "OPENROUTER_API_KEY"),
-        ("decision/mercury-decide", "OPENROUTER_API_KEY"),
         ("decision/microsoft-decision-1", "OPENROUTER_API_KEY"),
         ("decision/gpt-6-luna", "OPENAI_API_KEY"),
+        ("decision/gemini-decision-1", "GOOGLE_API_KEY"),
     ],
 )
 async def test_live_decision_call(model_key: str, key_env: str) -> None:

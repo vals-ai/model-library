@@ -32,6 +32,7 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
                 "query_id_normalized": None,
                 "attempt_id": None,
                 "requested_model_key": "openai/gpt-4.1-mini",
+                "served_model_key": None,
                 "provider": "openai",
                 "provider_endpoint": "default",
                 "param_group": None,
@@ -59,6 +60,7 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
                 "total_output_tokens": Decimal("20"),
                 "duration_seconds": Decimal("1.000000"),
                 "cost_usd": Decimal("0.123456789012"),
+                "standard_cost_usd": Decimal("0.987654321098"),
                 "finish_reason": "stop",
                 "finish_reason_raw": None,
                 "schema_version": Decimal("3"),
@@ -87,6 +89,7 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
     assert table.schema.field("schema_version").type == pa.int32()
     assert table.schema.field("metadata_schema_version").type == pa.int32()
     assert table.schema.field("cost_usd").type == pa.decimal128(38, 12)
+    assert table.schema.field("standard_cost_usd").type == pa.decimal128(38, 12)
     assert table.schema.field("duration_seconds").type == pa.decimal128(18, 6)
     assert table.schema.field("ttft_answer_ms").type == pa.int32()
     assert table.schema.field("timeline").type == pa.binary()
@@ -99,6 +102,7 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
     assert row["schema_version"] == 3
     assert row["metadata_schema_version"] == 3
     assert row["cost_usd"] == Decimal("0.123456789012")
+    assert row["standard_cost_usd"] == Decimal("0.987654321098")
     assert row["outcome"] == "success"
     assert row["error_type"] is None
     assert not row["performance_truncated"]
@@ -114,6 +118,7 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
         total_input_tokens=0,
         total_output_tokens=None,
         cost_usd=None,
+        standard_cost_usd=None,
         outcome="error",
         error_type="InvalidStructuredOutputError",
     )
@@ -122,6 +127,7 @@ def test_parquet_bytes_from_rows_writes_exact_redshift_staging_schema() -> None:
     assert sparse_row["input_tokens"] == 0
     assert sparse_row["output_tokens"] is None
     assert sparse_row["cost_usd"] is None
+    assert sparse_row["standard_cost_usd"] is None
 
 
 def test_window_and_artifact_identity_are_deterministic() -> None:

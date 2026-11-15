@@ -1,7 +1,7 @@
 services:
   gateway:
     build: .
-    command: uvicorn model_gateway.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn model_gateway.app:create_app --factory --host 0.0.0.0 --port 8000 --reload
     env_file: .env
     environment:
       REDIS_URL: redis://redis:6379/0

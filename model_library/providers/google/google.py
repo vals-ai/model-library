@@ -6,7 +6,6 @@ import uuid
 from typing import Any, Literal, Sequence, cast
 
 from google.genai import Client
-from google.genai import errors as genai_errors
 from google.genai.types import (
     BlockedReason,
     Content,
@@ -37,7 +36,7 @@ from google.genai.types import (
 )
 from google.oauth2 import service_account
 from pydantic import BaseModel, JsonValue, SecretStr
-from typing_extensions import deprecated, override
+from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -52,7 +51,6 @@ from model_library.base import (
     InputItem,
     LLMConfig,
     ProviderConfig,
-    PydanticT,
     QueryResult,
     QueryResultCost,
     QueryResultExtras,
@@ -76,9 +74,6 @@ from model_library.base.input import normalize_query_input
 from model_library.exceptions import (
     BadInputError,
     ContentFilterError,
-    ImmediateRetryException,
-    InvalidStructuredOutputError,
-    ModelNoOutputError,
     RetryException,
     UnexpectedSystemInputError,
     handle_empty_response,
@@ -743,7 +738,12 @@ class GoogleModel(LLM):
         client = self.get_client()
         if self.supports_streaming_transcription:
             return await transcribe_live(client, self.model_name, request)
-        return await transcribe_interactions(client, self.model_name, request)
+        return await transcribe_interactions(
+            client,
+            self.model_name,
+            request,
+            automatic_continuation=self.provider_config.automatic_continuation,
+        )
 
     @override
     async def _calculate_cost(
@@ -780,51 +780,3 @@ class GoogleModel(LLM):
     def _web_search_per_1k(self) -> float:
         """Gemini 3+ bills per query, Gemini 2.x per grounded prompt."""
         return 14.0 if _streams_server_side_tool_calls(self.model_name) else 35.0
-
-    @deprecated("Use query(output_schema=...) instead")
-    @override
-    async def query_json(
-        self,
-        input: Sequence[InputItem],
-        pydantic_model: type[PydanticT],
-        output_schema: dict[str, Any] | type[BaseModel] | None = None,
-        **kwargs: object,
-    ) -> PydanticT:
-        # Create the request body with JSON schema
-        body: dict[str, Any] = await self.build_body(
-            input, tools=[], output_schema=output_schema, **kwargs
-        )
-
-        # Get the JSON schema from the Pydantic model
-        json_schema = pydantic_model.model_json_schema()
-
-        # Update the config to include response_json_schema
-        config: GenerateContentConfig = body["config"]
-        config = config.model_copy(
-            update={
-                "response_json_schema": json_schema,
-                "response_mime_type": "application/json",
-            }
-        )
-
-        body["config"] = config
-
-        # Make the request with retry wrapper
-        async def _query():
-            try:
-                return await self.get_client().aio.models.generate_content(**body)
-            except (genai_errors.ServerError, genai_errors.UnknownApiResponseError):
-                raise ImmediateRetryException("Failed to connect to Google API")
-
-        response: GenerateContentResponse = await _query()
-
-        if not response.text:
-            raise ModelNoOutputError("Model returned empty response")
-
-        # Parse the JSON response into the Pydantic model
-        try:
-            parsed = pydantic_model.model_validate_json(response.text)
-        except Exception as e:
-            raise InvalidStructuredOutputError() from e
-
-        return parsed

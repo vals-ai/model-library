@@ -53,9 +53,11 @@ from model_library.rate_limits import RateLimit, rate_limit_from_headers
 from ._shared import (
     apply_common_body,
     capture_routing,
+    capture_upstream_cost,
     function_tool_payload,
     iter_input_groups,
     output_schema_value,
+    replayable_arguments,
     user_content,
     validate_tool_result,
 )
@@ -463,6 +465,8 @@ async def query(
             )
         if completion.usage:
             metadata = metadata_from_usage(completion.usage)
+            if routing is None and model.provider in {"vercel", "openrouter"}:
+                capture_upstream_cost(metadata.extra, completion)
         if routing is not None:
             capture_routing(routing, completion)
     else:
@@ -549,6 +553,8 @@ async def query(
             if chunk.usage:
                 # NOTE: see _calculate_cost
                 metadata = metadata_from_usage(chunk.usage)
+                if routing is None and model.provider in {"vercel", "openrouter"}:
+                    capture_upstream_cost(metadata.extra, chunk)
         if model.provider == "kimi":
             headers = cast(
                 AsyncStream[ChatCompletionChunk], completion
@@ -619,7 +625,21 @@ async def query(
     )
     if raw_tool_calls:
         final_message.tool_calls = cast(
-            list[ChatCompletionMessageToolCallUnion], raw_tool_calls
+            list[ChatCompletionMessageToolCallUnion],
+            [
+                tool_call.model_copy(
+                    update={
+                        "function": tool_call.function.model_copy(
+                            update={
+                                "arguments": replayable_arguments(
+                                    tool_call.function.arguments
+                                )
+                            }
+                        )
+                    }
+                )
+                for tool_call in raw_tool_calls
+            ],
         )
     elif not omit_null_message_fields:
         final_message.tool_calls = None

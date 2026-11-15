@@ -64,13 +64,10 @@ async def budget_refusal(request: Request) -> BudgetRefusal | None:
         return None
     if decision == BudgetDecision.KEY_EXHAUSTED:
         return BudgetRefusal(402, "budget_exceeded", "Managed key budget exceeded")
-    if decision == BudgetDecision.EXHAUSTED:
-        project_limit = authority.project_limit
-        if project_limit is not None and project_limit.total_limit_usd is not None:
-            return BudgetRefusal(
-                402,
-                "budget_exceeded",
-                f"Project total budget of ${project_limit.total_limit_usd} is spent",
-            )
-        return BudgetRefusal(402, "budget_exceeded", "Managed budget exceeded")
+    if decision == BudgetDecision.EXHAUSTED and authority.project_limit is not None:
+        return BudgetRefusal(
+            402,
+            "budget_exceeded",
+            f"Project total budget of ${authority.project_limit.total_limit_usd} is spent",
+        )
     return BudgetRefusal(503, "budget_unavailable", "Managed budget spend unavailable")

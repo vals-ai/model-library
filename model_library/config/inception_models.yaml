@@ -10,6 +10,8 @@ base-config:
 
 mercury-models:
   inception/mercury-3:
+    metadata:
+      available_for_everyone: false
     label: Mercury 3
     release_date: 2026-10-19
     properties:
@@ -21,16 +23,16 @@ mercury-models:
     default_parameters:
       reasoning_effort: "high"
     costs_per_million_token:
+      # https://docs.inceptionlabs.ai/get-started/models.md; OpenRouter's Inception-only route also quotes 50% off.
       input: 0.20
       output: 0.70
+      current_discount: 50
       cache:
         read: 0.02
-    alternative_keys:
-      - openrouter/inception/mercury-3:
-          provider_properties:
-            openrouter_provider_only: [inception]
 
   inception/mercury-2.5:
+    metadata:
+      available_for_everyone: false
     label: Mercury 2.5
     release_date: 2026-09-08
     properties:
@@ -48,10 +50,17 @@ mercury-models:
         read: 0.02
     alternative_keys:
       - openrouter/inception/mercury-2.5:
+          metadata:
+            available_for_everyone: false
           provider_properties:
             openrouter_provider_only: [inception]
+          # https://openrouter.ai/api/v1/models/inception/mercury-2.5/endpoints; native pricing is unchanged.
+          costs_per_million_token:
+            current_discount: 80
 
   inception/mercury:
+    metadata:
+      available_for_everyone: false
     label: Mercury
     release_date: 2025-11-06
     properties:

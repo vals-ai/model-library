@@ -12,7 +12,10 @@ import httpcore
 import httpx
 import pytest
 from anthropic import BadRequestError as AnthropicBadRequestError
+from anthropic import APIStatusError as AnthropicAPIStatusError
 from anthropic import InternalServerError as AnthropicInternalServerError
+from google.genai.errors import ClientError as GoogleClientError
+from google.genai.errors import ServerError as GoogleServerError
 from openai import APIError, BadRequestError
 from openai import InternalServerError as OpenAIInternalServerError
 import model_library.telemetry as telemetry
@@ -36,13 +39,14 @@ from model_library.exceptions import (
     NoMatchingToolCallError,
     NoRetryException,
     QueryDeadlineExceededError,
-    RateLimitException,
+    RateLimitError,
     RetryException,
     ToolCallingNotSupportedError,
     UnexpectedSystemInputError,
     exception_to_provider_error,
     handle_empty_response,
     is_content_filter_error,
+    is_rate_limit_error,
     is_retriable_error,
 )
 from model_library.retriers.backoff import ExponentialBackoffRetrier
@@ -89,7 +93,7 @@ _PROVIDER_HTTP_500_ERRORS: tuple[
 @pytest.mark.parametrize(
     "exc",
     [
-        RateLimitException(),
+        RateLimitError(),
         MaxOutputTokensExceededError(),
         MaxContextWindowExceededError(),
         ContentFilterError(),
@@ -475,7 +479,7 @@ async def test_retry_success_after_failures():
         (RetryException, True),
         (ImmediateRetryException, True),
         (BackoffRetryException, True),
-        (RateLimitException, True),
+        (RateLimitError, True),
         (MaxOutputTokensExceededError, False),
         (MaxContextWindowExceededError, False),
         (ContentFilterError, False),
@@ -1366,3 +1370,111 @@ async def test_query_raises_content_filter_on_openai_usage_policy_block(
 
     with pytest.raises(ContentFilterError):
         await mock_llm.query("Mock Input")
+
+
+async def test_query_keeps_the_result_of_a_content_filter_refusal(mock_llm: LLM):
+    from model_library.base.output import QueryResultMetadata
+
+    refused = QueryResult(
+        metadata=QueryResultMetadata(
+            in_tokens=3,
+            out_tokens=0,
+            extra={"anthropic_refusal_stop_details": {"category": "cyber"}},
+        )
+    )
+    mock_llm._query_impl = AsyncMock(  # pyright: ignore[reportPrivateUsage]
+        side_effect=ContentFilterError("refused", query_result=refused)
+    )
+
+    with pytest.raises(ContentFilterError) as caught:
+        await mock_llm.query("Mock Input")
+
+    assert caught.value.query_result is not None
+    assert caught.value.query_result.metadata.extra == {
+        "anthropic_refusal_stop_details": {"category": "cyber"}
+    }
+
+
+def _openai_stream_rate_limit_error() -> APIError:
+    request = httpx.Request("POST", "https://provider.example/v1/responses")
+    return APIError(
+        "Rate limit reached on tokens per min (TPM)",
+        request,
+        body={"type": "tokens", "code": "rate_limit_exceeded"},
+    )
+
+
+def _anthropic_stream_error(error_type: str) -> AnthropicAPIStatusError:
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    body = {"type": "error", "error": {"type": error_type, "message": error_type}}
+    return AnthropicAPIStatusError(
+        str(body), response=httpx.Response(200, request=request), body=body
+    )
+
+
+@pytest.mark.parametrize(
+    "exc,expected",
+    [
+        (_openai_stream_rate_limit_error(), True),
+        (
+            httpx.HTTPStatusError(
+                "Too Many Requests",
+                request=httpx.Request("GET", "https://provider.example"),
+                response=httpx.Response(429),
+            ),
+            True,
+        ),
+        (
+            APIError(
+                "server error",
+                httpx.Request("POST", "https://provider.example/v1/responses"),
+                body={"code": "server_error"},
+            ),
+            False,
+        ),
+        (_openai_internal_server_error(), False),
+        (_anthropic_stream_error("rate_limit_error"), True),
+        (_anthropic_stream_error("overloaded_error"), False),
+        (
+            GoogleClientError(
+                429, {"error": {"code": 429, "status": "RESOURCE_EXHAUSTED"}}
+            ),
+            True,
+        ),
+        (GoogleServerError(503, {"error": {"code": 503, "status": "UNAVAILABLE"}}), False),
+        (RuntimeError("rate limit"), False),
+    ],
+)
+def test_is_rate_limit_error(exc: Exception, expected: bool):
+    assert is_rate_limit_error(exc) is expected
+
+
+async def test_provider_rate_limit_retries_as_rate_limit_exception():
+    provider_error = _openai_stream_rate_limit_error()
+    succeeds_after_retry = AsyncMock(side_effect=[provider_error, "success"])
+    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=3, initial=0)
+
+    with patch(
+        "model_library.retriers.backoff.telemetry.record_scheduled_retry_exception"
+    ) as record_retry_exception:
+        assert await retry_decorator(retrier)(succeeds_after_retry)() == "success"
+
+    recorded, attributes = record_retry_exception.call_args.args
+    assert isinstance(recorded, RateLimitError)
+    assert recorded.__cause__ is provider_error
+    assert attributes["exception.type"] == "RateLimitError"
+
+
+async def test_exhausted_provider_rate_limit_serializes_as_429():
+    provider_error = _openai_stream_rate_limit_error()
+    retrier = ExponentialBackoffRetrier(MagicMock(), max_tries=1, initial=0)
+
+    with pytest.raises(RateLimitError) as raised:
+        await retry_decorator(retrier)(AsyncMock(side_effect=provider_error))()
+
+    assert raised.value.__cause__ is provider_error
+    assert exception_to_provider_error(raised.value) == {
+        "message": "APIError: Rate limit reached on tokens per min (TPM)",
+        "exception_type": "RateLimitError",
+        "status_code": 429,
+    }

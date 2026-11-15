@@ -17,6 +17,8 @@ base-config:
 
 deepseek-models:
   together/deepseek-ai/DeepSeek-V4.1-Flash:
+    metadata:
+      available_for_everyone: false
     company: DeepSeek
     country: China
     label: DeepSeek V4.1 Flash (Together)
@@ -43,6 +45,8 @@ deepseek-models:
 
 minimax-models:
   together/MiniMaxAI/MiniMax-M3:
+    metadata:
+      available_for_everyone: false
     company: MiniMax
     country: China
     label: MiniMax-M3 (Together)
@@ -80,6 +84,8 @@ nemotron-models:
     documentation_url: https://research.nvidia.com/labs/nemotron/Nemotron-3-Ultra/
 
   together/nemotron-3-ultra-550b-a55b:
+    metadata:
+      available_for_everyone: false
     label: Nemotron 3 Ultra
     provider_endpoint: nvidia/nemotron-3-ultra-550b-a55b
     release_date: 2026-06-04
@@ -109,6 +115,8 @@ muse-models:
 
   together/muse-spark-open:
     label: Muse Spark Open
+    metadata:
+      available_for_everyone: false
     provider_endpoint: meta-models/Muse-Spark-Open-816B-A42B
     release_date: 2026-10-15
     documentation_url: https://dev.meta.ai/resources/blog/build-with-muse-spark-open
@@ -135,6 +143,8 @@ muse-models:
 
   together/muse-glimmer-30b:
     label: Muse Glimmer 30B
+    metadata:
+      available_for_everyone: false
     provider_endpoint: meta-models/Muse-Glimmer-30B
     release_date: 2026-08-10
     properties:
@@ -159,6 +169,8 @@ muse-models:
 
 reflection-models:
   together/reflection/Beam-1.0-501B-A23B:
+    metadata:
+      available_for_everyone: false
     company: Reflection
     country: United States
     label: Beam 1.0 (Together)

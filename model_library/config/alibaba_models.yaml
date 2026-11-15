@@ -38,11 +38,11 @@ qwen-3.5-models:
         write: 0.5
       context:
         threshold: 256_000
-        input: 1.2
-        output: 7.2
+        input: 0.5
+        output: 3
         cache:
-          read: 0.24
-          write: 1.5
+          read: 0.1
+          write: 0.625
     alternative_keys:
       - alibaba/qwen3.5-plus-thinking:
           properties:
@@ -63,12 +63,8 @@ qwen-3.5-models:
       max_tokens: 65_536
       reasoning_model: true
     costs_per_million_token:
-      input: 0.172
-      output: 1.032
-      context:
-        threshold: 128_000
-        input: 0.43
-        output: 2.58
+      input: 0.6
+      output: 3.6
     provider_properties:
       preserve_thinking: true
 

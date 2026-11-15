@@ -76,11 +76,8 @@ class AgentResult(ValsModel):
     - final_aggregated_metadata.duration_seconds: sum of LLM query durations (excludes retries)
     - final_compaction_metadata.duration_seconds: sum of LLM query durations across compactions (excludes retries)
 
-    Token/cost metadata is split deliberately: ``final_aggregated_metadata``
-    reports task cost (LLM calls inside agent turns), and
-    ``final_compaction_metadata`` reports compaction overhead. Sum them for
-    the actual bill. They're kept apart so users can attribute cost between
-    the agent's reasoning loop and the housekeeping mechanism.
+    ``final_aggregated_metadata`` covers task turns and ``final_compaction_metadata``
+    covers compaction calls; add them for combined usage and both cost fields.
 
     The time budget (TimeLimit.max_seconds) is checked using wall clock minus retry overhead,
     so retry/backoff time does not count against the budget.
@@ -168,11 +165,7 @@ class AgentResult(ValsModel):
     @computed_field
     @property
     def final_aggregated_metadata(self) -> QueryResultMetadata:
-        """Aggregated LLM query metadata across agent turns only.
-
-        Excludes history compaction calls — those are aggregated separately
-        in ``final_compaction_metadata``. Sum the two for the true bill.
-        """
+        """Aggregated LLM query metadata across agent turns, excluding compactions."""
         result = QueryResultMetadata()
         for turn in self.turns:
             if isinstance(turn, TurnSummary):

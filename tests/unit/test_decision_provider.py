@@ -44,7 +44,6 @@ pytestmark = pytest.mark.unit
 # registry key, pinned OpenRouter slug, input price per 1M tokens, the provider OpenRouter reports
 MODELS = [
     ("decision/jev-1.13.0", "typesafe/jev-1.13-20260917", 0.042, "TypeSafe"),
-    ("decision/mercury-decide", "inception/mercury-decide-20260930", 0.02, "Inception"),
     (
         "decision/microsoft-decision-1",
         "microsoft/microsoft-decision-1-20261009",
@@ -167,12 +166,14 @@ async def test_every_model_goes_through_openrouter_with_a_pinned_slug_and_its_ow
     )
     assert result.metadata.served_model == slug
     assert (result.metadata.in_tokens, result.metadata.out_tokens) == (500, 3)
-    # billed at the registry price, while what OpenRouter says it billed is kept for reconciliation
+    # Standard registry price and the provider-reported effective bill are separate.
     assert (
         result.metadata.cost is not None
         and result.metadata.cost.input == pytest.approx(500 * price / 1e6)
     )
     assert result.metadata.cost.output == 0.0
+    assert result.metadata.effective_cost is not None
+    assert result.metadata.effective_cost.total_override == pytest.approx(0.5)
     assert result.metadata.extra["upstream_cost"] == 0.5
     assert result.metadata.extra["upstream_provider"] == upstream
 
@@ -325,6 +326,41 @@ async def test_perplexity_gets_the_openrouter_request_at_its_own_url_and_key(
     assert parse_decision_output(result.output_text) == ANSWERS
     assert result.metadata.cost is not None
     assert result.metadata.cost.total == pytest.approx(500 * 0.02 / 1_000_000)
+
+
+async def test_google_gets_the_state_as_input_and_its_key_as_a_goog_header(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "answers": ANSWERS,
+        "usage": {
+            "total_tokens": 200,
+            "total_input_tokens": 200,
+            "input_tokens_by_modality": [{"modality": "text", "tokens": 200}],
+            "total_output_tokens": 0,
+        },
+    }
+    seen = serve(monkeypatch, lambda _: httpx.Response(200, json=payload))
+
+    result = await get_registry_model("decision/gemini-decision-1").query(
+        decision_request({"order": 8821}, QUESTIONS)
+    )
+
+    assert (
+        str(seen[0].url)
+        == "https://generativelanguage.googleapis.com/v1beta/decisions"
+    )
+    assert "authorization" not in seen[0].headers
+    assert seen[0].headers["x-goog-api-key"] == "mock_ENV_GOOGLE_API_KEY"
+    assert json.loads(seen[0].content) == {
+        "model": "gemini-decision-1",
+        "input": '{"order": 8821}',
+        "questions": QUESTIONS,
+    }
+    assert parse_decision_output(result.output_text) == ANSWERS
+    assert (result.metadata.in_tokens, result.metadata.out_tokens) == (200, 0)
+    assert result.metadata.cost is not None
+    assert result.metadata.cost.total == pytest.approx(200 * 0.1 / 1_000_000)
 
 
 @pytest.mark.parametrize(

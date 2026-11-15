@@ -26,7 +26,7 @@ deepseek-models:
       images: true
       output_schema: true
     metadata:
-      available_for_everyone: true
+      available_for_everyone: false
       ignored_for_cost: false
     provider_properties:
       api_base: https://inference.baseten.co/v1
@@ -53,7 +53,7 @@ deepseek-models:
     supports:
       output_schema: true
     metadata:
-      available_for_everyone: true
+      available_for_everyone: false
       ignored_for_cost: false
     provider_properties:
       api_base: https://inference.baseten.co/v1
@@ -84,7 +84,7 @@ nemotron-models:
       images: true
       output_schema: true
     metadata:
-      available_for_everyone: true
+      available_for_everyone: false
       ignored_for_cost: false
     provider_properties:
       api_base: https://inference.baseten.co/v1

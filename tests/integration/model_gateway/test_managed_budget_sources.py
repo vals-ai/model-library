@@ -47,13 +47,13 @@ async def test_approved_project_sources_and_system_eligibility():
             policy.project.project_id for policy in await store.list_project_policies()
         }
         key = await store.decide_request(
-            request_id, actor, uuid4(), ("weekly", Decimal("100")), None,
+            request_id, actor, uuid4(), Decimal("100"), None,
         )
         assert key is not None and key.project == project
         policy = await store.get_project_policy(project.project_id)
         assert policy is not None
         assert policy.project == project
-        assert policy.period == "weekly" and policy.base_limit_usd == Decimal("100")
+        assert policy.total_limit_usd == Decimal("100")
         sources = [policy.project.project_id for policy in await store.list_project_policies()]
         assert sources.count(project.project_id) == 1
         assert key.id not in await list_key_spend_sources(engine)
@@ -76,7 +76,7 @@ async def test_approved_project_sources_and_system_eligibility():
             PersonalOwner(actor), None, project_with_optional_key_cap, None, None,
         )
         optional_key = await store.decide_request(
-            optional_key_request, actor, uuid4(), ("monthly", Decimal("25")), None,
+            optional_key_request, actor, uuid4(), Decimal("25"), None,
         )
         assert optional_key is not None and optional_key.key_limit is None
         assert project_with_optional_key_cap.project_id in {
@@ -112,13 +112,13 @@ async def test_first_service_key_approval_creates_shared_project_policy():
             ServiceOwner(service_id), None, project, None, None,
         )
         key = await store.decide_request(
-            requested.id, actor, uuid4(), ("monthly", Decimal("50")), None,
+            requested.id, actor, uuid4(), Decimal("50"), None,
         )
         assert key is not None
         policy = await store.get_project_policy(project_id)
         assert policy is not None
         assert policy.project == project
-        assert policy.period == "monthly" and policy.base_limit_usd == Decimal("50")
+        assert policy.total_limit_usd == Decimal("50")
         assert project_id in {
             policy.project.project_id for policy in await store.list_project_policies()
         }

@@ -6,6 +6,7 @@ from model_gateway.usage_ledger import schema
 from model_gateway.usage_ledger.dynamodb_writer import (
     _dynamodb_item_size,
     prepare_usage_event_for_write,
+    serialize_item,
 )
 
 
@@ -58,10 +59,15 @@ def test_dynamodb_item_size_uses_exact_binary_limit_and_nested_overhead() -> Non
 def test_prepare_usage_event_preserves_additive_root_fields() -> None:
     event = _event()
     event["future_additive_field"] = "value"
+    event["standard_cost_usd"] = Decimal("0.000000000001")
 
     prepared = prepare_usage_event_for_write(event)
 
     assert prepared.event["future_additive_field"] == "value"
+    assert prepared.event["standard_cost_usd"] == Decimal("0.000000000001")
+    assert Decimal(serialize_item(prepared.event)["standard_cost_usd"]["N"]) == Decimal(
+        "0.000000000001"
+    )
 
 
 def test_prepare_usage_event_preserves_details_below_the_size_limits() -> None:

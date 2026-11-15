@@ -1,18 +1,16 @@
-from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Literal, cast
+from typing import cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 
-from model_gateway.budgets.schema import period_bounds
 from model_gateway.budgets.service import BudgetService
 from model_gateway.managed_auth.identity import VerifiedHuman, VerifiedMachine
 from model_gateway.managed_auth.schemas import (
     ApprovalInput,
     CapabilitiesDTO,
     CatalogDTO,
-    CurrentProjectPeriodDTO,
+    CurrentProjectTotalDTO,
     IdentityDTO,
     KeyActionsDTO,
     KeyDTO,
@@ -27,7 +25,6 @@ from model_gateway.managed_auth.schemas import (
     ProjectBudgetChangeDTO,
     ProjectBudgetInput,
     ProjectPolicyDTO,
-    ProjectPolicyInput,
     RequestDTO,
     RequestInput,
     RevisionInput,
@@ -46,6 +43,7 @@ from model_gateway.managed_auth.schemas import (
 from model_gateway.managed_auth.service import ManagedAuthService
 from model_gateway.managed_auth.store import ManagedAuthStore
 from model_gateway.managed_auth.types import (
+    TemporaryIncreaseAction,
     HumanIdentity,
     PersonalOwner,
     ProjectReference,
@@ -71,7 +69,9 @@ async def human(
     scheme, _, token = authorization.partition(" ") if authorization else ("", "", "")
     if scheme.lower() != "bearer" or not token:
         raise HTTPException(401, "Human bearer token required")
-    person = await request.app.state.managed_auth_verifier.verify(token)
+    person = await request.app.state.managed_auth_verifier.verify(
+        token, allow_bound_key=request.method == "GET"
+    )
     await service(request).register(person)
     return person
 
@@ -240,12 +240,10 @@ async def approve(
         raise HTTPException(422, "First project approval requires initial_policy")
     if existing_policy is not None and body.initial_policy is not None:
         raise HTTPException(422, "Already-approved project cannot set initial_policy")
-    initial_policy = (
-        (body.initial_policy.period, body.initial_policy.base_limit_usd)
-        if body.initial_policy is not None
-        else None
+    first_total_usd = (
+        body.initial_policy.total_usd() if body.initial_policy is not None else None
     )
-    key = await svc.decide(person, request_id, initial_policy, True)
+    key = await svc.decide(person, request_id, first_total_usd, True)
     assert key is not None
     return key_dto(key)
 
@@ -357,8 +355,7 @@ async def project_allowances(
     _: VerifiedHuman = Depends(human),
     db: ManagedAuthStore = Depends(store),
 ) -> list[ProjectAllowanceDTO]:
-    now = datetime.now(UTC)
-    policies, extras = await db.list_project_allowance_sources(now)
+    policies, extras = await db.list_project_allowance_sources()
     budget_service = request.app.state.budget_service
     snapshot = None
     if budget_service.redis is not None:
@@ -367,36 +364,29 @@ async def project_allowances(
             snapshot = budget_service._parse_snapshot(payload)
     result: list[ProjectAllowanceDTO] = []
     for policy in policies:
-        active = extras.get(policy.project.project_id, ())
-        start, end = period_bounds(policy.period, now)
-        effective = policy.base_limit_usd + sum(
-            (item.increase_usd for item in active), Decimal(0)
-        )
         spend = None
         data_through = None
-        if snapshot is not None:
-            recorded = snapshot.periods[policy.period]
-            project_id = str(policy.project.project_id)
-            if (
-                recorded.start == start
-                and recorded.end == end
-                and project_id in recorded.spend_usd
-            ):
-                spend = recorded.spend_usd[project_id]
-                data_through = snapshot.data_through
-        current = CurrentProjectPeriodDTO(
-            start=start,
-            end=end,
-            effective_limit_usd=effective,
-            spend_usd=spend,
-            remaining_usd=effective - spend if spend is not None else None,
-            data_through=data_through,
-        )
+        if snapshot is not None and snapshot.total_spend_usd is not None:
+            spend = snapshot.total_spend_usd.get(
+                str(policy.project.project_id), Decimal(0)
+            )
+            data_through = snapshot.data_through
         result.append(
             ProjectAllowanceDTO(
                 policy=policy_dto(policy),
-                active_temporary_increases=[limit_request_dto(item) for item in active],
-                current_period=current,
+                active_temporary_increases=[
+                    limit_request_dto(item)
+                    for item in extras.get(policy.project.project_id, ())
+                ],
+                current_total=CurrentProjectTotalDTO(
+                    started_at=policy.total_started_at,
+                    total_limit_usd=policy.total_limit_usd,
+                    spend_usd=spend,
+                    remaining_usd=policy.total_limit_usd - spend
+                    if spend is not None
+                    else None,
+                    data_through=data_through,
+                ),
             )
         )
     return result
@@ -411,31 +401,6 @@ async def project_policy(
     policy = await db.get_project_policy(project_id)
     if policy is None:
         raise HTTPException(404, "Project policy not found")
-    return policy_dto(policy)
-
-
-@router.put("/projects/{project_id}/policy", response_model=ProjectPolicyDTO)
-async def update_project_policy(
-    project_id: UUID,
-    body: ProjectPolicyInput,
-    person: VerifiedHuman = Depends(human),
-    db: ManagedAuthStore = Depends(store),
-    svc: ManagedAuthService = Depends(service),
-):
-    svc.admin(person)
-    try:
-        policy = await db.update_project_policy(
-            project_id,
-            body.expected_revision,
-            body.period,
-            body.base_limit_usd,
-            person.identity,
-            body.reason,
-        )
-    except ValueError as error:
-        raise HTTPException(422, str(error)) from error
-    if policy is None:
-        raise HTTPException(409, "Project policy revision changed or not found")
     return policy_dto(policy)
 
 
@@ -519,10 +484,10 @@ async def project_history(
                     reason=item.reason,
                     request=dto,
                     before=ProjectAllowanceStateDTO.model_validate(detail["before"])
-                    if detail is not None
+                    if detail is not None and detail["before"] is not None
                     else None,
                     after=ProjectAllowanceStateDTO.model_validate(detail["after"])
-                    if detail is not None
+                    if detail is not None and detail["after"] is not None
                     else None,
                     affected_request_ids=[item.id] if detail is not None else [],
                 )
@@ -539,9 +504,8 @@ async def _change_temporary(
     svc: ManagedAuthService,
     expected_revision: int,
     reason: str,
-    action: Literal["add", "set", "remove"],
+    action: TemporaryIncreaseAction,
     amount: Decimal | None,
-    expected_period: tuple[datetime, datetime] | None,
 ) -> ProjectPolicyDTO:
     svc.admin(person)
     try:
@@ -552,7 +516,6 @@ async def _change_temporary(
             reason,
             action,
             amount,
-            expected_period,
         )
     except ValueError as error:
         raise HTTPException(409, str(error)) from error
@@ -578,9 +541,8 @@ async def add_temporary_increase(
         svc,
         body.expected_revision,
         body.reason,
-        "add",
+        TemporaryIncreaseAction.ADD,
         body.increase_usd,
-        (body.expected_period_start, body.expected_period_end),
     )
 
 
@@ -601,9 +563,8 @@ async def set_temporary_increase(
         svc,
         body.expected_revision,
         body.reason,
-        "set",
+        TemporaryIncreaseAction.SET,
         body.limit_usd,
-        (body.expected_period_start, body.expected_period_end),
     )
 
 
@@ -624,8 +585,7 @@ async def remove_temporary_increases(
         svc,
         body.expected_revision,
         body.reason,
-        "remove",
-        None,
+        TemporaryIncreaseAction.REMOVE,
         None,
     )
 
@@ -638,7 +598,7 @@ async def submit_limit_request(
     db: ManagedAuthStore = Depends(store),
     svc: ManagedAuthService = Depends(service),
 ):
-    policy = await svc.project_member(person, project_id)
+    policy = await svc.project_policy(project_id)
     try:
         item = await db.create_limit_request(
             uuid4(),
@@ -653,6 +613,67 @@ async def submit_limit_request(
     return limit_request_dto(item)
 
 
+_REVISION_CHANGED = "Project policy revision changed or not found"
+
+
+async def _file_raise(
+    db: ManagedAuthStore,
+    project_id: UUID,
+    body: ProjectBudgetInput,
+    person: VerifiedHuman,
+) -> ProjectBudgetChangeDTO:
+    raised = await db.request_project_raise(
+        uuid4(),
+        project_id,
+        body.expected_revision,
+        body.limit_usd,
+        body.reason,
+        person.identity,
+    )
+    if raised is None:
+        raise HTTPException(409, _REVISION_CHANGED)
+    reworded, item = raised
+    return ProjectBudgetChangeDTO(
+        policy=policy_dto(reworded), pending_request=limit_request_dto(item)
+    )
+
+
+async def _require_lower_above_spend(
+    request: Request, project_id: UUID, limit_usd: Decimal
+) -> None:
+    budgets = cast(BudgetService, request.app.state.budget_service)
+    spent = await budgets.project_total_spend(project_id)
+    if spent is None:
+        raise HTTPException(503, "Project spend is unavailable; try again shortly")
+    if limit_usd < spent:
+        raise HTTPException(
+            409,
+            f"The new budget ${limit_usd} is below the ${spent} "
+            "this project has already spent",
+        )
+
+
+async def _apply_total(
+    db: ManagedAuthStore,
+    project_id: UUID,
+    body: ProjectBudgetInput,
+    person: VerifiedHuman,
+) -> ProjectBudgetChangeDTO:
+    try:
+        changed = await db.change_project_total(
+            project_id,
+            body.expected_revision,
+            body.limit_usd,
+            body.reason,
+            person.identity,
+        )
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+    if changed is None:
+        raise HTTPException(409, _REVISION_CHANGED)
+    return ProjectBudgetChangeDTO(policy=policy_dto(changed), pending_request=None)
+
+
 @router.put("/projects/{project_id}/budget", response_model=ProjectBudgetChangeDTO)
 async def change_project_budget(
     project_id: UUID,
@@ -664,42 +685,12 @@ async def change_project_budget(
 ):
     policy = await svc.project_member(person, project_id)
     if policy.revision != body.expected_revision:
-        raise HTTPException(409, "Project policy revision changed or not found")
-    total = policy.total_limit_usd
-    if total is None:
-        raise HTTPException(409, "Project budget is not an overall total yet")
-    if body.limit_usd > total:
-        raised = await db.request_project_raise(
-            uuid4(),
-            project_id,
-            body.expected_revision,
-            body.limit_usd,
-            body.reason,
-            person.identity,
-        )
-        if raised is None:
-            raise HTTPException(409, "Project policy revision changed or not found")
-        reworded, item = raised
-        return ProjectBudgetChangeDTO(
-            policy=policy_dto(reworded), pending_request=limit_request_dto(item)
-        )
-    if body.limit_usd < total:
-        budgets = cast(BudgetService, request.app.state.budget_service)
-        spent = await budgets.project_total_spend(project_id)
-        if spent is None:
-            raise HTTPException(503, "Project spend is unavailable; try again shortly")
-        if body.limit_usd < spent:
-            raise HTTPException(
-                409,
-                f"The new budget ${body.limit_usd} is below the ${spent} "
-                "this project has already spent",
-            )
-    changed = await db.change_project_total(
-        project_id, body.expected_revision, body.limit_usd, body.reason, person.identity
-    )
-    if changed is None:
-        raise HTTPException(409, "Project policy revision changed or not found")
-    return ProjectBudgetChangeDTO(policy=policy_dto(changed), pending_request=None)
+        raise HTTPException(409, _REVISION_CHANGED)
+    if body.limit_usd > policy.total_limit_usd:
+        return await _file_raise(db, project_id, body, person)
+    if body.limit_usd < policy.total_limit_usd:
+        await _require_lower_above_spend(request, project_id, body.limit_usd)
+    return await _apply_total(db, project_id, body, person)
 
 
 @router.get("/limit-requests", response_model=list[LimitRequestDTO])

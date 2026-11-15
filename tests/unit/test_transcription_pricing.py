@@ -99,6 +99,30 @@ def test_transcription_token_cost_requires_returned_input_and_output_counts(
     assert compute_transcription_cost("test/token", _metadata(input_tokens=200)) is None
 
 
+def test_transcription_discount_changes_token_cost_but_not_duration_tariff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config = SimpleNamespace(
+        transcription_cost=None,
+        costs_per_million_token=CostProperties(
+            input=2.5, output=10.0, current_discount=40
+        ),
+    )
+    monkeypatch.setattr(
+        registry_utils, "get_transcription_registry_config", lambda _key: config
+    )
+    metadata = _metadata(
+        input_tokens=200, output_tokens=100, billable_duration_seconds=30.0
+    )
+
+    assert compute_transcription_cost("test/token", metadata) == pytest.approx(0.0009)
+
+    config.transcription_cost = TranscriptionCostProperties(
+        usd_per_minute=0.6, billing_basis="session"
+    )
+    assert compute_transcription_cost("test/token", metadata) == pytest.approx(0.3)
+
+
 def test_gemini_live_registry_uses_reported_token_cost() -> None:
     config = get_transcription_registry_config("google/gemini-3.5-transcribe-live")
 

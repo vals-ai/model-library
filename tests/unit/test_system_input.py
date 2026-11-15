@@ -1,9 +1,4 @@
-"""Backward compatibility tests for system_prompt kwarg.
-
-The system_prompt kwarg was deprecated in favor of passing SystemInput as
-the first element of the input sequence. These tests verify that the old
-kwarg still works via the query() and count_tokens() entry points.
-"""
+"""SystemInput handling at the query() and count_tokens() entry points."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -27,81 +22,23 @@ def _dummy_result() -> QueryResult:
 
 
 @pytest.mark.unit
-class TestSystemPromptKwargCompat:
-    """system_prompt kwarg is converted to SystemInput before _query_impl is called."""
-
-    async def test_anthropic_prepends_system_input(self):
-        model = AnthropicModel("claude-sonnet-4-5-20250929")
-
-        mock_impl = AsyncMock(return_value=_dummy_result())
-        model._query_impl = mock_impl  # type: ignore[method-assign]
-
-        await model.query(
-            [TextInput(text="hello")],
-            system_prompt="You are helpful.",
-        )
-
-        received_input = mock_impl.call_args.args[0]
-        assert isinstance(received_input[0], SystemInput)
-        assert received_input[0].text == "You are helpful."
-        assert isinstance(received_input[1], TextInput)
-
-    async def test_openai_prepends_system_input(self):
+class TestSystemInput:
+    async def test_system_prompt_kwarg_is_rejected(self):
         model = OpenAIModel("gpt-4o")
-
         mock_impl = AsyncMock(return_value=_dummy_result())
         model._query_impl = mock_impl  # type: ignore[method-assign]
 
-        await model.query(
-            [TextInput(text="hello")],
-            system_prompt="Be concise.",
-        )
+        with pytest.raises(TypeError, match="system_prompt kwarg was removed"):
+            await model.query([TextInput(text="hello")], system_prompt="Be concise.")
 
-        received_input = mock_impl.call_args.args[0]
-        assert isinstance(received_input[0], SystemInput)
-        assert received_input[0].text == "Be concise."
+        mock_impl.assert_not_called()
 
-    async def test_system_prompt_kwarg_prepends_before_user_input(self):
-        model = OpenAIModel("gpt-4o")
-
-        mock_impl = AsyncMock(return_value=_dummy_result())
-        model._query_impl = mock_impl  # type: ignore[method-assign]
-
-        user_msg = TextInput(text="What is the weather?")
-        await model.query([user_msg], system_prompt="Be concise.")
-
-        received_input = mock_impl.call_args.args[0]
-        assert isinstance(received_input[0], SystemInput)
-        assert received_input[1] is user_msg
-
-    async def test_no_system_prompt_kwarg_leaves_input_unchanged(self):
-        model = OpenAIModel("gpt-4o")
-
-        mock_impl = AsyncMock(return_value=_dummy_result())
-        model._query_impl = mock_impl  # type: ignore[method-assign]
-
-        user_msg = TextInput(text="hello")
-        await model.query([user_msg])
-
-        received_input = mock_impl.call_args.args[0]
-        assert not any(isinstance(item, SystemInput) for item in received_input)
-        assert received_input[0] is user_msg
-
-    async def test_stringify_input_accepts_system_prompt_kwarg(self):
-        """system_prompt kwarg also works for stringify_input (used by count_tokens)."""
+    async def test_stringify_input_includes_system_input(self):
         model = OpenAIModel("gpt-4o")
 
         result = await model.stringify_input(
-            [TextInput(text="hello")],
-            system_prompt="You are helpful.",
+            [SystemInput(text="You are helpful."), TextInput(text="hello")]
         )
-
-        assert "You are helpful." in result
-
-    async def test_stringify_input_accepts_system_prompt_only(self):
-        model = OpenAIModel("gpt-4o")
-
-        result = await model.stringify_input([], system_prompt="You are helpful.")
 
         assert "You are helpful." in result
 
@@ -111,7 +48,7 @@ class TestSystemPromptKwargCompat:
             config=LLMConfig(custom_api_key=SecretStr("dummy")),
         )
 
-        tokens = await model.count_tokens([], system_prompt="You are helpful.")
+        tokens = await model.count_tokens([SystemInput(text="You are helpful.")])
 
         assert tokens > 0
 
@@ -123,8 +60,7 @@ class TestSystemPromptKwargCompat:
         model.get_client = MagicMock(return_value=client)  # type: ignore[method-assign]
 
         tokens = await model.count_tokens(
-            [TextInput(text="hello")],
-            system_prompt="You are helpful.",
+            [SystemInput(text="You are helpful."), TextInput(text="hello")]
         )
 
         assert tokens == 7
@@ -297,7 +233,7 @@ class TestSystemPromptKwargCompat:
         assert tokens == 11
         client.messages.count_tokens.assert_awaited_once()
 
-    async def test_google_vertex_count_tokens_consumes_system_prompt_before_parse_input(
+    async def test_google_vertex_count_tokens_consumes_system_input_before_parse_input(
         self,
     ):
         with patch.object(GoogleModel, "get_client", return_value=MagicMock()):
@@ -317,8 +253,7 @@ class TestSystemPromptKwargCompat:
         model.get_client = MagicMock(return_value=client)  # type: ignore[method-assign]
 
         tokens = await model.count_tokens(
-            [TextInput(text="hello")],
-            system_prompt="You are helpful.",
+            [SystemInput(text="You are helpful."), TextInput(text="hello")]
         )
 
         assert tokens == 9

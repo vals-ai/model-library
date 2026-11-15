@@ -44,7 +44,7 @@ claude-4-models:                    # model block
 | `properties` | Required `context_window`, `max_tokens`, `reasoning_model`, optional `training_cutoff`; transcription-only models may omit the whole block |
 | `supports` | Boolean flags: `images`, `audio`, `videos`, `files`, `temperature`, `tools`, `output_schema`, `transcription` |
 | `transcription_streaming` | Whether this entry uses a streaming transcription transport, including complete-file uploads with streamed transcript responses |
-| `costs_per_million_token` | `input`, `output`, optional `cache`, `batch`, `context` pricing. Set to `null` for models without known pricing |
+| `costs_per_million_token` | Standard `input`, `output`, optional `cache`, `batch`, `context` pricing; optional `current_discount` is a 0–100% token-cost reduction (omitted means no reduction); optional `off_peak` is a reduction during listed UTC hours and days. `null` means pricing is unknown. See [common model fields](../../docs/config.md#common-model-fields) |
 | `transcription_cost` | Duration STT pricing: `usd_per_minute`, `billing_basis`, and optional `minimum_billable_seconds` and `increment_seconds` |
 | `metadata` | `deprecated`, `available_for_everyone`, `available_as_evaluator`, `ignored_for_cost` (defaults to `internal_only`), `internal_only` (also hidden from the public export), `approved_identities_only` (only run tokens minted for approved identities may call it; see `docs/gateway.md`) |
 | `default_parameters` | `temperature`, `top_p`, `top_k`, `reasoning_effort` |

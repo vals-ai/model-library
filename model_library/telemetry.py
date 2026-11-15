@@ -146,9 +146,6 @@ SENTRY_TAG_ATTRIBUTE_KEYS = frozenset(
         "gateway.provider_error.status_code",
         "gateway.error.phase",
         "gateway.error.provider",
-        "gateway.error_code",
-        "gateway.error_phase",
-        "gateway.error_provider",
         "http.status_code",
         "http.response.status_code",
         "model.provider",
@@ -805,13 +802,6 @@ def sanitize_attributes(
         value = _sanitize_value(raw_value)
         if value is not None:
             sanitized[key] = value
-    for source, alias in (
-        ("gateway.error.code", "gateway.error_code"),
-        ("gateway.error.phase", "gateway.error_phase"),
-        ("gateway.error.provider", "gateway.error_provider"),
-    ):
-        if source in sanitized and alias not in sanitized:
-            sanitized[alias] = sanitized[source]
     return sanitized
 
 

@@ -47,6 +47,24 @@ deepseek-models:
       output: 1.20
       cache:
         read: 0.006
+  fireworks/deepseek-v4p1-flash-1017:
+    label: DeepSeek V4.1 Flash 1017 (Fireworks)
+    release_date: 2026-10-17
+    documentation_url: https://fireworks.ai/models/deepseek-ai/deepseek-v4p1-flash-1017
+    supports:
+      images: true
+    properties:
+      context_window: 1_048_576
+      max_tokens: 262_144
+      reasoning_model: true
+    default_parameters:
+      reasoning_effort: max
+      top_p: 1
+    costs_per_million_token:
+      input: 0.30
+      output: 1.20
+      cache:
+        read: 0.006
 openai-models:
   base-config:
     company: OpenAI
@@ -85,6 +103,8 @@ kimi-models:
       top_p: 0.95
     alternative_keys:
       - together/moonshotai/Kimi-K3:
+          metadata:
+            available_for_everyone: false
           country: null
           label: Kimi K3 (Together)
           release_date: 2026-07-27
@@ -96,6 +116,8 @@ kimi-models:
           costs_per_million_token:
             batch: null
       - baseten/moonshotai/Kimi-K3:
+          metadata:
+            available_for_everyone: false
           country: null
           label: Kimi K3 (Baseten)
           release_date: 2026-07-27
@@ -123,7 +145,28 @@ kimi-models:
       cache:
         read: 0.30
 
+  fireworks/kimi-k3p1-pro:
+    label: Kimi K3.1 Pro
+    release_date: 2026-11-02
+    documentation_url: https://fireworks.ai/models/fireworks/kimi-k3p1-pro
+    supports:
+      images: true
+    properties:
+      context_window: 1_048_576
+      max_tokens: 131_072
+      reasoning_model: true
+    default_parameters:
+      reasoning_effort: max
+      temperature: 1
+      top_p: 0.95
+    costs_per_million_token:
+      input: 2.0
+      output: 10.0
+      cache:
+        read: 0.20
   fireworks/ember-1:
+    metadata:
+      available_for_everyone: false
     label: Ember-1
     company: Fireworks
     country: United States
@@ -168,6 +211,22 @@ minimax-models:
       output: 1.20
       cache:
         read: 0.06
+  fireworks/minimax-m3p1-flash:
+    label: MiniMax-M3.1 Flash (Fireworks)
+    release_date: 2026-10-17
+    documentation_url: https://fireworks.ai/models/fireworks/minimax-m3p1-flash
+    default_parameters:
+      temperature: 1
+      top_p: 0.95
+    properties:
+      context_window: 1_048_576
+      max_tokens: 131_072
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.15
+      output: 0.60
+      cache:
+        read: 0.015
 nvidia-models:
   base-config:
     company: NVIDIA
@@ -177,6 +236,8 @@ nvidia-models:
       images: false
       temperature: true
   fireworks/nemotron-3-ultra-550b-a55b:
+    metadata:
+      available_for_everyone: false
     label: Nemotron 3 Ultra (Fireworks)
     release_date: 2026-06-04
     documentation_url: https://research.nvidia.com/labs/nemotron/Nemotron-3-Ultra/
@@ -199,6 +260,8 @@ nvidia-models:
 
 
   fireworks/nemotron-lightning-3p5-30b-a3b:
+    metadata:
+      available_for_everyone: false
     label: Nemotron 3.5 Lightning
     release_date: 2026-08-11
     documentation_url: https://huggingface.co/nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16
@@ -272,6 +335,8 @@ zai-models:
     alternative_keys:
       # Library output budget matches Fireworks, not a Together-published limit.
       - together/zai-org/GLM-5.3-Flash:
+          metadata:
+            available_for_everyone: false
           country: null
           label: GLM 5.3 Flash (Together)
           documentation_url: https://www.together.ai/models/glm-5-3-flash
@@ -285,6 +350,8 @@ zai-models:
           costs_per_million_token:
             batch: null
       - baseten/zai-org/GLM-5.3-Flash:
+          metadata:
+            available_for_everyone: false
           country: null
           label: GLM 5.3 Flash (Baseten)
           documentation_url: https://www.baseten.co/library/glm-53-flash/
@@ -356,6 +423,8 @@ muse-models:
 
   fireworks/muse-spark-open:
     label: Muse Spark Open (Fireworks)
+    metadata:
+      available_for_everyone: false
     provider_endpoint: muse-spark-open
     release_date: 2026-10-15
     documentation_url: https://fireworks.ai/models/fireworks/muse-spark-open

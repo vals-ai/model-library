@@ -1,17 +1,18 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, Literal
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from model_gateway.budgets.schema import BudgetPeriod
 from model_gateway.managed_auth.types import (
-    LimitRequestStatus,
     HumanIdentity,
     KeyLimit,
     KeyOwner,
     KeyRequest,
+    LimitRequestKind,
+    LimitRequestStatus,
     MachineIdentity,
     ManagedKey,
     PersonalOwner,
@@ -87,8 +88,32 @@ class MachineRequestInput(StrictModel):
 
 
 class InitialPolicyInput(StrictModel):
-    period: BudgetPeriod
-    base_limit_usd: Decimal = Field(gt=0)
+    limit_usd: Decimal | None = Field(default=None, gt=0)
+    period: BudgetPeriod | None = None
+    base_limit_usd: Decimal | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def one_total(self) -> "InitialPolicyInput":
+        if (
+            self.limit_usd is not None
+            and self.period is None
+            and self.base_limit_usd is None
+        ):
+            return self
+        if (
+            self.limit_usd is None
+            and self.period is not None
+            and self.base_limit_usd is not None
+        ):
+            return self
+        raise ValueError(
+            "initial_policy takes limit_usd, or period with base_limit_usd"
+        )
+
+    def total_usd(self) -> Decimal:
+        if self.limit_usd is not None:
+            return self.limit_usd
+        return cast(Decimal, self.base_limit_usd)
 
 
 class ApprovalInput(StrictModel):
@@ -168,18 +193,9 @@ class CapabilitiesDTO(StrictModel):
     key_actions: dict[str, KeyActionsDTO]
 
 
-class ProjectPolicyInput(StrictModel):
-    expected_revision: int = Field(ge=1)
-    period: BudgetPeriod
-    base_limit_usd: Decimal = Field(gt=0)
-    reason: str | None = None
-
-
 class ProjectPolicyDTO(StrictModel):
     project: ProjectDTO
-    period: BudgetPeriod
-    base_limit_usd: Decimal
-    total_limit_usd: Decimal | None
+    total_limit_usd: Decimal
     budget_reason: str | None
     archived_at: datetime | None
     revision: int
@@ -191,16 +207,12 @@ class TemporaryIncreaseInput(StrictModel):
     expected_revision: int = Field(ge=1)
     reason: str = Field(min_length=1)
     increase_usd: Decimal = Field(gt=0)
-    expected_period_start: datetime
-    expected_period_end: datetime
 
 
 class TemporarySetInput(StrictModel):
     expected_revision: int = Field(ge=1)
     reason: str = Field(min_length=1)
     limit_usd: Decimal = Field(ge=0)
-    expected_period_start: datetime
-    expected_period_end: datetime
 
 
 class TemporaryRemoveInput(StrictModel):
@@ -211,10 +223,8 @@ class TemporaryRemoveInput(StrictModel):
 class LimitRequestDTO(StrictModel):
     id: UUID
     project: ProjectDTO
-    kind: Literal["temporary", "permanent"]
+    kind: LimitRequestKind
     increase_usd: Decimal
-    period_start: datetime | None
-    period_end: datetime | None
     reason: str
     creator: IdentityDTO
     status: LimitRequestStatus
@@ -226,10 +236,9 @@ class LimitRequestDTO(StrictModel):
     created_at: datetime
 
 
-class CurrentProjectPeriodDTO(StrictModel):
-    start: datetime
-    end: datetime
-    effective_limit_usd: Decimal
+class CurrentProjectTotalDTO(StrictModel):
+    started_at: datetime
+    total_limit_usd: Decimal
     spend_usd: Decimal | None
     remaining_usd: Decimal | None
     data_through: datetime | None
@@ -238,7 +247,7 @@ class CurrentProjectPeriodDTO(StrictModel):
 class ProjectAllowanceDTO(StrictModel):
     policy: ProjectPolicyDTO
     active_temporary_increases: list[LimitRequestDTO]
-    current_period: CurrentProjectPeriodDTO
+    current_total: CurrentProjectTotalDTO
 
 
 class HistoryExtraDTO(StrictModel):
@@ -270,7 +279,7 @@ class ProjectHistoryEventDTO(StrictModel):
 
 
 class LimitRequestInput(StrictModel):
-    kind: Literal["temporary", "permanent"]
+    kind: LimitRequestKind
     increase_usd: Decimal = Field(gt=0)
     reason: str
 
@@ -374,8 +383,6 @@ def request_dto(request: KeyRequest) -> RequestDTO:
 def policy_dto(policy: ProjectPolicy) -> ProjectPolicyDTO:
     return ProjectPolicyDTO(
         project=project_dto(policy.project),
-        period=policy.period,
-        base_limit_usd=policy.base_limit_usd,
         total_limit_usd=policy.total_limit_usd,
         budget_reason=policy.budget_reason,
         archived_at=policy.archived_at,
@@ -391,8 +398,6 @@ def limit_request_dto(item: ProjectLimitRequest) -> LimitRequestDTO:
         project=project_dto(item.project),
         kind=item.kind,
         increase_usd=item.increase_usd,
-        period_start=item.period_start,
-        period_end=item.period_end,
         reason=item.reason,
         creator=identity_dto(item.creator),
         status=item.status,

@@ -6,12 +6,13 @@ from collections.abc import Generator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from functools import cache
 from pathlib import Path
 from time import monotonic
 from urllib.parse import urljoin
 from typing import (
+    Annotated,
     Any,
     Callable,
     Literal,
@@ -24,7 +25,10 @@ from typing import (
 import httpx
 import yaml
 from pydantic import (
+    AwareDatetime,
     ConfigDict,
+    PrivateAttr,
+    Strict,
     TypeAdapter,
     ValidationError,
     create_model,
@@ -199,6 +203,85 @@ class BatchCost(BaseModel):
         return self
 
 
+_WEEKDAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")
+HourRange = Annotated[tuple[int, int], Strict(False)]
+
+
+def _weekdays(key: str) -> range:
+    first, _, last = key.partition("-")
+    if first not in _WEEKDAYS or (last and last not in _WEEKDAYS):
+        raise ValueError(f"unknown day key {key!r}; use e.g. 'mon' or 'mon-fri'")
+    start = _WEEKDAYS.index(first)
+    stop = _WEEKDAYS.index(last) if last else start
+    if stop < start:
+        raise ValueError(f"day range {key!r} must run forward, e.g. 'mon-fri'")
+    return range(start, stop + 1)
+
+
+class OffPeakDiscount(BaseModel):
+    """Token-cost reduction during the provider's discount hours and days (UTC)."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    discount: float = Field(ge=0, le=100)
+    starts_at: AwareDatetime | None = Field(
+        default=None, strict=False, exclude_if=lambda value: value is None
+    )
+    discount_hours_utc: dict[str, list[HourRange]] = Field(default_factory=dict)
+    discount_days: list[Annotated[date, Strict(False)]] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    _hours_by_weekday: dict[int, list[HourRange]] = PrivateAttr(default_factory=dict)
+
+    @model_validator(mode="after")
+    def index_discount_hours(self):
+        hours_by_weekday: dict[int, list[HourRange]] = {}
+        for key, hours in self.discount_hours_utc.items():
+            for start, end in hours:
+                if not 0 <= start < end <= 24:
+                    raise ValueError(
+                        f"{key}: hour range [{start}, {end}] must satisfy 0 <= start < end <= 24"
+                    )
+            for weekday in _weekdays(key):
+                if weekday in hours_by_weekday:
+                    raise ValueError(
+                        f"{key}: {_WEEKDAYS[weekday]} is listed under more than one day key"
+                    )
+                hours_by_weekday[weekday] = hours
+        self._hours_by_weekday = hours_by_weekday
+        return self
+
+    def weekday_peak_hours_utc(self) -> list[dict[str, int]]:
+        """Monday's full-price hours in the shape model-library read before
+        `discount_hours_utc`; Gateway sends it for one release so older clients
+        still load the registry."""
+        discounted = {
+            hour
+            for start, end in self._hours_by_weekday.get(0, [])
+            for hour in range(start, end)
+        }
+        windows: list[dict[str, int]] = []
+        for hour in range(24):
+            if hour in discounted:
+                continue
+            if windows and windows[-1]["end_hour"] == hour:
+                windows[-1]["end_hour"] = hour + 1
+            else:
+                windows.append({"start_hour": hour, "end_hour": hour + 1})
+        return windows
+
+    def applies_at(self, at: datetime) -> bool:
+        at = at.astimezone(UTC)
+        if self.starts_at is not None and at < self.starts_at:
+            return False
+        if at.date() in self.discount_days:
+            return True
+        return any(
+            start <= at.hour < end
+            for start, end in self._hours_by_weekday.get(at.weekday(), [])
+        )
+
+
 class CostProperties(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -207,6 +290,12 @@ class CostProperties(BaseModel):
     cache: CacheCost | None = None
     batch: BatchCost | None = None
     context: ContextCost | None = None
+    current_discount: float | None = Field(
+        default=None, ge=0, le=100, exclude_if=lambda value: value is None
+    )
+    off_peak: OffPeakDiscount | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class TranscriptionCostProperties(BaseModel):
@@ -506,6 +595,10 @@ def visible_registry_keys(
 def model_config_from_json(data: dict[str, Any]) -> RegistryEntry:
     """Parse a chat or transcription entry from gateway registry JSON."""
     provider_properties = data["provider_properties"]
+    # Gateway also sends the pre-discount_hours_utc field for older clients.
+    costs = cast(dict[str, Any], data.get("costs_per_million_token") or {})
+    off_peak = cast(dict[str, Any], costs.get("off_peak") or {})
+    off_peak.pop("weekday_peak_hours_utc", None)
     # Gateway adds product metadata outside the model configuration.
     payload = json.dumps(
         {

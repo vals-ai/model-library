@@ -21,7 +21,7 @@ uv run python examples/tools.py <model> [--mode agent|direct|both]
 
 If you already activated `.venv`, bare `python examples/...` commands work too.
 
-The validator is the broad model smoke check. It exercises core text, declared image/file transports, bounded agent tool use, reasoning evidence for reasoning models, prompt-cache read/write metadata, configured and live rate limits, and configured pricing. A missing configured rate limit fails the run. Human output groups results by section; one-row sections render as `Caching pass` or `Pricing warn - no configured pricing`, with details indented below. `--json` emits the full validation report, including aggregated usage and configured pricing under `usage.price_per_million_tokens`.
+The validator is the broad model smoke check. It exercises core text, declared image/file transports, bounded agent tool use, structured output, reasoning evidence for reasoning models, prompt-cache read/write metadata, configured and live rate limits, and configured pricing. A served model other than the one requested fails the run, as does a missing configured rate limit. Reasoning runs as five chained turns: no reasoning on turn 1 or a wrong final answer fails, and no reasoning on a later turn warns. `--key-env NAME` (repeatable) repeats the core check with the API key in that env var. Effort levels are separate registry keys, so validate each one. Human output groups results by section; one-row sections render as `Caching pass` or `Pricing warn - no configured pricing`, with details indented below. `--json` emits the full validation report, including aggregated usage and configured pricing under `usage.price_per_million_tokens`.
 
 Pass a model string after a command to override its default model:
 

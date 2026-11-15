@@ -57,8 +57,7 @@ result.output_dir        # Path to log directory
 | `final_aggregated_metadata` | `QueryResultMetadata` | Auditor plus target aggregate; excludes compaction metadata |
 | `output_dir` | `Path` | Log directory, excluded from JSON |
 
-For total billing metadata, add the nested `AgentResult.final_compaction_metadata`
-values separately; the conductor aggregates task-query metadata only.
+To include compactions, add each message's `AgentResult.final_compaction_metadata` to the conductor's task-turn aggregate.
 
 Each `ConversationMessage` has `role` (`"auditor"` or `"target"`) and `result` (full `AgentResult`).
 

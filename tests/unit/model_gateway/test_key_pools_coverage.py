@@ -1,4 +1,4 @@
-"""Every registry provider takes its Gateway key from the seeded pools or is listed native."""
+"""Every registry provider is pooled or native, and a pooled model reaches model-library's endpoint."""
 
 import os
 from typing import Any

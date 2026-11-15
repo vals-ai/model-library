@@ -1,5 +1,5 @@
 from model_library.base import LLM
-from model_library.base.input import ToolResult
+from model_library.base.input import SystemInput, ToolResult
 from model_library.registry_utils import get_registry_model
 from tests.conftest import parametrize_all_models
 from tests.test_helpers import get_example_tool_input
@@ -15,7 +15,9 @@ async def test_serialize_deserialize_history_roundtrip(model_key: str):
     if model.supports_tools:
         input, system_prompt, tools = get_example_tool_input()
 
-        response = await model.query(input, tools=tools, system_prompt=system_prompt)
+        response = await model.query(
+            [SystemInput(text=system_prompt), *input], tools=tools
+        )
     else:
         response = await model.query("Tell me a joke")
 

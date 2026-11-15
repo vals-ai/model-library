@@ -1,8 +1,8 @@
 """The key pool document: the one source of the Gateway's key pools.
 
 Every Gateway task reads it from the `pools` AppConfig profile through the same
-refresh as the model and credential profiles. `scripts/seed_key_pools.py`
-publishes a stage's first document; the control API's PUT publishes each later one.
+refresh as the model and credential profiles. The control API's PUT publishes
+each new document.
 """
 
 from __future__ import annotations

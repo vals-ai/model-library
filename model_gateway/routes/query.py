@@ -1,6 +1,5 @@
 """Query route registration."""
 
-import asyncio
 import time
 import uuid
 from collections.abc import Awaitable, Callable
@@ -12,7 +11,6 @@ from fastapi.responses import JSONResponse
 import model_library.telemetry as telemetry
 from model_gateway.cache import ModelCache
 from model_gateway.errors import ErrorBody
-from model_gateway.history import sign_history
 from model_gateway.key_assignments import AssignmentStore
 from model_gateway.metrics import model_dimensions
 from model_gateway.model_helpers import (
@@ -194,7 +192,7 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
             operation.add_event("sign_history_start")
 
             async def sign_result_history() -> str:
-                return sign_history(result.history, secret=secret or None)
+                return LLM.serialize_input(result.history, secret=secret or None)
 
             signed_history = await run_phase("sign_history", sign_result_history)
             operation.add_event("sign_history_done")
@@ -323,8 +321,11 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 ),
                 "HistoryItemCount": (len(result.history), "Count"),
             }
-            if result.metadata.cost is not None:
-                extra_metrics["CostUsd"] = (result.metadata.cost.total, "None")
+            if result.metadata.effective_cost is not None:
+                extra_metrics["CostUsd"] = (
+                    result.metadata.effective_cost.total,
+                    "None",
+                )
             if body.token_retry_params is not None:
                 extra_metrics["TokenRetryRequestCount"] = (1, "Count")
             response_attrs: dict[str, object | None] = {
@@ -332,20 +333,6 @@ def register_query_routes(app: FastAPI, *, cache: ModelCache) -> None:
                 if result.finish_reason
                 else None,
             }
-            # Enable only for controlled deployment-drain tests; keep disabled otherwise.
-            if False and not is_startup_canary:
-                _DEPLOY_TEST_RESPONSE_DELAY_SECONDS = 60
-                telemetry.add_event(
-                    "deploy_test_response_delay_start",
-                    {
-                        "gateway.deploy_test.delay_seconds": (
-                            _DEPLOY_TEST_RESPONSE_DELAY_SECONDS
-                        )
-                    },
-                )
-                await asyncio.sleep(_DEPLOY_TEST_RESPONSE_DELAY_SECONDS)
-                telemetry.add_event("deploy_test_response_delay_done")
-
             response = operation.success(
                 result_payload,
                 extra_metrics=extra_metrics,

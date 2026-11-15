@@ -124,15 +124,14 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
             assert await db.get_project_policy(project_id) is None
             assert (await call("admin", "GET", f"{project_path}/policy")).status_code == 404
             assert (await call("owner", "POST", f"/requests/{request_id}/approve",
-                               json={"initial_policy": {
-                                   "period": "monthly", "base_limit_usd": "20.00"}})).status_code == 403
+                               json={"initial_policy": {"limit_usd": "20.00"}})).status_code == 403
             assert (await call("admin", "POST", f"/requests/{request_id}/approve",
                                json={})).status_code == 422
             for invalid_policy in (
-                {"period": None, "base_limit_usd": None},
-                {"period": "monthly", "base_limit_usd": "0"},
-                {"period": "monthly", "base_limit_usd": None},
-                {"period": None, "base_limit_usd": "20"},
+                {"limit_usd": None},
+                {"limit_usd": "0"},
+                {"period": "monthly"},
+                {"limit_usd": "20", "period": "monthly", "base_limit_usd": "20"},
             ):
                 rejected = await call("admin", "POST", f"/requests/{request_id}/approve",
                                       json={"initial_policy": invalid_policy})
@@ -141,8 +140,7 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
                 assert pending["status"] == "pending" and pending["key_id"] is None
                 assert await db.get_project_policy(project_id) is None
             approved = await call("admin", "POST", f"/requests/{request_id}/approve",
-                                  json={"initial_policy": {
-                                      "period": "monthly", "base_limit_usd": "20.00"}})
+                                  json={"initial_policy": {"limit_usd": "20.00"}})
             assert approved.status_code == 200, approved.text
             direct = await call("owner", "POST", "/requests", json=create_body)
             assert direct.status_code == 200 and direct.json()["status"] == "approved"
@@ -153,7 +151,7 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
             assert "verifier_hash" not in key and "secret" not in key
             assert key["key_limit"] is None
             policy = (await call("admin", "GET", f"{project_path}/policy")).json()
-            assert policy["period"] == "monthly" and Decimal(policy["base_limit_usd"]) == Decimal("20")
+            assert Decimal(policy["total_limit_usd"]) == Decimal("20")
             assert policy["revision"] == 1
             assert (await call("owner", "GET", f"/keys/{key_id}")).json()["key_limit"] is None
             assert (await call("admin", "POST", f"/keys/{key_id}/collect",
@@ -255,8 +253,7 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
             assert replacement_request.status_code == 200 and replacement_request.json()["status"] == "pending"
             replacement = await call(
                 "admin", "POST", f"/requests/{replacement_request.json()['id']}/approve",
-                json={"initial_policy": {
-                    "period": "monthly", "base_limit_usd": "11.00"}},
+                json={"initial_policy": {"limit_usd": "11.00"}},
             )
             assert replacement.status_code == 200, replacement.text
             assert replacement.json()["id"] != additional_key_id
@@ -269,94 +266,63 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
             assert (await db.get_key_by_verifier(
                 managed_key_verifier(second_collected.json()["secret"]))).id == UUID(additional_key_id)
 
-            assert (await call("outsider", "POST", f"{project_path}/limit-requests", json={
+            assert (await call("outsider", "POST", f"/projects/{uuid4()}/limit-requests", json={
                 "kind": "temporary", "increase_usd": "3.00", "reason": "exception",
-            })).status_code == 403
+            })).status_code == 404
             temporary = await call("admin", "POST", f"{project_path}/limit-requests", json={
                 "kind": "temporary", "increase_usd": "3.00", "reason": "team capacity",
             })
             assert temporary.status_code == 200, temporary.text
             temporary_id = temporary.json()["id"]
             assert temporary.json()["creator"] == admin_identity
+            assert temporary.json()["kind"] == "temporary"
             assert temporary.json()["status"] == "pending"
-            assert temporary.json()["period_start"] is None
-            for invalid_policy in (
-                {"period": None, "base_limit_usd": None},
-                {"period": "monthly", "base_limit_usd": "0"},
-                {"period": "monthly", "base_limit_usd": None},
-                {"period": None, "base_limit_usd": "25"},
-            ):
-                rejected = await call("admin", "PUT", f"{project_path}/policy",
-                                      json={"expected_revision": 1, **invalid_policy})
-                assert rejected.status_code == 422, rejected.text
-                unchanged = await db.get_project_policy(project_id)
-                assert unchanged.revision == 1
-                assert unchanged.period == "monthly"
-                assert unchanged.base_limit_usd == Decimal("20.00")
-            assert (await call("admin", "PUT", f"{project_path}/policy", json={
-                "expected_revision": 1, "period": "monthly", "base_limit_usd": "25.00",
-            })).status_code == 200
-            assert (await call("admin", "PUT", f"{project_path}/policy", json={
-                "expected_revision": 1, "period": "monthly", "base_limit_usd": "30.00",
-            })).status_code == 409
-            assert (await call("owner", "PUT", f"{project_path}/policy", json={
-                "expected_revision": 2, "period": "monthly", "base_limit_usd": "30.00",
-            })).status_code == 403
+            assert "period_start" not in temporary.json()
             pending_policy = await call("admin", "GET", f"{project_path}/policy")
             assert pending_policy.status_code == 200
-            assert Decimal(pending_policy.json()["base_limit_usd"]) == Decimal("25.00")
+            assert Decimal(pending_policy.json()["total_limit_usd"]) == Decimal("20.00")
+            assert "period" not in pending_policy.json() and "base_limit_usd" not in pending_policy.json()
+            assert (await call("admin", "PUT", f"{project_path}/policy", json={
+                "expected_revision": 1, "period": "monthly", "base_limit_usd": "25.00",
+            })).status_code == 405
             assert (await call("machine-access-key", "POST", f"/limit-requests/{temporary_id}/approve",
-                               json={"expected_current_policy_revision": 2})).status_code == 401
+                               json={"expected_current_policy_revision": 1})).status_code == 401
             assert (await call("teammate", "POST", f"/limit-requests/{temporary_id}/approve",
-                               json={"expected_current_policy_revision": 2})).status_code == 403
+                               json={"expected_current_policy_revision": 1})).status_code == 403
             assert (await call("admin", "POST", f"/limit-requests/{temporary_id}/approve",
-                               json={"expected_current_policy_revision": 1})).status_code == 409
+                               json={"expected_current_policy_revision": 2})).status_code == 409
             assert (await call("admin", "GET", f"/limit-requests/{temporary_id}")).json()["status"] == "pending"
             approved_temp = await call("admin", "POST", f"/limit-requests/{temporary_id}/approve",
-                                       json={"expected_current_policy_revision": 2})
+                                       json={"expected_current_policy_revision": 1})
             assert approved_temp.status_code == 200, approved_temp.text
             assert approved_temp.json()["status"] == "approved"
-            start = datetime.fromisoformat(approved_temp.json()["period_start"])
-            end = datetime.fromisoformat(approved_temp.json()["period_end"])
-            assert start <= datetime.now(UTC) < end
+            assert "period_start" not in approved_temp.json() and "period_end" not in approved_temp.json()
             after_temporary = await call("admin", "GET", f"{project_path}/policy")
             assert after_temporary.status_code == 200
-            assert Decimal(after_temporary.json()["base_limit_usd"]) == Decimal("25.00")
+            assert Decimal(after_temporary.json()["total_limit_usd"]) == Decimal("23.00")
             assert (await call("admin", "POST", f"/limit-requests/{temporary_id}/approve",
-                               json={"expected_current_policy_revision": 3})).status_code == 409
+                               json={"expected_current_policy_revision": 2})).status_code == 409
             permanent = await call("admin", "POST", f"{project_path}/limit-requests", json={
                 "kind": "permanent", "increase_usd": "7.00", "reason": "recurring usage",
             })
             assert permanent.status_code == 200, permanent.text
             assert permanent.json()["status"] == "pending"
-            assert Decimal((await call("admin", "GET", f"{project_path}/policy")).json()[
-                "base_limit_usd"
-            ]) == Decimal("25.00")
+            assert permanent.json()["kind"] == "permanent"
             approved_perm = await call("admin", "POST", f"/limit-requests/{permanent.json()['id']}/approve",
-                                       json={"expected_current_policy_revision": 3})
+                                       json={"expected_current_policy_revision": 2})
             assert approved_perm.status_code == 200, approved_perm.text
             assert approved_perm.json()["status"] == "approved"
             after_permanent = await call("admin", "GET", f"{project_path}/policy")
             assert after_permanent.status_code == 200
-            assert Decimal(after_permanent.json()["base_limit_usd"]) == Decimal("25.00")
-            assert Decimal(after_permanent.json()["total_limit_usd"]) == Decimal("35.00")
-            switched = await call("admin", "PUT", f"{project_path}/policy", json={
-                "expected_revision": 4, "period": "weekly", "base_limit_usd": "32.00",
-            })
-            assert switched.status_code == 200, switched.text
-            assert switched.json()["period"] == "weekly"
-            assert Decimal(switched.json()["base_limit_usd"]) == Decimal("32.00")
-            assert switched.json()["revision"] == 5
-            retained = (await call("admin", "GET", f"/limit-requests/{temporary_id}")).json()
-            assert datetime.fromisoformat(retained["period_start"]) == start
-            assert datetime.fromisoformat(retained["period_end"]) == end
+            assert Decimal(after_permanent.json()["total_limit_usd"]) == Decimal("30.00")
+            assert after_permanent.json()["revision"] == 3
             denied_request = await call("admin", "POST", f"{project_path}/limit-requests", json={
                 "kind": "permanent", "increase_usd": "2.00", "reason": "not approved",
             })
             assert denied_request.status_code == 200 and denied_request.json()["status"] == "pending"
             denied = await call("admin", "POST", f"/limit-requests/{denied_request.json()['id']}/deny")
             assert denied.status_code == 200 and denied.json()["status"] == "denied"
-            assert (await call("admin", "GET", f"{project_path}/policy")).json()["revision"] == 5
+            assert (await call("admin", "GET", f"{project_path}/policy")).json()["revision"] == 3
             assert (await call("admin", "GET", f"/keys/{additional_key_id}")).json()["project"] == key["project"]
 
             machine_body = {"project_id": str(machine_project_id),
@@ -376,11 +342,7 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
                 **machine_body, "description": "",
             })).status_code == 422
             assert (await call("machine-access-key", "POST", f"/requests/{machine_request_id}/approve",
-                               json={"initial_policy": {
-                                   "period": "monthly", "base_limit_usd": "12"}})).status_code == 401
-            assert (await call("machine-access-key", "PUT", f"/projects/{machine_project_id}/policy",
-                               json={"expected_revision": 1, "period": "monthly",
-                                     "base_limit_usd": "13"})).status_code == 401
+                               json={"initial_policy": {"limit_usd": "12"}})).status_code == 401
             assert (await call("machine-access-key", "POST", f"/projects/{machine_project_id}/limit-requests",
                                json={"kind": "temporary", "increase_usd": "1", "reason": "no"})).status_code == 401
             assert (await call("machine-jwt", "POST", f"/requests/{machine_request_id}/approve",
@@ -391,8 +353,7 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
                                json={})).status_code == 401
             assert machine_key_id not in load_calls
             approved_machine = await call("admin", "POST", f"/requests/{machine_request_id}/approve",
-                                          json={"initial_policy": {
-                                              "period": "monthly", "base_limit_usd": "12.00"}})
+                                          json={"initial_policy": {"limit_usd": "12.00"}})
             assert approved_machine.status_code == 200, approved_machine.text
             machine_status = await call("machine-access-key", "GET",
                                         f"/machine/requests/{machine_request_id}")
@@ -456,7 +417,7 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
             assert next_machine_status.status_code == 200
             next_machine_key_id = next_machine_status.json()["key_id"]
             assert next_machine_key_id != issued_machine_key_id
-            assert (await db.get_project_policy(machine_project_id)).base_limit_usd == Decimal("12.00")
+            assert (await db.get_project_policy(machine_project_id)).total_limit_usd == Decimal("12.00")
             next_machine_metadata = await call(
                 "machine-access-key", "GET", f"/machine/keys/{next_machine_key_id}",
             )
@@ -536,7 +497,7 @@ async def test_machine_request_requested_budget_auto_approves_at_threshold_and_w
             assert approved.json()["requested_budget"] == "500"
             assert approved.json()["budget_reason"] == "nightly sweep"
             policy = await db.get_project_policy(at_threshold)
-            assert policy is not None and (policy.period, policy.base_limit_usd) == ("monthly", Decimal("500"))
+            assert policy is not None and policy.total_limit_usd == Decimal("500")
             key = (await call("machine-access-key", "GET", f"/machine/keys/{approved.json()['key_id']}")).json()
             assert key["status"] == "pending_collection" and key["description"] == "worker"
             history = (await call("admin", "GET", f"/projects/{at_threshold}/history")).json()
@@ -569,12 +530,12 @@ async def test_machine_request_requested_budget_auto_approves_at_threshold_and_w
                                json={})).status_code == 422
             for project_id, amount in ((keeps_amount, "5000"), (admin_typed, "750")):
                 approval = await call("admin", "POST", f"/requests/{pending[project_id]['id']}/approve",
-                                      json={"initial_policy": {"period": "monthly", "base_limit_usd": amount}})
+                                      json={"initial_policy": {"limit_usd": amount}})
                 assert approval.status_code == 200, approval.text
                 policy = await db.get_project_policy(project_id)
-                assert policy is not None and policy.base_limit_usd == Decimal(amount)
+                assert policy is not None and policy.total_limit_usd == Decimal(amount)
             assert (await call("admin", "POST", f"/requests/{pending[above]['id']}/approve", json={
-                "initial_policy": {"period": "monthly", "base_limit_usd": "500.01"}})).status_code == 200
+                "initial_policy": {"limit_usd": "500.01"}})).status_code == 200
             assert (await call("admin", "GET", f"/projects/{keeps_amount}/history")).json()[0]["reason"] == "full rerun"
     finally:
         await engine.dispose()

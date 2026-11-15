@@ -17,3 +17,7 @@ transcription-models:
   azure_speech/universal-language-model:
     label: Azure Speech Universal Language Model
     release_date: 2024-11-22
+    transcription_cost:
+      usd_per_minute: 0.016666666666666666
+      billing_basis: audio
+      increment_seconds: 1

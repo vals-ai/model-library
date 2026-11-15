@@ -12,6 +12,8 @@ base-config:
 
 hy4-models:
   openrouter/tencent/hy4-preview:
+    metadata:
+      available_for_everyone: false
     label: Hy4 preview (OpenRouter)
     release_date: 2026-08-28
     documentation_url: https://hy.tencent.ai/research/hy4-preview
@@ -31,6 +33,8 @@ hy4-models:
         read: 0.042
 
   openrouter/tencent/hy4:
+    metadata:
+      available_for_everyone: false
     label: Hy4 (OpenRouter)
     release_date: 2026-11-03
     documentation_url: https://hy.tencent.ai/research/hy4
@@ -46,7 +50,8 @@ hy4-models:
       temperature: 0.9
       top_p: 1.0
     costs_per_million_token:
-      input: 0.417
-      output: 1.2505
+      input: 0.834
+      output: 2.501
       cache:
-        read: 0.021
+        read: 0.042
+      current_discount: 50

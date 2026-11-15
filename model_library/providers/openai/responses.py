@@ -19,7 +19,6 @@ from openai.types.responses.response_function_web_search import (
 )
 from openai.types.responses.response import Response
 from openai.types.responses.response_stream_event import ResponseStreamEvent
-from openai.types.responses.tool_param import ToolParam as ResponsesToolParam
 from pydantic import BaseModel, JsonValue
 
 from model_library.base import (
@@ -34,7 +33,6 @@ from model_library.base import (
     FinishReasonInfo,
     InputItem,
     ProviderToolEvent,
-    PydanticT,
     QueryResult,
     QueryResultExtras,
     QueryResultMetadata,
@@ -51,14 +49,12 @@ from model_library.exceptions import (
     BadInputError,
     ContentFilterError,
     ImmediateRetryException,
-    ModelNoOutputError,
     NoMatchingToolCallError,
     UnexpectedSystemInputError,
     handle_empty_response,
 )
 from model_library.rate_limits import RateLimit, rate_limit_from_headers
 from model_library.agent.tool import is_native_web_search
-from model_library.retriers.base import BaseRetrier
 
 from ._shared import (
     apply_common_body,
@@ -66,6 +62,7 @@ from ._shared import (
     function_tool_payload,
     iter_input_groups,
     output_schema_value,
+    replayable_arguments,
     user_content,
     validate_tool_result,
 )
@@ -267,28 +264,18 @@ async def parse_file(model: OpenAIModel, file: FileInput) -> dict[str, Any]:
 
 async def parse_tools(
     model: OpenAIModel, tools: Sequence[ToolDefinition]
-) -> list[ResponsesToolParam | Any]:
-    parsed_tools: list[ResponsesToolParam | Any] = []
+) -> list[dict[str, Any]]:
+    parsed_tools: list[dict[str, Any]] = []
     for tool in tools:
         body = tool.body
         if is_native_web_search(body):
             parsed_tools.append(model.search_tool)
-            continue
-        if not isinstance(body, ToolBody):
-            if (
-                isinstance(body, dict)
-                and cast(dict[str, Any], body).get("type") == "computer"
-            ):
-                parsed_tools.append({"type": "computer"})
-                continue
-            parsed_tools.append(cast(Any, body))
-            continue
-        parsed_tools.append(
-            cast(
-                ResponsesToolParam,
-                {"type": "function", **function_tool_payload(body)},
-            )
-        )
+        elif isinstance(body, ToolBody):
+            parsed_tools.append({"type": "function", **function_tool_payload(body)})
+        elif body["type"] == "computer":
+            parsed_tools.append({"type": "computer"})
+        else:
+            parsed_tools.append(body)
     return parsed_tools
 
 
@@ -298,7 +285,7 @@ def _record_web_search_usage(
     metadata: QueryResultMetadata,
 ) -> None:
     """Set billable native web searches from the provider's own counter and keep the
-    raw counters (not typed in the SDK yet) in `extra` so fees can be recomputed.
+    raw counters in `extra` so fees can be recomputed.
 
     OpenAI: `tool_usage.web_search.num_requests` (search actions only; open_page and
     find_in_page are free). xAI: `server_side_tool_usage_details.web_search_calls`,
@@ -308,8 +295,10 @@ def _record_web_search_usage(
         dict[str, Any],
         (getattr(response.usage, "model_extra", None) or {}) if response.usage else {},
     )
-    tool_usage = cast(dict[str, Any], getattr(response, "model_extra", None) or {}).get(
-        "tool_usage"
+    tool_usage = (
+        response.tool_usage.model_dump(exclude_none=True)
+        if response.tool_usage
+        else None
     )
     details = usage_extra.get("server_side_tool_usage_details")
     if tool_usage:
@@ -376,25 +365,21 @@ async def build_body(
     if model.deep_research:
         await _check_deep_research_args(model, tools, **kwargs)
 
-    parsed_tools: list[Any] = await model.parse_tools(tools)
+    parsed_tools: list[dict[str, Any]] = await model.parse_tools(tools)
     present_types = {
-        "web_search" if tool_type == "web_search_preview" else tool_type
+        "web_search" if tool["type"] == "web_search_preview" else tool["type"]
         for tool in parsed_tools
-        if isinstance(tool, dict)
-        and (tool_type := cast(dict[str, Any], tool).get("type"))
     }
     for hosted_tool in model.hosted_tools or []:
         if hosted_tool["type"] not in present_types:
             parsed_tools.append(dict(hosted_tool))
-    has_web_search = any(
-        isinstance(tool, dict)
-        and cast(dict[str, Any], tool).get("type")
-        in {"web_search", "web_search_preview"}
-        for tool in parsed_tools
-    )
-    if model.force_web_search and not has_web_search:
+    assembled_types = {tool["type"] for tool in parsed_tools}
+    if model.force_web_search and not assembled_types & {
+        "web_search",
+        "web_search_preview",
+    }:
         parsed_tools.append(model.search_tool)
-        has_web_search = True
+        assembled_types.add(model.search_tool["type"])
     if model.tool_call_mode != "default":
         if model.tool_call_mode == "auto":
             allowed_callers = ["code_mode", "direct"]
@@ -403,21 +388,10 @@ async def build_body(
         else:
             raise ValueError(f"Unknown tool_call_mode: {model.tool_call_mode}")
 
-        has_code_mode_tool = any(
-            isinstance(tool, dict)
-            and cast(dict[str, Any], tool).get("type") == "code_mode"
-            for tool in parsed_tools
-        )
         for tool in parsed_tools:
-            if not isinstance(tool, dict):
-                continue
-            tool_body = cast(dict[str, Any], tool)
-            if (
-                tool_body.get("type") == "function"
-                and "allowed_callers" not in tool_body
-            ):
-                tool_body["allowed_callers"] = allowed_callers
-        if model.tool_call_mode in {"auto", "code_mode"} and not has_code_mode_tool:
+            if tool["type"] == "function" and "allowed_callers" not in tool:
+                tool["allowed_callers"] = allowed_callers
+        if "code_mode" not in assembled_types:
             parsed_tools.append({"type": "code_mode", "language": "javascript"})
 
     body: dict[str, Any] = {
@@ -431,8 +405,9 @@ async def build_body(
     if parsed_tools:
         body["tools"] = parsed_tools
 
+    include: list[str] = []
     if model.reasoning:
-        body["include"] = ["reasoning.encrypted_content"]
+        include.append("reasoning.encrypted_content")
         body["reasoning"] = {"summary": "auto"}
         body["store"] = False
         if model.reasoning_effort is not None:
@@ -440,8 +415,17 @@ async def build_body(
         if model.reasoning_context is not None:
             body["reasoning"]["context"] = model.reasoning_context
 
-    if model.provider == "openai" and has_web_search:
-        body["include"] = [*body.get("include", []), "web_search_call.action.sources"]
+    if model.provider == "openai" and assembled_types & {
+        "web_search",
+        "web_search_preview",
+    }:
+        include.append("web_search_call.action.sources")
+
+    if "code_interpreter" in assembled_types:
+        include.append("code_interpreter_call.outputs")
+
+    if include:
+        body["include"] = include
 
     if model.verbosity is not None:
         body["text"] = {"format": {"type": "text"}, "verbosity": model.verbosity}
@@ -656,6 +640,22 @@ async def query(
                 )
             )
             continue
+        if output.type == "code_interpreter_call":
+            provider_tool_events.append(
+                ProviderToolEvent(
+                    id=output.id,
+                    provider=model.provider,
+                    type="code_interpreter_call",
+                    name="code_interpreter",
+                    status=output.status,
+                    input={"code": output.code, "container_id": output.container_id},
+                    output=[o.model_dump(mode="json") for o in output.outputs]
+                    if output.outputs is not None
+                    else None,
+                    sequence=i,
+                )
+            )
+            continue
         if output.type == "web_search_call":
             if isinstance(output.action, ActionSearch):
                 query = output.action.query or next(
@@ -776,7 +776,19 @@ async def query(
         tool_calls=tool_calls,
         computer_calls=computer_calls,
         provider_tool_events=provider_tool_events,
-        history=[*input, RawResponse(response=response.output)],
+        history=[
+            *input,
+            RawResponse(
+                response=[
+                    output.model_copy(
+                        update={"arguments": replayable_arguments(output.arguments)}
+                    )
+                    if output.type == "function_call"
+                    else output
+                    for output in response.output
+                ]
+            ),
+        ],
         extras=QueryResultExtras(
             provider_response_id=response.id,
             provider_request_id=provider_request_id,
@@ -803,38 +815,3 @@ async def get_rate_limit(model: OpenAIModel) -> RateLimit | None:
         response.headers,
         default_scope="shared" if model.provider == "azure" else None,
     )
-
-
-async def query_json(
-    model: OpenAIModel,
-    input: Sequence[InputItem],
-    pydantic_model: type[PydanticT],
-    output_schema: dict[str, Any] | type[BaseModel] | None = None,
-    **kwargs: object,
-) -> PydanticT:
-    # re-use existing body
-    body = await model.build_body(
-        input,
-        tools=[],
-        output_schema=output_schema,
-        **kwargs,
-    )
-
-    async def _query():
-        try:
-            return await model.get_client().responses.parse(
-                text_format=pydantic_model,
-                **body,  # pyright: ignore[reportAny]
-            )
-        except APIConnectionError:
-            raise ImmediateRetryException("Failed to connect to OpenAI")
-
-    response = await BaseRetrier.immediate_retry_wrapper(
-        func=_query, logger=model.instance_logger
-    )
-
-    parsed: PydanticT | None = response.output_parsed
-    if parsed is None:
-        raise ModelNoOutputError("Model returned empty response")
-
-    return parsed

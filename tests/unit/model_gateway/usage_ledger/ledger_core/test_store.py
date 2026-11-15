@@ -721,6 +721,7 @@ def test_failed_event_preserves_error_result_and_unknown_measurements():
         "cache_write_tokens",
         "duration_seconds",
         "cost_usd",
+        "standard_cost_usd",
     ):
         assert field not in event
     details = cast(dict[str, Any], event["details"])
@@ -854,6 +855,56 @@ def test_build_usage_event_normalizes_float_artifact_cost_total():
     )
 
     assert event["cost_usd"] == Decimal("1.3")
+    assert event["standard_cost_usd"] == Decimal("1.3")
+
+
+def test_build_usage_event_keeps_effective_zero_distinct_from_standard_cost():
+    request = QueryRequest(
+        model="openai/gpt-4o",
+        inputs=[TextInput(text="hello")],
+    )
+    result = QueryResult(
+        output_text="ok",
+        metadata=QueryResultMetadata(
+            cost=QueryResultCost(input=0.6, output=0.7),
+            effective_cost=QueryResultCost(input=0, output=0),
+        ),
+    )
+
+    event = _build_usage_event(
+        body=request,
+        config=request.config_dict(),
+        query_params={},
+        dimensions={},
+        result=result,
+    )
+
+    assert event["cost_usd"] == Decimal("0")
+    assert event["standard_cost_usd"] == Decimal("1.3")
+
+
+def test_build_usage_event_does_not_infer_standard_from_effective_cost():
+    request = QueryRequest(
+        model="openai/gpt-4o",
+        inputs=[TextInput(text="hello")],
+    )
+    result = QueryResult(
+        output_text="ok",
+        metadata=QueryResultMetadata(
+            effective_cost=QueryResultCost(input=0.001, output=0.002),
+        ),
+    )
+
+    event = _build_usage_event(
+        body=request,
+        config=request.config_dict(),
+        query_params={},
+        dimensions={},
+        result=result,
+    )
+
+    assert event["cost_usd"] == Decimal("0.003")
+    assert "standard_cost_usd" not in event
 
 
 def test_build_usage_event_preserves_subcent_cost_precision_at_root():
@@ -882,6 +933,7 @@ def test_build_usage_event_preserves_subcent_cost_precision_at_root():
     )
 
     assert event["cost_usd"] == Decimal("0.000000000001")
+    assert event["standard_cost_usd"] == Decimal("0.000000000001")
 
 
 def test_build_usage_event_serializes_integral_cost_without_exponent():
@@ -2175,7 +2227,6 @@ def managed_ledger_claims(monkeypatch: pytest.MonkeyPatch) -> RunTokenClaims:
 def test_query_writes_success_usage_event_when_ledger_is_configured(
     managed_ledger_claims: RunTokenClaims,
 ):
-    from model_gateway import main
     from model_library.base.base import LLM
     from model_library.base.input import RawInput
 
@@ -2212,7 +2263,7 @@ def test_query_writes_success_usage_event_when_ledger_is_configured(
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         app.state.usage_ledger = fake_ledger
         client = TestClient(app)
         attach_run_authority(client, managed_ledger_claims)
@@ -2277,7 +2328,6 @@ def test_local_startup_canary_query_skips_usage_ledger(
     managed_ledger_claims: RunTokenClaims,
     monkeypatch: pytest.MonkeyPatch,
 ):
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -2308,8 +2358,8 @@ def test_local_startup_canary_query_skips_usage_ledger(
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
     ):
-        producer_app = main.create_app()
-        app = main.create_app()
+        producer_app = gateway_app.create_app()
+        app = gateway_app.create_app()
         app.state.usage_ledger = fake_ledger
         client = TestClient(app, client=("127.0.0.1", 50000))
         canary_claims = managed_ledger_claims.model_copy(
@@ -2410,7 +2460,6 @@ def test_local_startup_canary_query_skips_usage_ledger(
 def test_query_marks_usage_ledger_phase_when_enforced_write_fails(
     managed_ledger_claims: RunTokenClaims,
 ):
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -2441,7 +2490,7 @@ def test_query_marks_usage_ledger_phase_when_enforced_write_fails(
             side_effect=lambda name, attrs=None: events.append((name, attrs)),
         ),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         app.state.usage_ledger = FailingUsageLedger()
         client = TestClient(app, raise_server_exceptions=False)
         attach_run_authority(client, managed_ledger_claims)
@@ -2469,7 +2518,6 @@ def test_query_marks_usage_ledger_phase_when_enforced_write_fails(
 def test_query_does_not_write_usage_event_on_provider_error(
     managed_ledger_claims: RunTokenClaims,
 ):
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -2491,7 +2539,7 @@ def test_query_does_not_write_usage_event_on_provider_error(
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
         patch.object(model_helpers, "get_registry_model", return_value=FailingLLM()),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         app.state.usage_ledger = fake_ledger
         client = TestClient(app, raise_server_exceptions=False)
         attach_run_authority(client, managed_ledger_claims)

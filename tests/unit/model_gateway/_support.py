@@ -64,7 +64,6 @@ def _make_client(
     runtime_role: str = "combined",
     api_keys: dict[str, str] | None = None,
 ) -> TestClient:
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = json.dumps(api_keys or {"test": "sk-test"})
@@ -80,5 +79,5 @@ def _make_client(
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
         patch.dict(os.environ, {"GATEWAY_RUNTIME_ROLE": runtime_role}),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         return TestClient(app, client=client)

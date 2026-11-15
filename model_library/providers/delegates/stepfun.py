@@ -12,7 +12,7 @@ from model_library.base import (
     QueryResult,
     ToolDefinition,
 )
-from model_library.exceptions import MaxContextWindowExceededError
+from model_library.exceptions import MaxContextWindowExceededError, error_text
 from model_library.register_models import register_provider
 
 
@@ -65,6 +65,6 @@ class StepFunModel(DelegateOnly):
                 **kwargs,
             )
         except Exception as e:
-            if "The input you provided is invalid" in str(e):
+            if "The input you provided is invalid" in error_text(e):
                 raise MaxContextWindowExceededError(str(e)) from e
             raise

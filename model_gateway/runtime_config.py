@@ -501,6 +501,13 @@ class RuntimeConfigManager:
                         and error.response.status_code in _NO_DEPLOYED_VERSION_STATUSES
                     ):
                         return
+                if (
+                    source == "pools"
+                    and isinstance(error, httpx.HTTPStatusError)
+                    and error.response.status_code in _NO_DEPLOYED_VERSION_STATUSES
+                ):
+                    candidates[source] = _empty_pool_snapshot()
+                    return
                 failed.add(source)
                 record_runtime_config_refresh(source=source, outcome="failed")
                 logger.warning(
@@ -725,6 +732,18 @@ def _parse_credential_snapshot(
         digest=digest,
         managed_fields=managed_fields,
         values=MappingProxyType(values),
+    )
+
+
+def _empty_pool_snapshot() -> PoolConfigSnapshot:
+    """Revision 0 with no pools: what a stage with no deployed `pools` document serves."""
+    document = PublishedPoolDocument(
+        pools={}, model_pools=[], weights={}, descriptions={}, revision=0
+    )
+    return PoolConfigSnapshot(
+        digest=hashlib.sha256(document.model_dump_json().encode()).hexdigest(),
+        document=document,
+        configuration_version="none",
     )
 
 

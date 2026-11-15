@@ -12,6 +12,7 @@ from model_library.agent.agent import Agent
 from model_library.agent.config import AgentConfig, TurnLimit
 from model_library.agent.metadata import (
     AgentTurn,
+    CompactionSummary,
     ErrorTurn,
     SerializableException,
     ToolCallRecord,
@@ -464,7 +465,7 @@ class TestAgentResultToATIF:
         assert trajectory.steps[1].extra is None
 
     def test_cost_aggregation(self):
-        """Final metrics aggregate cost across turns."""
+        """Final and helper metrics aggregate effective cost across turns."""
         question = TextInput(text="Q")
         turn_history: list[InputItem] = [question, RawResponse(response={})]
 
@@ -472,27 +473,100 @@ class TestAgentResultToATIF:
             in_tokens=100,
             out_tokens=50,
             cost=QueryResultCost(input=0.001, output=0.002),
+            effective_cost=QueryResultCost(input=0.0004, output=0.0006),
         )
         meta2 = QueryResultMetadata(
             in_tokens=200,
             out_tokens=100,
-            cost=QueryResultCost(input=0.002, output=0.004),
+            effective_cost=QueryResultCost(input=0, output=0, total_override=0.006),
+        )
+        helper_record = self._make_tool_record("call_1", "search", "Found results")
+        helper_record.tool_output.metadata = QueryResultMetadata(
+            cost=QueryResultCost(input=0.003, output=0.004),
+            effective_cost=QueryResultCost(input=0, output=0, total_override=0.002),
         )
 
         turns: list[AgentTurn | ErrorTurn] = [
-            self._make_turn("A1", history=turn_history, metadata=meta1),
+            self._make_turn(
+                "A1",
+                history=turn_history,
+                metadata=meta1,
+                tool_calls=[helper_record.tool_call],
+                tool_records=[helper_record],
+            ),
             self._make_turn("A2", history=turn_history, metadata=meta2),
         ]
 
-        trajectory = ATIFTrajectory.from_agent_result(
+        exported = ATIFTrajectory.from_agent_result(
             turns=turns,
             agent_name="agent",
             model_name="gpt-4",
-        )
+        ).to_json_dict()
 
-        assert trajectory.final_metrics.total_prompt_tokens == 300
-        assert trajectory.final_metrics.total_completion_tokens == 150
-        assert trajectory.final_metrics.total_cost_usd == pytest.approx(0.009)
+        assert exported["steps"][1]["metrics"]["cost_usd"] == pytest.approx(0.001)
+        assert exported["steps"][2]["metrics"]["cost_usd"] == pytest.approx(0.006)
+        assert exported["final_metrics"]["total_prompt_tokens"] == 300
+        assert exported["final_metrics"]["total_completion_tokens"] == 150
+        assert exported["final_metrics"]["total_cost_usd"] == pytest.approx(0.007)
+        assert exported["final_metrics"]["extra"]["helper_metrics"][
+            "total_cost_usd"
+        ] == pytest.approx(0.002)
+        assert exported["final_metrics"]["extra"]["combined_metrics"][
+            "total_cost_usd"
+        ] == pytest.approx(0.009)
+
+    @pytest.mark.parametrize(
+        ("normal_cost", "effective_cost", "expected_cost"),
+        [
+            (
+                None,
+                QueryResultCost(input=0, output=0, total_override=0.004),
+                0.004,
+            ),
+            (
+                QueryResultCost(input=0.001, output=0.002),
+                QueryResultCost(input=0.0004, output=0.0006),
+                0.001,
+            ),
+            (
+                QueryResultCost(input=0.001, output=0.002),
+                QueryResultCost(input=0, output=0),
+                0.0,
+            ),
+            (QueryResultCost(input=0.001, output=0.002), None, None),
+        ],
+        ids=["bill-only", "discounted", "zero-effective", "unknown-effective"],
+    )
+    def test_effective_cost_in_step_final_and_compaction(
+        self,
+        normal_cost: QueryResultCost | None,
+        effective_cost: QueryResultCost | None,
+        expected_cost: float | None,
+    ):
+        metadata = QueryResultMetadata(
+            in_tokens=10,
+            out_tokens=5,
+            cost=normal_cost,
+            effective_cost=effective_cost,
+        )
+        exported = ATIFTrajectory.from_agent_result(
+            turns=[self._make_turn("A1", metadata=metadata)],
+            compactions=[CompactionSummary(metadata=metadata)],
+            agent_name="agent",
+            model_name="gpt-4",
+        ).to_json_dict()
+
+        step_metrics = exported["steps"][0]["metrics"]
+        final_metrics = exported["final_metrics"]
+        compaction_metrics = exported["extra"]["compaction_metrics"]
+        if expected_cost is None:
+            assert "cost_usd" not in step_metrics
+            assert "total_cost_usd" not in final_metrics
+            assert compaction_metrics["total_cost_usd"] is None
+        else:
+            assert step_metrics["cost_usd"] == pytest.approx(expected_cost)
+            assert final_metrics["total_cost_usd"] == pytest.approx(expected_cost)
+            assert compaction_metrics["total_cost_usd"] == pytest.approx(expected_cost)
 
     def test_preserves_usage_breakdown_and_query_duration(self):
         turns: list[AgentTurn | ErrorTurn] = [

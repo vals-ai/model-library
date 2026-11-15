@@ -11,6 +11,8 @@ base-config:
 
 trinity-models:
   arcee-ai/trinity-large-thinking:
+    metadata:
+      available_for_everyone: false
     label: Trinity Large Thinking
     release_date: 2026-04-01
     properties:

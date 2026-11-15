@@ -60,12 +60,7 @@ class RateLimitProbeService:
             operation.start_event(attrs)
             try:
                 operation.add_event("model_cache_lookup")
-                llm = model_helpers.get_cached_llm(
-                    self._cache,
-                    body,
-                    config=config,
-                    model_config=config,
-                )
+                llm = model_helpers.get_cached_llm(self._cache, body, config=config)
                 result = await operation.provider_call(
                     asyncio.wait_for(
                         llm.get_rate_limit(), timeout=RATE_LIMIT_PROBE_TIMEOUT_SECONDS

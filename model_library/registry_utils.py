@@ -1,5 +1,6 @@
 import logging
 import math
+from datetime import UTC, datetime
 from functools import cache
 from inspect import getattr_static
 from pathlib import Path
@@ -252,10 +253,19 @@ def compute_transcription_cost(
         or metadata.output_tokens is None
     ):
         return None
+    discount_factor = (
+        1
+        if token_cost.current_discount is None
+        else 1 - token_cost.current_discount / 100
+    )
     return (
-        token_cost.input * metadata.input_tokens
-        + token_cost.output * metadata.output_tokens
-    ) / 1_000_000
+        (
+            token_cost.input * metadata.input_tokens
+            + token_cost.output * metadata.output_tokens
+        )
+        / 1_000_000
+        * discount_factor
+    )
 
 
 def get_model_input_context_window(model_name: str) -> int:
@@ -310,6 +320,7 @@ def compute_model_cost(
     cache_ttl: Literal["5m", "1h"] = "5m",
     web_search_per_1k: float | None = None,
 ) -> QueryResultCost | None:
+    """Calculate standard registry charges before any current promotion."""
     costs = get_model_cost(model_str)
     if not costs:
         return None
@@ -356,7 +367,6 @@ def compute_model_cost(
             cache_read_cost *= costs.batch.cache_discount
             cache_write_cost *= costs.batch.cache_discount
             cache_write_1h_cost *= costs.batch.cache_discount
-
     return QueryResultCost(
         input=input_cost * metadata.in_tokens / million,
         output=output_cost * metadata.out_tokens / million,
@@ -381,9 +391,49 @@ def compute_model_cost(
     )
 
 
+def discount_model_cost(
+    model_str: str, cost: QueryResultCost, at: datetime | None = None
+) -> QueryResultCost:
+    """Apply the registry's promotion and off-peak rate to token charges, not web search."""
+    prices = get_model_cost(model_str)
+    if prices is None:
+        return cost.model_copy()
+
+    factor = _token_discount_factor(prices, at or datetime.now(UTC))
+    if factor == 1.0:
+        return cost.model_copy()
+    return _scale_token_cost(cost, factor)
+
+
+def _token_discount_factor(prices: CostProperties, at: datetime | None) -> float:
+    """The promotion, times the off-peak rate in effect at `at` when `at` is known."""
+    factor = 1.0
+    if prices.current_discount is not None:
+        factor *= 1 - prices.current_discount / 100
+    if (
+        at is not None
+        and prices.off_peak is not None
+        and prices.off_peak.applies_at(at)
+    ):
+        factor *= 1 - prices.off_peak.discount / 100
+    return factor
+
+
+def _scale_token_cost(cost: QueryResultCost, factor: float) -> QueryResultCost:
+    return QueryResultCost(
+        input=cost.input * factor,
+        output=cost.output * factor,
+        reasoning=cost.reasoning * factor if cost.reasoning is not None else None,
+        cache_read=cost.cache_read * factor if cost.cache_read is not None else None,
+        cache_write=cost.cache_write * factor if cost.cache_write is not None else None,
+        web_search=cost.web_search,
+    )
+
+
 async def recompute_cost(
     model_str: str,
     tokens: TokenDict,
+    completed_at: datetime | None = None,
 ) -> QueryResultCost:
     """
     Recompute the cost for a model based on token information.
@@ -399,6 +449,9 @@ async def recompute_cost(
             - reasoning_tokens (optional): Number of reasoning tokens
             - cache_read_tokens (optional): Number of cache read tokens
             - cache_write_tokens (optional): Number of cache write tokens
+        completed_at: When the call finished. If set, the off-peak rate in
+            effect then is applied; otherwise standard rates are used. Any
+            `current_discount` is always applied.
 
     Returns:
         QueryResultCost with computed costs
@@ -423,7 +476,10 @@ async def recompute_cost(
     cost = compute_model_cost(model_str, metadata)
     if cost is None:
         raise Exception(f"No cost information available for model {model_str}")
-    return cost
+    prices = get_model_cost(model_str)
+    if prices is None:
+        return cost
+    return _scale_token_cost(cost, _token_discount_factor(prices, completed_at))
 
 
 @cache

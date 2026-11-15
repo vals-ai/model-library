@@ -8,6 +8,7 @@ queries to `RouterLLM.router_cost`.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import cast
 
 from model_library.base.input import InputItem, ToolDefinition
 from model_library.base.output import QueryResultCost, QueryResultMetadata
@@ -66,3 +67,25 @@ class RouterLLM:
         if cost is None or not (fee := self._router_fee(metadata)):
             return cost
         return QueryResultCost(input=0, output=0, total_override=cost.total + fee)
+
+    def router_discounted_cost(
+        self, metadata: QueryResultMetadata, cost: QueryResultCost
+    ) -> QueryResultCost:
+        """Discount an already-priced served model's tokens, excluding its router fee."""
+        from model_library.registry_utils import discount_model_cost
+
+        served_model = cast(str, metadata.served_model)
+        key = cast(str, self._served_model_cost_key(served_model))
+        if cost.total_override is not None:
+            fee = self._router_fee(metadata)
+            token_cost = QueryResultCost(input=cost.total - fee, output=0)
+            discounted_tokens = discount_model_cost(
+                key, token_cost, at=metadata.completed_at
+            )
+            return QueryResultCost(
+                input=0,
+                output=0,
+                total_override=cost.total
+                + (discounted_tokens.total - token_cost.total),
+            )
+        return discount_model_cost(key, cost, at=metadata.completed_at)

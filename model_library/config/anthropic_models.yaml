@@ -107,6 +107,58 @@ claude-fable-5-1-models:
           label: Claude Fable 5.1 (No Fallback)
           provider_properties:
             fallback_models: []
+claude-fable-5-2-models:
+  anthropic/claude-fable-5-2:
+    label: Claude Fable 5.2
+    release_date: 2026-11-09
+    documentation_url: https://platform.claude.com/docs/en/models/overview
+    properties:
+      context_window: 1_000_000
+      max_tokens: 128_000
+      reasoning_model: true
+      training_cutoff: "2026-06"
+    costs_per_million_token:
+      input: 8.0
+      output: 40.0
+      cache:
+        read: 0.2
+        write: 10.0
+    provider_properties:
+      computer_tool_type: computer_20251124
+      supports_auto_thinking: true
+      supports_compute_effort: true
+      fallback_models:
+        - claude-opus-5
+        - claude-opus-4-8
+      client_side_fallback: true
+    default_parameters:
+      max_tokens: 128_000
+      compute_effort: "max"
+    alternative_keys:
+      - anthropic/claude-fable-5-2-low:
+          label: Claude Fable 5.2 (Low Effort)
+          default_parameters:
+            compute_effort: "low"
+      - anthropic/claude-fable-5-2-medium:
+          label: Claude Fable 5.2 (Medium Effort)
+          default_parameters:
+            compute_effort: "medium"
+      - anthropic/claude-fable-5-2-high:
+          label: Claude Fable 5.2 (High Effort)
+          default_parameters:
+            compute_effort: "high"
+      - anthropic/claude-fable-5-2-xhigh:
+          label: Claude Fable 5.2 (Extra High Effort)
+          default_parameters:
+            compute_effort: "xhigh"
+      - anthropic/claude-fable-5-2-max:
+          label: Claude Fable 5.2 (Max Effort)
+          default_parameters:
+            compute_effort: "max"
+      - anthropic/claude-fable-5-2-no-fallback:
+          label: Claude Fable 5.2 (No Fallback)
+          provider_properties:
+            fallback_models: []
 claude-haiku-5-5-models:
   anthropic/claude-haiku-5-5:
     label: Claude Haiku 5.5

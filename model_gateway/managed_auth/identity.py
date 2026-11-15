@@ -26,6 +26,10 @@ class UserLoader(Protocol):
     async def load_by_user_id(self, user_id: str) -> object: ...
 
 
+class AccessKeyLoader(Protocol):
+    async def load(self, id: str) -> object: ...
+
+
 class SessionResponse(BaseModel):
     sessionToken: dict[str, object]
 
@@ -43,6 +47,16 @@ class DescopeUser(BaseModel):
 
 class UserResponse(BaseModel):
     user: DescopeUser
+
+
+class DescopeAccessKey(BaseModel):
+    id: str
+    status: str
+    boundUserId: str | None = None
+
+
+class AccessKeyResponse(BaseModel):
+    key: DescopeAccessKey
 
 
 @dataclass(frozen=True)
@@ -127,7 +141,7 @@ class HumanVerifier:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def verify(self, token: str) -> VerifiedHuman:
+    async def verify(self, token: str, allow_bound_key: bool) -> VerifiedHuman:
         validator = cast(SessionValidator, self._client)
         try:
             session = SessionResponse.model_validate(
@@ -157,11 +171,37 @@ class HumanVerifier:
         claims = session.sessionToken
         if claims.get("iss") != self._expected_issuer:
             raise HTTPException(status_code=401, detail="Invalid human session issuer")
-        if (claims.get("dsub") or claims.get("sub")) == self._registered_machine_key_id:
+        if (
+            claims.get("sub") == self._registered_machine_key_id
+            or claims.get("dsub") == self._registered_machine_key_id
+        ):
             raise HTTPException(status_code=401, detail="Invalid human session")
         subject = claims.get("sub")
         if not isinstance(subject, str) or not subject:
             raise HTTPException(status_code=401, detail="Invalid human session subject")
+        if "user_id" in claims:
+            if not allow_bound_key:
+                raise HTTPException(status_code=401, detail="Human session required")
+            bound_user_id = claims["user_id"]
+            if not isinstance(bound_user_id, str) or not bound_user_id:
+                raise HTTPException(
+                    status_code=401, detail="Invalid human session subject"
+                )
+            try:
+                key = await self._load_access_key(subject)
+            except AuthException as exc:
+                if exc.status_code != 404:
+                    raise
+                raise HTTPException(
+                    status_code=401, detail="Unknown human access key"
+                ) from exc
+            if (
+                key.id != subject
+                or key.status != "active"
+                or key.boundUserId != bound_user_id
+            ):
+                raise HTTPException(status_code=401, detail="Invalid human access key")
+            subject = bound_user_id
 
         try:
             user = await self._load_user(subject)
@@ -211,3 +251,8 @@ class HumanVerifier:
             await loader.load_by_user_id(user_id=subject)
         )
         return response.user
+
+    async def _load_access_key(self, key_id: str) -> DescopeAccessKey:
+        loader = cast(AccessKeyLoader, self._client.mgmt.access_key)
+        response = AccessKeyResponse.model_validate(await loader.load(key_id))
+        return response.key

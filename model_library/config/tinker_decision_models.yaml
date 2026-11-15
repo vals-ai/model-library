@@ -1,0 +1,86 @@
+# Typed-decision models on Tinker, answered with Tinker Cookbook's decisions recipe by the `tinker_decision` provider
+# (providers/tinker_decision.py) with TINKER_API_KEY. They take and return the same decision request and answers as the
+# `decision` provider. Each entry is a Tinker base model; a checkpoint trained on it is sampled by sending its
+# tinker://.../sampler_weights/... path as provider_config.checkpoint on a request to that entry, so no checkpoint needs
+# an entry of its own. Prices are Tinker's prefill and sample rates for the base model. See docs/decision-models.md.
+base-config:
+  open_source: false
+  supports:
+    images: false
+    videos: false
+    files: false
+    temperature: false
+    tools: false
+    output_schema: false
+  properties:
+    # No free-text output, so there is no output budget.
+    max_tokens: 0
+    reasoning_model: false
+  metadata:
+    available_as_evaluator: false
+
+tinker-decision-models:
+  tinker_decision/qwen3-8b:
+    provider_endpoint: Qwen/Qwen3-8B
+    label: Qwen3-8B (Tinker decisions)
+    company: Thinking Machines
+    country: United States
+    documentation_url: https://tinker-docs.thinkingmachines.ai/cookbook/recipes/decisions/
+    release_date: 2026-11-06
+    open_source: true
+    provider_properties:
+      base_model: Qwen/Qwen3-8B
+    properties:
+      context_window: 32_768
+    costs_per_million_token:
+      input: 0.195
+      output: 0.60
+
+  tinker_decision/qwen3.5-4b:
+    provider_endpoint: Qwen/Qwen3.5-4B
+    label: Qwen3.5-4B (Tinker decisions)
+    company: Thinking Machines
+    country: United States
+    documentation_url: https://tinker-docs.thinkingmachines.ai/cookbook/recipes/decisions/
+    release_date: 2026-11-06
+    open_source: true
+    provider_properties:
+      base_model: Qwen/Qwen3.5-4B
+    properties:
+      context_window: 65_536
+    costs_per_million_token:
+      input: 0.33
+      output: 1.005
+
+  tinker_decision/qwen3.5-9b:
+    provider_endpoint: Qwen/Qwen3.5-9B
+    label: Qwen3.5-9B (Tinker decisions)
+    company: Thinking Machines
+    country: United States
+    documentation_url: https://tinker-docs.thinkingmachines.ai/cookbook/recipes/decisions/
+    release_date: 2026-11-06
+    open_source: true
+    provider_properties:
+      base_model: Qwen/Qwen3.5-9B
+    properties:
+      context_window: 65_536
+    costs_per_million_token:
+      input: 0.3
+      output: 0.807
+
+  tinker_decision/qwen3.5-4b-256k:
+    provider_endpoint: Qwen/Qwen3.5-4B:peft:262144
+    label: Qwen3.5-4B 256K (Tinker decisions)
+    company: Thinking Machines
+    country: United States
+    documentation_url: https://tinker-docs.thinkingmachines.ai/cookbook/recipes/decisions/
+    release_date: 2026-11-06
+    open_source: true
+    provider_properties:
+      # The endpoint is Tinker's 256K variant; the tokenizer and renderer are the base model's.
+      base_model: Qwen/Qwen3.5-4B
+    properties:
+      context_window: 262_144
+    costs_per_million_token:
+      input: 0.33
+      output: 1.005

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -26,6 +27,14 @@ from model_library.exceptions import NoMatchingToolCallError
 
 if TYPE_CHECKING:
     from .openai import OpenAIModel
+
+
+def replayable_arguments(arguments: str) -> str:
+    try:
+        json.loads(arguments)
+    except json.JSONDecodeError:
+        return "{}"
+    return arguments
 
 
 def iter_input_groups(
@@ -126,6 +135,16 @@ def output_schema_value(
     )
 
 
+def capture_upstream_cost(
+    metadata: dict[str, Any],
+    response: ChatCompletion | ChatCompletionChunk | Response,
+) -> None:
+    if response.usage is not None:
+        cost = (response.usage.model_extra or {}).get("cost")
+        if cost is not None:
+            metadata["upstream_cost"] = float(cost)
+
+
 def capture_routing(
     routing: dict[str, Any],
     response: ChatCompletion | ChatCompletionChunk | Response,
@@ -136,7 +155,4 @@ def capture_routing(
         routing["upstream_provider"] = provider
     if response.service_tier:
         routing["service_tier"] = response.service_tier
-    if response.usage is not None:
-        cost = (response.usage.model_extra or {}).get("cost")
-        if cost is not None:
-            routing["upstream_cost"] = float(cost)
+    capture_upstream_cost(routing, response)

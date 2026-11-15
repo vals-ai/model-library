@@ -48,18 +48,15 @@ class FakeRedis:
 
 
 def authority(
-    project_limit: Decimal | None = None,
-    key_limit: Decimal | None = None,
     total: Decimal | None = None,
+    key_limit: Decimal | None = None,
 ) -> RuntimeAuthority:
     return RuntimeAuthority(
         key_id=uuid4(),
         owner=PersonalOwner(HumanIdentity("https://issuer.example", "owner")),
         permissions=ModelPermissions(),
         project=ProjectReference(uuid4(), "organization", "dev"),
-        project_limit=None
-        if project_limit is None
-        else RuntimeProjectLimit("monthly", project_limit, (), total),
+        project_limit=None if total is None else RuntimeProjectLimit(total),
         key_limit=None if key_limit is None else KeyLimit("monthly", key_limit),
     )
 
@@ -96,71 +93,69 @@ async def decide(payload: str | None, auth: RuntimeAuthority) -> str:
 
 
 async def test_previous_period_snapshot_counts_as_zero_after_rollover():
-    auth = authority(project_limit=Decimal("10"), key_limit=Decimal("5"))
+    auth = authority(key_limit=Decimal("5"))
     october = NOW - timedelta(minutes=6)
     payload = snapshot(
-        october,
-        october,
-        {
-            str(auth.project.project_id): Decimal("10"),
-            managed_key_spend_id(auth.key_id): Decimal("5"),
-        },
+        october, october, {managed_key_spend_id(auth.key_id): Decimal("5")}
     )
     assert await decide(payload, auth) == "allowed"
 
 
 async def test_absent_entry_in_recent_snapshot_counts_as_zero():
-    auth = authority(project_limit=Decimal("10"), key_limit=Decimal("5"))
-    assert await decide(snapshot(NOW, NOW, {}), auth) == "allowed"
+    auth = authority(total=Decimal("10"), key_limit=Decimal("5"))
+    assert await decide(snapshot(NOW, NOW, {}, {}), auth) == "allowed"
 
 
 async def test_long_stale_previous_period_snapshot_counts_as_zero():
-    auth = authority(project_limit=Decimal("10"))
+    auth = authority(key_limit=Decimal("5"))
     october = NOW - timedelta(days=3)
-    payload = snapshot(october, october, {str(auth.project.project_id): Decimal("10")})
+    payload = snapshot(
+        october, october, {managed_key_spend_id(auth.key_id): Decimal("5")}
+    )
     assert await decide(payload, auth) == "allowed"
 
 
 async def test_no_snapshot_is_missing():
-    assert await decide(None, authority(project_limit=Decimal("10"))) == "missing"
+    assert await decide(None, authority(total=Decimal("10"))) == "missing"
 
 
-async def test_current_spend_at_limit_is_still_exhausted():
-    auth = authority(project_limit=Decimal("10"), key_limit=Decimal("5"))
+async def test_spend_at_the_total_or_key_limit_is_exhausted():
+    auth = authority(total=Decimal("10"), key_limit=Decimal("5"))
     project = str(auth.project.project_id)
     key = managed_key_spend_id(auth.key_id)
     assert (
-        await decide(snapshot(NOW, NOW, {project: Decimal("10")}), auth) == "exhausted"
+        await decide(snapshot(NOW, NOW, {}, {project: Decimal("10")}), auth)
+        == "exhausted"
     )
     assert (
         await decide(
-            snapshot(NOW, NOW, {project: Decimal("1"), key: Decimal("5")}), auth
+            snapshot(NOW, NOW, {key: Decimal("5")}, {project: Decimal("1")}), auth
         )
         == "key_exhausted"
     )
 
 
-async def test_total_under_cap_allows_even_when_this_month_is_over_the_base():
-    auth = authority(project_limit=Decimal("10"), total=Decimal("25"))
+async def test_total_under_cap_allows_whatever_this_month_spent():
+    auth = authority(total=Decimal("25"))
     project = str(auth.project.project_id)
-    payload = snapshot(NOW, NOW, {project: Decimal("12")}, {project: Decimal("24")})
+    payload = snapshot(NOW, NOW, {project: Decimal("30")}, {project: Decimal("24")})
     assert await decide(payload, auth) == "allowed"
 
 
-async def test_total_at_cap_is_exhausted_even_when_this_month_is_under_the_base():
-    auth = authority(project_limit=Decimal("10"), total=Decimal("25"))
+async def test_total_at_cap_is_exhausted_whatever_this_month_spent():
+    auth = authority(total=Decimal("25"))
     project = str(auth.project.project_id)
     payload = snapshot(NOW, NOW, {project: Decimal("1")}, {project: Decimal("25")})
     assert await decide(payload, auth) == "exhausted"
 
 
 async def test_total_without_published_totals_is_missing():
-    auth = authority(project_limit=Decimal("10"), total=Decimal("25"))
+    auth = authority(total=Decimal("25"))
     assert await decide(snapshot(NOW, NOW, {}), auth) == "missing"
 
 
 async def test_refusal_names_the_project_total():
-    auth = authority(project_limit=Decimal("10"), total=Decimal("25"))
+    auth = authority(total=Decimal("25"))
     project = str(auth.project.project_id)
     service = BudgetService(
         stage=STAGE,
@@ -176,14 +171,11 @@ async def test_refusal_names_the_project_total():
     )
 
 
-def test_authority_round_trips_the_total_and_reads_records_without_one():
-    auth = authority(project_limit=Decimal("10"), total=Decimal("25"))
+def test_authority_record_carries_only_the_project_total():
+    auth = authority(total=Decimal("25"))
     record = serialize_authority(auth)
     assert deserialize_authority(record).project_limit == auth.project_limit
-    older = json.loads(record)
-    del older["project_limit"]["total_limit_usd"]
-    project_limit = deserialize_authority(json.dumps(older)).project_limit
-    assert project_limit is not None and project_limit.total_limit_usd is None
+    assert json.loads(record)["project_limit"] == {"total_limit_usd": "25"}
 
 
 async def spent(payload: str | None, project: str) -> Decimal | None:
@@ -221,7 +213,7 @@ async def test_budget_refusal_handles_every_decision(decision: BudgetDecision):
     request = SimpleNamespace(
         app=SimpleNamespace(state=SimpleNamespace(budget_service=FixedDecision(decision))),
         state=SimpleNamespace(
-            managed_authority=authority(project_limit=Decimal("10"), total=Decimal("25"))
+            managed_authority=authority(total=Decimal("25"))
         ),
     )
     refusal = await budget_refusal(cast(Request, request))

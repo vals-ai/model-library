@@ -38,7 +38,8 @@ grok-4.7-models:
       cache:
         read: 0.50
       context:
-        threshold: 200_000
+        # The calculator uses >, so this tier starts at 200,000 tokens.
+        threshold: 199_999
         input: 4.00
         output: 12.00
         cache:
@@ -95,7 +96,7 @@ grok-4.6-models:
       cache:
         read: 0.50
       context:
-        threshold: 200_000
+        threshold: 199_999
         input: 4.00
         output: 12.00
         cache:
@@ -150,7 +151,7 @@ grok-4.5-models:
       cache:
         read: 0.30
       context:
-        threshold: 200_000
+        threshold: 199_999
         input: 4.00
         output: 12.00
         cache:
@@ -195,7 +196,7 @@ grok-4.3-models:
       cache:
         read: 0.20
       context:
-        threshold: 200_000
+        threshold: 199_999
         input: 2.50
         output: 5.00
         cache:
@@ -223,14 +224,14 @@ grok-4.20-models:
       training_cutoff: null
       reasoning_model: true
     costs_per_million_token:
-      input: 2.00
-      output: 6.00
+      input: 1.25
+      output: 2.50
       cache:
         read: 0.20
       context:
-        threshold: 200_000
-        input: 4.00
-        output: 12.00
+        threshold: 199_999
+        input: 2.50
+        output: 5.00
         cache:
           read: 0.40
   grok/grok-4.20-multi-agent-0309:
@@ -245,14 +246,14 @@ grok-4.20-models:
       training_cutoff: null
       reasoning_model: true
     costs_per_million_token:
-      input: 2.00
-      output: 6.00
+      input: 1.25
+      output: 2.50
       cache:
         read: 0.20
       context:
-        threshold: 200_000
-        input: 4.00
-        output: 12.00
+        threshold: 199_999
+        input: 2.50
+        output: 5.00
         cache:
           read: 0.40
 
@@ -262,8 +263,17 @@ grok-4-models:
       files: true
       temperature: true
     costs_per_million_token:
+      input: 1.25
+      output: 2.50
       cache:
+        read: 0.20
         read_discount: 0.1
+      context:
+        threshold: 199_999
+        input: 2.50
+        output: 5.00
+        cache:
+          read: 0.40
     default_parameters:
       temperature: 0.7
       top_p: 0.95
@@ -276,15 +286,6 @@ grok-4-models:
       max_tokens: 128_000
       training_cutoff: null
       reasoning_model: true
-    costs_per_million_token:
-      input: 3.00
-      output: 15.00
-      cache:
-        read: 0.75
-      context:
-        threshold: 128_000
-        input: 6.00
-        output: 30.00
     alternative_keys:
       - grok/grok-4
       - grok/grok-4-latest
@@ -298,15 +299,6 @@ grok-4-models:
       max_tokens: 2_000_000
       training_cutoff: null
       reasoning_model: true
-    costs_per_million_token:
-      input: 0.20
-      output: 0.5
-      cache:
-        read: 0.05
-      context:
-        threshold: 128_000
-        input: 0.4
-        output: 1.0
     alternative_keys:
       - grok/grok-4-fast
       - grok/grok-4-fast-reasoning-latest
@@ -320,15 +312,6 @@ grok-4-models:
       max_tokens: 2_000_000 # from openrouter
       training_cutoff: null
       reasoning_model: true
-    costs_per_million_token:
-      input: 0.20
-      output: 0.5
-      cache:
-        read: 0.05
-      context:
-        threshold: 128_000
-        input: 0.4
-        output: 1.0
 
   grok/grok-4-1-fast-non-reasoning:
     label: Grok 4.1 Fast Non-Reasoning
@@ -338,15 +321,6 @@ grok-4-models:
       context_window: 2_000_000
       max_tokens: 2_000_000 # from openrouter
       training_cutoff: null
-    costs_per_million_token:
-      input: 0.20
-      output: 0.5
-      cache:
-        read: 0.05
-      context:
-        threshold: 128_000
-        input: 0.4
-        output: 1.0
 
   grok/grok-4-fast-non-reasoning:
     label: Grok 4 Fast (Non-Reasoning)
@@ -356,15 +330,6 @@ grok-4-models:
       context_window: 2_000_000
       max_tokens: 2_000_000
       training_cutoff: null
-    costs_per_million_token:
-      input: 0.20
-      output: 0.5
-      cache:
-        read: 0.05
-      context:
-        threshold: 128_000
-        input: 0.4
-        output: 1.0
     alternative_keys:
       - grok/grok-4-fast-non-reasoning-latest
 
@@ -391,10 +356,16 @@ grok-code-models:
       max_tokens: 40_000
       reasoning_model: true
     costs_per_million_token:
-      input: 0.20
-      output: 1.50
+      input: 1.00
+      output: 2.00
       cache:
-        read: 0.02
+        read: 0.20
+      context:
+        threshold: 199_999
+        input: 2.00
+        output: 4.00
+        cache:
+          read: 0.40
     alternative_keys:
       - grok/grok-code-fast
       - grok/grok-code-fast-1-0825
@@ -426,7 +397,7 @@ grok-build-models:
       cache:
         read: 0.20
       context:
-        threshold: 200_000
+        threshold: 199_999
         input: 2.00
         output: 4.00
         cache:
@@ -490,10 +461,16 @@ grok-3-models:
       max_tokens: 0
       training_cutoff: null
     costs_per_million_token:
-      input: 3.00
-      output: 15.00
+      input: 1.25
+      output: 2.50
       cache:
-        read: 0.75
+        read: 0.20
+      context:
+        threshold: 199_999
+        input: 2.50
+        output: 5.00
+        cache:
+          read: 0.40
     alternative_keys:
       - grok/grok-3-latest
       - grok/grok-3-beta

@@ -4,7 +4,7 @@ import sys
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Coroutine, Mapping
+from typing import Any, Awaitable, Callable, Coroutine, Mapping, cast
 
 from pydantic import SecretStr
 from rich.console import Console
@@ -249,6 +249,7 @@ smoke_cases["decision"] = SmokeCase(
     validate=_check_decision_answer,
     allow_zero_output_tokens=True,
 )
+smoke_cases["tinker_decision"] = smoke_cases["decision"]
 ERROR_OVERRIDES = [
     "overloaded",
     "rate limit",

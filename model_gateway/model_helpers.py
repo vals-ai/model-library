@@ -46,12 +46,15 @@ def get_cached_llm(
     model_config: dict[str, Any] | None = None,
     transcription: bool = False,
 ) -> LLM:
-    effective_config = body.config if model_config is None else model_config
+    model_config = dict(config if model_config is None else model_config)
+    if "custom_api_key" not in model_config and (key := fixed_key_value(body.model)):
+        model_config["custom_api_key"] = key
+        config = {**config, "custom_api_key": key}
     build = get_transcription_model if transcription else get_registry_model
     return cache.get_or_create(
         body.model,
         config,
-        lambda m, _c: build(m, normalize_llm_config_for_model(m, effective_config)),
+        lambda m, _c: build(m, normalize_llm_config_for_model(m, model_config)),
         namespace=runtime_cache_namespace(),
     )
 
@@ -75,7 +78,7 @@ def current_pool_config() -> PoolConfig:
 
 
 def current_pool_revision() -> int | None:
-    """The `revision` of the pools document active for this request; None without AppConfig."""
+    """The `revision` of the pools document active for this request; 0 for empty pools, None without AppConfig."""
     snapshot = runtime_pool_snapshot()
     return None if snapshot is None else snapshot.document.revision
 
@@ -138,6 +141,22 @@ def _pick_managed_key_setting(body: QueryRequest, config: PoolConfig) -> str | N
     bounds = config.weight_bounds(pool)
     digest = hashlib.sha256(_pick_identity(body).encode()).digest()
     return pool[bisect_right(bounds, int.from_bytes(digest, "big") % bounds[-1])]
+
+
+def fixed_key_value(model: str) -> str | None:
+    if uses_workload_identity(model):
+        return None
+    config = current_pool_config()
+    pool = keys_for(config, model)
+    key_setting = next((key for key in pool if config.weights.get(key, 1) > 0), None)
+    if key_setting is None:
+        return None
+    value = model_library_settings.get(key_setting)
+    if not value:
+        raise AssignedKeyUnavailableError(
+            key_name=key_setting, attempt_key=None, model=model
+        )
+    return value
 
 
 def managed_api_key_value(

@@ -36,7 +36,7 @@ data = trajectory.to_json_dict()  # dict, None fields excluded
 | `step.metrics.prompt_tokens` | `QueryResultMetadata.total_input_tokens` |
 | `step.metrics.completion_tokens` | `QueryResultMetadata.total_output_tokens` |
 | `step.metrics.cached_tokens` | `QueryResultMetadata.cache_read_tokens` |
-| `step.metrics.cost_usd` | `QueryResultCost.total` |
+| `step.metrics.cost_usd` | `QueryResultMetadata.effective_cost.total` |
 | `step.model_name` | Actual response model when the provider reports it; otherwise the requested model |
 | `step.reasoning_effort` | Passed to `from_agent_result(reasoning_effort=...)` |
 | `step.is_copied_context` | Set manually on `ATIFStep` |

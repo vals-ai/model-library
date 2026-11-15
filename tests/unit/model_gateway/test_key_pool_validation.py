@@ -10,7 +10,7 @@ from model_gateway.key_pool_validation import (
     RegistryModel,
     validate_mapping,
 )
-from model_gateway.key_pool_config import key_catalog, pool_config_from_document
+
 from model_gateway.key_pools import (
     ModelRule,
     PoolConfig,
@@ -245,6 +245,8 @@ def test_real_registry_accepts_a_real_model_and_rejects_a_made_up_one() -> None:
     )
 
     assert _validate(config, get_model_registry()) == [MappingError("anthropic/claude-made-up-0-0", "second", "unknown_model")]
+
+
 def test_a_weight_for_a_key_no_pool_holds_is_refused() -> None:
     config = PoolConfig(
         pools=_CLEAN_DEFAULTS, weights={"ANTHROPIC_API_KEY": 1, "META_API_KEY_9": 2}

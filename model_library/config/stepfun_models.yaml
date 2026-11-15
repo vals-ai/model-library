@@ -13,6 +13,8 @@ base-config:
 
 step-5-models:
   stepfun/step-5-preview:
+    metadata:
+      available_for_everyone: false
     label: Step 5 Preview
     release_date: 2026-09-28
     open_source: true
@@ -28,4 +30,4 @@ step-5-models:
       input: 1.00
       output: 2.70
       cache:
-        read: 0.05
+        read: 0.10

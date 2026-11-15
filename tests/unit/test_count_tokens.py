@@ -4,6 +4,7 @@ Unit tests for count_tokens functionality
 
 import pytest
 
+from model_library.base.input import SystemInput
 from model_library.registry_utils import get_registry_config, get_registry_model
 from tests.conftest import parametrize_all_models
 from tests.test_helpers import get_example_tool_input
@@ -44,9 +45,8 @@ async def test_count_tokens_with_text_and_tools(model_key: str):
     input, system_prompt, tools = get_example_tool_input()
 
     token_count = await model.count_tokens(
-        input,
+        [SystemInput(text=system_prompt), *input],
         tools=tools,
-        system_prompt=system_prompt,
     )
 
     assert isinstance(token_count, int)

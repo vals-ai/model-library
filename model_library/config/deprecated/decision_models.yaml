@@ -22,6 +22,42 @@ deprecated:
     metadata:
       deprecated: true
 
+  decision/mercury-decide:
+    company: Inception
+    country: United States
+    label: Mercury Decide
+    release_date: 2026-09-30
+    open_source: false
+    documentation_url: https://openrouter.ai/inception/mercury-decide
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: false
+      temperature: false
+      tools: false
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    alternative_keys: []
+    default_parameters: {}
+    provider_endpoint: inception/mercury-decide-20260930
+    properties:
+      context_window: 65536
+      max_tokens: 0
+      reasoning_model: false
+    costs_per_million_token:
+      input: 0.04
+      output: 0.0
+      cache: null
+      batch: null
+      context: null
+      current_discount: 50.0
+
   decision/elephant-1:
     company: Baseten
     country: United States

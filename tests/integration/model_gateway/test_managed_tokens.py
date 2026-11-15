@@ -2,6 +2,7 @@
 
 import json
 import os
+from decimal import Decimal
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -15,6 +16,7 @@ from model_gateway.managed_auth.authority_publisher import ManagedAuthorityPubli
 from model_gateway.managed_auth.credentials import create_managed_key_secret
 from model_gateway.managed_auth.database import create_engine
 from model_gateway.managed_auth.reconciliation import HumanReconciler
+from model_gateway.managed_auth.runtime import authority_hash_key, authority_key_prefix
 from model_gateway.managed_auth.store import ManagedAuthStore
 from model_gateway.managed_auth.types import HumanIdentity, PersonalOwner, ProjectReference
 from model_gateway.run_tokens import LegacyRunTokenClaims, mint_run_token, sha256_hex
@@ -33,8 +35,8 @@ async def test_managed_root_child_rotation_scope_and_revocation(monkeypatch):
     next_root, next_verifier = create_managed_key_secret()
     redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
     namespace = f"managed-tokens-{uuid4()}"
-    owner_key = f"gateway:managed-auth:{namespace}:owner"
-    active_key = f"gateway:managed-auth:{namespace}:active"
+    owner_key = f"{authority_key_prefix(namespace)}:owner"
+    active_key = authority_hash_key(namespace)
     owner_token = uuid4().hex
     monkeypatch.setenv("MODEL_GATEWAY_AUTH_NAMESPACE", namespace)
     monkeypatch.setenv("MODEL_GATEWAY_AUTH_POOL_SIZE", "4")
@@ -64,7 +66,7 @@ async def test_managed_root_child_rotation_scope_and_revocation(monkeypatch):
             request_id, "key", "work", owner,
             PersonalOwner(owner), None, project, None, None,
         )
-        pending = await store.decide_request(request_id, owner, key_id, ("monthly", Decimal("10")), None)
+        pending = await store.decide_request(request_id, owner, key_id, Decimal("10"), None)
         collected = await store.collect_key(key_id, pending.revision, verifier, owner)
         await store.create_request(
             other_request_id, "other key", "work", owner,

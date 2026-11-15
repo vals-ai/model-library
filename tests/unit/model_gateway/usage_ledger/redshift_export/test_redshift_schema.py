@@ -57,6 +57,12 @@ def test_aggregate_tables_are_defined_per_grain_without_non_additive_metrics():
         assert "duration_observed_count bigint not null" in ddl
         assert "cost_usd_sum decimal(38,12)," in ddl
         assert "cost_recorded_count bigint not null" in ddl
+        if grain == "5m":
+            assert "standard_cost_usd_sum decimal(38,12)," in ddl
+            assert "standard_cost_recorded_count bigint," in ddl
+        else:
+            assert "standard_cost_usd_sum" not in ddl
+            assert "standard_cost_recorded_count" not in ddl
         assert "error_count bigint not null" in ddl
         assert "percentile_cont" not in ddl.lower()
         assert "run_count" not in ddl.lower()
@@ -126,6 +132,7 @@ def test_fact_staging_performance_and_dimension_table_ddls_are_specific():
         "total_output_tokens bigint,",
         "duration_seconds decimal(18,6)",
         "cost_usd decimal(38,12),",
+        "standard_cost_usd decimal(38,12),",
         "finish_reason varchar(256)",
         "finish_reason_raw varchar(2048)",
         "schema_version integer not null",
@@ -326,9 +333,16 @@ def test_aggregate_refresh_sql_uses_missing_sentinel_and_excludes_non_additive_s
     assert "count(duration_seconds) as duration_observed_count" in insert_sql
     assert "sum(cost_usd) as cost_usd_sum" in insert_sql
     assert "count(cost_usd) as cost_recorded_count" in insert_sql
+    assert "sum(standard_cost_usd) as standard_cost_usd_sum" in insert_sql
+    assert (
+        "count(case when cost_usd is not null then standard_cost_usd end) "
+        "as standard_cost_recorded_count"
+    ) in insert_sql
+    assert "    cost_usd,\n    standard_cost_usd" in insert_sql
     assert "coalesce(sum" not in insert_sql
     assert (
-        "group by\n  bucket_start_utc,\n  bucket_end_utc,\n  provider,\n  provider_model,"
+        "group by\n  bucket_start_utc,\n  bucket_end_utc,\n  served_model_key,\n"
+        "  provider,\n  provider_model,"
         in insert_sql
     )
     assert "agent_name,\n  identity_email,\n  api_key_name;" in insert_sql
@@ -366,6 +380,8 @@ def test_aggregate_refresh_sql_covers_hour_and_day_bucket_branches():
     assert "insert into gateway_usage.usage_agg_1d" in day_sql
     assert "date_trunc('day', completed_at::timestamp) as bucket_start_utc" in day_sql
     assert "dateadd(day, 1, date_trunc('day', completed_at::timestamp))" in day_sql
+    assert "standard_cost_usd" not in hour_sql
+    assert "standard_cost_usd" not in day_sql
 
 
 def test_schema_statement_batches_leave_column_additions_to_migration() -> None:
@@ -374,6 +390,32 @@ def test_schema_statement_batches_leave_column_additions_to_migration() -> None:
     ]
 
     assert not any("alter table" in sql for sql in statements)
+    standard_additions = {
+        (addition["TableName"], addition["ColumnName"], addition["ColumnType"])
+        for addition in redshift_schema.SCHEMA_COLUMN_ADDITIONS
+        if addition["ColumnName"].startswith("standard_cost_")
+    }
+    assert standard_additions == {
+        ("usage_events_staging_v5", "standard_cost_usd", "decimal(38,12)"),
+        ("usage_events", "standard_cost_usd", "decimal(38,12)"),
+        ("usage_agg_5m", "standard_cost_usd_sum", "decimal(38,12)"),
+        ("usage_agg_5m", "standard_cost_recorded_count", "bigint"),
+    }
+
+
+def test_every_column_addition_is_in_its_table_ddl() -> None:
+    statements = [
+        sql for batch in redshift_schema.schema_statement_batches() for sql in batch
+    ]
+
+    for addition in redshift_schema.SCHEMA_COLUMN_ADDITIONS:
+        (ddl,) = (
+            sql
+            for sql in statements
+            if f"create table if not exists gateway_usage.{addition['TableName']} ("
+            in sql
+        )
+        assert f"  {addition['ColumnName']} {addition['ColumnType']}" in ddl, addition
 
 
 def test_run_aggregate_table_is_keyed_by_run_day_grader_provider_and_model() -> None:
@@ -459,6 +501,7 @@ def test_run_aggregate_refresh_splits_grader_calls_from_every_other_agent() -> N
         "  bucket_end_utc,\n"
         "  run_id,\n"
         "  is_grader,\n"
+        "  served_model_key,\n"
         "  provider,\n"
         "  provider_model;"
     )

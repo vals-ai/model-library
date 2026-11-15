@@ -3,7 +3,6 @@ from uuid import UUID, uuid4
 
 from fastapi import HTTPException
 
-from model_gateway.budgets.schema import BudgetPeriod
 from model_gateway.managed_auth.credentials import create_managed_key_secret
 from model_gateway.managed_auth.identity import VerifiedHuman, VerifiedMachine
 from model_gateway.managed_auth.store import ManagedAuthStore
@@ -37,12 +36,16 @@ class ManagedAuthService:
         if not ManagedAuthService.is_admin(human):
             raise HTTPException(403, "Platform administrator required")
 
-    async def project_member(
-        self, human: VerifiedHuman, project_id: UUID
-    ) -> ProjectPolicy:
+    async def project_policy(self, project_id: UUID) -> ProjectPolicy:
         policy = await self.store.get_project_policy(project_id)
         if policy is None:
             raise HTTPException(404, "Project policy not found")
+        return policy
+
+    async def project_member(
+        self, human: VerifiedHuman, project_id: UUID
+    ) -> ProjectPolicy:
+        policy = await self.project_policy(project_id)
         if self.is_admin(human) or await self.store.owns_project_key(
             PersonalOwner(human.identity), project_id
         ):
@@ -132,7 +135,7 @@ class ManagedAuthService:
             request_id,
             SystemIdentity("managed-auth-system", "requested-budget-auto-approval"),
             uuid4(),
-            ("monthly", requested_budget),
+            requested_budget,
             self.auto_approval_threshold_usd,
         )
 
@@ -182,7 +185,7 @@ class ManagedAuthService:
         self,
         human: VerifiedHuman,
         request_id: UUID,
-        first_policy: tuple[BudgetPeriod, Decimal] | None,
+        first_total_usd: Decimal | None,
         approved: bool,
     ) -> ManagedKey | None:
         self.admin(human)
@@ -194,7 +197,7 @@ class ManagedAuthService:
         key_id = uuid4() if approved else None
         try:
             return await self.store.decide_request(
-                request_id, human.identity, key_id, first_policy, None
+                request_id, human.identity, key_id, first_total_usd, None
             )
         except ValueError as error:
             raise HTTPException(409, str(error)) from error

@@ -25,6 +25,7 @@ from model_gateway.managed_auth.authority_publisher import ManagedAuthorityPubli
 from model_gateway.managed_auth.credentials import create_managed_key_secret
 from model_gateway.managed_auth.database import create_engine
 from model_gateway.managed_auth.reconciliation import HumanReconciler
+from model_gateway.managed_auth.runtime import authority_hash_key, authority_key_prefix
 from model_gateway.managed_auth.store import ManagedAuthStore
 from model_gateway.managed_auth.types import HumanIdentity, ProjectReference
 from model_gateway.run_token_types import ModelPermissions
@@ -211,8 +212,8 @@ async def test_populated_upgrade_preserves_authority_and_existing_child(monkeypa
             )).all())
         redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
         namespace = f"managed-migration-{uuid4()}"
-        owner_key = f"gateway:managed-auth:{namespace}:owner"
-        active_key = f"gateway:managed-auth:{namespace}:active"
+        owner_key = f"{authority_key_prefix(namespace)}:owner"
+        active_key = authority_hash_key(namespace)
         owner_token = uuid4().hex
         first_key = CANARY_KEY_ID
         monkeypatch.setenv("MODEL_GATEWAY_AUTH_NAMESPACE", namespace)
@@ -241,7 +242,7 @@ async def test_populated_upgrade_preserves_authority_and_existing_child(monkeypa
                 assert len(policies) == 13
                 assert {row.project_id for row in policies} == {UUID(p) for _, _, p in ASSIGNMENTS}
                 assert all(row.project_organization == ORGANIZATION and row.project_environment == ENVIRONMENT
-                           and row.period == "monthly" and row.base_limit_usd == Decimal("10000")
+                           and row.total_limit_usd == Decimal("10000")
                            and row.revision == 1 for row in policies)
                 assert (await connection.execute(select(tables.project_limit_requests))).all() == []
                 keys = {row.id: row for row in (await connection.execute(select(tables.keys))).all()}
@@ -437,7 +438,7 @@ async def test_positive_project_policy_upgrade_refuses_invalid_rows_until_correc
                 {"id": zero_id, "period": "monthly", "amount": 0},
             ])
         with pytest.raises(IntegrityError) as missing_period:
-            await _revision(engine, "head")
+            await _revision(engine, "b8e1f3a6c2d4")
         assert missing_period.value.orig.sqlstate == "23502"
         async with engine.connect() as connection:
             assert (await connection.execute(text(
@@ -456,7 +457,7 @@ async def test_positive_project_policy_upgrade_refuses_invalid_rows_until_correc
                 "WHERE project_id = :id"
             ), {"id": uncapped_id})
         with pytest.raises(IntegrityError) as zero_base:
-            await _revision(engine, "head")
+            await _revision(engine, "b8e1f3a6c2d4")
         assert zero_base.value.orig.sqlstate == "23514"
         async with engine.connect() as connection:
             assert (await connection.execute(text(
@@ -471,7 +472,7 @@ async def test_positive_project_policy_upgrade_refuses_invalid_rows_until_correc
                 "UPDATE managed_project_policies SET base_limit_usd = 20 "
                 "WHERE project_id = :id"
             ), {"id": zero_id})
-        await _revision(engine, "head")
+        await _revision(engine, "b8e1f3a6c2d4")
         async with engine.connect() as connection:
             assert (await connection.execute(text(
                 "SELECT version_num FROM alembic_version"
@@ -495,6 +496,24 @@ async def test_positive_project_policy_upgrade_refuses_invalid_rows_until_correc
                     "revision, created_at, updated_at) "
                     "VALUES (:id, 'org', 'dev', 'monthly', 0, 1, now(), now())"
                 ), {"id": uuid4()})
+        await _revision(engine, "head")
+        async with engine.connect() as connection:
+            assert (await connection.execute(text(
+                "SELECT version_num FROM alembic_version"
+            ))).scalar_one() == "d7e3f9a2b6c1"
+            assert (await connection.execute(text(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema = current_schema() AND table_name IN "
+                "('managed_project_policies', 'managed_project_limit_requests') "
+                "AND column_name IN ('period', 'base_limit_usd', 'period_start', 'period_end')"
+            ))).all() == []
+        for total in (None, 0):
+            with pytest.raises(IntegrityError):
+                async with engine.begin() as connection:
+                    await connection.execute(text(
+                        "UPDATE managed_project_policies SET total_limit_usd = :total "
+                        "WHERE project_id = :id"
+                    ), {"id": uncapped_id, "total": total})
 
 
 @pytest.mark.asyncio

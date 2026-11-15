@@ -107,30 +107,13 @@ class BudgetService:
             return BudgetDecision.UNREADABLE
 
         project_limit = authority.project_limit
-        if project_limit is not None and project_limit.total_limit_usd is not None:
+        if project_limit is not None:
             if snapshot.total_spend_usd is None:
                 return BudgetDecision.MISSING
             spend = snapshot.total_spend_usd.get(
                 str(authority.project.project_id), Decimal(0)
             )
             if spend >= project_limit.total_limit_usd:
-                return BudgetDecision.EXHAUSTED
-        elif project_limit is not None:
-            spend = _current_spend(
-                snapshot,
-                project_limit.period,
-                str(authority.project.project_id),
-                now,
-            )
-            limit = project_limit.base_limit_usd + sum(
-                (
-                    increase.increase_usd
-                    for increase in project_limit.temporary_increases
-                    if increase.period_start <= now < increase.period_end
-                ),
-                Decimal(0),
-            )
-            if spend >= limit:
                 return BudgetDecision.EXHAUSTED
 
         key_limit = authority.key_limit

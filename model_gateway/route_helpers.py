@@ -24,6 +24,7 @@ from model_gateway.types import ProviderError
 from model_library import model_library_settings
 from model_library.base.output import QueryResult
 from model_library.exceptions import (
+    ContentFilterError,
     InvalidStructuredOutputError,
     exception_to_provider_error,
 )
@@ -198,7 +199,9 @@ class GatewayOperation:
                         )
                     raise
                 except Exception as exc:
-                    if isinstance(exc, InvalidStructuredOutputError):
+                    if isinstance(
+                        exc, InvalidStructuredOutputError | ContentFilterError
+                    ):
                         self.failed_query_result = exc.query_result
                     artifact = (
                         await active_capture.finalize_async()

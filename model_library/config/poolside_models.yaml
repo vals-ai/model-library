@@ -16,6 +16,8 @@ laguna-models:
       temperature: 1.0
 
   poolside/laguna-m.1:
+    metadata:
+      available_for_everyone: false
     label: Laguna M.1
     release_date: 2026-04-28
     open_source: true
@@ -25,6 +27,8 @@ laguna-models:
       max_tokens: 32_768
     costs_per_million_token: null
   poolside/laguna-m.1:fast:
+    metadata:
+      available_for_everyone: false
     label: Laguna M.1 Fast
     release_date: 2026-04-28
     open_source: true

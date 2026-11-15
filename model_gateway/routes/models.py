@@ -47,6 +47,8 @@ def register_model_routes(app: FastAPI) -> None:
                 "supports": {"transcription"},
                 "metadata": {"router"},
                 "costs_per_million_token": {
+                    "current_discount": True,
+                    "off_peak": True,
                     "cache": {"write_1h_markup"},
                     "context": {"cache": {"write_1h_markup"}},
                     "batch": {"cache_discount"},
@@ -67,6 +69,11 @@ def register_model_routes(app: FastAPI) -> None:
         def serialize_config(config: RegistryEntry) -> dict[str, Any]:
             payload = config.model_dump(mode="json", exclude=exclude)
             if include_excluded_fields:
+                costs = config.costs_per_million_token
+                if costs is not None and costs.off_peak is not None:
+                    payload["costs_per_million_token"]["off_peak"][
+                        "weekday_peak_hours_utc"
+                    ] = costs.off_peak.weekday_peak_hours_utc()
                 if config.rate_limit is None:
                     payload.pop("rate_limit")
                 else:

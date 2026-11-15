@@ -1,14 +1,13 @@
 import asyncio
 import logging
-from collections import defaultdict
 from datetime import UTC, datetime
 from typing import Protocol, cast, overload
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from redis.exceptions import TimeoutError as RedisTimeoutError
-from sqlalchemy import and_, func, select
+from sqlalchemy import and_, select
 from sqlalchemy.exc import DBAPIError, TimeoutError as SQLAlchemyTimeoutError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
@@ -17,8 +16,8 @@ from model_gateway.managed_auth.reconciliation import HumanReconciler
 from model_gateway.managed_auth.runtime import (
     RuntimeAuthority,
     RuntimeProjectLimit,
-    TemporaryProjectIncrease,
     authority_hash_key,
+    authority_key_prefix,
     serialize_authority,
 )
 from model_gateway.managed_auth.types import (
@@ -95,8 +94,8 @@ class ManagedAuthorityPublisher:
         )
         self.reconciler = reconciler
         self._active_key = authority_hash_key(namespace)
-        self._owner_key = f"gateway:managed-auth:{namespace}:owner"
-        self._stage_prefix = f"gateway:managed-auth:{namespace}:staging:"
+        self._owner_key = f"{authority_key_prefix(namespace)}:owner"
+        self._stage_prefix = f"{authority_key_prefix(namespace)}:staging:"
         self._stop = asyncio.Event()
 
     async def stop(self) -> None:
@@ -216,12 +215,7 @@ class ManagedAuthorityPublisher:
                             t.keys.c.key_limit_usd,
                             t.project_policies.c.project_organization,
                             t.project_policies.c.project_environment,
-                            t.project_policies.c.period,
-                            t.project_policies.c.base_limit_usd,
-                            func.coalesce(
-                                t.project_policies.c.total_limit_usd,
-                                t.project_policies.c.base_limit_usd,
-                            ).label("total_limit_usd"),
+                            t.project_policies.c.total_limit_usd,
                             t.humans.c.enabled,
                         )
                         .select_from(
@@ -239,38 +233,7 @@ class ManagedAuthorityPublisher:
                         .where(t.keys.c.status == "active")
                     )
                 ).all()
-                temporary_rows = (
-                    await connection.execute(
-                        select(
-                            t.project_limit_requests.c.project_id,
-                            t.project_limit_requests.c.period_start,
-                            t.project_limit_requests.c.period_end,
-                            t.project_limit_requests.c.increase_usd,
-                        )
-                        .where(
-                            t.project_limit_requests.c.kind == "temporary",
-                            t.project_limit_requests.c.status == "approved",
-                            t.project_limit_requests.c.cancelled_at.is_(None),
-                        )
-                        .order_by(
-                            t.project_limit_requests.c.project_id,
-                            t.project_limit_requests.c.period_start,
-                            t.project_limit_requests.c.id,
-                        )
-                    )
-                ).all()
 
-        temporary_by_project: dict[UUID, list[TemporaryProjectIncrease]] = defaultdict(
-            list
-        )
-        for row in temporary_rows:
-            temporary_by_project[row.project_id].append(
-                TemporaryProjectIncrease(
-                    increase_usd=row.increase_usd,
-                    period_start=row.period_start,
-                    period_end=row.period_end,
-                )
-            )
         projection: list[tuple[str, RuntimeAuthority]] = []
         for row in keys:
             if row.owner_kind == "personal":
@@ -287,12 +250,7 @@ class ManagedAuthorityPublisher:
                 row.project_organization,
                 row.project_environment,
             )
-            project_limit = RuntimeProjectLimit(
-                period=row.period,
-                base_limit_usd=row.base_limit_usd,
-                temporary_increases=tuple(temporary_by_project[row.project_id]),
-                total_limit_usd=row.total_limit_usd,
-            )
+            project_limit = RuntimeProjectLimit(row.total_limit_usd)
             key_limit = (
                 KeyLimit(period=row.key_limit_period, limit_usd=row.key_limit_usd)
                 if row.key_limit_period is not None

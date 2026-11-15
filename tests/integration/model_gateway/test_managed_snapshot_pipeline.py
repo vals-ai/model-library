@@ -110,11 +110,11 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
     try:
         await store.record_human(actor, True, actor)
         for approved_project, limit, key_id in (
-            (project, ("monthly", Decimal("3")), root_key_id),
+            (project, Decimal("3"), root_key_id),
             (project, None, peer_key_id),
-            (other_project, ("monthly", Decimal("20")), other_key_id),
-            (empty_project, ("monthly", Decimal("5")), empty_key_id),
-            (optional_key_project, ("monthly", Decimal("10")), uncapped_key_id),
+            (other_project, Decimal("20"), other_key_id),
+            (empty_project, Decimal("5"), empty_key_id),
+            (optional_key_project, Decimal("10"), uncapped_key_id),
         ):
             request_id = uuid4()
             await store.create_request(
@@ -161,7 +161,7 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
             completed_at timestamptz not null, budget_id varchar(128), project_id varchar(128),
             managed_key_id varchar(128), identity_email varchar(1024),
             requested_model_key varchar(2048) not null, benchmark_name varchar(1024),
-            cost_usd numeric(38, 12))""")
+            cost_usd numeric(38, 12), served_model_key varchar(2048))""")
         await warehouse.execute(f"""create table {schema}.usage_agg_1d (
             bucket_start_utc timestamptz not null, identity_email varchar(1024),
             provider_model varchar(2048), cost_usd_sum numeric(38, 12),
@@ -201,6 +201,10 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
                     data_through=data_through, idle=idle,
                 )
 
+        await warehouse.execute(
+            "update managed_project_policies set total_started_at = $1",
+            period_bounds("monthly", now)[0],
+        )
         backdated = period_bounds("monthly", now)[0] - timedelta(days=10)
         await warehouse.execute(
             "update managed_project_policies set total_started_at = $1 where project_id = $2",
@@ -210,8 +214,8 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         bound = next(list(b.values()) for b in client.parameters if str(other_project.project_id) in b.values())
         assert bound[bound.index(str(other_project.project_id)) + 1] == backdated.isoformat()
         await managed_control.refresh_control_once()
-        project_limit = RuntimeProjectLimit("monthly", Decimal("3"), ())
-        other_limit = RuntimeProjectLimit("monthly", Decimal("20"), ())
+        project_limit = RuntimeProjectLimit(Decimal("3"))
+        other_limit = RuntimeProjectLimit(Decimal("20"))
         root_limit = KeyLimit("monthly", Decimal("2"))
         uncapped_limit = KeyLimit("daily", Decimal("1"))
 
@@ -235,7 +239,7 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         assert first_cap.revision == 1
         assert first_cap.data_through == now
         first_alert = json.loads(s3.get_object(Bucket=bucket, Key=alert_key)["Body"].read())
-        assert first_alert["schema_version"] == 1
+        assert first_alert["schema_version"] == 2
         assert first_alert["stage"] == stage
         assert first_alert["revision"] == 1
         assert datetime.fromisoformat(first_alert["data_through"]) == now
@@ -247,11 +251,9 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
             "name": "Current project label",
             "handle": "current-handle",
             "environment": "dev",
-            "period": "monthly",
-            "start": first_cap.periods["monthly"].start.isoformat(),
-            "end": first_cap.periods["monthly"].end.isoformat(),
-            "limit_usd": "3",
-            "spend_usd": "0",
+            "total_started_at": (await store.get_project_policy(project.project_id)).total_started_at.isoformat(),
+            "total_limit_usd": "3",
+            "total_spend_usd": "0",
             "contributors": [],
             "models": [],
             "benchmarks": [],
@@ -304,7 +306,7 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         ) is not None
         assert {root_key_id, uncapped_key_id} <= set(await list_key_spend_sources(engine))
         root_authority = authority(root_key_id, project, project_limit, root_limit)
-        uncapped_authority = authority(uncapped_key_id, optional_key_project, RuntimeProjectLimit("monthly", Decimal("10"), ()), uncapped_limit)
+        uncapped_authority = authority(uncapped_key_id, optional_key_project, RuntimeProjectLimit(Decimal("10")), uncapped_limit)
         await asyncio.to_thread(publish, now)
         await managed_control.refresh_control_once()
         assert await query.managed_decision(root_authority, now) == "exhausted"
@@ -312,11 +314,11 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         assert await query.managed_decision(other_authority, now) == "allowed"
         policy = await store.get_project_policy(project.project_id)
         assert policy is not None
-        raised = await store.update_project_policy(
-            project.project_id, policy.revision, "monthly", Decimal("10"), actor,
+        raised = await store.change_project_total(
+            project.project_id, policy.revision, Decimal("10"), "raise", actor,
         )
-        assert raised.base_limit_usd == Decimal("10")
-        raised_limit = RuntimeProjectLimit("monthly", Decimal("10"), ())
+        assert raised is not None and raised.total_limit_usd == Decimal("10")
+        raised_limit = RuntimeProjectLimit(Decimal("10"))
         assert await query.managed_decision(
             authority(root_key_id, project, raised_limit, root_limit), now,
         ) == "key_exhausted"
@@ -345,7 +347,7 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         assert alert_projects[str(project.project_id)]["handle"] == "current-handle"
         assert alert_projects[str(other_project.project_id)]["name"] == "Manual project label"
         assert alert_projects[str(other_project.project_id)]["handle"] is None
-        assert alert_projects[str(project.project_id)]["spend_usd"] == "8.500000000000"
+        assert alert_projects[str(project.project_id)]["total_spend_usd"] == "8.500000000000"
         assert alert_projects[str(project.project_id)]["contributors"] == [
             {"email": None, "spend_usd": "0.500000000000"},
             {"email": email, "spend_usd": "8.000000000000"},
@@ -365,11 +367,11 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         ]
         assert all(
             sum(Decimal(entry["spend_usd"]) for entry in alert_projects[str(project.project_id)][dimension])
-            == Decimal(alert_projects[str(project.project_id)]["spend_usd"])
+            == Decimal(alert_projects[str(project.project_id)]["total_spend_usd"])
             == cap.periods["monthly"].spend_usd[str(project.project_id)]
             for dimension in ("models", "benchmarks", "contributors")
         )
-        assert alert_projects[str(other_project.project_id)]["spend_usd"] == "5.000000000000"
+        assert alert_projects[str(other_project.project_id)]["total_spend_usd"] == "5.000000000000"
         assert alert_projects[str(empty_project.project_id)]["contributors"] == []
         assert alert_projects[str(empty_project.project_id)]["models"] == []
         assert alert_projects[str(empty_project.project_id)]["benchmarks"] == []
@@ -383,7 +385,7 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         assert policy is not None
         await store.change_temporary_increases(
             project.project_id, policy.revision, actor, "burst", "add",
-            Decimal("2"), period_bounds(policy.period, datetime.now(UTC)),
+            Decimal("2"),
         )
         await asyncio.to_thread(publish, now, idle=True)
         changed = json.loads(s3.get_object(Bucket=bucket, Key=alert_key)["Body"].read())
@@ -391,8 +393,8 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
             item for item in changed["projects"] if item["project_id"] == str(project.project_id)
         )
         assert changed["revision"] == alert["revision"] + 1
-        assert changed_project["limit_usd"] == "12"
-        assert changed_project["spend_usd"] == alert_projects[str(project.project_id)]["spend_usd"]
+        assert changed_project["total_limit_usd"] == "12"
+        assert changed_project["total_spend_usd"] == alert_projects[str(project.project_id)]["total_spend_usd"]
         assert changed_project["models"] == alert_projects[str(project.project_id)]["models"]
         assert changed_project["benchmarks"] == alert_projects[str(project.project_id)]["benchmarks"]
         assert changed["data_through"] == alert["data_through"]
@@ -475,7 +477,7 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         assert restored_projects[str(optional_key_project.project_id)] == alert_projects[str(optional_key_project.project_id)]
         assert len(client.statements) == 5
         # A failed alert read is deferred until the warehouse admission snapshot is refreshed.
-        original_sources = ManagedAuthStore.list_project_allowance_sources
+        original_sources = ManagedAuthStore.list_project_policies
         original_token = redshift_export_job.read_alert_publication_token
         alert_body = s3.get_object(Bucket=bucket, Key=alert_key)["Body"].read()
         admission = SpendSnapshot.model_validate_json(
@@ -483,10 +485,10 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         )
         calls = []
 
-        async def read_sources(self, as_of):
+        async def read_sources(self):
             assert calls == ["token"]
             calls.append("sources")
-            return await original_sources(self, as_of)
+            return await original_sources(self)
 
         token_error = RuntimeError("alert token read failed")
 
@@ -497,7 +499,7 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         with (
             patch("model_gateway.usage_ledger.redshift_export_job.read_alert_publication_token",
                   side_effect=fail_token),
-            patch.object(ManagedAuthStore, "list_project_allowance_sources", read_sources),
+            patch.object(ManagedAuthStore, "list_project_policies", read_sources),
         ):
             with pytest.raises(RuntimeError) as captured:
                 await asyncio.to_thread(publish, now, idle=True)
@@ -534,7 +536,7 @@ async def test_managed_fact_spend_publishes_and_refreshes_query_decision(caplog)
         with (
             patch("model_gateway.usage_ledger.redshift_export_job.read_alert_publication_token",
                   side_effect=read_token),
-            patch.object(ManagedAuthStore, "list_project_allowance_sources", read_sources),
+            patch.object(ManagedAuthStore, "list_project_policies", read_sources),
             patch.object(ManagedAuthStore, "list_project_alert_identities", fail_identities),
         ):
             with pytest.raises(RuntimeError) as captured:

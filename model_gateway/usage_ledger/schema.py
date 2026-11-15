@@ -48,7 +48,9 @@ _EMAIL_RE: Final = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 REQUEST_COUNT_FIELD: Final = "request_count"
 ERROR_COUNT_FIELD: Final = "error_count"
 COST_USD_FIELD: Final = "cost_usd"
-NUMERIC_LEDGER_FIELDS: Final = (
+STANDARD_COST_USD_FIELD: Final = "standard_cost_usd"
+COST_FIELDS: Final = (COST_USD_FIELD, STANDARD_COST_USD_FIELD)
+_USAGE_FIELDS: Final = (
     "input_tokens",
     "output_tokens",
     "reasoning_tokens",
@@ -57,9 +59,15 @@ NUMERIC_LEDGER_FIELDS: Final = (
     "total_input_tokens",
     "total_output_tokens",
     "duration_seconds",
-    COST_USD_FIELD,
 )
-NUMBER_FIELDS: Final = (REQUEST_COUNT_FIELD, ERROR_COUNT_FIELD, *NUMERIC_LEDGER_FIELDS)
+# Standard cost stays out of index projections and CLI aggregate totals.
+NUMERIC_LEDGER_FIELDS: Final = (*_USAGE_FIELDS, COST_USD_FIELD)
+NUMBER_FIELDS: Final = (
+    REQUEST_COUNT_FIELD,
+    ERROR_COUNT_FIELD,
+    *_USAGE_FIELDS,
+    *COST_FIELDS,
+)
 COST_USD_DECIMAL_PLACES: Final = 12
 COST_USD_DECIMAL_QUANTUM: Final = Decimal("0.000000000001")
 

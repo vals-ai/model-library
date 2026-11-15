@@ -15,7 +15,6 @@ from model_library.base import (
     TextInput,
     ToolDefinition,
 )
-from model_gateway.history import sign_history
 from model_gateway.model_helpers import require_raw_input_secret
 from model_gateway.types import QueryRequest, query_result_response_body
 from model_library.base.gateway import GatewayLLM, _parse_query_result
@@ -113,7 +112,7 @@ async def test_anthropic_computer_call_replays_signed_history() -> None:
 
     response = query_result_response_body(
         result,
-        signed_history=sign_history(result.history, secret=b"test-secret"),
+        signed_history=LLM.serialize_input(result.history, secret=b"test-secret"),
         failed=False,
     )
     client_result = _parse_query_result(response, schema_model=None)

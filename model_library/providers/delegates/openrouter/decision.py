@@ -1,31 +1,27 @@
-"""Typed-decision models, served through OpenRouter's Decisions API (Jev, Mercury Decide, Microsoft-Decision-1),
-OpenAI's (``decision_api: openai``) or Perplexity's (``decision_api: perplexity``).
+"""Typed-decision models (the ``decision`` provider), served by the Decisions API their ``decision_api`` names.
 
 A typed-decision model takes a ``state`` and typed ``questions`` and returns a typed answer for each: ``choice`` (one
 option plus a probability for every option), ``noul`` (a probability) or ``score`` (a value on an ordered scale). It
 does not generate text.
-
-This is an OpenRouter model whose input is a decision request and whose output is the answers. It reuses
-``OpenRouterModel``'s client, key and retries and posts to the Decisions endpoint itself; the model sent is the
-registry's ``provider_endpoint``. For OpenAI it points that client at OpenAI with ``OPENAI_API_KEY`` and translates the
-request and answers, so every decision model takes and returns the same shapes. Perplexity takes OpenRouter's shapes, so
-only the client's URL and key change.
 
 The query's single text input *is* the decision request, as JSON::
 
     {"state": "...", "questions": {"verdict": {"type": "choice", "instructions": "...", "criteria": {"a": "...", ...}}}}
 
 The result's ``output_text`` is the answers object as JSON (``{"answers": {...}}``). Use ``decision_request`` and
-``parse_decision_output`` to build and read them.
+``parse_decision_output`` to build and read them. Every API takes and returns OpenRouter's shapes; ``DECISION_APIS``
+holds how each one differs. ``DecisionModel`` reuses ``OpenRouterModel``'s client, key and retries, points the client
+at its API and posts to ``/decisions`` itself; the model sent is the registry's ``provider_endpoint``.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any, Literal, Sequence, cast
 
-from openai import APIStatusError
+from openai import APIStatusError, Omit
 from pydantic import BaseModel, SecretStr
 from typing_extensions import override
 
@@ -45,21 +41,48 @@ from model_library.register_models import register_provider
 
 from .openrouter import OpenRouterConfig, OpenRouterModel
 
-# OpenRouter marks its Decisions API "alpha", so its path may change. Absolute, because the client's base URL is /v1.
-DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
-
-OPENAI_URL = "https://api.openai.com/v1"
-# The Decisions APIs other than OpenRouter's: the base URL the client is pointed at and the setting holding its key.
-DIRECT_APIS = {
-    "openai": (OPENAI_URL, "OPENAI_API_KEY"),
-    "perplexity": ("https://api.perplexity.ai/v1", "PERPLEXITY_API_KEY"),
-}
-
 QUESTION_TYPES = ("choice", "noul", "score")
 
 
+@dataclass(frozen=True)
+class DecisionAPI:
+    """Where one Decisions API serves ``/decisions``, the setting holding its key, and how it differs from OpenRouter's."""
+
+    base_url: str
+    key_setting: str
+    # Sends ``state`` as ``input``, as JSON text when it is not a string.
+    state_as_input: bool = False
+    # Takes and returns OpenAI's question and answer shapes (``_openai_question``, ``_openrouter_answer``).
+    openai_shapes: bool = False
+    # Sends the key in this header instead of as a bearer token.
+    key_header: str | None = None
+    # Prefix of the usage token counts.
+    usage_prefix: str = ""
+
+
+DECISION_APIS = {
+    # OpenRouter marks its Decisions API "alpha", so its path may change.
+    "openrouter": DecisionAPI("https://openrouter.ai/api/alpha", "OPENROUTER_API_KEY"),
+    "openai": DecisionAPI(
+        "https://api.openai.com/v1",
+        "OPENAI_API_KEY",
+        state_as_input=True,
+        openai_shapes=True,
+    ),
+    "perplexity": DecisionAPI("https://api.perplexity.ai/v1", "PERPLEXITY_API_KEY"),
+    # Google rejects an API key sent as a bearer token.
+    "google": DecisionAPI(
+        "https://generativelanguage.googleapis.com/v1beta",
+        "GOOGLE_API_KEY",
+        state_as_input=True,
+        key_header="x-goog-api-key",
+        usage_prefix="total_",
+    ),
+}
+
+
 class DecisionConfig(OpenRouterConfig):
-    decision_api: Literal["openrouter", "openai", "perplexity"] = "openrouter"
+    decision_api: Literal["openrouter", "openai", "perplexity", "google"] = "openrouter"
 
 
 class DecisionError(NoRetryException):
@@ -85,9 +108,9 @@ class DecisionRequestRejected(NoRetryException):
         super().__init__(str(upstream))
         self.status_code = upstream.status_code
         self.exception_type = type(upstream).__name__
-        code, kind = getattr(upstream, "code", None), getattr(upstream, "type", None)
-        self.code = code if isinstance(code, str) else None
-        self.type = kind if isinstance(kind, str) else None
+        # The SDK copies these from the error body, where an API may put a number.
+        self.code = upstream.code if isinstance(upstream.code, str) else None
+        self.type = upstream.type if isinstance(upstream.type, str) else None
 
     @override
     def to_provider_error(self) -> ProviderErrorPayload:
@@ -111,6 +134,77 @@ def parse_decision_output(output_text: str) -> dict[str, dict[str, Any]]:
     if answers is None:
         raise DecisionError("decision output has no answers object")
     return cast(dict[str, dict[str, Any]], answers)
+
+
+def reject_query_options(
+    tools: list[ToolDefinition], output_schema: object, kwargs: dict[str, object]
+) -> None:
+    if tools or output_schema is not None or kwargs:
+        raise DecisionError(
+            "typed-decision models take only a decision request: no tools, output schema or query options"
+        )
+
+
+def parse_decision_request(input: Sequence[InputItem]) -> dict[str, Any]:
+    """``{"state", "questions"}`` from the query's single text input, validated. Shared by every typed-decision
+    provider."""
+    if len(input) != 1 or not isinstance(input[0], TextInput):
+        raise DecisionError(
+            "a typed-decision query takes exactly one text input holding the decision request as JSON"
+        )
+    try:
+        request = _obj(json.loads(input[0].text))
+    except json.JSONDecodeError as exc:
+        raise DecisionError(f"the decision request is not valid JSON: {exc}") from exc
+    if request is None:
+        raise DecisionError("the decision request must be a JSON object")
+    extra = request.keys() - {"state", "questions"}
+    if extra:
+        raise DecisionError(
+            f"unexpected decision request fields {sorted(extra)}; "
+            "only 'state' and 'questions' are allowed (the model comes from the registry)"
+        )
+    if "state" not in request:
+        raise DecisionError("the decision request has no 'state'")
+    questions = _obj(request.get("questions"))
+    if not questions:
+        raise DecisionError("the decision request needs a non-empty 'questions' object")
+    for name, question in questions.items():
+        question = _obj(question)
+        if question is None or question.get("type") not in QUESTION_TYPES:
+            raise DecisionError(
+                f"question {name!r} needs a 'type' of {list(QUESTION_TYPES)}"
+            )
+    try:
+        # A lone surrogate or NaN would otherwise escape from the HTTP client as a raw exception.
+        json.dumps(request, ensure_ascii=False, allow_nan=False).encode("utf-8")
+    except ValueError as exc:
+        raise DecisionError(
+            f"the decision request cannot be sent as JSON: {exc}"
+        ) from exc
+    return request
+
+
+def state_text(state: object) -> str:
+    """``state`` as text: itself when it is a string, else its JSON."""
+    return state if isinstance(state, str) else json.dumps(state)
+
+
+def decision_result(
+    answers: dict[str, dict[str, Any]], metadata: QueryResultMetadata
+) -> QueryResult:
+    """The result every typed-decision provider returns. A refusal is flagged, not raised, since the other questions
+    are still answered."""
+    refused = any(answer.get("type") == "refusal" for answer in answers.values())
+    return QueryResult(
+        output_text=json.dumps({"answers": answers}, separators=(",", ":")),
+        finish_reason=FinishReasonInfo(
+            reason=FinishReason.CONTENT_FILTER, raw="refusal"
+        )
+        if refused
+        else FinishReasonInfo(reason=FinishReason.STOP, raw="stop"),
+        metadata=metadata,
+    )
 
 
 def _openai_question(name: str, question: dict[str, Any]) -> dict[str, Any]:
@@ -166,7 +260,7 @@ def _openrouter_answer(answer: dict[str, Any]) -> dict[str, Any]:
 
 @register_provider("decision")
 class DecisionModel(OpenRouterModel):
-    # The key follows `decision_api` (OpenRouter's or OpenAI's), not one setting.
+    # The key follows `decision_api`, not one setting.
     api_key_setting = None
 
     provider_config = DecisionConfig()
@@ -178,73 +272,30 @@ class DecisionModel(OpenRouterModel):
         *,
         config: LLMConfig | None = None,
     ):
-        # The Decisions URL is absolute, so an endpoint override would be ignored while its key was still sent.
+        # The client always points at the Decisions API, so an endpoint override would be ignored while its key was sent.
         if config is not None and config.custom_endpoint is not None:
             raise DecisionError(
                 "typed-decision models always use their Decisions API; custom_endpoint is not supported"
             )
         # The parent writes its endpoint into the config it is given.
         config = config.model_copy() if config else LLMConfig()
-        if (
-            isinstance(config.provider_config, DecisionConfig)
-            and config.provider_config.decision_api in DIRECT_APIS
-        ):
-            config.custom_endpoint, key = DIRECT_APIS[
-                config.provider_config.decision_api
-            ]
-            config.custom_api_key = config.custom_api_key or SecretStr(
-                getattr(model_library_settings, key)
-            )
-        else:
-            config.custom_api_key = config.custom_api_key or SecretStr(
-                model_library_settings.OPENROUTER_API_KEY
-            )
+        provider_config = (
+            config.provider_config
+            if isinstance(config.provider_config, DecisionConfig)
+            else self.provider_config
+        )
+        self.api = DECISION_APIS[provider_config.decision_api]
+        config.custom_endpoint = self.api.base_url
+        config.custom_api_key = config.custom_api_key or SecretStr(
+            getattr(model_library_settings, self.api.key_setting)
+        )
         super().__init__(model_name, provider, config=config)
 
     @override
     async def parse_input(
-        self, input: Sequence[InputItem], **kwargs: Any
+        self, input: Sequence[InputItem], **kwargs: object
     ) -> dict[str, Any]:
-        """Turn the query input into ``{"state", "questions"}``, validating the shape."""
-        if len(input) != 1 or not isinstance(input[0], TextInput):
-            raise DecisionError(
-                "a typed-decision query takes exactly one text input holding the decision request as JSON"
-            )
-        try:
-            request = _obj(json.loads(input[0].text))
-        except json.JSONDecodeError as exc:
-            raise DecisionError(
-                f"the decision request is not valid JSON: {exc}"
-            ) from exc
-        if request is None:
-            raise DecisionError("the decision request must be a JSON object")
-        extra = request.keys() - {"state", "questions"}
-        if extra:
-            raise DecisionError(
-                f"unexpected decision request fields {sorted(extra)}; "
-                "only 'state' and 'questions' are allowed (the model comes from the registry)"
-            )
-        if "state" not in request:
-            raise DecisionError("the decision request has no 'state'")
-        questions = _obj(request.get("questions"))
-        if not questions:
-            raise DecisionError(
-                "the decision request needs a non-empty 'questions' object"
-            )
-        for name, question in questions.items():
-            question = _obj(question)
-            if question is None or question.get("type") not in QUESTION_TYPES:
-                raise DecisionError(
-                    f"question {name!r} needs a 'type' of {list(QUESTION_TYPES)}"
-                )
-        try:
-            # A lone surrogate or NaN would otherwise escape from the HTTP client as a raw exception.
-            json.dumps(request, ensure_ascii=False, allow_nan=False).encode("utf-8")
-        except ValueError as exc:
-            raise DecisionError(
-                f"the decision request cannot be sent as JSON: {exc}"
-            ) from exc
-        return request
+        return parse_decision_request(input)
 
     @override
     async def build_body(
@@ -255,14 +306,25 @@ class DecisionModel(OpenRouterModel):
         output_schema: dict[str, Any] | type[BaseModel] | None = None,
         **kwargs: object,
     ) -> dict[str, Any]:
-        if tools or output_schema is not None or kwargs:
-            raise DecisionError(
-                "typed-decision models take only a decision request: no tools, output schema or query options"
-            )
+        """The request in OpenRouter's shape: the model, the decision request and any pinned hosts."""
+        reject_query_options(tools, output_schema, kwargs)
         body = {"model": self.model_name, **await self.parse_input(input)}
         if self.provider_config.openrouter_provider_only:
             body["provider"] = {"only": self.provider_config.openrouter_provider_only}
         return body
+
+    def _wire_body(self, body: dict[str, Any]) -> dict[str, Any]:
+        """``body`` in this API's request shape."""
+        if not self.api.state_as_input:
+            return body
+        questions = body["questions"]
+        return {
+            "model": body["model"],
+            "input": state_text(body["state"]),
+            "questions": [_openai_question(name, q) for name, q in questions.items()]
+            if self.api.openai_shapes
+            else questions,
+        }
 
     @override
     async def _query_impl(
@@ -277,21 +339,21 @@ class DecisionModel(OpenRouterModel):
         body = await self.build_body(
             input, tools=tools, output_schema=output_schema, **kwargs
         )
-        api = self.provider_config.decision_api
-        via_openai = api == "openai"
-        url, sent = (DECISIONS_URL if api == "openrouter" else "/decisions"), body
-        if via_openai:
-            state = body["state"]
-            sent = {
-                "model": body["model"],
-                "input": state if isinstance(state, str) else json.dumps(state),
-                "questions": [
-                    _openai_question(name, question)
-                    for name, question in body["questions"].items()
-                ],
-            }
+        client = self.get_client()
+        headers: dict[str, str | Omit] = (
+            {"Authorization": Omit(), self.api.key_header: client.api_key}
+            if self.api.key_header
+            else {}
+        )
         try:
-            payload = _obj(await self.get_client().post(url, body=sent, cast_to=object))
+            payload = _obj(
+                await client.post(
+                    "/decisions",
+                    body=self._wire_body(body),
+                    cast_to=object,
+                    options={"headers": headers},
+                )
+            )
         except APIStatusError as exc:
             if 400 <= exc.status_code < 500 and exc.status_code not in RETRIABLE_4XX:
                 raise DecisionRequestRejected(exc) from exc
@@ -300,7 +362,7 @@ class DecisionModel(OpenRouterModel):
             raise DecisionError("the Decisions API returned a non-object response")
 
         answers = payload.get("answers")
-        if via_openai and isinstance(answers, list):
+        if self.api.openai_shapes and isinstance(answers, list):
             answers = {
                 answer.get("name"): _openrouter_answer(answer)
                 for answer in cast(list[dict[str, Any]], answers)
@@ -319,19 +381,17 @@ class DecisionModel(OpenRouterModel):
                 f"the Decisions API returned no answer for questions {missing}"
             )
 
-        # Answers still come back for the other questions, so the refusal is flagged rather than raised.
-        refused = any(answer.get("type") == "refusal" for answer in answers.values())
-
         usage = _obj(payload.get("usage")) or {}
-        in_tokens, out_tokens = usage.get("input_tokens"), usage.get("output_tokens")
+        in_tokens = usage.get(f"{self.api.usage_prefix}input_tokens")
+        out_tokens = usage.get(f"{self.api.usage_prefix}output_tokens")
         if not isinstance(in_tokens, int) or not isinstance(out_tokens, int):
             # A missing count would silently price the call at $0.
             raise DecisionError(
                 "the Decisions API returned no token usage; refusing to report a $0 cost"
             )
 
-        # What OpenRouter says it billed and which provider served the call, kept for reconciliation (OpenAI and
-        # Perplexity report neither). The result is billed at the registry price.
+        # OpenRouter's bill supplies effective_cost; cost remains the registry estimate.
+        # Keep its serving provider for reconciliation; the other APIs report neither field.
         extra = {
             f"upstream_{key}": value
             for key, value in (
@@ -341,14 +401,9 @@ class DecisionModel(OpenRouterModel):
             if value is not None
         }
         served = payload.get("model")
-        return QueryResult(
-            output_text=json.dumps({"answers": answers}, separators=(",", ":")),
-            finish_reason=FinishReasonInfo(
-                reason=FinishReason.CONTENT_FILTER, raw="refusal"
-            )
-            if refused
-            else FinishReasonInfo(reason=FinishReason.STOP, raw="stop"),
-            metadata=QueryResultMetadata(
+        return decision_result(
+            cast(dict[str, dict[str, Any]], answers),
+            QueryResultMetadata(
                 in_tokens=in_tokens,
                 out_tokens=out_tokens,
                 served_model=served if isinstance(served, str) else None,

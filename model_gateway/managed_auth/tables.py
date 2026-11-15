@@ -44,25 +44,13 @@ project_policies = Table(
     Column("project_id", Uuid(), primary_key=True),
     Column("project_organization", String, nullable=False),
     Column("project_environment", String, nullable=False),
-    Column("period", String, nullable=False),
-    Column("base_limit_usd", Numeric(), nullable=False),
-    Column("total_limit_usd", Numeric()),
-    Column("total_started_at", DateTime(timezone=True)),
+    Column("total_limit_usd", Numeric(), nullable=False),
+    Column("total_started_at", DateTime(timezone=True), nullable=False),
     Column("revision", Integer, nullable=False),
     Column("created_at", DateTime(timezone=True), nullable=False),
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("budget_reason", String),
     Column("archived_at", DateTime(timezone=True)),
-    CheckConstraint(
-        "(period IS NULL AND base_limit_usd IS NULL) OR "
-        "(period IS NOT NULL AND base_limit_usd IS NOT NULL AND "
-        "period IN ('daily', 'weekly', 'monthly') AND base_limit_usd >= 0)",
-        name="project_policy_cap_pair",
-    ),
-    CheckConstraint(
-        "period IN ('daily', 'weekly', 'monthly') AND base_limit_usd > 0",
-        name="project_policy_positive_base",
-    ),
     CheckConstraint(
         "total_limit_usd IS NULL OR total_limit_usd > 0",
         name="project_policy_positive_total",
@@ -83,8 +71,6 @@ project_limit_requests = Table(
     Column("increase_usd", Numeric(), nullable=False),
     Column("target_total_usd", Numeric()),
     Column("source_revision", Integer),
-    Column("period_start", DateTime(timezone=True)),
-    Column("period_end", DateTime(timezone=True)),
     Column("reason", String, nullable=False),
     Column("creator_issuer", String, nullable=False),
     Column("creator_subject", String, nullable=False),
@@ -98,13 +84,6 @@ project_limit_requests = Table(
     Column("cancellation_reason", String),
     Column("created_at", DateTime(timezone=True), nullable=False),
     CheckConstraint("increase_usd > 0", name="limit_request_amount"),
-    CheckConstraint(
-        "(kind = 'permanent' AND period_start IS NULL AND period_end IS NULL) OR "
-        "(kind = 'temporary' AND ("
-        "(status = 'approved' AND period_start IS NOT NULL AND period_end IS NOT NULL AND period_start < period_end) OR "
-        "(status IN ('pending', 'denied') AND period_start IS NULL AND period_end IS NULL)))",
-        name="limit_request_period",
-    ),
     CheckConstraint(
         "(status = 'pending' AND decided_at IS NULL AND decided_by_issuer IS NULL AND decided_by_subject IS NULL) OR "
         "(status IN ('approved', 'denied') AND decided_at IS NOT NULL AND decided_by_issuer IS NOT NULL AND decided_by_subject IS NOT NULL)",

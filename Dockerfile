@@ -30,4 +30,4 @@ COPY model_gateway/ model_gateway/
 ENV PATH="/app/.venv/bin:$PATH"
 EXPOSE 8000
 
-CMD ["sh", "-c", "exec uvicorn model_gateway.main:create_app --factory --host 0.0.0.0 --port 8000 --workers ${GATEWAY_UVICORN_WORKERS:-2} --loop ${GATEWAY_UVICORN_LOOP:-auto} --http ${GATEWAY_UVICORN_HTTP_PROTOCOL:-auto} --timeout-keep-alive ${GATEWAY_UVICORN_KEEPALIVE_TIMEOUT_SECONDS:-75} --timeout-graceful-shutdown ${GATEWAY_UVICORN_GRACEFUL_SHUTDOWN_SECONDS:-120}"]
+CMD ["sh", "-c", "exec uvicorn model_gateway.app:create_app --factory --host 0.0.0.0 --port 8000 --workers ${GATEWAY_UVICORN_WORKERS:-2} --loop ${GATEWAY_UVICORN_LOOP:-auto} --http ${GATEWAY_UVICORN_HTTP_PROTOCOL:-auto} --timeout-keep-alive ${GATEWAY_UVICORN_KEEPALIVE_TIMEOUT_SECONDS:-75} --timeout-graceful-shutdown ${GATEWAY_UVICORN_GRACEFUL_SHUTDOWN_SECONDS:-120}"]

@@ -195,7 +195,7 @@ async def test_deepgram_nova_maps_metadata_duration_to_billing() -> None:
 
     assert result.text == "hello"
     assert result.metadata.billable_duration_seconds == 0.75
-    assert result.metadata.cost_usd == pytest.approx(0.0048 * 0.75 / 60)
+    assert result.metadata.cost_usd == pytest.approx(0.0077 * 0.75 / 60)
 
 
 async def test_deepgram_nova_requires_terminal_metadata() -> None:

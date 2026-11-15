@@ -1,6 +1,7 @@
 import logging
 from typing import Any, Literal, Sequence, cast
 
+from openai.types.responses import ResponseReasoningItem
 from pydantic import BaseModel, SecretStr
 from typing_extensions import override
 
@@ -11,6 +12,7 @@ from model_library.base import (
     LLMConfig,
     ProviderConfig,
     QueryResult,
+    RawResponse,
     ToolDefinition,
 )
 from model_library.exceptions import (
@@ -95,6 +97,21 @@ class RampModel(DelegateOnly, RouterLLM):
                 "X-Gateway-Client": client,
                 SWITCHYARD_SESSION_HEADERS[client]: session_id,
             }
+        # Under zero data retention Ramp can reject these ids as stored-item references
+        input = [
+            RawResponse(
+                response=[
+                    output.model_dump(exclude_none=True, exclude={"id", "status"})
+                    if isinstance(output, ResponseReasoningItem)
+                    and not output.encrypted_content
+                    else output
+                    for output in item.response
+                ]
+            )
+            if isinstance(item, RawResponse)
+            else item
+            for item in input
+        ]
         try:
             return await super()._query_impl(
                 input,

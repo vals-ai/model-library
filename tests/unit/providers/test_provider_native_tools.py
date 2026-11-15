@@ -1,4 +1,4 @@
-"""Tests for built-in provider web search (OpenAI and xAI Responses web_search_call, Anthropic web_search_tool_result, Google grounding) handling."""
+"""Tests for provider-native tool handling across OpenAI, xAI, Anthropic, and Google."""
 
 from typing import Any, Literal
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -20,6 +20,7 @@ from openai.types.responses import (
     ResponseOutputMessage,
     ResponseOutputText,
 )
+from openai.types.responses.response import ToolUsage
 from openai.types.responses.response_function_web_search import (
     ActionSearch,
     ActionSearchSource,
@@ -179,6 +180,35 @@ async def test_compaction_item_maps_to_provider_tool_event():
 
     compactions = [e for e in result.provider_tool_events if e.type == "compaction"]
     assert [(e.id, e.sequence) for e in compactions] == [("cmp_1", 0)]
+    assert result.output_text == "The answer is 42."
+
+
+async def test_code_interpreter_call_maps_to_provider_tool_event():
+    from openai.types.responses.response_code_interpreter_tool_call import (
+        OutputLogs,
+        ResponseCodeInterpreterToolCall,
+    )
+
+    response = _make_web_search_response()
+    response.output.insert(
+        1,
+        ResponseCodeInterpreterToolCall(
+            id="ci_1",
+            type="code_interpreter_call",
+            status="completed",
+            code="print(1 + 1)",
+            container_id="cntr_1",
+            outputs=[OutputLogs(type="logs", logs="2\n")],
+        ),
+    )
+
+    result = await _parse_response(response)
+
+    [event] = [e for e in result.provider_tool_events if e.type == "code_interpreter_call"]
+    assert event.name == "code_interpreter"
+    assert event.input == {"code": "print(1 + 1)", "container_id": "cntr_1"}
+    assert event.output == [{"type": "logs", "logs": "2\n"}]
+    assert event.sequence == 1
     assert result.output_text == "The answer is 42."
 
 
@@ -1131,15 +1161,22 @@ def _web_search_item(action: object, item_id: str) -> ResponseFunctionWebSearch:
 
 async def test_openai_web_search_requests_uses_tool_usage_counter():
     """OpenAI's `tool_usage.web_search.num_requests` wins over the item count."""
+    tool_usage = {
+        "image_gen": {
+            "input_tokens": 0,
+            "input_tokens_details": {"image_tokens": 0, "text_tokens": 0},
+            "output_tokens": 0,
+            "total_tokens": 0,
+        },
+        "web_search": {"num_requests": 4},
+    }
     response = _response_with_items(
         [_web_search_item(ActionSearch(type="search", query="q"), "ws_1")],
-        tool_usage={"web_search": {"num_requests": 4}},
+        tool_usage=ToolUsage.model_validate(tool_usage),
     )
     result = await _parse_response(response)
     assert result.metadata.web_search_requests == 4
-    assert result.metadata.extra["openai_tool_usage"] == {
-        "web_search": {"num_requests": 4}
-    }
+    assert result.metadata.extra["openai_tool_usage"] == tool_usage
 
 
 async def test_openai_web_search_requests_is_none_when_counter_is_zero():

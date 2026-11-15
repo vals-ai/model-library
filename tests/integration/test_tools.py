@@ -4,6 +4,7 @@ Integration tests for provider tool-calling.
 
 from model_library.base import (
     RawResponse,
+    SystemInput,
     TextInput,
     ToolBody,
     ToolDefinition,
@@ -80,9 +81,11 @@ async def test_fireworks_streaming_tools_roundtrip():
 
     # Test 1: Model should make a tool call
     result1 = await model.query(
-        [TextInput(text="What is the weather in Tokyo right now?")],
+        [
+            SystemInput(text="You must make exactly 0 or 1 tool calls per answer."),
+            TextInput(text="What is the weather in Tokyo right now?"),
+        ],
         tools=tools,
-        system_prompt="You must make exactly 0 or 1 tool calls per answer.",
     )
 
     # Verify tool call was made
@@ -91,7 +94,6 @@ async def test_fireworks_streaming_tools_roundtrip():
     assert "Tokyo" in result1.tool_calls[0].args
 
     # Verify history contains the full conversation and assistant message.
-    # The system prompt is normalized into a SystemInput and included in history.
     assert len(result1.history) >= 2, (
         "Expected history to contain input and assistant message"
     )

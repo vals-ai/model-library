@@ -97,7 +97,7 @@ def test_observability_logger_emits_info_under_uvicorn_default_config(
         for name in logger_names
     }
     try:
-        Config("model_gateway.main:create_app", factory=True).configure_logging()
+        Config("model_gateway.app:create_app", factory=True).configure_logging()
         log_gateway_event("gateway.test.visible", safe_count=1)
         captured = capsys.readouterr()
     finally:

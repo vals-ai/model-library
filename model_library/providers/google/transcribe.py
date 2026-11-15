@@ -52,7 +52,11 @@ def _usage(interaction: Interaction) -> NormalizedTranscriptionUsage | None:
 
 
 async def transcribe_interactions(
-    client: Client, model_name: str, request: TranscriptionRequest
+    client: Client,
+    model_name: str,
+    request: TranscriptionRequest,
+    *,
+    automatic_continuation: bool = False,
 ) -> TranscriptionResult:
     """Transcribe one complete audio file through the Interactions API."""
     audio_file = await client.aio.files.upload(
@@ -71,6 +75,7 @@ async def transcribe_interactions(
                         "mime_type": audio_file.mime_type or request.mime,
                     }
                 ],
+                automatic_continuation=automatic_continuation,
             ),
         )
         text = interaction.output_text

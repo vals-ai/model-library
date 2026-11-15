@@ -10,12 +10,14 @@ from anthropic import (
     transform_schema,
 )
 from anthropic.lib.credentials import WorkloadIdentityCredentials
-from anthropic.types.beta import BetaContentBlock, BetaMessage
+from anthropic.lib.middleware import BetaRefusalFallbackMiddleware
+from anthropic.types.beta import BetaContentBlock, BetaMessage, BetaUsage
 from anthropic.types.beta.beta_server_tool_usage import BetaServerToolUsage
 from anthropic.types.beta.beta_fallback_block import BetaFallbackBlock
 from anthropic.types.beta.beta_fallback_message_iteration_usage import (
     BetaFallbackMessageIterationUsage,
 )
+from anthropic.types.beta.beta_refusal_stop_details import BetaRefusalStopDetails
 from anthropic.types.beta.beta_message_iteration_usage import (
     BetaMessageIterationUsage,
 )
@@ -74,6 +76,7 @@ from model_library.rate_limits import (
 )
 from model_library.exceptions import (
     BadInputError,
+    ContentFilterError,
     ImmediateRetryException,
     ModelNoOutputError,
     NoMatchingToolCallError,
@@ -96,6 +99,7 @@ ANTHROPIC_FILES_BETA = "files-api-2025-04-14"
 ANTHROPIC_INTERLEAVED_THINKING_BETA = "interleaved-thinking-2025-05-14"
 ANTHROPIC_SERVER_SIDE_FALLBACK_BETA = "server-side-fallback-2026-06-01"
 ANTHROPIC_TASK_BUDGET_BETA = "task-budgets-2026-03-13"
+ANTHROPIC_THINKING_BINDING_BETA = "thinking-binding-controls-2026-08-01"
 COMPUTER_BETAS = {
     "computer_20250124": "computer-use-2025-01-24",
     "computer_20251124": "computer-use-2025-11-24",
@@ -121,7 +125,7 @@ def _computer_betas(body: dict[str, Any]) -> list[str]:
 def _strip_fallback_blocks(
     messages: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Drop `fallback` blocks, which only the beta messages endpoint accepts."""
+    """Drop `fallback` blocks, which the API accepts only under the server-side fallback beta."""
     stripped: list[dict[str, Any]] = []
     for message in messages:
         content: Any = message.get("content")
@@ -136,6 +140,87 @@ def _strip_fallback_blocks(
             }
         stripped.append(message)
     return stripped
+
+
+# Anthropic bills a refusal before any output only in these categories; mid-stream refusals
+# are always billed.
+BILLED_PRE_OUTPUT_REFUSALS = frozenset({"bio", "frontier_llm", "reasoning_extraction"})
+
+
+def _cache_write_1h_tokens(
+    usage: BetaUsage | BetaMessageIterationUsage | BetaFallbackMessageIterationUsage,
+    one_hour: bool,
+) -> int | None:
+    """Server-tool loops report writes beyond the 5m/1h split; bill them at the requested ttl."""
+    creation = usage.cache_creation
+    if creation is None:
+        return None
+    if one_hour:
+        return (
+            usage.cache_creation_input_tokens or 0
+        ) - creation.ephemeral_5m_input_tokens
+    return creation.ephemeral_1h_input_tokens
+
+
+def _hop_usage(
+    usage: BetaUsage | BetaMessageIterationUsage | BetaFallbackMessageIterationUsage,
+    one_hour: bool,
+) -> QueryResultMetadata:
+    return QueryResultMetadata(
+        in_tokens=usage.input_tokens,
+        out_tokens=usage.output_tokens,
+        cache_read_tokens=usage.cache_read_input_tokens,
+        cache_write_tokens=usage.cache_creation_input_tokens,
+        cache_write_1h_tokens=_cache_write_1h_tokens(usage, one_hour),
+    )
+
+
+def _pinned_fallback_model(
+    messages: list[dict[str, Any]], fallback_models: list[str]
+) -> str | None:
+    """The fallback model the conversation's latest `fallback` block handed off to."""
+    for message in reversed(messages):
+        content: Any = message.get("content")
+        if isinstance(content, list):
+            for block in reversed(cast(list[Any], content)):
+                if (
+                    isinstance(block, BetaFallbackBlock)
+                    and block.to.model in fallback_models
+                ):
+                    return block.to.model
+    return None
+
+
+_REFUSED_BLOCK_TYPES = frozenset(
+    {"thinking", "redacted_thinking", "connector_text", "tool_use"}
+)
+
+
+def _keep_served_output(message: BetaMessage) -> BetaMessage:
+    """Drop refused-model blocks before the last fallback block that Anthropic says not to echo."""
+    last_seam = max(
+        (
+            i
+            for i, block in enumerate(message.content)
+            if isinstance(block, BetaFallbackBlock)
+        ),
+        default=None,
+    )
+    if last_seam is None:
+        return message
+    refused = message.content[:last_seam]
+    result_ids: set[str] = {
+        getattr(block, "tool_use_id")
+        for block in refused
+        if hasattr(block, "tool_use_id")
+    }
+    kept = [
+        block
+        for block in refused
+        if block.type not in _REFUSED_BLOCK_TYPES
+        and not (block.type == "server_tool_use" and block.id not in result_ids)
+    ]
+    return message.model_copy(update={"content": [*kept, *message.content[last_seam:]]})
 
 
 def map_anthropic_finish_reason(
@@ -162,6 +247,18 @@ def map_anthropic_finish_reason(
     return FinishReasonInfo(reason=reason, raw=stop_reason)
 
 
+def refusal_stop_details(message: BetaMessage) -> dict[str, Any] | None:
+    """A refusal's `stop_details`, reporting only whether a fallback credit token came back."""
+    details = getattr(message, "stop_details", None)
+    if not isinstance(details, BetaRefusalStopDetails):
+        return None
+    return {
+        "category": details.category,
+        "recommended_model": details.recommended_model,
+        "has_fallback_credit_token": details.fallback_credit_token is not None,
+    }
+
+
 def parse_computer_screenshot(url: str) -> dict[str, Any]:
     if url[:5].lower() != "data:":
         return {
@@ -184,6 +281,7 @@ class AnthropicConfig(ProviderConfig):
     task_budget_tokens: int | None = None
     returns_thinking_truncated_turns: bool = False
     fallback_models: list[str] = Field(default_factory=list)
+    client_side_fallback: bool = False
     computer_tool_type: Literal["computer_20250124", "computer_20251124"] | None = None
     workload_identity: bool = False
 
@@ -340,6 +438,92 @@ class AnthropicModel(LLM):
         if self.model_name in fallback_models:
             raise ValueError("fallback_models must not include requested model")
         return fallback_models
+
+    def _route_fallback(
+        self,
+        body: dict[str, Any],
+        stream_kwargs: dict[str, Any],
+        betas: list[str],
+        client: AsyncAnthropic,
+    ) -> tuple[AsyncAnthropic, str | None]:
+        """Client-side: start on the pinned model, SDK middleware for the rest. Else server-side `fallbacks`."""
+        fallback_models = self._fallback_models_for_request()
+        # fallback models are validated on their own and may not accept between_tools
+        overrides: dict[str, Any] = (
+            {"thinking": {"type": "disabled"}}
+            if body.get("thinking") == BETWEEN_TOOLS_THINKING
+            else {}
+        )
+        if not self.provider_config.client_side_fallback:
+            if fallback_models:
+                betas.append(ANTHROPIC_SERVER_SIDE_FALLBACK_BETA)
+                stream_kwargs.setdefault("extra_body", {})["fallbacks"] = [
+                    {"model": model, **overrides} for model in fallback_models
+                ]
+            return client, None
+        # stateless stand-in for the SDK's BetaFallbackState: stay on the model the conversation fell back to
+        pinned_model = _pinned_fallback_model(body["messages"], fallback_models)
+        # the API takes `fallback` blocks only under the server-side beta; the middleware strips
+        # them too, but a turn pinned to the chain's last model runs without it
+        stream_kwargs["messages"] = _strip_fallback_blocks(body["messages"])
+        if pinned_model:
+            stream_kwargs.update(model=pinned_model, **overrides)
+            fallback_models = fallback_models[fallback_models.index(pinned_model) + 1 :]
+        if fallback_models:
+            # the middleware applies the between_tools override per hop itself
+            client = client.with_middleware(
+                BetaRefusalFallbackMiddleware(
+                    [{"model": model} for model in fallback_models]
+                )
+            )
+        return client, pinned_model
+
+    def _fallback_info(
+        self,
+        usage: BetaUsage,
+        fallback_blocks: list[BetaFallbackBlock],
+        pinned_model: str | None,
+    ) -> FallbackInfo | None:
+        """Per-hop fallback metadata; a pinned turn counts as served by the pinned model."""
+        one_hour = self.prompt_caching == "1h"
+        # one fallback block per declined hop, in hop order
+        blocks = iter(fallback_blocks)
+        hops: list[FallbackHop] = []
+        for iteration in usage.iterations or []:
+            if not isinstance(
+                iteration,
+                BetaMessageIterationUsage | BetaFallbackMessageIterationUsage,
+            ):
+                continue
+            served = iteration.type == "fallback_message"
+            block = None if served else next(blocks, None)
+            hops.append(
+                FallbackHop(
+                    model=f"anthropic/{iteration.model}",
+                    served=served,
+                    trigger=block.trigger.type if block else None,
+                    category=block.trigger.category if block else None,
+                    usage=_hop_usage(iteration, one_hour),
+                )
+            )
+        if pinned_model and not any(hop.served for hop in hops):
+            hops = [
+                FallbackHop(
+                    model=f"anthropic/{pinned_model}",
+                    served=True,
+                    usage=_hop_usage(usage, one_hour),
+                )
+            ]
+        served_hop = next((hop for hop in hops if hop.served), None)
+        return (
+            FallbackInfo(
+                requested_model=self._registry_key or f"anthropic/{self.model_name}",
+                served_model=served_hop.model,
+                hops=hops,
+            )
+            if served_hop
+            else None
+        )
 
     async def get_tool_call_ids(self, input: Sequence[InputItem]) -> list[str]:
         return [
@@ -790,6 +974,7 @@ class AnthropicModel(LLM):
             for key in sampling_fields:
                 if key in stream_kwargs:
                     request_extra_body.setdefault(key, stream_kwargs.pop(key))
+        pinned_model: str | None = None
         if is_anthropic_endpoint:
             betas = [ANTHROPIC_FILES_BETA, *_computer_betas(body)]
             if not self.provider_config.supports_auto_thinking:
@@ -800,22 +985,9 @@ class AnthropicModel(LLM):
             )
             if request_output_config.get("task_budget"):
                 betas.append(ANTHROPIC_TASK_BUDGET_BETA)
-
-            fallback_models = self._fallback_models_for_request()
-            if fallback_models:
-                betas.append(ANTHROPIC_SERVER_SIDE_FALLBACK_BETA)
-                if request_extra_body is None:
-                    request_extra_body = {}
-                    stream_kwargs["extra_body"] = request_extra_body
-                fallback_overrides: dict[str, Any] = {}
-                # fallback entries are validated against their own model, which
-                # may not accept between_tools
-                if body.get("thinking") == BETWEEN_TOOLS_THINKING:
-                    fallback_overrides["thinking"] = {"type": "disabled"}
-                request_extra_body["fallbacks"] = [
-                    {"model": model, **fallback_overrides} for model in fallback_models
-                ]
-
+            client, pinned_model = self._route_fallback(
+                body, stream_kwargs, betas, client
+            )
             stream_kwargs["betas"] = betas
 
         result_builder = QueryResultBuilder()
@@ -861,6 +1033,8 @@ class AnthropicModel(LLM):
                         if thinking_tokens is not None:
                             stream_thinking_tokens = thinking_tokens
                 message = await stream.get_final_message()
+            if self.provider_config.client_side_fallback:
+                message = _keep_served_output(message)
             query_logger.debug(f"Anthropic Response finished: {message.id}")
         except APIConnectionError:
             raise ImmediateRetryException("Failed to connect to Anthropic")
@@ -964,8 +1138,12 @@ class AnthropicModel(LLM):
             self.provider_config.returns_thinking_truncated_turns
             and truncated_inside_thinking
         )
+        stop_details = refusal_stop_details(message)
+        refused_without_output = False
         if not has_observed_output and not continuable:
-            handle_empty_response(mapped_finish_reason, {"raw": str(message)})
+            if mapped_finish_reason.reason != FinishReason.CONTENT_FILTER:
+                handle_empty_response(mapped_finish_reason, {"raw": str(message)})
+            refused_without_output = True
 
         # Anthropic rejects an assistant message whose final block is thinking, so a turn that
         # ran out of tokens mid-thought cannot be replayed in a later request.
@@ -992,46 +1170,9 @@ class AnthropicModel(LLM):
             or getattr(output_token_details, "thinking_tokens", None)
             or None
         )
-        # one fallback block per declined hop, in hop order
-        blocks = iter(fallback_blocks)
-        hops: list[FallbackHop] = []
-        for iteration in usage.iterations or []:
-            if not isinstance(
-                iteration,
-                BetaMessageIterationUsage | BetaFallbackMessageIterationUsage,
-            ):
-                continue
-            served = iteration.type == "fallback_message"
-            block = None if served else next(blocks, None)
-            hops.append(
-                FallbackHop(
-                    model=f"anthropic/{iteration.model}",
-                    served=served,
-                    trigger=block.trigger.type if block else None,
-                    category=block.trigger.category if block else None,
-                    usage=QueryResultMetadata(
-                        in_tokens=iteration.input_tokens,
-                        out_tokens=iteration.output_tokens,
-                        cache_read_tokens=iteration.cache_read_input_tokens,
-                        cache_write_tokens=iteration.cache_creation_input_tokens,
-                        cache_write_1h_tokens=iteration.cache_creation.ephemeral_1h_input_tokens
-                        if iteration.cache_creation
-                        else None,
-                    ),
-                )
-            )
-        served_hop = next((hop for hop in hops if hop.served), None)
-        fallback = (
-            FallbackInfo(
-                requested_model=self._registry_key or f"anthropic/{self.model_name}",
-                served_model=served_hop.model,
-                hops=hops,
-            )
-            if served_hop
-            else None
-        )
+        fallback = self._fallback_info(usage, fallback_blocks, pinned_model)
 
-        return result_builder.build(
+        result = result_builder.build(
             finish_reason=mapped_finish_reason,
             metadata=QueryResultMetadata(
                 # see _calculate_cost
@@ -1040,15 +1181,9 @@ class AnthropicModel(LLM):
                 reasoning_tokens=reasoning_tokens,
                 cache_read_tokens=usage.cache_read_input_tokens,
                 cache_write_tokens=usage.cache_creation_input_tokens,
-                # server-tool loops report writes beyond the split; bill them at the requested ttl
-                cache_write_1h_tokens=(
-                    (usage.cache_creation_input_tokens or 0)
-                    - usage.cache_creation.ephemeral_5m_input_tokens
-                    if self.prompt_caching == "1h"
-                    else usage.cache_creation.ephemeral_1h_input_tokens
-                )
-                if usage.cache_creation
-                else None,
+                cache_write_1h_tokens=_cache_write_1h_tokens(
+                    usage, self.prompt_caching == "1h"
+                ),
                 web_search_requests=(
                     server_tool_use.web_search_requests
                     if server_tool_use
@@ -1067,6 +1202,11 @@ class AnthropicModel(LLM):
                         if server_tool_use
                         else {}
                     ),
+                    **(
+                        {"anthropic_refusal_stop_details": stop_details}
+                        if stop_details
+                        else {}
+                    ),
                 },
             ),
             extras=QueryResultExtras(
@@ -1076,8 +1216,28 @@ class AnthropicModel(LLM):
             tool_calls=tool_calls,
             computer_calls=computer_calls,
             provider_tool_events=provider_tool_events,
-            history=[*input, RawResponse(response=message)],
+            # the credit token stays out of the replayable history the gateway returns
+            history=[
+                *input,
+                RawResponse(
+                    response=message.model_copy(update={"stop_details": None})
+                    if stop_details
+                    else message
+                ),
+            ],
         )
+        if refused_without_output:
+            raise ContentFilterError(
+                str(
+                    {
+                        "finish_reason": mapped_finish_reason.raw,
+                        "stop_details": stop_details,
+                        "response_id": message.id,
+                    }
+                ),
+                query_result=result,
+            )
+        return result
 
     @override
     async def get_rate_limit(self) -> RateLimit | None:
@@ -1205,13 +1365,31 @@ class AnthropicModel(LLM):
         batch: bool = False,
         bill_reasoning: bool = True,
     ) -> QueryResultCost | None:
-        """Web fetch is free."""
-        # a server-side fallback response is billed at the serving model's price
-        return await super()._calculate_cost(
+        """Web fetch is free. Billed declined fallback hops add their own model's charge."""
+        from model_library.registry_utils import compute_model_cost
+
+        # a fallback response is billed at the serving model's price
+        cost = await super()._calculate_cost(
             metadata,
             batch,
             bill_reasoning=False or metadata.reasoning_tokens is not None,
         )
+        if cost is None or metadata.fallback is None:
+            return cost
+        for hop in metadata.fallback.hops:
+            if hop.served or not (
+                hop.usage.out_tokens or hop.category in BILLED_PRE_OUTPUT_REFUSALS
+            ):
+                continue
+            hop_cost = compute_model_cost(
+                hop.model,
+                hop.usage,
+                batch=batch,
+                cache_ttl="1h" if self.prompt_caching == "1h" else "5m",
+            )
+            if hop_cost is not None:
+                cost += hop_cost
+        return cost
 
     @override
     def _web_search_per_1k(self) -> float:

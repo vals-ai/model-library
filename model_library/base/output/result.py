@@ -2,6 +2,7 @@
 --- OUTPUT ---
 """
 
+from datetime import datetime
 from enum import Enum
 from typing import Any, Literal, cast
 
@@ -237,14 +238,23 @@ class FallbackInfo(ValsModel):
 
 
 class QueryResultMetadata(ValsModel):
-    """Per-query token usage, cost, successful-attempt duration, and performance."""
+    """Per-query usage, standard and effective costs, duration, and performance."""
 
-    cost: QueryResultCost | None = None  # set post query
+    # Calculated cost at normal prices; None when unavailable.
+    cost: QueryResultCost | None = None
+    effective_cost: QueryResultCost | None = None
     duration_seconds: SecondsMetric | None = Field(
         default=None,
         description=(
             "Successful _query_impl attempt duration, rounded to milliseconds; "
             "excludes earlier failed attempts and retry waits."
+        ),
+    )
+    completed_at: datetime | None = Field(
+        default=None,
+        description=(
+            "UTC time the response finished, which picks time-of-day prices; "
+            "pass it to recompute_cost to reprice the call."
         ),
     )
     performance: QueryResultPerformance | CompressedQueryResultPerformance | None = (
@@ -298,6 +308,11 @@ class QueryResultMetadata(ValsModel):
         ):
             return performance
         return compress_query_result_performance(performance)
+
+    @field_serializer("completed_at")
+    def serialize_completed_at(self, completed_at: datetime | None) -> str | None:
+        # ISO string in python mode too, so callers can json.dump model_dump()
+        return completed_at.isoformat() if completed_at else None
 
     @property
     def default_duration_seconds(self) -> float:
@@ -358,6 +373,10 @@ class QueryResultMetadata(ValsModel):
             duration_seconds=self.default_duration_seconds
             + other.default_duration_seconds,
             cost=cast(QueryResultCost | None, add_optional(self.cost, other.cost)),
+            effective_cost=cast(
+                QueryResultCost | None,
+                add_optional(self.effective_cost, other.effective_cost),
+            ),
         )
 
 

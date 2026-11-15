@@ -22,6 +22,8 @@ mimo-models:
       top_p: 0.95
 
   xiaomi/mimo-v2.6-pro:
+    metadata:
+      available_for_everyone: false
     label: MiMo V2.6 Pro
     release_date: 2026-09-21
     supports:
@@ -39,6 +41,8 @@ mimo-models:
         read: 0.0036
 
   xiaomi/mimo-v2.6-flash:
+    metadata:
+      available_for_everyone: false
     label: MiMo V2.6 Flash
     release_date: 2026-09-21
     supports:
@@ -56,6 +60,8 @@ mimo-models:
         read: 0.0028
 
   xiaomi/mimo-v2-flash:
+    metadata:
+      available_for_everyone: false
     label: MiMo V2 Flash
     release_date: 2025-12-17
     properties:

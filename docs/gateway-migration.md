@@ -106,7 +106,7 @@ result = await model.query(
 
 Do not pass provider parameters such as `temperature`, `top_p`, `max_tokens`, `stop`, or provider SDK kwargs to `query()`. Put them in `LLMConfig` at model construction time. Gateway rejects unsupported extra query parameters before making the HTTP request.
 
-`logger` supplies the base logger for client-side query logs. `system_prompt` is still normalized into a leading system input, but new code should prefer explicit `SystemInput` items.
+`logger` supplies the base logger for client-side query logs. Pass a system prompt as a leading `SystemInput`; the `system_prompt` kwarg was removed and raises `TypeError`.
 
 ## Metadata and registry access
 

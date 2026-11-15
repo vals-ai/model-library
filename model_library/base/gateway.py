@@ -206,7 +206,7 @@ def _raise_for_gateway_error_envelope(data: dict[str, Any]) -> None:
     if exception_type == MaxContextWindowExceededError.__name__:
         raise MaxContextWindowExceededError(message) from gateway_error
     if is_content_filter_error(gateway_error):
-        raise ContentFilterError(message) from gateway_error
+        raise ContentFilterError(message, query_result=query_result) from gateway_error
     raise gateway_error
 
 
@@ -556,8 +556,8 @@ class GatewayLLM(LLM):
 
         base_logger = logger or self.instance_logger
         query_logger = scoped_query_logger(base_logger, ids, in_agent=in_agent)
-        current_input = normalize_query_input(input, kwargs=kwargs)
-        all_input = normalize_query_input(current_input, history=history)
+        all_input = normalize_query_input(input, history=history, kwargs=kwargs)
+        current_input = all_input[len(history) :]
 
         schema_model: type[BaseModel] | None = (
             output_schema

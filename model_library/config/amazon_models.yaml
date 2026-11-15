@@ -17,6 +17,8 @@ nova-models:
     documentation_url: https://www.aboutamazon.com/news/aws/amazon-nova-artificial-intelligence-bedrock-aws
 
   amazon/amazon.nova-pro-v1:0:
+    metadata:
+      available_for_everyone: false
     label: Nova Pro
     release_date: 2024-12-03
     documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html
@@ -34,6 +36,8 @@ nova-models:
         read: 0.2
 
   amazon/amazon.nova-micro-v1:0:
+    metadata:
+      available_for_everyone: false
     label: Nova Micro
     release_date: 2024-12-03
     documentation_url: https://docs.aws.amazon.com/nova/latest/userguide/what-is-nova.html

@@ -24,8 +24,8 @@ dependencies = [
   # providers
   "httpx2>=2.13.0,<3.0",
   "httpx-aiohttp[httpx2]>=0.2.0,<1.0",
-  "openai[aiohttp]>=3.35.1,<4.0",
-  "anthropic[aiohttp]>=2.0.0,<3.0",
+  "openai[aiohttp]>=3.41.0,<4.0",
+  "anthropic[aiohttp]>=2.3.0,<3.0",
   "mistralai>=3.5.0,<4.0",
   "ai21>=4.3.0,<5.0",
   "boto3>=1.43.106,<2.0",
@@ -37,6 +37,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Typed decisions on Tinker models (`decision_api: tinker`); pulls in torch and transformers.
+tinker = [
+  "tinker>=0.36.0,<1.0",
+  "tinker-cookbook>=0.5.9,<1.0",
+]
 voice = [
   "assemblyai>=1.6.1,<2.0",
   "cartesia>=4.2.0,<5.0",

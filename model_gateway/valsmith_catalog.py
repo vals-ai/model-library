@@ -32,6 +32,13 @@ VALSMITH_OVERRIDES: dict[str, ValSmithPolicy] = {
 }
 
 
+# ValSmith runs these labs' models through Fireworks, so it leaves out their
+# direct provider keys. Other registry consumers still list them.
+VALSMITH_FIREWORKS_ONLY_PROVIDERS = frozenset(
+    {"alibaba", "deepseek", "kimi", "minimax", "zai"}
+)
+
+
 def _with_override(key: str, inherited: ValSmithPolicy) -> ValSmithPolicy:
     override = VALSMITH_OVERRIDES.get(key)
     if override is None:
@@ -99,23 +106,27 @@ def _thinking_sort_key(value: str) -> tuple[int, str]:
 def _execution_signatures(config: ModelConfig) -> tuple[dict[str, Any], dict[str, Any]]:
     properties = config.properties.model_dump(mode="json")
     parameters = config.default_parameters.model_dump(mode="json")
+    supports = config.supports.model_dump(mode="json")
     execution = {
         "provider_name": config.provider_name,
         "provider_endpoint": config.provider_endpoint,
         "provider_properties": config.provider_properties.model_dump(mode="json"),
-        "supports": config.supports.model_dump(mode="json"),
+        "supports": supports,
         "properties": properties,
         "default_parameters": parameters,
     }
     without_reasoning = {
         **execution,
+        "supports": {
+            key: value for key, value in supports.items() if key != "temperature"
+        },
         "properties": {
             key: value for key, value in properties.items() if key != "reasoning_model"
         },
         "default_parameters": {
             key: value
             for key, value in parameters.items()
-            if key not in {"reasoning_effort", "compute_effort"}
+            if key not in {"reasoning_effort", "compute_effort", "temperature", "top_p"}
         },
     }
     return execution, without_reasoning
@@ -134,6 +145,8 @@ def valsmith_catalog(
         and not config.metadata.deprecated
         and not config.metadata.internal_only
         and config.metadata.available_for_everyone
+        and config.supports.tools
+        and key.split("/")[0] not in VALSMITH_FIREWORKS_ONLY_PROVIDERS
     }
     families = {key: key for key in models}
     effort = {key: _thinking_value(config) for key, config in models.items()}

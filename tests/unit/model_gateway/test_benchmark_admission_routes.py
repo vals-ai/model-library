@@ -163,7 +163,9 @@ def _control_lifecycle_settings(monkeypatch: pytest.MonkeyPatch) -> None:
         "HumanReconciler",
         MagicMock(return_value=SimpleNamespace(run=lambda stop: stop.wait())),
     )
-    monkeypatch.setattr(gateway_app, "ManagedAuthorityPublisher", QuietAuthorityPublisher)
+    monkeypatch.setattr(
+        gateway_app, "ManagedAuthorityPublisher", QuietAuthorityPublisher
+    )
 
 
 async def test_admission_routes_coordinate_through_shared_redis(

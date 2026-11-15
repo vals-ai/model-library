@@ -10,6 +10,8 @@ base-config:
 
 beam-models:
   reflection/Beam-1.0-501B-A23B:
+    metadata:
+      available_for_everyone: false
     label: Beam 1.0
     release_date: 2026-10-16
     supports:

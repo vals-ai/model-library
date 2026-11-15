@@ -61,7 +61,6 @@ from model_library.exceptions import (
     is_retriable_error,
 )
 from model_library.providers.openai import OpenAIConfig
-from model_gateway.history import sign_history
 import model_gateway.app as gateway_app
 from model_gateway import model_helpers
 
@@ -101,7 +100,7 @@ def _identity_with_compact_json_size(size: int) -> dict[str, str]:
 
 def _make_signed_blob(items, secret=b"test-secret"):
     """Build a signed history blob using the new JSON format."""
-    return sign_history(items, secret=secret)
+    return LLM.serialize_input(items, secret=secret)
 
 
 def _make_gateway():
@@ -805,7 +804,7 @@ async def test_gateway_query_logs_start_but_not_completion_on_parse_failure(capl
     assert not any(message.startswith("Query completed:") for message in messages)
 
 
-async def test_gateway_query_prepends_system_prompt_without_leaking_kwarg():
+async def test_gateway_query_sends_leading_system_input():
     llm = _make_gateway()
     response = httpx.Response(
         200,
@@ -822,10 +821,9 @@ async def test_gateway_query_prepends_system_prompt_without_leaking_kwarg():
         new_callable=AsyncMock,
         return_value=response,
     ) as mock_post:
-        await llm.query("hi", system_prompt="follow policy")
+        await llm.query([SystemInput(text="follow policy"), TextInput(text="hi")])
 
     body = _load_json(mock_post.call_args[1]["content"])
-    assert "system_prompt" not in body
     assert body["inputs"] == [
         {"kind": "system", "text": "follow policy"},
         {"kind": "text", "text": "hi"},
@@ -838,8 +836,11 @@ async def test_gateway_query_rejects_duplicate_system_input_before_network():
     with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
         with pytest.raises(ValueError, match="At most one SystemInput"):
             await llm.query(
-                [SystemInput(text="existing"), TextInput(text="hi")],
-                system_prompt="new",
+                [
+                    SystemInput(text="existing"),
+                    SystemInput(text="new"),
+                    TextInput(text="hi"),
+                ]
             )
 
     mock_post.assert_not_called()
@@ -1110,7 +1111,9 @@ async def test_gateway_token_count_forwards_request_and_returns_count():
         new_callable=AsyncMock,
         return_value=response,
     ) as mock_post:
-        tokens = await llm.count_tokens([TextInput(text="hi")], system_prompt="policy")
+        tokens = await llm.count_tokens(
+            [SystemInput(text="policy"), TextInput(text="hi")]
+        )
         await llm.init_token_retry(params)
         await llm.count_tokens([TextInput(text="hi")])
 
@@ -1369,7 +1372,9 @@ async def test_proxy_query_forwards_each_explicit_id(field: str, header: str):
     ):
         await llm.query([TextInput(text="hi")], **{field: f"{field}-explicit"})
 
-    assert _load_json(mock_post.call_args.kwargs["content"])[field] == f"{field}-explicit"
+    assert (
+        _load_json(mock_post.call_args.kwargs["content"])[field] == f"{field}-explicit"
+    )
     assert mock_post.call_args.kwargs["headers"][header] == f"{field}-explicit"
 
 
@@ -2141,8 +2146,6 @@ async def test_gateway_client_to_server_contract_with_mock_model():
     class Answer(BaseModel):
         value: int
 
-    from model_gateway import main
-
     class GatewaySettings:
         MODEL_GATEWAY_URL = "http://gateway.test"
         MODEL_GATEWAY_API_KEY = "integration-key"
@@ -2190,7 +2193,7 @@ async def test_gateway_client_to_server_contract_with_mock_model():
             model_helpers, "get_registry_model", side_effect=fake_get_registry_model
         ),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app),
             base_url="http://gateway.test",
@@ -2823,3 +2826,45 @@ async def test_concurrent_token_scopes_do_not_leak_between_tasks():
         "mgwt_b",
     ]
     assert current_gateway_token() is None
+
+
+async def test_gateway_content_filter_envelope_keeps_failed_result():
+    llm = _make_gateway()
+    stop_details = {
+        "category": "cyber",
+        "recommended_model": None,
+        "has_fallback_credit_token": False,
+    }
+    response = httpx.Response(
+        200,
+        json={
+            "error": {
+                "type": "ProviderError",
+                "message": "Model's content filter triggered",
+                "provider": "anthropic",
+                "exception_type": "ContentFilterError",
+            },
+            "result": {
+                "signed_history": "",
+                "metadata": {
+                    "in_tokens": 12,
+                    "out_tokens": 0,
+                    "extra": {"anthropic_refusal_stop_details": stop_details},
+                },
+            },
+        },
+    )
+
+    with patch(
+        "httpx.AsyncClient.post",
+        new_callable=AsyncMock,
+        return_value=response,
+    ):
+        with pytest.raises(ContentFilterError) as caught:
+            await llm.query([TextInput(text="hi")])
+
+    assert caught.value.query_result is not None
+    assert caught.value.usage_metadata is caught.value.query_result.metadata
+    assert caught.value.usage_metadata.extra == {
+        "anthropic_refusal_stop_details": stop_details
+    }

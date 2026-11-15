@@ -73,7 +73,7 @@ def _serialize_envelope(event: Mapping[str, object]) -> str:
 
 def _message_json_safe(value: object, *, key_name: str | None = None) -> object:
     if isinstance(value, Decimal):
-        if key_name == ledger_schema.COST_USD_FIELD:
+        if key_name in ledger_schema.COST_FIELDS:
             return ledger_schema.format_cost_usd_decimal(value)
         return str(value)
     if isinstance(value, Mapping):

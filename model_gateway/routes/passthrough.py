@@ -27,6 +27,7 @@ from model_library.base.query_ids import resolve_query_ids
 from model_library.register_models import RegistryEntry
 from model_library.registry_utils import (
     compute_model_cost,
+    discount_model_cost,
     get_model_names,
     get_registry_config,
 )
@@ -387,23 +388,32 @@ def _usage_fields(
     for payload in _usage_payloads(body, event_stream):
         fields.update(upstream.usage(payload))
         if upstream.reported_cost is not None:
-            cost = upstream.reported_cost(payload) or cost
+            if (reported := upstream.reported_cost(payload)) is not None:
+                cost = reported
     return fields, cost
 
 
 def _usage_result(
     registry_key: str, fields: dict[str, int], reported_cost: float | None
 ) -> QueryResult:
-    """Draft #1545 response hashes use these fields in build_usage_event_details.
-
-    A registry model is priced from the registry; a model admitted by a `provider/x/*`
-    pattern has no entry, so the provider's reported cost is the price.
-    """
+    """Build costs from available usage or provider bills."""
     result = QueryResult(metadata=QueryResultMetadata(**cast(dict[str, Any], fields)))
-    if get_registry_config(registry_key) is not None:
-        result.metadata.cost = compute_model_cost(registry_key, result.metadata)
+    if not fields and reported_cost is None:
+        return result
+    normal_cost = (
+        compute_model_cost(registry_key, result.metadata)
+        if get_registry_config(registry_key) is not None
+        else None
+    )
+    if normal_cost is not None:
+        result.metadata.cost = normal_cost
+        result.metadata.effective_cost = (
+            QueryResultCost(input=0, output=0, total_override=reported_cost)
+            if reported_cost is not None
+            else discount_model_cost(registry_key, normal_cost)
+        )
     elif reported_cost is not None:
-        result.metadata.cost = QueryResultCost(
+        result.metadata.effective_cost = QueryResultCost(
             input=0, output=0, total_override=reported_cost
         )
     return result

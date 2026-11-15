@@ -9,6 +9,7 @@ import pickle
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Collection, Generator, Mapping
+from datetime import UTC, datetime
 from math import ceil
 from pathlib import Path
 from time import perf_counter
@@ -20,7 +21,6 @@ from typing import (
     Literal,
     Sequence,
     TypedDict,
-    TypeVar,
     cast,
 )
 
@@ -35,7 +35,6 @@ from pydantic import (
 )
 from rich.pretty import pretty_repr
 from tiktoken.core import Encoding
-from typing_extensions import deprecated
 
 import model_library.telemetry as telemetry
 from model_library.base.computer import (
@@ -73,7 +72,7 @@ from model_library.base.transcription import (
     single_exception_from_group,
 )
 from model_library.base.utils import serialize_for_tokenizing
-from model_library.exceptions import InvalidStructuredOutputError
+from model_library.exceptions import ContentFilterError, InvalidStructuredOutputError
 from model_library.rate_limits import RateLimit
 from model_library.retriers.backoff import ExponentialBackoffRetrier
 from model_library.retriers.base import BaseRetrier, R, RetrierType, retry_decorator
@@ -84,9 +83,6 @@ from model_library.utils import (
 
 if TYPE_CHECKING:
     from model_library.register_models import ModelConfig
-
-
-PydanticT = TypeVar("PydanticT", bound=BaseModel)
 
 
 class ProviderConfig(BaseModel):
@@ -593,10 +589,8 @@ class LLM(ABC):
         info_enabled = query_logger.isEnabledFor(logging.INFO)
         debug_enabled = query_logger.isEnabledFor(logging.DEBUG)
 
-        current_input = normalize_query_input(input, kwargs=kwargs)
-
-        # join input with history and validate SystemInput placement
-        input = normalize_query_input(current_input, history=history)
+        input = normalize_query_input(input, history=history, kwargs=kwargs)
+        current_input = input[len(history) :]
 
         validate_computer_provider(self.provider, validate_computer_tools(tools), input)
 
@@ -703,30 +697,18 @@ class LLM(ABC):
                     ),
                 },
             )
-            output, duration = await run_with_retry()
+            try:
+                output, duration = await run_with_retry()
+            except ContentFilterError as exc:
+                if exc.query_result is not None:
+                    await _apply_cost(self, exc.query_result.metadata)
+                raise
             telemetry.add_event(
                 "model_library.query.retry_wrapper_done",
                 {**query_id_attributes, "llm.duration_seconds": duration},
             )
         output.metadata.duration_seconds = round_to_milliseconds(duration)
-        try:
-            bill = (
-                output.metadata.extra.get("upstream_cost") if self.is_router else None
-            )
-            if bill is not None:
-                output.metadata.cost = QueryResultCost(
-                    input=0, output=0, total_override=bill
-                )
-            elif output.metadata.cost is None and (
-                "in_tokens" in output.metadata.model_fields_set
-                and "out_tokens" in output.metadata.model_fields_set
-            ):
-                output.metadata.cost = await self._calculate_cost(output.metadata)
-        except Exception as exc:
-            telemetry.record_exception(exc, {"cost_calculation.phase": "calculate"})
-            self.instance_logger.warning(
-                "Cost calculation failed, returning cost=None", exc_info=True
-            )
+        await _apply_cost(self, output.metadata)
         if output_schema is not None and output.output_text:
             parser_error_type: str | None = None
             try:
@@ -845,6 +827,24 @@ class LLM(ABC):
             web_search_per_1k=self._web_search_per_1k(),
         )
 
+    def _discounted_cost(
+        self, metadata: QueryResultMetadata, cost: QueryResultCost
+    ) -> QueryResultCost:
+        """Derive the promotional charge from the selected model's normal charge."""
+        from model_library.registry_utils import discount_model_cost
+
+        if self.is_router:
+            return cast(RouterLLM, self).router_discounted_cost(metadata, cost)
+
+        model = (
+            metadata.fallback.served_model if metadata.fallback else self._registry_key
+        )
+        return (
+            discount_model_cost(model, cost, at=metadata.completed_at)
+            if model
+            else cost.model_copy()
+        )
+
     def _web_search_per_1k(self) -> float | None:
         """Provider's native web search fee in USD per 1k `web_search_requests`."""
         return None
@@ -863,8 +863,8 @@ class LLM(ABC):
         Query the model with input
         Input can consist on text, images, files, or model specific raw responses
         Optionally pass in tools
-        Kwargs will be passed to the model call (apart from exceptions like system_prompt)
-        Note: system_prompt kwarg is deprecated -- pass SystemInput as the first input item instead
+        Kwargs will be passed to the model call
+        Pass a system prompt as a leading SystemInput
         Images and files should be preprocessed according to what the model supports:
             - base64
             - url
@@ -1085,22 +1085,6 @@ class LLM(ABC):
         self.instance_logger.debug(f"Combined Token Count Input: {count}")
         return count
 
-    @deprecated("Use query(output_schema=...) instead")
-    async def query_json(
-        self,
-        input: Sequence[InputItem],
-        pydantic_model: type[PydanticT],
-        **kwargs: object,
-    ) -> PydanticT:
-        """Query the model with JSON response format using Pydantic model.
-
-        Deprecated: Use query(output_schema=...) instead.
-        """
-        raise NotImplementedError(
-            f"query_json is not implemented for {self.__class__.__name__}. "
-            f"Only OpenAI and Google providers currently support this method."
-        )
-
     @staticmethod
     def serialize_input(
         input: Sequence[InputItem], *, secret: bytes | None = None
@@ -1206,3 +1190,26 @@ class LLM(ABC):
         if secret:
             raise ValueError("Expected HMAC-signed pickle blob but got unsigned string")
         return pickle.loads(base64.b64decode(value))
+
+
+async def _apply_cost(llm: "LLM", metadata: QueryResultMetadata) -> None:
+    if metadata.completed_at is None:
+        metadata.completed_at = datetime.now(UTC)
+    try:
+        bill = metadata.extra.get("upstream_cost")
+        if bill is None:
+            bill = metadata.extra.get("xai_cost_usd")
+        if bill is not None:
+            metadata.effective_cost = QueryResultCost(
+                input=0, output=0, total_override=bill
+            )
+        if metadata.cost is None and (
+            "in_tokens" in metadata.model_fields_set
+            and "out_tokens" in metadata.model_fields_set
+        ):
+            metadata.cost = await llm._calculate_cost(metadata)  # pyright: ignore[reportPrivateUsage]
+        if metadata.cost is not None and metadata.effective_cost is None:
+            metadata.effective_cost = llm._discounted_cost(metadata, metadata.cost)  # pyright: ignore[reportPrivateUsage]
+    except Exception as exc:
+        telemetry.record_exception(exc, {"cost_calculation.phase": "calculate"})
+        llm.instance_logger.warning("Cost calculation failed", exc_info=True)

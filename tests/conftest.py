@@ -29,7 +29,7 @@ def _local_model_names(provider_name: str | None = None) -> list[str]:
 def cannot_query_free_text(model: str) -> bool:
     config = get_registry_config(model)
     assert config is not None
-    return config.provider_name in {"cursor", "devin", "factory", "decision"}
+    return config.provider_name in {"cursor", "devin", "factory", "decision", "tinker_decision"}
 
 
 def is_llm_model(model: str) -> bool:

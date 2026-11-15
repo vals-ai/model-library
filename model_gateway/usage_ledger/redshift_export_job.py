@@ -13,7 +13,6 @@ from boto3.dynamodb.types import TypeDeserializer
 from pydantic import AwareDatetime, BaseModel, ConfigDict, model_validator
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from model_gateway.budgets.schema import period_bounds
 from model_gateway.managed_auth.budget_sources import list_key_spend_sources
 from model_gateway.managed_auth.database import DatabaseSecret, build_database_url
 from model_gateway.managed_auth.store import ManagedAuthStore
@@ -444,14 +443,13 @@ def _publish_managed_budget_snapshot(
         try:
             now = datetime.now(UTC)
             store = ManagedAuthStore(engine)
-            policies, extras = await store.list_project_allowance_sources(now)
+            policies = await store.list_project_policies()
             key_ids = await list_key_spend_sources(engine)
             result = publish_managed_spend_snapshot(
                 s3_client=s3_client,
                 redshift_data_client=redshift_data_client,
                 project_starts={
                     policy.project.project_id: policy.total_started_at
-                    or period_bounds(policy.period, policy.created_at)[0]
                     for policy in policies
                 },
                 key_ids=key_ids,
@@ -476,7 +474,6 @@ def _publish_managed_budget_snapshot(
                     key=config.project_alert_snapshot_key,
                     result=result,
                     policies=policies,
-                    extras=extras,
                     identities=identities,
                     publication_token=alert_publication_token,
                 )

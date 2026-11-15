@@ -23,6 +23,7 @@ from model_gateway.managed_auth.types import (
 from model_gateway.usage_ledger import redshift_export_job
 from model_gateway.usage_ledger.budgets.managed_publisher import (
     ManagedSpendPublishResult,
+    _managed_spend_statement,
     publish_managed_spend_snapshot,
     publish_project_alert_snapshot,
     read_alert_publication_token,
@@ -124,8 +125,8 @@ def managed_spend_sources(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     monkeypatch.setattr(
         redshift_export_job.ManagedAuthStore,
-        "list_project_allowance_sources",
-        AsyncMock(return_value=((), {})),
+        "list_project_policies",
+        AsyncMock(return_value=()),
     )
     monkeypatch.setattr(
         redshift_export_job.ManagedAuthStore,
@@ -193,10 +194,10 @@ def test_export_job_runs_direct_window_load() -> None:
     project_id = UUID("00000000-0000-0000-0000-000000000001")
     key_id = UUID("00000000-0000-0000-0000-000000000002")
     project = ProjectReference(project_id, "example-org", "dev")
-    redshift_export_job.ManagedAuthStore.list_project_allowance_sources.return_value = (
-        (ProjectPolicy(project, "monthly", Decimal("10"), 1,
+    redshift_export_job.ManagedAuthStore.list_project_policies.return_value = (
+        (ProjectPolicy(project, Decimal("10"), datetime(2026, 5, 1, tzinfo=UTC), 1,
                        datetime(2026, 5, 1, tzinfo=UTC),
-                       datetime(2026, 5, 1, tzinfo=UTC)),), {}
+                       datetime(2026, 5, 1, tzinfo=UTC)),)
     )
     redshift_export_job.ManagedAuthStore.list_project_alert_identities.return_value = {
         project_id: ProjectAlertIdentity("Project label", "project-handle")
@@ -222,11 +223,11 @@ def test_export_job_runs_direct_window_load() -> None:
         assert managed.periods[period].spend_usd == {
             str(project_id): 0, managed_key_spend_id(key_id): 0,
         }
-    assert json.loads(s3.alert_body)["projects"][0]["spend_usd"] == "0"
+    assert json.loads(s3.alert_body)["projects"][0]["total_spend_usd"] == "0"
     assert json.loads(s3.alert_body)["projects"][0]["name"] == "Project label"
     assert json.loads(s3.alert_body)["projects"][0]["handle"] == "project-handle"
     assert managed.total_spend_usd == {str(project_id): 0}
-    redshift_export_job.ManagedAuthStore.list_project_allowance_sources.assert_awaited_once()
+    redshift_export_job.ManagedAuthStore.list_project_policies.assert_awaited_once()
     redshift_export_job.ManagedAuthStore.list_project_alert_identities.assert_awaited_once()
     redshift_export_job.list_key_spend_sources.assert_awaited_once()
     assert [submission["StatementName"] for submission in redshift.submissions] == [
@@ -520,9 +521,8 @@ def test_idle_publisher_updates_policy_and_rolls_empty_period() -> None:
             bucket="usage-landing",
             key=alert_key,
             result=result,
-            policies=(ProjectPolicy(project, "monthly", Decimal(limit), 1,
+            policies=(ProjectPolicy(project, Decimal(limit), created, 1,
                                     created, created),),
-            extras={},
             identities={project.project_id: ProjectAlertIdentity("Project label", None)},
             publication_token=token,
         )
@@ -532,13 +532,14 @@ def test_idle_publisher_updates_policy_and_rolls_empty_period() -> None:
     publish("20", datetime(2026, 6, 1, 0, 1, tzinfo=UTC), idle=True)
     second = json.loads(s3.alert_body)
 
-    assert first["projects"][0]["start"] == "2026-05-01T00:00:00+00:00"
-    assert second["projects"][0]["start"] == "2026-06-01T00:00:00+00:00"
-    assert second["projects"][0]["limit_usd"] == "20"
-    assert second["projects"][0]["spend_usd"] == "0"
+    assert first["projects"][0]["total_started_at"] == "2026-05-01T00:00:00+00:00"
+    assert second["projects"][0]["total_started_at"] == "2026-05-01T00:00:00+00:00"
+    assert second["projects"][0]["total_limit_usd"] == "20"
+    assert second["projects"][0]["total_spend_usd"] == "0"
     assert second["projects"][0]["contributors"] == []
     assert second["projects"][0]["models"] == []
     assert second["projects"][0]["benchmarks"] == []
+    assert first["schema_version"] == second["schema_version"] == 2
     assert second["revision"] == first["revision"] + 1
     assert second["data_through"] == first["data_through"]
     assert s3.puts[-1]["IfMatch"] == '"alert"'
@@ -621,6 +622,7 @@ def test_stale_policy_candidate_cannot_replace_newer_project_alert() -> None:
             period: PeriodSpend(start=start, end=end, spend_usd=spend[period])
             for period, (start, end) in bounds.items()
         },
+        total_spend_usd={str(project.project_id): Decimal("5")},
     )
     result = ManagedSpendPublishResult(snapshot, contributors, models, benchmarks)
     daily_start, daily_end = period_bounds("daily", newer_moment)
@@ -637,14 +639,6 @@ def test_stale_policy_candidate_cannot_replace_newer_project_alert() -> None:
     newer_result = ManagedSpendPublishResult(
         newer_snapshot, contributors, models, benchmarks,
     )
-    actor = HumanIdentity("https://issuer.example", "test-actor")
-    expired = ProjectLimitRequest(
-        UUID("00000000-0000-0000-0000-000000000002"), project, "temporary",
-        Decimal("7"), bounds["daily"][0], daily_start, "old burst", actor,
-        "approved", actor, moment, moment, None, None, None,
-    )
-    assert expired.period_end == newer_snapshot.periods["daily"].start
-    loaded_extras = {project.project_id: (expired,)}
 
     def publish(
         limit: str, token: tuple[int, str | None], published: ManagedSpendPublishResult,
@@ -655,9 +649,8 @@ def test_stale_policy_candidate_cannot_replace_newer_project_alert() -> None:
             key=key,
             result=published,
             policies=(
-                ProjectPolicy(project, "daily", Decimal(limit), 1, moment, moment),
+                ProjectPolicy(project, Decimal(limit), moment, 1, moment, moment),
             ),
-            extras=loaded_extras,
             identities={project.project_id: ProjectAlertIdentity("Project label", None)},
             publication_token=token,
         )
@@ -667,8 +660,8 @@ def test_stale_policy_candidate_cannot_replace_newer_project_alert() -> None:
 
     assert len(s3.puts) == 1
     assert s3.puts[0]["IfNoneMatch"] == "*"
-    assert json.loads(s3.alert_body)["projects"][0]["start"] == daily_start.isoformat()
-    assert json.loads(s3.alert_body)["projects"][0]["limit_usd"] == "20"
+    assert json.loads(s3.alert_body)["projects"][0]["total_started_at"] == moment.isoformat()
+    assert json.loads(s3.alert_body)["projects"][0]["total_limit_usd"] == "20"
     assert json.loads(s3.alert_body)["projects"][0]["models"] == [
         {"name": "included", "spend_usd": "5"}
     ]
@@ -729,3 +722,74 @@ def test_project_total_counts_spend_since_the_budget_began() -> None:
     # Redshift rejects untyped Data API parameters in a select list ("Invalid type: 705").
     for item in TotalRedshift.parameters:
         assert f"CAST(:{item['name']} AS" in TotalRedshift.sql
+
+
+def test_alert_token_reads_a_version_one_or_two_snapshot() -> None:
+    s3 = FakeS3Client()
+    key = "gateway-usage/dev/spend/project-alerts-current.json"
+    for version, revision in ((1, 7), (2, 8)):
+        s3.alert_body = json.dumps(
+            {"schema_version": version, "stage": "dev", "revision": revision, "projects": []}
+        ).encode()
+        assert read_alert_publication_token(s3, "usage-landing", key, "dev") == (
+            revision,
+            '"alert"',
+        )
+
+
+def test_version_two_alert_snapshot_carries_the_total_and_no_period() -> None:
+    moment = datetime(2026, 11, 4, 12, tzinfo=UTC)
+    project = ProjectReference(UUID("00000000-0000-0000-0000-000000000011"), "org", "dev")
+    project_id = str(project.project_id)
+    bounds = {period: period_bounds(period, moment) for period in ("daily", "weekly", "monthly")}
+    snapshot = SpendSnapshot(
+        schema_version=1, stage="dev", revision=1, generated_at=moment, data_through=moment,
+        periods={
+            period: PeriodSpend(start=start, end=end, spend_usd={project_id: Decimal("4")})
+            for period, (start, end) in bounds.items()
+        },
+        total_spend_usd={project_id: Decimal("40")},
+    )
+    breakdown = {period: {project_id: {"owner@example.com": Decimal("1")}} for period in bounds}
+    named = {period: {project_id: {"model-a": Decimal("1")}} for period in bounds}
+    unnamed = {period: {project_id: {None: Decimal("1")}} for period in bounds}
+    s3 = FakeS3Client()
+    publish_project_alert_snapshot(
+        s3_client=s3,
+        bucket="usage-landing",
+        key="gateway-usage/dev/spend/project-alerts-current.json",
+        result=ManagedSpendPublishResult(snapshot, breakdown, named, unnamed),
+        policies=(ProjectPolicy(project, Decimal("300"), moment, 1, moment, moment),),
+        identities={project.project_id: ProjectAlertIdentity("Stored", "stored")},
+        publication_token=(0, None),
+    )
+    document = json.loads(cast(bytes, s3.alert_body))
+    assert document["schema_version"] == 2
+    entry = document["projects"][0]
+    assert not {"period", "start", "end", "limit_usd", "spend_usd"} & set(entry)
+    assert (
+        datetime.fromisoformat(entry["total_started_at"]),
+        Decimal(entry["total_limit_usd"]),
+        Decimal(entry["total_spend_usd"]),
+    ) == (moment, Decimal("300"), Decimal("40"))
+    assert entry["contributors"] == [{"email": "owner@example.com", "spend_usd": "1"}]
+
+
+def test_every_bound_value_in_the_spend_statement_is_cast_for_redshift() -> None:
+    moment = datetime(2026, 11, 5, 12, tzinfo=UTC)
+    bounds = {period: period_bounds(period, moment) for period in ("daily", "weekly", "monthly")}
+    sql, parameters = _managed_spend_statement(
+        bounds,
+        "gateway_usage_dev",
+        ("ignored-model",),
+        {UUID("00000000-0000-0000-0000-000000000021"): bounds["monthly"][0]},
+        [UUID("00000000-0000-0000-0000-000000000022")],
+    )
+    assert [item["value"] for item in parameters] == [
+        "total", "project", "00000000-0000-0000-0000-000000000021",
+        "2026-11-01T00:00:00+00:00", "ignored-model",
+    ]
+    for item in parameters:
+        assert f"CAST(:{item['name']} AS" in sql
+    for label in ("daily", "weekly", "monthly", "project", "key", "model", "benchmark"):
+        assert f"CAST('{label}' AS VARCHAR(16))" in sql

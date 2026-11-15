@@ -42,7 +42,7 @@ MODEL_KEYS = {
     "openai": "openai/gpt-4o",
     "anthropic": "anthropic/claude-sonnet-4-5-20250929",
     "google": "google/gemini-2.5-flash",
-    "openrouter": "openrouter/inception/mercury-3",
+    "openrouter": "openrouter/inception/mercury-2.5",
 }
 MODELS = {
     provider: get_registry_config(key).provider_endpoint.removeprefix("models/")
@@ -486,6 +486,10 @@ def test_forwards_provider_bytes_and_records_usage(
         error = event["error"]
         assert error["status_code"] == 429
         assert error["message"] == "rate limit exceeded"
+        assert "cost_usd" not in event
+        details_metadata = event["details"]["result"]["metadata"]
+        assert details_metadata["cost"] is None
+        assert details_metadata["effective_cost"] is None
     else:
         assert (event["input_tokens"], event["output_tokens"]) == {
             "openai": (8, 4),
@@ -1213,22 +1217,27 @@ def test_openrouter_forwards_chat_completions_only(
 
 
 @pytest.mark.parametrize(
-    ("model", "status"),
+    ("model", "status", "reported_bill"),
     [
-        ("openai/gpt-4o-mini", 200),
-        ("openai/gpt-4o-mini:online", 403),
-        ("inception/mercury-3", 403),
+        ("openai/gpt-4o-mini", 200, 0.0000123),
+        ("openai/gpt-4o-mini", 200, 0.0),
+        ("openai/gpt-4o-mini:online", 403, 0.0000123),
+        ("inception/mercury-3", 403, 0.0000123),
     ],
 )
 def test_pattern_allowlist_admits_unregistered_models_priced_by_the_provider(
-    monkeypatch: pytest.MonkeyPatch, model: str, status: int
+    monkeypatch: pytest.MonkeyPatch, model: str, status: int, reported_bill: float
 ) -> None:
     sent: list[bytes] = []
 
     async def handler(request: httpx.Request) -> httpx.Response:
         sent.append(await request.aread())
         return httpx.Response(
-            200, headers={"content-type": "application/json"}, content=OPENROUTER_RESPONSE
+            200,
+            headers={"content-type": "application/json"},
+            content=OPENROUTER_RESPONSE.replace(
+                b'"cost":0.0000123', f'"cost":{reported_bill}'.encode()
+            ),
         )
 
     client = _make_client()
@@ -1247,13 +1256,28 @@ def test_pattern_allowlist_admits_unregistered_models_priced_by_the_provider(
         event = ledger.events[0]
         assert event["model"] == f"openrouter/{model}"
         assert (event["input_tokens"], event["output_tokens"]) == (8, 4)
-        assert Decimal(str(event["cost_usd"])) == Decimal("0.0000123")
+        assert Decimal(str(event["cost_usd"])) == Decimal(str(reported_bill))
+        assert "standard_cost_usd" not in event
+        details = cast(dict[str, Any], event["details"])
+        metadata = details["result"]["metadata"]
+        assert metadata["cost"] is None
+        assert metadata["effective_cost"]["total_override"] == pytest.approx(
+            reported_bill
+        )
+        assert metadata["effective_cost"]["total"] == pytest.approx(reported_bill)
 
 
-def test_registry_models_keep_registry_pricing(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("reported_bill", [0.0000123, 0.0])
+def test_registry_models_keep_registry_pricing(
+    monkeypatch: pytest.MonkeyPatch, reported_bill: float
+) -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
-            200, headers={"content-type": "application/json"}, content=OPENROUTER_RESPONSE
+            200,
+            headers={"content-type": "application/json"},
+            content=OPENROUTER_RESPONSE.replace(
+                b'"cost":0.0000123', f'"cost":{reported_bill}'.encode()
+            ),
         )
 
     client = _make_client()
@@ -1267,7 +1291,21 @@ def test_registry_models_keep_registry_pricing(monkeypatch: pytest.MonkeyPatch) 
     )
 
     assert response.status_code == 200, response.text
-    assert Decimal(str(ledger.events[0]["cost_usd"])) != Decimal("0.0000123")
+    event = ledger.events[0]
+    details = cast(dict[str, Any], event["details"])
+    metadata = details["result"]["metadata"]
+    assert event["cost_usd"] == Decimal(str(reported_bill))
+    assert event["standard_cost_usd"] == Decimal("0.00000689")
+    assert metadata["cost"]["input"] == pytest.approx(0.0000016)
+    assert metadata["cost"]["output"] == pytest.approx(0.000003)
+    assert metadata["cost"]["reasoning"] == pytest.approx(0.00000225)
+    assert metadata["cost"]["cache_read"] == pytest.approx(0.00000004)
+    assert metadata["cost"]["total"] == pytest.approx(0.00000689)
+    assert metadata["cost"]["total_override"] is None
+    assert metadata["effective_cost"]["total_override"] == pytest.approx(
+        reported_bill
+    )
+    assert metadata["effective_cost"]["total"] == pytest.approx(reported_bill)
 
 
 def test_mint_rejects_a_pattern_for_an_unknown_provider() -> None:

@@ -247,7 +247,7 @@ class ATIFTrajectory(ValsModel):
         # Compactions aren't a first-party ATIF concept and their cost is
         # housekeeping overhead, not task cost. Keep them out of
         # final_metrics; expose them in `extra` with a separate aggregate so
-        # consumers can compute the true bill as final_metrics + compaction.
+        # consumers can combine observed task and compaction costs.
         extra = dict(trajectory_extra or {}) or None
         if compactions:
             comp_prompt = sum(
@@ -262,8 +262,8 @@ class ATIFTrajectory(ValsModel):
             comp_cost = 0.0
             comp_has_cost = False
             for c in compactions:
-                if c.metadata is not None and c.metadata.cost is not None:
-                    comp_cost += c.metadata.cost.total
+                if c.metadata is not None and c.metadata.effective_cost is not None:
+                    comp_cost += c.metadata.effective_cost.total
                     comp_has_cost = True
             if extra is None:
                 extra = {}
@@ -293,7 +293,11 @@ class ATIFTrajectory(ValsModel):
 
 
 def _aggregate_metadata(metadata: Sequence[QueryResultMetadata]) -> _MetadataTotals:
-    costs = [item.cost.total for item in metadata if item.cost is not None]
+    costs = [
+        item.effective_cost.total
+        for item in metadata
+        if item.effective_cost is not None
+    ]
     cached_tokens = [
         item.cache_read_tokens
         for item in metadata
@@ -335,7 +339,9 @@ def _extra_metrics(totals: _MetadataTotals) -> dict[str, int | float | None]:
 
 def _make_step_metrics(metadata: QueryResultMetadata) -> ATIFMetrics:
     """Convert QueryResultMetadata to ATIFMetrics."""
-    cost_usd = metadata.cost.total if metadata.cost else None
+    cost_usd = (
+        metadata.effective_cost.total if metadata.effective_cost is not None else None
+    )
     extra = {
         key: value
         for key, value in {

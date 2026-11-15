@@ -35,6 +35,7 @@ USAGE_EVENT_FACT_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "query_id_normalized",
     "attempt_id",
     "requested_model_key",
+    "served_model_key",
     "provider",
     "provider_endpoint",
     "param_group",
@@ -62,6 +63,7 @@ USAGE_EVENT_FACT_COLUMN_NAMES: Final[tuple[str, ...]] = (
     "total_output_tokens",
     "duration_seconds",
     "cost_usd",
+    "standard_cost_usd",
     "finish_reason",
     "finish_reason_raw",
     "schema_version",
@@ -267,6 +269,7 @@ def usage_events_column_sql(*, include_batch_id: bool = False) -> str:
   attempt_id varchar(65535),
 
   requested_model_key varchar(2048) not null,
+  served_model_key varchar(2048),
   provider varchar(256) not null,
   provider_endpoint varchar(64) not null,
   param_group varchar(512),
@@ -297,6 +300,7 @@ def usage_events_column_sql(*, include_batch_id: bool = False) -> str:
   total_output_tokens bigint,
   duration_seconds decimal(18,6),
   cost_usd decimal(38,12),
+  standard_cost_usd decimal(38,12),
 
   finish_reason varchar(256),
   finish_reason_raw varchar(2048),
@@ -346,6 +350,7 @@ SCHEMA_COLUMN_ADDITIONS: Final[tuple[dict[str, str], ...]] = tuple(
     for table_name in (USAGE_EVENTS_STAGING_TABLE_NAME, "usage_events")
     for column_name, column_type in (
         ("attempt_id", "varchar(65535)"),
+        ("served_model_key", "varchar(2048)"),
         ("managed_key_id", "varchar(128)"),
         ("budget_id", "varchar(128)"),
         ("owner_issuer", "varchar(2048)"),
@@ -354,7 +359,27 @@ SCHEMA_COLUMN_ADDITIONS: Final[tuple[dict[str, str], ...]] = tuple(
         ("project_id", "varchar(128)"),
         ("project_org_id", "varchar(128)"),
         ("project_environment", "varchar(128)"),
+        ("standard_cost_usd", "decimal(38,12)"),
     )
+) + (
+    *(
+        {
+            "TableName": table_name,
+            "ColumnName": "served_model_key",
+            "ColumnType": "varchar(2048)",
+        }
+        for table_name in (*AGGREGATE_TABLE_BY_GRAIN.values(), RUN_AGGREGATE_TABLE_NAME)
+    ),
+    {
+        "TableName": AGGREGATE_TABLE_BY_GRAIN["5m"],
+        "ColumnName": "standard_cost_usd_sum",
+        "ColumnType": "decimal(38,12)",
+    },
+    {
+        "TableName": AGGREGATE_TABLE_BY_GRAIN["5m"],
+        "ColumnName": "standard_cost_recorded_count",
+        "ColumnType": "bigint",
+    },
 )
 
 
@@ -377,11 +402,18 @@ def aggregate_table_ddl(grain: AggregateGrain, schema: str = WAREHOUSE_SCHEMA) -
             for dimension in _fast_aggregate_dimensions()
         ]
     )
+    standard_cost_columns = (
+        "\n  standard_cost_usd_sum decimal(38,12),\n"
+        "  standard_cost_recorded_count bigint,"
+        if grain == "5m"
+        else ""
+    )
     return f"""create table if not exists {table} (
   bucket_start_utc timestamptz not null,
   bucket_end_utc timestamptz not null,
 
 {dimension_columns}
+  served_model_key varchar(2048),
 
   request_count bigint not null,
   error_count bigint not null,
@@ -402,7 +434,7 @@ def aggregate_table_ddl(grain: AggregateGrain, schema: str = WAREHOUSE_SCHEMA) -
   duration_seconds_sum decimal(38,6),
   duration_observed_count bigint not null,
   cost_usd_sum decimal(38,12),
-  cost_recorded_count bigint not null,
+  cost_recorded_count bigint not null,{standard_cost_columns}
 
   data_through_utc timestamptz not null,
   refreshed_at timestamptz not null
@@ -447,6 +479,7 @@ def run_aggregate_table_ddl(schema: str = WAREHOUSE_SCHEMA) -> str:
   run_id varchar(65535) not null,
   is_grader boolean not null,
 {dimension_columns}
+  served_model_key varchar(2048),
 
   request_count bigint not null,
   cost_usd_sum decimal(38,12),
@@ -685,10 +718,24 @@ def aggregate_insert_sql(
     reserved_dimension_guard = _reserved_dimension_guard_sql(
         fact_table, start_expression, end_expression
     )
+    standard_insert_columns = (
+        "  standard_cost_usd_sum,\n  standard_cost_recorded_count,\n"
+        if grain == "5m"
+        else ""
+    )
+    standard_select_columns = (
+        "  sum(standard_cost_usd) as standard_cost_usd_sum,\n"
+        "  count(case when cost_usd is not null then standard_cost_usd end) "
+        "as standard_cost_recorded_count,\n"
+        if grain == "5m"
+        else ""
+    )
+    standard_fact_column = ",\n    standard_cost_usd" if grain == "5m" else ""
     return f"""insert into {aggregate_table} (
   bucket_start_utc,
   bucket_end_utc,
 {dimension_insert_columns}
+  served_model_key,
   request_count,
   error_count,
   input_tokens,
@@ -709,13 +756,14 @@ def aggregate_insert_sql(
   duration_observed_count,
   cost_usd_sum,
   cost_recorded_count,
-  data_through_utc,
+{standard_insert_columns}  data_through_utc,
   refreshed_at
 )
 select
   bucket_start_utc,
   bucket_end_utc,
 {dimension_select_columns}
+  served_model_key,
   count(case when outcome = 'success' then 1 end) as request_count,
   count(case when outcome = 'error' then 1 end) as error_count,
   sum(input_tokens) as input_tokens,
@@ -736,13 +784,14 @@ select
   count(duration_seconds) as duration_observed_count,
   sum(cost_usd) as cost_usd_sum,
   count(cost_usd) as cost_recorded_count,
-  {data_through_sql} as data_through_utc,
+{standard_select_columns}  {data_through_sql} as data_through_utc,
   {refreshed_at_sql} as refreshed_at
 from (
   select
     {bucket_start} as bucket_start_utc,
     {bucket_end} as bucket_end_utc,
 {dimension_bucket_columns}
+    served_model_key,
     outcome,
     input_tokens,
     output_tokens,
@@ -752,7 +801,7 @@ from (
     total_input_tokens,
     total_output_tokens,
     duration_seconds,
-    cost_usd
+    cost_usd{standard_fact_column}
   from {fact_table}
   where completed_at >= {start_expression}
     and completed_at < {end_expression}
@@ -763,6 +812,7 @@ cross join (
 group by
   bucket_start_utc,
   bucket_end_utc,
+  served_model_key,
 {dimension_group_by_columns};"""
 
 
@@ -805,6 +855,7 @@ def run_aggregate_insert_sql(
   run_id,
   is_grader,
 {dimension_columns}
+  served_model_key,
   request_count,
   cost_usd_sum,
   data_through_utc,
@@ -816,6 +867,7 @@ select
   run_id,
   is_grader,
 {dimension_columns}
+  served_model_key,
   count(case when outcome = 'success' then 1 end) as request_count,
   sum(cost_usd) as cost_usd_sum,
   {data_through_sql} as data_through_utc,
@@ -827,6 +879,7 @@ from (
     run_id,
     coalesce(agent_name = {grader}, false) as is_grader,
 {dimension_bucket_columns}
+    served_model_key,
     outcome,
     cost_usd
   from {fact_table}
@@ -842,6 +895,7 @@ group by
   bucket_end_utc,
   run_id,
   is_grader,
+  served_model_key,
 {dimension_group_by_columns};"""
 
 

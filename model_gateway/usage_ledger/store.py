@@ -996,7 +996,7 @@ def build_usage_event(
     pool_revision: int | None,
     completed_at: datetime | None = None,
 ) -> dict[str, object]:
-    completed = completed_at or datetime.now(UTC)
+    completed = completed_at or result.metadata.completed_at or datetime.now(UTC)
     completed_at_iso = _isoformat(completed)
     day = completed.strftime("%Y%m%d")
     run_id = body.run_id
@@ -1187,7 +1187,12 @@ def _sqs_should_retry(message: _PendingSqsMessage, *, now: float) -> bool:
 
 
 def _metadata_counts(metadata: QueryResultMetadata) -> dict[str, object]:
-    cost_total = metadata.cost.total if metadata.cost is not None else None
+    cost = (
+        metadata.effective_cost
+        if metadata.effective_cost is not None
+        else metadata.cost
+    )
+    cost_total = cost.total if cost is not None else None
     counts: dict[str, object] = {}
     if "in_tokens" in metadata.model_fields_set:
         counts["input_tokens"] = metadata.in_tokens
@@ -1210,5 +1215,10 @@ def _metadata_counts(metadata: QueryResultMetadata) -> dict[str, object]:
     if cost_total is not None:
         counts["cost_usd"] = ledger_schema.normalize_cost_usd_decimal(
             Decimal(str(cost_total))
+        )
+    standard_cost_total = metadata.cost.total if metadata.cost is not None else None
+    if standard_cost_total is not None:
+        counts[ledger_schema.STANDARD_COST_USD_FIELD] = (
+            ledger_schema.normalize_cost_usd_decimal(Decimal(str(standard_cost_total)))
         )
     return counts

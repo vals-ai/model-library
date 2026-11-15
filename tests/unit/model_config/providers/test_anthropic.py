@@ -4,10 +4,15 @@ from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
+from anthropic.lib.middleware import BetaRefusalFallbackMiddleware
 from anthropic.types.beta import (
     BetaFallbackBlock,
     BetaFallbackMessageIterationUsage,
+    BetaMessage,
     BetaMessageIterationUsage,
+    BetaServerToolUseBlock,
+    BetaTextBlock,
+    BetaToolUseBlock,
 )
 from pydantic import ValidationError
 import pytest
@@ -15,7 +20,12 @@ import pytest
 from model_library.base import LLMConfig, QueryResult, QueryResultMetadata
 from model_library.base.output import FallbackHop, FallbackInfo
 from model_library.base.input import TextInput
-from model_library.providers.anthropic import AnthropicConfig, AnthropicModel
+from model_library.providers.anthropic import (
+    AnthropicConfig,
+    AnthropicModel,
+    _keep_served_output,  # pyright: ignore[reportPrivateUsage]
+    _pinned_fallback_model,  # pyright: ignore[reportPrivateUsage]
+)
 from model_library.registry_utils import get_model_cost, get_registry_model
 
 _INPUT = [TextInput(text="")]
@@ -27,6 +37,7 @@ async def _query_anthropic_with_provider_config(
     thinking_tokens: int | None = None,
     fallback_blocks: list[BetaFallbackBlock] | None = None,
     custom_endpoint: str | None = None,
+    reasoning: bool = False,
 ) -> tuple[dict[str, object], QueryResult]:
     captured: dict[str, object] = {}
 
@@ -112,11 +123,15 @@ async def _query_anthropic_with_provider_config(
     class _DummyClient:
         beta = _DummyBeta()
 
+        def with_middleware(self, *middleware: object) -> "_DummyClient":
+            captured["middleware"] = list(middleware)
+            return self
+
     model = AnthropicModel(
         model_name,
         config=LLMConfig(
             max_tokens=4096,
-            reasoning=False,
+            reasoning=reasoning,
             provider_config=provider_config,
             custom_endpoint=custom_endpoint,
             custom_api_key="test-key" if custom_endpoint else None,
@@ -312,7 +327,6 @@ class TestAnthropicConfig:
         )
 
         assert "betas" not in captured
-
     async def test_count_tokens_drops_the_task_budget(self):
         captured: dict[str, object] = {}
 
@@ -403,6 +417,64 @@ class TestAnthropicConfig:
         assert result.metadata.extra == {
             "anthropic_response_model": "claude-primary-test"
         }
+
+    async def test_client_side_fallback_uses_sdk_middleware(self):
+        captured, _ = await _query_anthropic_with_provider_config(
+            AnthropicConfig(
+                fallback_models=["claude-fallback-test"],
+                client_side_fallback=True,
+                supports_auto_thinking=True,
+            )
+        )
+
+        assert captured["betas"] == ["files-api-2025-04-14"]
+        assert "fallbacks" not in cast(dict[str, object], captured.get("extra_body") or {})
+        middleware = cast(list[object], captured["middleware"])
+        assert len(middleware) == 1
+        assert isinstance(middleware[0], BetaRefusalFallbackMiddleware)
+
+    def test_pinned_fallback_model_follows_latest_seam(self):
+        def seam(to: str) -> BetaFallbackBlock:
+            return BetaFallbackBlock.model_validate(
+                {
+                    "type": "fallback",
+                    "from": {"model": "claude-primary-test"},
+                    "to": {"model": to},
+                    "trigger": {"type": "refusal", "category": "cyber"},
+                }
+            )
+
+        chain = ["claude-fallback-a", "claude-fallback-b"]
+        messages: list[dict[str, object]] = [
+            {"role": "user", "content": "hi"},
+            {"role": "assistant", "content": [seam("claude-fallback-a")]},
+            {"role": "assistant", "content": [seam("claude-fallback-b")]},
+        ]
+
+        assert _pinned_fallback_model(messages[:1], chain) is None
+        assert _pinned_fallback_model(messages[:2], chain) == "claude-fallback-a"
+        assert _pinned_fallback_model(messages, chain) == "claude-fallback-b"
+
+    def test_keep_served_output_drops_refused_blocks(self):
+        seam = BetaFallbackBlock.model_validate(
+            {
+                "type": "fallback",
+                "from": {"model": "claude-primary-test"},
+                "to": {"model": "claude-fallback-test"},
+                "trigger": {"type": "refusal", "category": "cyber"},
+            }
+        )
+        partial_text = BetaTextBlock(type="text", text="partial")
+        refused_call = BetaToolUseBlock(type="tool_use", id="toolu_refused", name="bash", input={})
+        unpaired = BetaServerToolUseBlock.model_construct(
+            type="server_tool_use", id="srvtoolu_refused", name="web_search", input={}
+        )
+        served = BetaTextBlock(type="text", text="served")
+        message = BetaMessage.model_construct(
+            content=[partial_text, refused_call, unpaired, seam, served]
+        )
+
+        assert _keep_served_output(message).content == [partial_text, seam, served]
 
     async def test_between_tools_fallbacks_override_thinking_to_disabled(self):
         captured, _ = await _query_anthropic_with_provider_config(

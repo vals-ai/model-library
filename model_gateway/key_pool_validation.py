@@ -9,8 +9,7 @@ Every `<provider>/default` pool in `config.pools` is checked the same way as a
 public model's pool, because default pools serve public models, and every
 pooled provider must have one.
 
-`PUT /admin/key-pools` runs it on every operator document. The seed document
-`scripts/seed_key_pools.py` publishes is proven by its parity tests instead.
+`PUT /admin/key-pools` runs it on every operator document.
 """
 
 from collections.abc import Collection, Mapping

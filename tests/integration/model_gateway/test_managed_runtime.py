@@ -9,7 +9,7 @@ from model_gateway.managed_auth.authority_publisher import ManagedAuthorityPubli
 from model_gateway.managed_auth.database import create_engine
 from model_gateway.managed_auth.identity import HumanVerifier
 from model_gateway.managed_auth.reconciliation import HumanReconciler
-from model_gateway.managed_auth.runtime import ManagedAuthorityResolver, authority_hash_key
+from model_gateway.managed_auth.runtime import ManagedAuthorityResolver, authority_hash_key, authority_key_prefix
 from model_gateway.managed_auth.store import ManagedAuthStore
 from model_gateway.managed_auth.types import (
     HumanIdentity, KeyLimit, PersonalOwner, ProjectReference, ServiceOwner,
@@ -22,7 +22,9 @@ async def test_current_personal_and_service_authority():
     store = ManagedAuthStore(engine)
     redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
     namespace = f"runtime-{uuid4().hex}"
-    owner_key = f"gateway:managed-auth:{namespace}:owner"
+    owner_key = f"{authority_key_prefix(namespace)}:owner"
+    legacy_active = f"gateway:managed-auth:{namespace}:active"
+    legacy_owner = f"gateway:managed-auth:{namespace}:owner"
     token = uuid4().hex
     verifier = HumanVerifier(
         "project-test", "https://issuer.example", "organization-test", "management-test",
@@ -50,13 +52,17 @@ async def test_current_personal_and_service_authority():
         await store.create_request(service_request_id, "service", "work", creator,
                                    ServiceOwner(service_id), None, service_project, None, None)
         personal_pending = await store.decide_request(
-            personal_request_id, creator, personal_key_id, ("weekly", Decimal("70")), None,
+            personal_request_id, creator, personal_key_id, Decimal("70"), None,
         )
         service_pending = await store.decide_request(
-            service_request_id, creator, service_key_id, ("monthly", Decimal("30")), None,
+            service_request_id, creator, service_key_id, Decimal("30"), None,
         )
+        await redis.hset(legacy_active, mapping={"__published__": "v1:older", "k:older": "older record"})
+        await redis.set(legacy_owner, "older owner")
         assert await redis.set(owner_key, token, nx=True, ex=60)
         assert await publisher.publish_once(token)
+        assert await redis.hgetall(legacy_active) == {"__published__": "v1:older", "k:older": "older record"}
+        assert await redis.get(legacy_owner) == "older owner"
         assert await resolver.by_key_id(personal_key_id) is None
         assert await resolver.by_key_id(service_key_id) is None
         personal = await store.collect_key(personal_key_id, personal_pending.revision, personal_verifier, person)
@@ -72,14 +78,13 @@ async def test_current_personal_and_service_authority():
         assert authority.permissions.allowed_embedding_models == []
         assert authority.permissions.allowed_operations is None
         assert authority.project == project
-        assert authority.project_limit.period == "weekly"
-        assert authority.project_limit.base_limit_usd == Decimal("70")
+        assert authority.project_limit.total_limit_usd == Decimal("70")
         assert authority.key_limit == personal_limit
         service_authority = await resolver.by_key_id(service_key_id)
         assert service_authority.key_id == service.id
         assert service_authority.owner == service.owner
         assert service_authority.project == service_project
-        assert service_authority.project_limit.base_limit_usd == Decimal("30")
+        assert service_authority.project_limit.total_limit_usd == Decimal("30")
         assert service_authority.key_limit is None
         assert service_authority.permissions.allowed_models is None
 
@@ -96,7 +101,7 @@ async def test_current_personal_and_service_authority():
         assert updated.key_id == personal_key_id
         assert updated.permissions.allowed_models is None
         assert updated.project == project
-        assert updated.project_limit.base_limit_usd == Decimal("70")
+        assert updated.project_limit.total_limit_usd == Decimal("70")
         assert updated.key_limit == personal_limit
 
         await store.revoke_key(personal_key_id, limited.revision, creator)
@@ -107,7 +112,7 @@ async def test_current_personal_and_service_authority():
         assert await resolver.by_key_id(service_key_id) is None
         assert await resolver.by_verifier(service_verifier) is None
     finally:
-        await redis.delete(authority_hash_key(namespace), owner_key)
+        await redis.delete(authority_hash_key(namespace), owner_key, legacy_active, legacy_owner)
         await redis.aclose()
         await verifier.aclose()
         await engine.dispose()

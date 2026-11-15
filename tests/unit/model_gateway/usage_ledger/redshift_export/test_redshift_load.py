@@ -102,6 +102,9 @@ def test_direct_prepare_copy_and_finalize_use_batch_ids() -> None:
     ]
     assert "from 's3://bucket/window/manifest.json'" in copy[0]
     assert "iam_role 'arn:aws:iam::123456789012:role/copy'" in copy[0]
+    assert "  cost_usd,\n  standard_cost_usd,\n  finish_reason" in copy[0]
+    assert "  standard_cost_usd = source.standard_cost_usd" in finalize[0]
+    assert "  source.standard_cost_usd" in finalize[0]
     assert "on usage_events.usage_event_id = source.usage_event_id" in sql
     assert "on usage_event_performance_v3.usage_event_id = source.usage_event_id" in sql
     assert "merge into gateway_usage_dev.usage_event_performance_v3" in sql
@@ -145,6 +148,11 @@ def test_finalize_refreshes_aggregates_and_dimension_values() -> None:
 
     assert sql.count("delete from gateway_usage.usage_agg_") == 3
     assert sql.count("insert into gateway_usage.usage_agg_") == 3
+    assert "sum(standard_cost_usd) as standard_cost_usd_sum" in sql
+    assert (
+        "count(case when cost_usd is not null then standard_cost_usd end) "
+        "as standard_cost_recorded_count"
+    ) in sql
     assert "delete from gateway_usage.usage_dimension_values;" in sql
     assert "insert into gateway_usage.usage_dimension_values" in sql
     assert "outcome = 'success' and completed_at" in sql

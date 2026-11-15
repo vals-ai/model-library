@@ -15,6 +15,7 @@ from model_gateway.usage_ledger.dynamodb_writer import (
 )
 from model_gateway.usage_ledger.message import deserialize_usage_event_message
 from model_gateway.usage_ledger.redshift_export import parquet_bytes_from_rows
+from model_gateway.usage_ledger.redshift_load import staging_row_from_redshift_rows
 from model_gateway.usage_ledger.redshift_schema import (
     SCHEMA_COLUMN_ADDITIONS,
     USAGE_EVENTS_STAGING_COLUMN_NAMES,
@@ -145,3 +146,84 @@ def test_admitted_attribution_survives_ledger_message_and_warehouse_export() -> 
             for addition in SCHEMA_COLUMN_ADDITIONS
             if addition["ColumnName"] == field
         } == {USAGE_EVENTS_STAGING_TABLE_NAME, "usage_events"}
+
+
+def test_cost_basis_survives_producer_codec_and_warehouse_parquet() -> None:
+    body = QueryRequest(
+        model="openai/gpt-4o",
+        inputs=[TextInput(text="hello")],
+    )
+    event_args = dict(
+        body=body,
+        config=body.config_dict(),
+        query_params={},
+        dimensions={"ProviderEndpoint": "default", "ParamGroup": "pg"},
+        error=None,
+        request=snapshot_usage_request(body),
+        api_key_name="display-name",
+        provider_key_name=None,
+        pool_revision=None,
+        completed_at=datetime(2026, 5, 29, 12, 0, tzinfo=UTC),
+    )
+    distinct = build_usage_event(
+        result=QueryResult(
+            output_text="ok",
+            metadata=QueryResultMetadata(
+                cost=QueryResultCost(input=0.001, output=0.002),
+                effective_cost=QueryResultCost(input=0.0004, output=0.0006),
+            ),
+        ),
+        **event_args,
+    )
+    zero = build_usage_event(
+        result=QueryResult(
+            output_text="ok",
+            metadata=QueryResultMetadata(
+                cost=QueryResultCost(input=0, output=0),
+                effective_cost=QueryResultCost(input=0, output=0),
+            ),
+        ),
+        **event_args,
+    )
+    legacy = dict(distinct)
+    legacy["usage_event_id"] = "prefield-usage"
+    legacy.pop("standard_cost_usd")
+
+    assert distinct["cost_usd"] == Decimal("0.001")
+    assert distinct["standard_cost_usd"] == Decimal("0.003")
+    assert zero["cost_usd"] == Decimal("0")
+    assert zero["standard_cost_usd"] == Decimal("0")
+
+    events = (distinct, zero, legacy)
+    restored = tuple(
+        deserialize_usage_event_message(prepare_usage_event_for_write(event).message)
+        for event in events
+    )
+    assert [(event["cost_usd"], event.get("standard_cost_usd")) for event in restored] == [
+        (Decimal("0.001"), Decimal("0.003")),
+        (Decimal("0"), Decimal("0")),
+        (Decimal("0.001"), None),
+    ]
+    assert "standard_cost_usd" not in restored[2]
+    assert ("standard_cost_usd",) in redshift_export_source_paths()
+
+    rows = tuple(
+        staging_row_from_redshift_rows(
+            redshift_rows_from_usage_event(event, batch_id="batch-1")
+        )
+        for event in restored
+    )
+    assert [row["standard_cost_usd"] for row in rows] == [
+        Decimal("0.003"),
+        Decimal("0"),
+        None,
+    ]
+    table = pq.read_table(pa.BufferReader(parquet_bytes_from_rows(rows)))
+    assert tuple(table.schema.names) == USAGE_EVENTS_STAGING_COLUMN_NAMES
+    assert table.schema.field("standard_cost_usd").type == pa.decimal128(38, 12)
+    exported = table.to_pylist()
+    assert [(row["cost_usd"], row["standard_cost_usd"]) for row in exported] == [
+        (Decimal("0.001000000000"), Decimal("0.003000000000")),
+        (Decimal("0E-12"), Decimal("0E-12")),
+        (Decimal("0.001000000000"), None),
+    ]

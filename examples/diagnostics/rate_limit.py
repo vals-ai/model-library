@@ -29,7 +29,7 @@ from model_library import set_logging
 from model_library.base import LLM, LLMConfig
 from model_library.base.input import SystemInput, TextInput
 from model_library.base.output import QueryResult
-from model_library.exceptions import MaxContextWindowExceededError, RateLimitException
+from model_library.exceptions import MaxContextWindowExceededError, RateLimitError
 from model_library.registry_utils import get_registry_model
 
 from examples.setup import console_log, setup
@@ -132,7 +132,7 @@ def _exception_status_code(exception: Exception) -> int | None:
 
 
 def _is_rate_limit_error(exception: Exception) -> bool:
-    if isinstance(exception, RateLimitException):
+    if isinstance(exception, RateLimitError):
         return True
 
     if _exception_status_code(exception) == 429:

@@ -1,10 +1,19 @@
+import io
 import json
 import logging
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import AsyncMock
 
 import pytest
+from botocore.exceptions import ClientError
 from rich.console import Console
+
+from model_gateway.key_pool_config import (
+    ModelPoolRule,
+    PublishedPoolDocument,
+    pool_config_from_document,
+)
 
 from model_library.base import QueryResult, QueryResultMetadata, TextInput
 from model_library.settings import ModelLibrarySettings
@@ -50,14 +59,18 @@ async def test_decision_smoke_prompt_is_a_decision_request() -> None:
 
 
 def _smoke_answer(choice: str, probabilities: dict[str, float]) -> QueryResult:
-    answers = {"team": {"type": "choice", "choice": choice, "probabilities": probabilities}}
+    answers = {
+        "team": {"type": "choice", "choice": choice, "probabilities": probabilities}
+    }
     return QueryResult(
         output_text=json.dumps({"answers": answers}),
         metadata=QueryResultMetadata(in_tokens=120, out_tokens=0),
     )
 
 
-async def _run_decision_smoke(monkeypatch: pytest.MonkeyPatch, result: QueryResult) -> None:
+async def _run_decision_smoke(
+    monkeypatch: pytest.MonkeyPatch, result: QueryResult
+) -> None:
     model = SimpleNamespace(
         instance_logger=logging.getLogger("t"), query=AsyncMock(return_value=result)
     )

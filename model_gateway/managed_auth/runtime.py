@@ -1,13 +1,11 @@
 import json
 from dataclasses import dataclass
-from datetime import datetime
 from decimal import Decimal
 from typing import Protocol, cast
 from uuid import UUID
 
 from redis.asyncio import Redis
 
-from model_gateway.budgets.schema import BudgetPeriod
 from model_gateway.managed_auth.types import (
     HumanIdentity,
     KeyLimit,
@@ -19,18 +17,8 @@ from model_gateway.run_token_types import ModelPermissions
 
 
 @dataclass(frozen=True)
-class TemporaryProjectIncrease:
-    increase_usd: Decimal
-    period_start: datetime
-    period_end: datetime
-
-
-@dataclass(frozen=True)
 class RuntimeProjectLimit:
-    period: BudgetPeriod
-    base_limit_usd: Decimal
-    temporary_increases: tuple[TemporaryProjectIncrease, ...]
-    total_limit_usd: Decimal | None = None
+    total_limit_usd: Decimal
 
 
 @dataclass(frozen=True)
@@ -43,8 +31,12 @@ class RuntimeAuthority:
     key_limit: KeyLimit | None
 
 
+def authority_key_prefix(namespace: str) -> str:
+    return f"gateway:managed-auth-v2:{namespace}"
+
+
 def authority_hash_key(namespace: str) -> str:
-    return f"gateway:managed-auth:{namespace}:active"
+    return f"{authority_key_prefix(namespace)}:active"
 
 
 class AuthorityReaderRedis(Protocol):
@@ -104,23 +96,7 @@ def serialize_authority(authority: RuntimeAuthority) -> str:
                 "environment": project.environment,
             },
             "project_limit": (
-                {
-                    "period": project_limit.period,
-                    "base_limit_usd": str(project_limit.base_limit_usd),
-                    "temporary_increases": [
-                        {
-                            "increase_usd": str(increase.increase_usd),
-                            "period_start": increase.period_start.isoformat(),
-                            "period_end": increase.period_end.isoformat(),
-                        }
-                        for increase in project_limit.temporary_increases
-                    ],
-                    "total_limit_usd": (
-                        str(project_limit.total_limit_usd)
-                        if project_limit.total_limit_usd is not None
-                        else None
-                    ),
-                }
+                {"total_limit_usd": str(project_limit.total_limit_usd)}
                 if project_limit is not None
                 else None
             ),
@@ -146,23 +122,7 @@ def deserialize_authority(record: str) -> RuntimeAuthority:
     project_limit_data = data["project_limit"]
     key_limit_data = data["key_limit"]
     project_limit = (
-        RuntimeProjectLimit(
-            period=project_limit_data["period"],
-            base_limit_usd=Decimal(project_limit_data["base_limit_usd"]),
-            temporary_increases=tuple(
-                TemporaryProjectIncrease(
-                    increase_usd=Decimal(increase["increase_usd"]),
-                    period_start=datetime.fromisoformat(increase["period_start"]),
-                    period_end=datetime.fromisoformat(increase["period_end"]),
-                )
-                for increase in project_limit_data["temporary_increases"]
-            ),
-            total_limit_usd=(
-                Decimal(project_limit_data["total_limit_usd"])
-                if project_limit_data.get("total_limit_usd") is not None
-                else None
-            ),
-        )
+        RuntimeProjectLimit(Decimal(project_limit_data["total_limit_usd"]))
         if project_limit_data is not None
         else None
     )

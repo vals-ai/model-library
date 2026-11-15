@@ -10,7 +10,7 @@ from model_gateway.managed_auth.authority_publisher import ManagedAuthorityPubli
 from model_gateway.managed_auth.database import create_engine
 from model_gateway.managed_auth.identity import HumanVerifier
 from model_gateway.managed_auth.reconciliation import HumanReconciler
-from model_gateway.managed_auth.runtime import ManagedAuthorityResolver, authority_hash_key
+from model_gateway.managed_auth.runtime import ManagedAuthorityResolver, authority_hash_key, authority_key_prefix
 from model_gateway.managed_auth.store import ManagedAuthStore
 from model_gateway.managed_auth.types import (
     HumanIdentity, PersonalOwner, ProjectReference, ServiceOwner,
@@ -27,7 +27,7 @@ async def test_background_offboarding_changes_personal_authority_without_service
     store = ManagedAuthStore(engine)
     redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
     namespace = f"offboarding-{uuid4().hex}"
-    owner_key = f"gateway:managed-auth:{namespace}:owner"
+    owner_key = f"{authority_key_prefix(namespace)}:owner"
     token = uuid4().hex
     resolver = ManagedAuthorityResolver(redis, namespace=namespace)
     owner = HumanIdentity(ISSUER, f"owner-{uuid4()}")
@@ -63,19 +63,19 @@ async def test_background_offboarding_changes_personal_authority_without_service
             service_project, None, None,
         )
         personal_key = await store.decide_request(
-            personal_request.id, owner, personal_id, ("monthly", Decimal("15")), None,
+            personal_request.id, owner, personal_id, Decimal("15"), None,
         )
         service_key = await store.decide_request(
-            service_request.id, owner, service_key_id, ("monthly", Decimal("20")), None,
+            service_request.id, owner, service_key_id, Decimal("20"), None,
         )
         await store.collect_key(personal_id, personal_key.revision, f"personal-{personal_id}", owner)
         await store.collect_key(service_key_id, service_key.revision, f"service-{service_key_id}", owner)
         assert await redis.set(owner_key, token, nx=True, ex=60)
         assert await publisher.publish_once(token)
         assert (await resolver.by_key_id(personal_id)).project == project
-        assert (await resolver.by_key_id(personal_id)).project_limit.base_limit_usd == Decimal("15")
+        assert (await resolver.by_key_id(personal_id)).project_limit.total_limit_usd == Decimal("15")
         assert (await resolver.by_key_id(service_key_id)).project == service_project
-        assert (await resolver.by_key_id(service_key_id)).project_limit.base_limit_usd == Decimal("20")
+        assert (await resolver.by_key_id(service_key_id)).project_limit.total_limit_usd == Decimal("20")
 
         state["tenants"] = []
         await reconciler.reconcile_once()

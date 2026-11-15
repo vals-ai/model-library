@@ -39,15 +39,16 @@ def _document(revision: int, *keys: str) -> bytes:
 class PoolsAgent:
     """An AppConfig Agent that serves a fixed models and credentials pair."""
 
-    def __init__(self, pools: bytes | None) -> None:
+    def __init__(self, pools: bytes | None, *, status: int = 404) -> None:
         self.pools = pools
+        self.status = status
 
     def client(self) -> AppConfigAgentClient:
         def handle(request: httpx.Request) -> httpx.Response:
             profile = request.url.path.rsplit("/", 1)[-1]
             if profile == "pools":
                 if self.pools is None:
-                    return httpx.Response(404)
+                    return httpx.Response(self.status)
                 return httpx.Response(
                     200, content=self.pools, headers={"Configuration-Version": "1"}
                 )
@@ -142,13 +143,45 @@ async def test_a_served_document_keeps_its_descriptions():
 
 
 @pytest.mark.unit
-async def test_a_stage_without_a_published_document_fails_its_refresh():
-    manager = _manager(PoolsAgent(None))
+@pytest.mark.parametrize("status", [400, 404])
+async def test_a_stage_without_a_deployed_document_serves_empty_pools(status: int):
+    manager = _manager(PoolsAgent(None, status=status))
+
+    first = await manager.refresh_once()
+    second = await manager.refresh_once()
+
+    assert "pools" not in first.failed | first.rejected | second.failed | second.rejected
+    with manager.state.capture():
+        snapshot = runtime_pool_snapshot()
+        assert snapshot is not None and snapshot.document.revision == 0
+        assert model_helpers.current_pool_config().pools == {}
+        assert model_helpers.managed_api_keys(MODEL) == ()
+
+
+@pytest.mark.unit
+async def test_a_deployed_document_that_is_invalid_fails_its_refresh():
+    manager = _manager(PoolsAgent(b'{"pools": 3}'))
 
     result = await manager.refresh_once()
 
     assert "pools" in result.failed
     assert manager.state.current.pools is None
+
+
+@pytest.mark.unit
+async def test_a_published_document_replaces_the_empty_pools():
+    agent = PoolsAgent(None)
+    manager = _manager(agent)
+    await manager.refresh_once()
+
+    agent.pools = _document(1, "ANTHROPIC_API_KEY_2")
+    result = await manager.refresh_once()
+
+    assert "pools" not in result.failed | result.rejected
+    with manager.state.capture():
+        assert model_helpers.managed_api_keys(MODEL) == (
+            model_helpers.ManagedApiKey("pool_1", "ANTHROPIC_API_KEY_2"),
+        )
 
 
 @pytest.mark.unit

@@ -60,6 +60,7 @@ _OPTIONAL_FACT_COLUMNS = frozenset(
         "total_input_tokens",
         "total_output_tokens",
         "cost_usd",
+        "standard_cost_usd",
         "finish_reason_raw",
         "usage_shard",
     }
@@ -79,6 +80,9 @@ _COMPUTED_FACT_SOURCE_PATHS: dict[str, tuple[tuple[str, ...], ...]] = {
     "completed_date": (("completed_at",),),
     "completed_hour": (("completed_at",),),
     "query_id_normalized": (("query_id",),),
+    "served_model_key": (
+        (ledger_schema.DETAILS_FIELD, "result", "metadata", "fallback", "served_model"),
+    ),
     "loaded_at": (),
 }
 
@@ -109,6 +113,7 @@ def redshift_rows_from_usage_event(
     loaded_at_utc = (loaded_at or datetime.now(UTC)).astimezone(UTC)
     performance_data = _performance_data(event[ledger_schema.DETAILS_FIELD])
     query_id = event.get("query_id")
+    fallback = event[ledger_schema.DETAILS_FIELD]["result"]["metadata"].get("fallback")
 
     outcome = event["outcome"] if event["schema_version"] == 4 else "success"
     computed: RedshiftRow = {
@@ -120,6 +125,7 @@ def redshift_rows_from_usage_event(
             minute=0, second=0, microsecond=0, tzinfo=None
         ),
         "query_id_normalized": query_id or None,
+        "served_model_key": fallback["served_model"] if fallback else None,
         "loaded_at": loaded_at_utc,
     }
     fact: RedshiftRow = {"batch_id": batch_id}

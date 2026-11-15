@@ -1,3 +1,5 @@
+import json
+from datetime import UTC, datetime
 import base64
 import gzip
 from unittest.mock import patch
@@ -748,6 +750,7 @@ class TestQueryResultMetadataAddition:
             cache_write_tokens=5,
             duration_seconds=1.5,
             cost=QueryResultCost(input=0.01, output=0.02),
+            effective_cost=QueryResultCost(input=0.005, output=0.01),
         )
         meta2 = QueryResultMetadata(
             in_tokens=200,
@@ -757,6 +760,7 @@ class TestQueryResultMetadataAddition:
             cache_write_tokens=10,
             duration_seconds=2.0,
             cost=QueryResultCost(input=0.02, output=0.03),
+            effective_cost=QueryResultCost(input=0.01, output=0.015),
         )
 
         result = meta1 + meta2
@@ -770,6 +774,9 @@ class TestQueryResultMetadataAddition:
         assert result.cost is not None
         assert result.cost.input == 0.03
         assert result.cost.output == 0.05
+        assert result.effective_cost is not None
+        assert result.effective_cost.input == 0.015
+        assert result.effective_cost.output == 0.025
 
     async def test_add_metadata_missing_optional_tokens(self):
         meta1 = QueryResultMetadata(
@@ -810,6 +817,7 @@ class TestQueryResultMetadataAddition:
             in_tokens=100,
             out_tokens=50,
             cost=QueryResultCost(input=0.01, output=0.02),
+            effective_cost=QueryResultCost(input=0.005, output=0.01),
         )
         meta2 = QueryResultMetadata(in_tokens=200, out_tokens=100, cost=None)
 
@@ -818,6 +826,7 @@ class TestQueryResultMetadataAddition:
         assert result.cost is not None
         assert result.cost.input == 0.01
         assert result.cost.output == 0.02
+        assert result.effective_cost == meta1.effective_cost
 
     async def test_add_metadata_other_has_cost(self):
         meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50, cost=None)
@@ -840,6 +849,7 @@ class TestQueryResultMetadataAddition:
         result = meta1 + meta2
 
         assert result.cost is None
+        assert result.effective_cost is None
 
     async def test_add_metadata_drops_per_query_extra(self):
         meta1 = QueryResultMetadata(in_tokens=100, out_tokens=50)
@@ -931,3 +941,16 @@ def test_web_search_requests_and_cost_are_additive():
     assert total.cost is not None
     assert total.cost.web_search == pytest.approx(0.03)
     assert total.cost.total == pytest.approx(0.03)
+
+
+def test_query_result_metadata_model_dump_is_json_serializable():
+    completed_at = datetime(2026, 11, 9, 1, 18, 18, tzinfo=UTC)
+    metadata = QueryResultMetadata(
+        in_tokens=10, out_tokens=5, completed_at=completed_at
+    )
+
+    dumped = metadata.model_dump()
+    assert dumped["completed_at"] == completed_at.isoformat()
+    assert json.loads(json.dumps(dumped))["completed_at"] == completed_at.isoformat()
+    assert QueryResultMetadata.model_validate(dumped).completed_at == completed_at
+    assert QueryResultMetadata(in_tokens=1).model_dump()["completed_at"] is None

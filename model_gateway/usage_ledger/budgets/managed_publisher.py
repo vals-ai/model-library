@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from hashlib import sha256
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, Unpack, cast
 from uuid import UUID
 
 import sqlalchemy as sa
@@ -25,12 +25,10 @@ from model_gateway.budgets.schema import (
 )
 from model_gateway.managed_auth.types import (
     ProjectAlertIdentity,
-    ProjectLimitRequest,
     ProjectPolicy,
 )
 from model_gateway.usage_ledger import (
     gateway_registry,
-    redshift_schema,
     redshift_statements,
 )
 
@@ -80,6 +78,8 @@ def read_alert_publication_token(
 
 
 _PERIODS: tuple[BudgetPeriod, ...] = ("daily", "weekly", "monthly")
+_ALERT_BREAKDOWN_PERIOD: BudgetPeriod = "monthly"
+PROJECT_ALERT_SCHEMA_VERSION = 2
 _TOTAL_ROW = "total"
 
 
@@ -183,66 +183,139 @@ def publish_managed_spend_snapshot(
         return ManagedSpendPublishResult(snapshot, contributors, models, benchmarks)
 
 
-def _build_managed_spend_query(
+def _inline(value: str) -> sa.BindParameter[str]:
+    return sa.bindparam(None, value, type_=sa.String(), literal_execute=True)
+
+
+def _inline_in(
+    column: sa.ColumnElement[Any], values: list[str]
+) -> sa.ColumnElement[bool]:
+    return column.in_(
+        sa.bindparam(
+            None, values, type_=sa.String(), expanding=True, literal_execute=True
+        )
+    )
+
+
+def _cost_model_key(facts: sa.TableClause) -> sa.ColumnElement[Any]:
+    return sa.func.coalesce(facts.c.served_model_key, facts.c.requested_model_key)
+
+
+def _managed_spend_query(
     bounds: dict[BudgetPeriod, tuple[datetime, datetime]],
     schema: str,
     ignored_models: tuple[str, ...],
     project_ids: list[UUID],
     key_ids: list[UUID],
-) -> str:
-    table = redshift_schema.qualified_table_name("usage_events", schema)
-    periods = "\n  union all\n".join(
-        f"  select {redshift_schema.sql_literal(period)}, "
-        f"cast({redshift_schema.sql_literal(start.isoformat())} as timestamptz), "
-        f"cast({redshift_schema.sql_literal(end.isoformat())} as timestamptz)"
-        for period, (start, end) in bounds.items()
+) -> sa.CompoundSelect[Unpack[tuple[Any, ...]]]:
+    facts = sa.table(
+        "usage_events",
+        sa.column("completed_at"),
+        sa.column("project_id"),
+        sa.column("managed_key_id"),
+        sa.column("identity_email"),
+        sa.column("requested_model_key"),
+        sa.column("served_model_key"),
+        sa.column("benchmark_name"),
+        sa.column("cost_usd"),
+        schema=schema,
     )
-    projects = ", ".join(
-        redshift_schema.sql_literal(str(project_id)) for project_id in project_ids
-    )
-    keys = ", ".join(redshift_schema.sql_literal(str(key_id)) for key_id in key_ids)
-    project_filter = f"project_id in ({projects})" if projects else "1 = 0"
-    key_filter = f"managed_key_id in ({keys})" if keys else "1 = 0"
-    project_scope = f"fact.project_id in ({projects})" if projects else "1 = 0"
-    key_scope = f"fact.managed_key_id in ({keys})" if keys else "1 = 0"
-    ignored = ""
-    if ignored_models:
-        ignored = (
-            "and fact.requested_model_key not in ("
-            + ", ".join(redshift_schema.sql_literal(key) for key in ignored_models)
-            + ")"
+    periods = sa.union_all(
+        *(
+            sa.select(
+                sa.cast(_inline(period), sa.String(16)).label("period"),
+                sa.cast(_inline(start.isoformat()), sa.DateTime(timezone=True)).label(
+                    "period_start"
+                ),
+                sa.cast(_inline(end.isoformat()), sa.DateTime(timezone=True)).label(
+                    "period_end"
+                ),
+            )
+            for period, (start, end) in bounds.items()
         )
-    return f"""with budget_periods(period, period_start, period_end) as (
-{periods}
-), attributed_facts as (
-  select p.period, fact.project_id, fact.managed_key_id, fact.identity_email, fact.requested_model_key, fact.benchmark_name, fact.cost_usd
-  from {table} fact
-  join budget_periods p
-    on fact.completed_at >= p.period_start
-   and fact.completed_at < p.period_end
-  where fact.cost_usd is not null
-    and ({project_scope} or {key_scope})
-    {ignored}
-)
-select period, 'project', project_id, identity_email, sum(cost_usd)
-from attributed_facts
-where {project_filter}
-group by period, project_id, identity_email
-union all
-select period, 'key', managed_key_id, null, sum(cost_usd)
-from attributed_facts
-where {key_filter}
-group by period, managed_key_id
-union all
-select period, 'model', project_id, requested_model_key, sum(cost_usd)
-from attributed_facts
-where {project_filter}
-group by period, project_id, requested_model_key
-union all
-select period, 'benchmark', project_id, benchmark_name, sum(cost_usd)
-from attributed_facts
-where {project_filter}
-group by period, project_id, benchmark_name"""
+    ).cte("budget_periods")
+    projects = [str(project_id) for project_id in project_ids]
+    keys = [str(key_id) for key_id in key_ids]
+    attributed = (
+        sa.select(
+            periods.c.period,
+            facts.c.project_id,
+            facts.c.managed_key_id,
+            facts.c.identity_email,
+            facts.c.requested_model_key,
+            facts.c.benchmark_name,
+            facts.c.cost_usd,
+        )
+        .select_from(
+            facts.join(
+                periods,
+                sa.and_(
+                    facts.c.completed_at >= periods.c.period_start,
+                    facts.c.completed_at < periods.c.period_end,
+                ),
+            )
+        )
+        .where(
+            facts.c.cost_usd.is_not(None),
+            sa.or_(
+                _inline_in(facts.c.project_id, projects),
+                _inline_in(facts.c.managed_key_id, keys),
+            ),
+            sa.not_(_inline_in(_cost_model_key(facts), list(ignored_models))),
+        )
+        .cte("attributed_facts")
+    )
+    row = attributed.c
+    return sa.union_all(
+        *(
+            sa.select(
+                row.period,
+                sa.cast(_inline(dimension), sa.String(16)),
+                root,
+                detail,
+                sa.func.sum(row.cost_usd),
+            )
+            .where(_inline_in(root, ids))
+            .group_by(row.period, root, *grouping)
+            for dimension, root, detail, ids, grouping in (
+                (
+                    "project",
+                    row.project_id,
+                    row.identity_email,
+                    projects,
+                    (row.identity_email,),
+                ),
+                ("key", row.managed_key_id, sa.null(), keys, ()),
+                (
+                    "model",
+                    row.project_id,
+                    row.requested_model_key,
+                    projects,
+                    (row.requested_model_key,),
+                ),
+                (
+                    "benchmark",
+                    row.project_id,
+                    row.benchmark_name,
+                    projects,
+                    (row.benchmark_name,),
+                ),
+            )
+        )
+    )
+
+
+def _compile(
+    statement: sa.CompoundSelect[Unpack[tuple[Any, ...]]],
+) -> tuple[str, list[dict[str, str]]]:
+    dialect = postgresql.dialect(paramstyle="named")
+    dialect.bind_typing = BindTyping.NONE
+    compiled = statement.compile(
+        dialect=dialect, compile_kwargs={"render_postcompile": True}
+    )
+    return str(compiled), [
+        {"name": name, "value": str(value)} for name, value in compiled.params.items()
+    ]
 
 
 def _managed_spend_statement(
@@ -252,24 +325,28 @@ def _managed_spend_statement(
     project_starts: dict[UUID, datetime],
     key_ids: list[UUID],
 ) -> tuple[str, list[dict[str, str]]]:
-    sql = _build_managed_spend_query(
+    periods = _managed_spend_query(
         bounds, schema, ignored_models, list(project_starts), key_ids
     )
     if not project_starts:
-        return sql, []
-    totals, parameters = _total_spend_query(schema, ignored_models, project_starts)
-    return "\n".join((sql, "union all", totals)), parameters
+        return _compile(periods)
+    return _compile(
+        sa.union_all(
+            *periods.selects, _total_spend_query(schema, ignored_models, project_starts)
+        )
+    )
 
 
 def _total_spend_query(
     schema: str, ignored_models: tuple[str, ...], project_starts: dict[UUID, datetime]
-) -> tuple[str, list[dict[str, str]]]:
+) -> sa.Select[Unpack[tuple[Any, ...]]]:
     facts = sa.table(
         "usage_events",
         sa.column("project_id"),
         sa.column("completed_at"),
         sa.column("cost_usd"),
         sa.column("requested_model_key"),
+        sa.column("served_model_key"),
         schema=schema,
     )
     starts = sa.union_all(
@@ -285,7 +362,7 @@ def _total_spend_query(
             for project_id, start in sorted(project_starts.items())
         )
     ).subquery("starts")
-    query = (
+    return (
         sa.select(
             sa.cast(sa.literal(_TOTAL_ROW), sa.String(16)),
             sa.cast(sa.literal("project"), sa.String(16)),
@@ -304,20 +381,12 @@ def _total_spend_query(
         )
         .where(
             facts.c.cost_usd.is_not(None),
-            facts.c.requested_model_key.not_in(
+            _cost_model_key(facts).not_in(
                 [sa.cast(sa.literal(model), sa.String(256)) for model in ignored_models]
             ),
         )
         .group_by(facts.c.project_id)
     )
-    dialect = postgresql.dialect(paramstyle="named")
-    dialect.bind_typing = BindTyping.NONE
-    compiled = query.compile(
-        dialect=dialect, compile_kwargs={"render_postcompile": True}
-    )
-    return str(compiled), [
-        {"name": name, "value": str(value)} for name, value in compiled.params.items()
-    ]
 
 
 def _query_managed_spend(
@@ -411,17 +480,15 @@ def publish_project_alert_snapshot(
     result: ManagedSpendPublishResult,
     policies: tuple[ProjectPolicy, ...],
     identities: dict[UUID, ProjectAlertIdentity],
-    extras: dict[UUID, tuple[ProjectLimitRequest, ...]],
     publication_token: tuple[int, str | None],
 ) -> None:
     projects: list[dict[str, object]] = []
+    totals = cast(dict[str, Decimal], result.snapshot.total_spend_usd)
     for policy in policies:
         project_id = policy.project.project_id
         identity = identities.get(project_id)
         if identity is None:
             continue
-        period = policy.period
-        period_spend = result.snapshot.periods[period]
         projects.append(
             {
                 "project_id": str(project_id),
@@ -429,40 +496,30 @@ def publish_project_alert_snapshot(
                 "handle": identity.handle,
                 "organization_id": policy.project.organization,
                 "environment": policy.project.environment,
-                "period": period,
-                "start": period_spend.start.isoformat(),
-                "end": period_spend.end.isoformat(),
-                "limit_usd": str(
-                    policy.base_limit_usd
-                    # CAS can advance the published day past the day used to load extras.
-                    + sum(
-                        (
-                            extra.increase_usd
-                            for extra in extras.get(project_id, ())
-                            if cast(datetime, extra.period_end)
-                            > result.snapshot.periods["daily"].start
-                        ),
-                        Decimal(0),
-                    )
-                ),
-                "spend_usd": str(period_spend.spend_usd[str(project_id)]),
+                "total_started_at": policy.total_started_at.isoformat(),
+                "total_limit_usd": str(policy.total_limit_usd),
+                "total_spend_usd": str(totals.get(str(project_id), Decimal(0))),
                 "contributors": [
                     {"email": email, "spend_usd": str(amount)}
                     for email, amount in sorted(
-                        result.contributors[period][str(project_id)].items(),
+                        result.contributors[_ALERT_BREAKDOWN_PERIOD][
+                            str(project_id)
+                        ].items(),
                         key=lambda item: (item[0] is not None, item[0] or ""),
                     )
                 ],
                 "models": [
                     {"name": name, "spend_usd": str(amount)}
                     for name, amount in sorted(
-                        result.models[period][str(project_id)].items()
+                        result.models[_ALERT_BREAKDOWN_PERIOD][str(project_id)].items()
                     )
                 ],
                 "benchmarks": [
                     {"name": name, "spend_usd": str(amount)}
                     for name, amount in sorted(
-                        result.benchmarks[period][str(project_id)].items(),
+                        result.benchmarks[_ALERT_BREAKDOWN_PERIOD][
+                            str(project_id)
+                        ].items(),
                         key=lambda item: (item[0] is not None, item[0] or ""),
                     )
                 ],
@@ -470,7 +527,7 @@ def publish_project_alert_snapshot(
         )
     revision, etag = publication_token
     document = {
-        "schema_version": 1,
+        "schema_version": PROJECT_ALERT_SCHEMA_VERSION,
         "stage": result.snapshot.stage,
         "revision": revision + 1,
         "generated_at": datetime.now(UTC).isoformat(),

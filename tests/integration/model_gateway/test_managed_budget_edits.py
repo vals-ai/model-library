@@ -2,18 +2,24 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID, uuid4
 
 import httpx
+from redis.asyncio import Redis
 import pytest
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from fastapi import FastAPI
 from jwt.exceptions import PyJWTError
 
+from model_gateway.budgets.schema import PeriodSpend, SpendSnapshot, period_bounds
+from model_gateway.budgets.service import BudgetService
 from model_gateway.managed_auth.api import router
+from model_gateway.managed_auth.schemas import ProjectAllowanceStateDTO
 from model_gateway.managed_auth.database import create_engine
 from model_gateway.managed_auth.identity import HumanVerifier, MachineVerifier
 from model_gateway.managed_auth.service import PLATFORM_ADMIN, ManagedAuthService
@@ -35,6 +41,7 @@ class Project:
     spend: dict[str, Decimal]
     store: ManagedAuthStore
     member: HumanIdentity
+    app: FastAPI
 
     async def call(self, token: str, method: str, path: str, **kwargs: Any):
         return await self.client.request(
@@ -61,7 +68,9 @@ class Project:
 
 
 @asynccontextmanager
-async def project_with_member() -> AsyncIterator[Project]:
+async def project_with_member(
+    initial_policy: dict[str, str] | None = None,
+) -> AsyncIterator[Project]:
     engine = create_engine(os.environ["MODEL_GATEWAY_AUTH_DATABASE_URL"], 5)
     db = ManagedAuthStore(engine)
     tenant_id = f"descope-tenant-{uuid4()}"
@@ -126,6 +135,7 @@ async def project_with_member() -> AsyncIterator[Project]:
                 spend,
                 db,
                 HumanIdentity(ISSUER, subjects["member"]),
+                app,
             )
             await db.create_service(
                 service_id,
@@ -152,7 +162,7 @@ async def project_with_member() -> AsyncIterator[Project]:
                 "POST",
                 f"/requests/{requested.json()['id']}/approve",
                 json={
-                    "initial_policy": {"period": "monthly", "base_limit_usd": "100.00"}
+                    "initial_policy": initial_policy or {"limit_usd": "100.00"}
                 },
             )
             assert approved.status_code == 200, approved.text
@@ -253,6 +263,30 @@ async def test_members_file_raises_and_only_admins_approve():
         approved = await project.call("admin", "POST", approve_path, json=revision)
         assert approved.status_code == 200 and approved.json()["status"] == "approved"
         assert Decimal((await project.policy())["total_limit_usd"]) == Decimal("125")
+
+
+@pytest.mark.asyncio
+async def test_anyone_signed_in_files_an_increase_and_only_admins_approve():
+    async with project_with_member() as project:
+        before = await project.policy()
+        body = {"kind": "permanent", "increase_usd": "25.00", "reason": "more tasks"}
+        filed = await project.call("outsider", "POST", f"{project.path}/limit-requests", json=body)
+        assert filed.status_code == 200, filed.text
+        assert filed.json()["status"] == "pending"
+        assert filed.json()["creator"]["subject"].startswith("outsider-")
+        assert await project.policy() == before
+        approve_path = f"/limit-requests/{filed.json()['id']}/approve"
+        revision = {"expected_current_policy_revision": before["revision"]}
+        assert (await project.call("outsider", "POST", approve_path, json=revision)).status_code == 403
+        assert (await project.call("outsider", "PUT", f"{project.path}/budget", json={
+            "expected_revision": before["revision"], "limit_usd": "150.00", "reason": "more",
+        })).status_code == 403
+        assert (await project.call(
+            "machine-access-key", "POST", f"{project.path}/limit-requests", json=body
+        )).status_code == 401
+        assert (await project.call(
+            "outsider", "POST", f"/projects/{uuid4()}/limit-requests", json=body
+        )).status_code == 404
 
 
 @pytest.mark.asyncio
@@ -452,3 +486,195 @@ async def test_a_member_whose_key_is_revoked_cannot_edit():
 async def test_a_new_project_keeps_the_reason_it_was_requested_with():
     async with project_with_member() as project:
         assert (await project.policy())["budget_reason"] == "full rerun"
+
+
+async def _add_temporary(project: Project, increase_usd: str):
+    return await project.call(
+        "admin",
+        "POST",
+        f"{project.path}/temporary-increases",
+        json={
+            "expected_revision": (await project.policy())["revision"],
+            "reason": "burst",
+            "increase_usd": increase_usd,
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_new_project_total_starts_at_its_approval():
+    async with project_with_member() as project:
+        project_id = UUID(project.path.removeprefix("/projects/"))
+        first = min(
+            (
+                request
+                for request in await project.store.list_requests()
+                if request.project.project_id == project_id
+            ),
+            key=lambda request: request.created_at,
+        )
+        policy = await project.store.get_project_policy(project_id)
+        assert policy is not None and first.decided_at is not None
+        assert policy.total_started_at == first.decided_at
+        assert policy.total_started_at > first.created_at
+
+
+@pytest.mark.asyncio
+async def test_lowering_keeps_the_total_above_its_temporary_increases():
+    async with project_with_member() as project:
+        added = await _add_temporary(project, "40.00")
+        assert added.status_code == 200, added.text
+        assert Decimal(added.json()["total_limit_usd"]) == Decimal("140")
+        assert (await project.edit("member", "40.00", "trim")).status_code == 409
+        refused = await project.edit("member", "30.00", "trim")
+        assert refused.status_code == 409
+        assert refused.json()["detail"] == (
+            "The new budget $30.00 must stay above the $40.00 of temporary "
+            "increases; remove them first"
+        )
+        lowered = await project.edit("member", "50.00", "trim")
+        assert lowered.status_code == 200, lowered.text
+        removed = await project.call(
+            "admin",
+            "DELETE",
+            f"{project.path}/temporary-increases",
+            json={"expected_revision": (await project.policy())["revision"], "reason": "done"},
+        )
+        assert removed.status_code == 200, removed.text
+        assert Decimal(removed.json()["total_limit_usd"]) == Decimal("10")
+
+
+@pytest.mark.asyncio
+async def test_allowances_report_the_total_and_its_spend():
+    async with project_with_member() as project:
+        project_id = project.path.removeprefix("/projects/")
+        assert (await _add_temporary(project, "40.00")).status_code == 200
+        redis = Redis.from_url(os.environ["REDIS_URL"], decode_responses=True)
+        budgets = BudgetService(stage=f"allowances-{uuid4().hex}", redis=redis)
+        project.app.state.budget_service = budgets
+        now = datetime.now(UTC)
+        try:
+            missing = await project.call("admin", "GET", "/projects/allowances")
+            entry = next(
+                item for item in missing.json()
+                if item["policy"]["project"]["project_id"] == project_id
+            )
+            assert entry["current_total"]["spend_usd"] is None
+            assert entry["current_total"]["remaining_usd"] is None
+            await redis.set(
+                budgets.redis_key,
+                SpendSnapshot(
+                    schema_version=1, stage=budgets.stage, revision=1,
+                    generated_at=now, data_through=now,
+                    periods={
+                        period: PeriodSpend(
+                            start=period_bounds(period, now)[0],
+                            end=period_bounds(period, now)[1],
+                            spend_usd={project_id: Decimal("999")},
+                        )
+                        for period in ("daily", "weekly", "monthly")
+                    },
+                    total_spend_usd={project_id: Decimal("30")},
+                ).model_dump_json(),
+            )
+            listed = await project.call("admin", "GET", "/projects/allowances")
+            assert listed.status_code == 200, listed.text
+            entry = next(
+                item for item in listed.json()
+                if item["policy"]["project"]["project_id"] == project_id
+            )
+            policy = await project.store.get_project_policy(UUID(project_id))
+            assert policy is not None
+            assert "current_period" not in entry
+            assert datetime.fromisoformat(entry["current_total"]["started_at"]) == policy.total_started_at
+            assert Decimal(entry["current_total"]["total_limit_usd"]) == Decimal("140")
+            assert Decimal(entry["current_total"]["spend_usd"]) == Decimal("30")
+            assert Decimal(entry["current_total"]["remaining_usd"]) == Decimal("110")
+            assert datetime.fromisoformat(entry["current_total"]["data_through"]) == now
+            assert [Decimal(item["increase_usd"]) for item in entry["active_temporary_increases"]] == [Decimal("40.00")]
+        finally:
+            await redis.delete(budgets.redis_key)
+            await redis.aclose()
+
+
+@pytest.mark.asyncio
+async def test_the_deployed_dashboard_first_approval_sets_the_same_total():
+    totals = []
+    for initial_policy in (
+        {"limit_usd": "100.00"},
+        {"period": "monthly", "base_limit_usd": "100.00"},
+    ):
+        async with project_with_member(initial_policy) as project:
+            totals.append(Decimal((await project.policy())["total_limit_usd"]))
+    assert totals == [Decimal("100.00"), Decimal("100.00")]
+
+
+@pytest.mark.asyncio
+async def test_a_filed_raise_is_audited_under_the_limit_request_target():
+    async with project_with_member() as project:
+        raised = await project.edit("member", "150.00", "longer eval sweep")
+        request_id = UUID(raised.json()["pending_request"]["id"])
+        events = await project.store.audit_for("project_limit_request", request_id)
+        assert [event.change for event in events] == ["submitted"]
+
+
+@pytest.mark.asyncio
+async def test_an_approved_raise_keeps_the_history_shape_older_tasks_read():
+    async with project_with_member() as project:
+        raised = await project.edit("member", "150.00", "longer eval sweep")
+        request_id = raised.json()["pending_request"]["id"]
+        approved = await project.call(
+            "admin",
+            "POST",
+            f"/limit-requests/{request_id}/approve",
+            json={"expected_current_policy_revision": (await project.policy())["revision"]},
+        )
+        assert approved.status_code == 200, approved.text
+        events = await project.store.audit_for(
+            "project_policy", UUID(project.path.removeprefix("/projects/"))
+        )
+        async with project.store.engine.connect() as connection:
+            detail = (
+                await connection.execute(
+                    text(
+                        "SELECT detail FROM managed_audit WHERE change = 'increase_approved' "
+                        "AND target_id = :id"
+                    ),
+                    {"id": UUID(project.path.removeprefix("/projects/"))},
+                )
+            ).scalar_one()
+        assert events
+        before = ProjectAllowanceStateDTO.model_validate(detail["before"])
+        after = ProjectAllowanceStateDTO.model_validate(detail["after"])
+        assert (before.effective_limit_usd, after.effective_limit_usd) == (
+            Decimal("100.00"),
+            Decimal("150.00"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_new_approvals_and_increases_leave_the_period_columns_empty():
+    async with project_with_member() as project:
+        project_id = UUID(project.path.removeprefix("/projects/"))
+        assert (await _add_temporary(project, "40.00")).status_code == 200
+        async with project.store.engine.connect() as connection:
+            policy = (
+                await connection.execute(
+                    text(
+                        "SELECT period, base_limit_usd FROM managed_project_policies "
+                        "WHERE project_id = :id"
+                    ),
+                    {"id": project_id},
+                )
+            ).one()
+            window = (
+                await connection.execute(
+                    text(
+                        "SELECT period_start, period_end FROM managed_project_limit_requests "
+                        "WHERE project_id = :id AND kind = 'temporary'"
+                    ),
+                    {"id": project_id},
+                )
+            ).one()
+        assert tuple(policy) == (None, None)
+        assert tuple(window) == (None, None)

@@ -14,7 +14,9 @@ from model_library.rate_limits import (
     TokenRateLimit,
 )
 from examples.validate_model import (
+    ConversationProbeResult,
     ProbeValue,
+    StructuredAnswer,
     ValidationCase,
     ValidationReport,
     _build_cases,
@@ -158,21 +160,90 @@ def test_validate_model_runs_all_capability_cases_when_not_declared() -> None:
         assert case.declared is False
 
 
+def _turns(*turns: QueryResult) -> ConversationProbeResult:
+    return ConversationProbeResult(turns=list(turns))
+
+
+def _reasoned(text: str, reasoning_tokens: int) -> QueryResult:
+    result = _query_result(text)
+    result.metadata.reasoning_tokens = reasoning_tokens
+    return result
+
+
 def test_validate_model_flags_undeclared_reasoning() -> None:
     cases = {(case.section, case.name): case for case in _build_cases(_fake_llm())}
     case = cases[("Reasoning", "undeclared reasoning")]
     assert case.declared is False
     assert case.runner is not None
 
-    passed, detail = case.predicate(_query_result("42"))
+    passed, detail = case.predicate(_turns(_query_result("352")))
     assert passed, detail
 
-    reasoning_result = _query_result("42")
+    reasoning_result = _query_result("352")
     reasoning_result.metadata.reasoning_tokens = 7
-    passed, detail = case.predicate(reasoning_result)
+    passed, detail = case.predicate(_turns(_query_result("42"), reasoning_result))
     assert not passed
     assert detail is not None
     assert "reasoning_model is false" in detail
+
+
+def test_validate_model_reasoning_fails_on_turn_one_and_warns_on_later_turns() -> None:
+    model = _fake_llm()
+    model.reasoning = True
+    cases = {(case.section, case.name): case for case in _build_cases(model)}
+    evidence = cases[("Reasoning", "evidence")]
+    later = cases[("Reasoning", "later turns")]
+    assert evidence.runner is later.runner
+    assert (evidence.severity, later.severity) == ("fail", "warn")
+
+    dropped = _turns(_reasoned("157", 5), _reasoned("352", 0))
+    assert evidence.predicate(dropped)[0]
+    passed, detail = later.predicate(dropped)
+    assert not passed
+    assert detail is not None and "turn 2: no reasoning" in detail
+    passed, detail = evidence.predicate(
+        _turns(_reasoned("157", 0), _reasoned("352", 5))
+    )
+    assert not passed
+    assert detail is not None and "turn 1: no reasoning" in detail
+    passed, detail = evidence.predicate(_turns(_reasoned("157", 5), _reasoned("2", 5)))
+    assert not passed
+    assert detail is not None and "final answer is not 352" in detail
+
+
+def test_validate_model_core_fails_when_served_model_differs() -> None:
+    model = _fake_llm()
+    key_model = _fake_llm()
+    cases = {
+        (case.section, case.name): case
+        for case in _build_cases(model, key_models={"LAB_KEY_2": key_model})
+    }
+
+    for case_key in [("Core", "text query"), ("Keys", "LAB_KEY_2")]:
+        predicate = cases[case_key].predicate
+        result = _query_result("ok")
+        assert predicate(result)[0]
+        result.metadata.served_model = "test-model-2026-01-01"
+        assert predicate(result)[0]
+        for served in ["test-model-mini", "other-model"]:
+            result.metadata.served_model = served
+            passed, detail = predicate(result)
+            assert not passed
+            assert detail == f"requested test-model but provider served {served}"
+
+
+def test_validate_model_structured_output_checks_parsed_answer() -> None:
+    cases = {(case.section, case.name): case for case in _build_cases(_fake_llm())}
+    case = cases[("Structured Output", "output schema")]
+    assert case.severity == "warn"
+
+    result = _query_result("{}")
+    result.output_parsed = StructuredAnswer(city="Tokyo", temperature_c=21)
+    assert case.predicate(result)[0]
+    result.output_parsed = StructuredAnswer(city="Osaka", temperature_c=21)
+    passed, detail = case.predicate(result)
+    assert not passed
+    assert detail is not None and "wrong structured answer" in detail
 
 
 def test_validate_model_fails_when_undeclared_file_example_works() -> None:

@@ -22,6 +22,7 @@ from model_gateway.managed_auth.authority_publisher import ManagedAuthorityPubli
 from model_gateway.managed_auth.credentials import create_managed_key_secret
 from model_gateway.managed_auth.database import create_engine
 from model_gateway.managed_auth.reconciliation import HumanReconciler
+from model_gateway.managed_auth.runtime import authority_hash_key, authority_key_prefix
 from model_gateway.managed_auth.store import ManagedAuthStore
 from model_gateway.managed_auth.types import (
     HumanIdentity, KeyLimit, PersonalOwner, ProjectReference, ServiceOwner,
@@ -72,8 +73,8 @@ async def test_managed_query_gate_and_at_use_attribution(monkeypatch):
     service_id = uuid4()
     stage = f"admission-{uuid4()}"
     namespace = f"managed-admission-{uuid4()}"
-    owner_key = f"gateway:managed-auth:{namespace}:owner"
-    active_key = f"gateway:managed-auth:{namespace}:active"
+    owner_key = f"{authority_key_prefix(namespace)}:owner"
+    active_key = authority_hash_key(namespace)
     owner_token = uuid4().hex
     snapshot_key = f"gateway:budgets:{stage}:managed-spend-v2"
     now = datetime.now(UTC)
@@ -126,9 +127,9 @@ async def test_managed_query_gate_and_at_use_attribution(monkeypatch):
         await store.record_human(owner, True, owner)
         await store.create_service(service_id, "project-budgeted-worker", owner)
         for index, (key, target, key_verifier, first_policy) in enumerate((
-            (key_id, project, verifier, ("monthly", Decimal("10"))),
+            (key_id, project, verifier, Decimal("10")),
             (peer_key_id, project, peer_verifier, None),
-            (other_key_id, other_project, other_verifier, ("monthly", Decimal("10"))),
+            (other_key_id, other_project, other_verifier, Decimal("10")),
         )):
             request = await store.create_request(
                 uuid4(), f"personal-{index}", "test", owner,
@@ -143,7 +144,7 @@ async def test_managed_query_gate_and_at_use_attribution(monkeypatch):
             ServiceOwner(service_id), None, uncapped_project, None, None,
         )
         service_pending = await store.decide_request(
-            service_request.id, owner, service_key_id, ("monthly", Decimal("100")), None,
+            service_request.id, owner, service_key_id, Decimal("100"), None,
         )
         await store.collect_key(
             service_key_id, service_pending.revision, service_verifier, owner,
@@ -228,7 +229,6 @@ async def test_managed_query_gate_and_at_use_attribution(monkeypatch):
                         pending_increase.id, owner, policy.revision,
                     )
                     assert approved.status == "approved"
-                    assert approved.period_start <= datetime.now(UTC) < approved.period_end
                     assert await publisher.publish_once(owner_token)
                     shared = await client.post("/query", headers=peer_headers, json=body)
                     assert shared.status_code == 200, shared.text
@@ -255,21 +255,11 @@ async def test_managed_query_gate_and_at_use_attribution(monkeypatch):
                     })
                     await redis.set(snapshot_key, switched_spend.model_dump_json())
                     assert (await client.post("/query", headers=peer_headers, json=body)).status_code == 402
-                    policy = await store.get_project_policy(project.project_id)
-                    switched_policy = await store.update_project_policy(
-                        project.project_id, policy.revision, "weekly", Decimal("10"), owner,
-                    )
-                    assert switched_policy.period == "weekly"
-                    assert await publisher.publish_once(owner_token)
-                    switched_authority = await app.state.managed_authority.by_key_id(key_id)
-                    assert switched_authority.project_limit.period == "weekly"
-                    assert switched_authority.project_limit.temporary_increases[0].period_start == approved.period_start
-                    assert switched_authority.project_limit.temporary_increases[0].period_end == approved.period_end
-                    switched_refused = await client.post("/query", headers=peer_headers, json=body)
-                    assert switched_refused.status_code == 402, switched_refused.text
+                    raised_authority = await app.state.managed_authority.by_key_id(key_id)
+                    assert raised_authority.project_limit.total_limit_usd == Decimal("15")
                     assert provider.calls == len(ledger.events) == 4
 
-                    future = approved.period_end + timedelta(seconds=1)
+                    future = now + timedelta(days=40)
                     await redis.set(
                         snapshot_key, spend_snapshot(future, 4, Decimal("10")).model_dump_json(),
                     )
@@ -289,7 +279,7 @@ async def test_managed_query_gate_and_at_use_attribution(monkeypatch):
                     policy = await store.get_project_policy(project.project_id)
                     await store.approve_limit_request(permanent.id, owner, policy.revision)
                     raised = await store.get_project_policy(project.project_id)
-                    assert (raised.base_limit_usd, raised.total_limit_usd) == (Decimal("10"), Decimal("20"))
+                    assert raised.total_limit_usd == Decimal("20")
                     assert await publisher.publish_once(owner_token)
                     with patch.object(request_budget, "datetime", FutureDatetime):
                         permanent_allowed = await client.post("/query", headers=headers, json=body)

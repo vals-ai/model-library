@@ -429,9 +429,8 @@ def test_sanitize_attributes_keeps_ids_and_content_but_drops_credentials():
     assert attrs["question_id"] == "q1"
     assert attrs["gen_ai.usage.input_tokens"] == 12
     assert attrs["gateway.enabled"]
-    assert attrs["gateway.error_code"] == "access_denied"
-    assert attrs["gateway.error_phase"] == "access_control"
-    assert attrs["gateway.error_provider"] == "openai"
+    assert attrs["gateway.error.code"] == "access_denied"
+    assert "gateway.error_code" not in attrs
     assert attrs["long"] == "x" * telemetry.MAX_ATTRIBUTE_LENGTH
     assert attrs["prompt"] == "do not record"
     assert attrs["raw_input"] == "do not record"
@@ -1381,7 +1380,6 @@ def test_record_exception_records_sentry_issue_without_exception_message_on_span
         {
             "exception.type": "RuntimeError",
             "gateway.error.code": "provider_error",
-            "gateway.error_code": "provider_error",
         },
     )
     assert span.events == [expected_event]

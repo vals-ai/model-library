@@ -267,7 +267,7 @@ def create_app() -> FastAPI:
             )
             app.state.managed_machine_verifier = MachineVerifier(
                 project_id=descope_project_id,
-                expected_issuer=descope_issuer,
+                expected_issuer=descope_project_id,
                 required_organization=descope_organization,
                 registered_access_key_id=registered_machine_key_id,
                 service_id=machine_service_owner_id,

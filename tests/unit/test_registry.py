@@ -2,6 +2,7 @@
 
 import asyncio
 import time
+from datetime import UTC, datetime
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Literal
@@ -26,7 +27,7 @@ from model_library.register_models import (
     get_provider_registry,
     register_provider,
 )
-from model_library.registry_utils import get_registry_model, recompute_cost
+from model_library.registry_utils import TokenDict, get_registry_model, recompute_cost
 
 
 @pytest.mark.parametrize("concurrency_type", ["threads", "async"])
@@ -281,6 +282,60 @@ async def test_none_costs():
     assert result is None
 
 
+def test_discount_follows_context_batch_and_cache_rate_selection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from model_library.base import QueryResultMetadata
+    from model_library.register_models import (
+        BatchCost,
+        CacheCost,
+        ContextCost,
+        CostProperties,
+    )
+    from model_library.registry_utils import compute_model_cost, discount_model_cost
+
+    costs = CostProperties(
+        input=2.0,
+        output=8.0,
+        cache=CacheCost(read=1.0, write=3.0, write_1h_markup=2.0),
+        context=ContextCost(
+            threshold=1500,
+            input=4.0,
+            output=12.0,
+            cache=CacheCost(read=2.0, write=5.0, write_1h_markup=2.0),
+        ),
+        batch=BatchCost(
+            input_discount=0.5, output_discount=0.5, cache_discount=0.5
+        ),
+        current_discount=50,
+    )
+    monkeypatch.setattr(registry_utils, "get_model_cost", lambda _key: costs)
+    usage = QueryResultMetadata(
+        in_tokens=1000,
+        out_tokens=2000,
+        reasoning_tokens=250,
+        cache_read_tokens=500,
+        cache_write_tokens=100,
+        cache_write_1h_tokens=25,
+    )
+
+    cost = compute_model_cost("test/context-batch", usage, batch=True)
+
+    assert cost is not None
+    assert cost.input == pytest.approx(0.002)
+    assert cost.output == pytest.approx(0.012)
+    assert cost.reasoning == pytest.approx(0.0015)
+    assert cost.cache_read == pytest.approx(0.0005)
+    assert cost.cache_write == pytest.approx(0.0002875)
+
+    discounted_cost = discount_model_cost("test/context-batch", cost)
+    assert discounted_cost.input == pytest.approx(0.001)
+    assert discounted_cost.output == pytest.approx(0.006)
+    assert discounted_cost.reasoning == pytest.approx(0.00075)
+    assert discounted_cost.cache_read == pytest.approx(0.00025)
+    assert discounted_cost.cache_write == pytest.approx(0.00014375)
+
+
 @pytest.mark.parametrize(
     "model_key,fee",
     [
@@ -324,3 +379,188 @@ async def test_web_search_cost_absent_without_searches():
     )
     assert cost is not None
     assert cost.web_search is None
+
+
+@pytest.mark.parametrize(
+    ("model_key", "at", "factor"),
+    [
+        ("deepseek/deepseek-v4-flash", datetime(2026, 11, 4, 1, 0, tzinfo=UTC), 1.0),
+        ("deepseek/deepseek-v4-flash", datetime(2026, 11, 4, 3, 59, tzinfo=UTC), 1.0),
+        ("deepseek/deepseek-v4-flash", datetime(2026, 11, 4, 4, 0, tzinfo=UTC), 0.5),
+        ("deepseek/deepseek-v4-flash", datetime(2026, 11, 4, 6, 0, tzinfo=UTC), 1.0),
+        ("deepseek/deepseek-v4-flash", datetime(2026, 11, 4, 10, 0, tzinfo=UTC), 0.5),
+        ("deepseek/deepseek-v4-flash", datetime(2026, 11, 4, 16, 0, tzinfo=UTC), 0.5),
+        ("deepseek/deepseek-v4-flash", datetime(2026, 11, 7, 2, 0, tzinfo=UTC), 0.5),
+        ("deepseek/deepseek-v4-pro-medium", datetime(2026, 11, 4, 16, 0, tzinfo=UTC), 0.5),
+        ("deepseek/deepseek-v4.1-flash-1017", datetime(2026, 11, 8, 8, 0, tzinfo=UTC), 0.5),
+        ("deepseek/deepseek-chat", datetime(2026, 11, 4, 16, 0, tzinfo=UTC), 1.0),
+    ],
+)
+def test_deepseek_off_peak_halves_token_cost_outside_weekday_peak_hours(
+    model_key: str, at: datetime, factor: float
+) -> None:
+    from model_library.registry_utils import QueryResultCost, discount_model_cost
+
+    cost = QueryResultCost(input=1.0, output=2.0, cache_read=0.5, web_search=0.1)
+
+    discounted = discount_model_cost(model_key, cost, at=at)
+
+    assert discounted.input == pytest.approx(1.0 * factor)
+    assert discounted.output == pytest.approx(2.0 * factor)
+    assert discounted.cache_read == pytest.approx(0.5 * factor)
+    assert discounted.web_search == pytest.approx(0.1)
+
+
+@pytest.mark.parametrize(
+    ("completed_at", "factor"),
+    [
+        (datetime(2026, 11, 7, 2, 0, tzinfo=UTC), 0.5),
+        (datetime(2026, 11, 9, 2, 0, tzinfo=UTC), 1.0),
+        (None, 1.0),
+    ],
+)
+async def test_recompute_cost_prices_off_peak_from_completed_at(
+    completed_at: datetime | None, factor: float
+) -> None:
+    tokens: TokenDict = {"in_tokens": 1_000_000, "out_tokens": 1_000_000}
+    standard = await recompute_cost("deepseek/deepseek-v4.1-flash-1017", tokens)
+
+    cost = await recompute_cost(
+        "deepseek/deepseek-v4.1-flash-1017", tokens, completed_at=completed_at
+    )
+
+    assert cost.total == pytest.approx(standard.total * factor)
+
+
+async def test_a_query_can_be_repriced_from_its_returned_metadata_alone() -> None:
+    from unittest.mock import AsyncMock, patch
+
+    from model_library.base import QueryResult, QueryResultMetadata
+
+    model_key = "deepseek/deepseek-v4.1-flash-1017"
+    model = get_registry_model(model_key)
+    usage = QueryResultMetadata(in_tokens=1_000_000, out_tokens=1_000_000)
+    off_peak = datetime(2026, 11, 7, 2, 0, tzinfo=UTC)
+    with (
+        patch.object(
+            type(model),
+            "_query_impl",
+            new=AsyncMock(return_value=QueryResult(output_text="hi", metadata=usage)),
+        ),
+        patch("model_library.base.base.datetime", wraps=datetime) as clock,
+    ):
+        clock.now.return_value = off_peak
+        out = await model.query("hi")
+
+    saved = QueryResultMetadata.model_validate_json(out.metadata.model_dump_json())
+    tokens: TokenDict = {"in_tokens": saved.in_tokens, "out_tokens": saved.out_tokens}
+    repriced = await recompute_cost(model_key, tokens, completed_at=saved.completed_at)
+
+    assert saved.completed_at == off_peak
+    assert out.metadata.effective_cost is not None and out.metadata.cost is not None
+    assert repriced.total == pytest.approx(out.metadata.effective_cost.total)
+    assert repriced.total == pytest.approx(out.metadata.cost.total * 0.5)
+
+
+async def test_recompute_cost_takes_off_the_current_discount() -> None:
+    """Solar Decide lists input at $0.10/M with 50% off, so a call is charged $0.05/M."""
+    tokens: TokenDict = {"in_tokens": 1_000_000, "out_tokens": 0}
+
+    cost = await recompute_cost("decision/solar-decide", tokens)
+
+    assert cost.input == pytest.approx(0.05)
+
+
+@pytest.mark.parametrize(
+    ("completed_at", "factor"),
+    [
+        (datetime(2026, 8, 16, 15, 59, tzinfo=UTC), 1.0),
+        (datetime(2026, 8, 16, 16, 0, tzinfo=UTC), 0.5),
+    ],
+)
+async def test_recompute_cost_gives_no_off_peak_before_it_started(
+    completed_at: datetime, factor: float
+) -> None:
+    tokens: TokenDict = {"in_tokens": 1_000_000, "out_tokens": 1_000_000}
+    standard = await recompute_cost("deepseek/deepseek-v4.1-flash-1017", tokens)
+
+    cost = await recompute_cost(
+        "deepseek/deepseek-v4.1-flash-1017", tokens, completed_at=completed_at
+    )
+
+    assert cost.total == pytest.approx(standard.total * factor)
+
+
+@pytest.mark.parametrize(
+    ("completed_at", "factor"),
+    [
+        (datetime(2026, 10, 1, 2, 0, tzinfo=UTC), 0.5),
+        (datetime(2026, 10, 7, 8, 0, tzinfo=UTC), 0.5),
+        (datetime(2026, 10, 8, 2, 0, tzinfo=UTC), 1.0),
+    ],
+)
+async def test_recompute_cost_treats_china_holidays_as_off_peak(
+    completed_at: datetime, factor: float
+) -> None:
+    tokens: TokenDict = {"in_tokens": 1_000_000, "out_tokens": 1_000_000}
+    standard = await recompute_cost("deepseek/deepseek-v4.1-flash-1017", tokens)
+
+    cost = await recompute_cost(
+        "deepseek/deepseek-v4.1-flash-1017", tokens, completed_at=completed_at
+    )
+
+    assert cost.total == pytest.approx(standard.total * factor)
+
+
+def test_off_peak_stacks_with_current_discount(monkeypatch: pytest.MonkeyPatch) -> None:
+    from model_library.register_models import (
+        CostProperties,
+        OffPeakDiscount,
+    )
+    from model_library.registry_utils import QueryResultCost, discount_model_cost
+
+    costs = CostProperties(
+        input=1.0,
+        output=2.0,
+        current_discount=20,
+        off_peak=OffPeakDiscount(
+            discount=50,
+            discount_hours_utc={"mon-fri": [(0, 1), (4, 24)]},
+        ),
+    )
+    monkeypatch.setattr(registry_utils, "get_model_cost", lambda _key: costs)
+    cost = QueryResultCost(input=1.0, output=2.0)
+
+    peak = discount_model_cost("test/both", cost, at=datetime(2026, 11, 4, 2, tzinfo=UTC))
+    off_peak = discount_model_cost(
+        "test/both", cost, at=datetime(2026, 11, 4, 12, tzinfo=UTC)
+    )
+
+    assert peak.input == pytest.approx(0.8)
+    assert off_peak.input == pytest.approx(0.4)
+    assert off_peak.output == pytest.approx(0.8)
+
+
+@pytest.mark.parametrize(
+    "hours",
+    [
+        {"mon-fri": [(0, 24)], "fri": [(0, 24)]},
+        {"monday": [(0, 24)]},
+        {"fri-mon": [(0, 24)]},
+        {"mon": [(4, 4)]},
+    ],
+)
+def test_off_peak_rejects_bad_discount_hours(hours: dict[str, list[tuple[int, int]]]) -> None:
+    from model_library.register_models import OffPeakDiscount
+
+    with pytest.raises(ValueError):
+        OffPeakDiscount(discount=50, discount_hours_utc=hours)
+
+
+def test_off_peak_gives_no_hourly_discount_on_an_unmapped_day() -> None:
+    from model_library.register_models import OffPeakDiscount
+
+    off_peak = OffPeakDiscount(discount=50, discount_hours_utc={"sat": [(0, 24)]})
+
+    assert off_peak.applies_at(datetime(2026, 11, 7, 12, tzinfo=UTC))
+    assert not off_peak.applies_at(datetime(2026, 11, 8, 12, tzinfo=UTC))

@@ -85,6 +85,7 @@ async def test_interactions_transcription_sends_audio_only(
     client.aio.files.delete.assert_awaited_once_with(name="files/audio")
     call = client.aio.interactions.create.await_args.kwargs
     assert call["model"] == "gemini-3.5-transcribe"
+    assert call["automatic_continuation"] is False
     assert call["input"] == [
         {
             "type": "audio",
@@ -167,9 +168,10 @@ async def test_live_transcription_caps_ingest_rate_and_ends_the_stream() -> None
 
     client = SimpleNamespace(aio=SimpleNamespace(live=SimpleNamespace(connect=connect)))
 
-    with patch(
-        "model_library.base.transcription.asyncio.sleep", new=AsyncMock()
-    ) as sleep:
+    with (
+        patch("model_library.base.transcription.asyncio.sleep", new=AsyncMock()) as sleep,
+        patch("model_library.base.transcription.time.perf_counter", return_value=0.0),
+    ):
         result = await transcribe_live(
             cast(Client, client), "gemini-3.5-transcribe-live", _request()
         )
@@ -189,7 +191,7 @@ async def test_live_transcription_caps_ingest_rate_and_ends_the_stream() -> None
     # Live rejects audio delivered faster than 10x realtime.
     assert sleep.await_count == 1
     assert sleep.await_args is not None
-    assert sleep.await_args.args[0] == pytest.approx(0.01, abs=0.005)
+    assert sleep.await_args.args[0] == pytest.approx(0.01)
 
 
 @pytest.mark.unit
@@ -262,3 +264,32 @@ async def test_live_transcription_finishes_after_all_audio_segments(
     assert result.text == "hello world"
     assert result.metadata.input_tokens == (12 if with_usage else None)
     assert result.metadata.output_tokens == (3 if with_usage else None)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_google_model_transcription_forwards_automatic_continuation(
+    enabled: bool,
+) -> None:
+    from pydantic import SecretStr
+
+    from model_library.base import LLMConfig
+    from model_library.providers.google.google import GoogleConfig, GoogleModel
+
+    model = GoogleModel(
+        "gemini-3.5-transcribe",
+        config=LLMConfig(
+            custom_api_key=SecretStr("test-key"),
+            provider_config=GoogleConfig(automatic_continuation=enabled),
+        ),
+    )
+    with (
+        patch.object(model, "get_client", return_value=object()),
+        patch(
+            "model_library.providers.google.google.transcribe_interactions",
+            new=AsyncMock(),
+        ) as transcribe,
+    ):
+        await model._transcribe_audio(_request())  # pyright: ignore[reportPrivateUsage]
+
+    assert transcribe.await_args.kwargs["automatic_continuation"] is enabled

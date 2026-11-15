@@ -13,9 +13,9 @@ from sqlalchemy import RowMapping
 
 from model_gateway.budgets.schema import BudgetPeriod, period_bounds
 from model_gateway.managed_auth.types import (
+    LimitRequestKind,
     LimitRequestStatus,
     PROJECT_POLICY_AUDIT,
-    TEMPORARY_INCREASE,
 )
 
 revision: str = "a4d7c2e9b315"
@@ -103,7 +103,7 @@ def upgrade() -> None:
         sa.select(sa.func.coalesce(sa.func.sum(requests.c.increase_usd), 0))
         .where(
             requests.c.project_id == policies.c.project_id,
-            requests.c.kind == TEMPORARY_INCREASE,
+            requests.c.kind == LimitRequestKind.TEMPORARY,
             requests.c.status == LimitRequestStatus.APPROVED,
         )
         .scalar_subquery()

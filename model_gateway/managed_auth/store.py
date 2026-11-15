@@ -1,7 +1,7 @@
 import logging
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import Literal
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
 from sqlalchemy import insert, or_, select, update
@@ -10,7 +10,6 @@ from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 from sqlalchemy.sql.elements import ColumnElement
 
-from model_gateway.budgets.schema import BudgetPeriod, period_bounds
 from model_gateway.managed_auth import tables as t
 from model_gateway.managed_auth.types import (
     ActorIdentity,
@@ -18,22 +17,22 @@ from model_gateway.managed_auth.types import (
     HumanIdentity,
     KeyLimit,
     KeyOwner,
-    LimitRequestKind,
-    TEMPORARY_INCREASE,
-    LimitRequestStatus,
-    PERMANENT_INCREASE,
-    PROJECT_POLICY_AUDIT,
-    KeyStatus,
     KeyRequest,
+    KeyStatus,
+    LimitRequestKind,
+    LimitRequestStatus,
     MachineIdentity,
     ManagedKey,
-    ProjectAlertIdentity,
+    PROJECT_LIMIT_REQUEST_AUDIT,
+    PROJECT_POLICY_AUDIT,
     PersonalOwner,
+    ProjectAlertIdentity,
     ProjectLimitRequest,
     ProjectPolicy,
     ProjectReference,
     ServiceOwner,
     SystemIdentity,
+    TemporaryIncreaseAction,
 )
 
 logger = logging.getLogger(__name__)
@@ -87,6 +86,17 @@ def _read_owner(row: RowMapping) -> KeyOwner:
 
 def _human_id(identity: HumanIdentity) -> UUID:
     return uuid5(NAMESPACE_URL, f"{identity.issuer}\0{identity.subject}")
+
+
+def _total_state(total_usd: Decimal) -> dict[str, object]:
+    return {
+        "period": None,
+        "period_start": None,
+        "period_end": None,
+        "base_limit_usd": None,
+        "effective_limit_usd": str(total_usd),
+        "active_temporary_increases": [],
+    }
 
 
 class ManagedAuthStore:
@@ -310,7 +320,7 @@ class ManagedAuthStore:
         request_id: UUID,
         actor: HumanIdentity | SystemIdentity,
         key_id: UUID | None,
-        first_policy: tuple[BudgetPeriod, Decimal] | None,
+        first_total_usd: Decimal | None,
         auto_approval_threshold_usd: Decimal | None,
     ) -> ManagedKey | None:
         now = datetime.now(UTC)
@@ -354,9 +364,8 @@ class ManagedAuthStore:
                 .first()
             )
             if policy is None:
-                if first_policy is None:
+                if first_total_usd is None:
                     raise ValueError("first key approval requires a project policy")
-                period, base_limit_usd = first_policy
                 created_policy = (
                     await connection.execute(
                         pg_insert(t.project_policies)
@@ -364,10 +373,8 @@ class ManagedAuthStore:
                             project_id=row["project_id"],
                             project_organization=row["project_organization"],
                             project_environment=row["project_environment"],
-                            period=period,
-                            base_limit_usd=base_limit_usd,
-                            total_limit_usd=base_limit_usd,
-                            total_started_at=period_bounds(period, now)[0],
+                            total_limit_usd=first_total_usd,
+                            total_started_at=now,
                             budget_reason=row["budget_reason"],
                             revision=1,
                             created_at=now,
@@ -384,14 +391,15 @@ class ManagedAuthStore:
                 await self._audit(
                     connection,
                     actor,
-                    "project_policy",
+                    PROJECT_POLICY_AUDIT,
                     row["project_id"],
                     "approved",
                     detail={
                         "reason": row["budget_reason"],
                         "before": None,
-                        "after": self._allowance_state(period, base_limit_usd, now, ()),
+                        "after": _total_state(first_total_usd),
                         "affected_request_ids": [],
+                        "total_after_usd": str(first_total_usd),
                         "auto_approval_threshold_usd": str(auto_approval_threshold_usd)
                         if auto_approval_threshold_usd is not None
                         else None,
@@ -403,7 +411,7 @@ class ManagedAuthStore:
                 or policy["project_environment"] != row["project_environment"]
             ):
                 raise ValueError("project reference changed since request")
-            elif first_policy is not None:
+            elif first_total_usd is not None:
                 raise ValueError("project is already approved")
             created = (
                 await connection.execute(
@@ -771,46 +779,17 @@ class ManagedAuthStore:
     def _policy(row: RowMapping) -> ProjectPolicy:
         return ProjectPolicy(
             _project(row),
-            row["period"],
-            row["base_limit_usd"],
+            row["total_limit_usd"],
+            row["total_started_at"],
             row["revision"],
             row["created_at"],
             row["updated_at"],
-            row["total_limit_usd"],
-            row["total_started_at"],
             row["budget_reason"],
             row["archived_at"],
         )
 
-    @staticmethod
-    def _allowance_state(
-        period: BudgetPeriod,
-        base: Decimal,
-        now: datetime,
-        extras: tuple[RowMapping | dict[str, Any], ...],
-    ) -> dict[str, object]:
-        start, end = period_bounds(period, now)
-        return {
-            "period": period,
-            "period_start": start.isoformat(),
-            "period_end": end.isoformat(),
-            "base_limit_usd": str(base),
-            "effective_limit_usd": str(
-                base + sum((row["increase_usd"] for row in extras), Decimal(0))
-            ),
-            "active_temporary_increases": [
-                {
-                    "id": str(row["id"]),
-                    "increase_usd": str(row["increase_usd"]),
-                    "period_start": row["period_start"].isoformat(),
-                    "period_end": row["period_end"].isoformat(),
-                }
-                for row in extras
-            ],
-        }
-
     async def _active_extras(
-        self, connection: AsyncConnection, project_id: UUID, now: datetime
+        self, connection: AsyncConnection, project_id: UUID
     ) -> tuple[RowMapping, ...]:
         return tuple(
             (
@@ -818,11 +797,9 @@ class ManagedAuthStore:
                     select(t.project_limit_requests)
                     .where(
                         t.project_limit_requests.c.project_id == project_id,
-                        t.project_limit_requests.c.kind == "temporary",
+                        t.project_limit_requests.c.kind == LimitRequestKind.TEMPORARY,
                         t.project_limit_requests.c.status == "approved",
                         t.project_limit_requests.c.cancelled_at.is_(None),
-                        t.project_limit_requests.c.period_start <= now,
-                        t.project_limit_requests.c.period_end > now,
                     )
                     .order_by(t.project_limit_requests.c.id)
                 )
@@ -832,7 +809,7 @@ class ManagedAuthStore:
         )
 
     async def list_project_allowance_sources(
-        self, now: datetime
+        self,
     ) -> tuple[tuple[ProjectPolicy, ...], dict[UUID, tuple[ProjectLimitRequest, ...]]]:
         async with self.engine.connect() as connection:
             await connection.execution_options(isolation_level="REPEATABLE READ")
@@ -853,11 +830,10 @@ class ManagedAuthStore:
                         await connection.execute(
                             self._limit_request_query()
                             .where(
-                                t.project_limit_requests.c.kind == "temporary",
+                                t.project_limit_requests.c.kind
+                                == LimitRequestKind.TEMPORARY,
                                 t.project_limit_requests.c.status == "approved",
                                 t.project_limit_requests.c.cancelled_at.is_(None),
-                                t.project_limit_requests.c.period_start <= now,
-                                t.project_limit_requests.c.period_end > now,
                             )
                             .order_by(
                                 t.project_limit_requests.c.project_id,
@@ -976,11 +952,23 @@ class ManagedAuthStore:
         async with self.engine.begin() as connection:
             before = (
                 await connection.execute(
-                    select(t.project_policies.c.total_limit_usd).where(
-                        t.project_policies.c.project_id == project_id
-                    )
+                    select(t.project_policies.c.total_limit_usd)
+                    .where(t.project_policies.c.project_id == project_id)
+                    .with_for_update()
                 )
             ).scalar_one_or_none()
+            temporary = sum(
+                (
+                    item["increase_usd"]
+                    for item in await self._active_extras(connection, project_id)
+                ),
+                Decimal(0),
+            )
+            if total_limit_usd <= temporary:
+                raise ValueError(
+                    f"The new budget ${total_limit_usd} must stay above the "
+                    f"${temporary} of temporary increases; remove them first"
+                )
             row = (
                 (
                     await connection.execute(
@@ -1068,83 +1056,6 @@ class ManagedAuthStore:
             )
             return tuple(self._policy(row) for row in rows)
 
-    async def update_project_policy(
-        self,
-        project_id: UUID,
-        expected_revision: int,
-        period: BudgetPeriod,
-        base_limit_usd: Decimal,
-        actor: HumanIdentity,
-        reason: str | None = None,
-    ) -> ProjectPolicy | None:
-        async with self.engine.begin() as connection:
-            current = (
-                (
-                    await connection.execute(
-                        select(t.project_policies)
-                        .where(t.project_policies.c.project_id == project_id)
-                        .with_for_update()
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            if current is None or current["revision"] != expected_revision:
-                return None
-            now = datetime.now(UTC)
-            extras = await self._active_extras(connection, project_id, now)
-            before = self._allowance_state(
-                current["period"], current["base_limit_usd"], now, extras
-            )
-            total: Decimal | None = None
-            if current["total_limit_usd"] is not None:
-                moved: Decimal = (
-                    current["total_limit_usd"]
-                    + base_limit_usd
-                    - current["base_limit_usd"]
-                )
-                if moved <= 0:
-                    raise ValueError("project total must stay above zero")
-                total = moved
-            row = (
-                (
-                    await connection.execute(
-                        update(t.project_policies)
-                        .where(
-                            t.project_policies.c.project_id == project_id,
-                            t.project_policies.c.revision == expected_revision,
-                        )
-                        .values(
-                            period=period,
-                            base_limit_usd=base_limit_usd,
-                            total_limit_usd=total,
-                            revision=expected_revision + 1,
-                            updated_at=now,
-                        )
-                        .returning(t.project_policies)
-                    )
-                )
-                .mappings()
-                .first()
-            )
-            if row is None:
-                return None
-            await self._audit(
-                connection,
-                actor,
-                "project_policy",
-                project_id,
-                "policy_changed",
-                detail={
-                    "reason": reason,
-                    "before": before,
-                    "after": self._allowance_state(period, base_limit_usd, now, extras),
-                    "affected_request_ids": [],
-                },
-                occurred_at=now,
-            )
-            return self._policy(row)
-
     @staticmethod
     def _limit_request_query():
         return select(
@@ -1164,8 +1075,6 @@ class ManagedAuthStore:
             ),
             row["kind"],
             row["increase_usd"],
-            row["period_start"],
-            row["period_end"],
             row["reason"],
             HumanIdentity(row["creator_issuer"], row["creator_subject"]),
             row["status"],
@@ -1258,7 +1167,7 @@ class ManagedAuthStore:
                         await connection.execute(
                             select(t.audit)
                             .where(
-                                t.audit.c.target_kind == "project_policy",
+                                t.audit.c.target_kind == PROJECT_POLICY_AUDIT,
                                 t.audit.c.target_id == project_id,
                             )
                             .order_by(t.audit.c.occurred_at, t.audit.c.id)
@@ -1290,9 +1199,8 @@ class ManagedAuthStore:
         expected_revision: int,
         actor: HumanIdentity,
         reason: str,
-        action: Literal["add", "set", "remove"],
+        action: TemporaryIncreaseAction,
         amount: Decimal | None,
-        expected_period: tuple[datetime, datetime] | None,
     ) -> ProjectPolicy | None:
         async with self.engine.begin() as connection:
             policy = (
@@ -1309,17 +1217,16 @@ class ManagedAuthStore:
             if policy is None or policy["revision"] != expected_revision:
                 return None
             now = datetime.now(UTC)
-            if action != "remove":
-                if period_bounds(policy["period"], now) != expected_period:
-                    raise ValueError("project budget period changed since preview")
-            if action == "set" and amount < policy["base_limit_usd"]:
-                raise ValueError("temporary limit must be at least the recurring base")
-            extras = await self._active_extras(connection, project_id, now)
-            before = self._allowance_state(
-                policy["period"], policy["base_limit_usd"], now, extras
+            extras = await self._active_extras(connection, project_id)
+            without_temporary = policy["total_limit_usd"] - sum(
+                (item["increase_usd"] for item in extras), Decimal(0)
             )
+            if action == TemporaryIncreaseAction.SET and amount < without_temporary:
+                raise ValueError(
+                    "temporary limit must be at least the total without temporary increases"
+                )
             cancelled_ids: list[UUID] = []
-            if action != "add":
+            if action != TemporaryIncreaseAction.ADD:
                 cancelled_ids = [item["id"] for item in extras]
                 if cancelled_ids:
                     await connection.execute(
@@ -1331,27 +1238,23 @@ class ManagedAuthStore:
                             cancellation_reason=reason,
                         )
                     )
-            if action == "add":
+            if action == TemporaryIncreaseAction.ADD:
                 increase = amount
-            elif action == "set":
-                increase = amount - policy["base_limit_usd"]
+            elif action == TemporaryIncreaseAction.SET:
+                increase = amount - without_temporary
             else:
                 increase = None
             added: tuple[RowMapping, ...] = ()
             if increase is not None and increase > 0:
-                start, end = period_bounds(policy["period"], now)
-                added_id = uuid4()
                 added_row = (
                     (
                         await connection.execute(
                             insert(t.project_limit_requests)
                             .values(
-                                id=added_id,
+                                id=uuid4(),
                                 project_id=project_id,
-                                kind=TEMPORARY_INCREASE,
+                                kind=LimitRequestKind.TEMPORARY,
                                 increase_usd=increase,
-                                period_start=start,
-                                period_end=end,
                                 reason=reason,
                                 **_identity(actor, "creator_"),
                                 status=LimitRequestStatus.APPROVED,
@@ -1366,56 +1269,57 @@ class ManagedAuthStore:
                     .one()
                 )
                 added = (added_row,)
-            values: dict[str, Decimal | int | datetime] = {
-                "revision": expected_revision + 1,
-                "updated_at": now,
-            }
-            if policy["total_limit_usd"] is not None:
-                total: Decimal = (
-                    policy["total_limit_usd"]
-                    + sum((item["increase_usd"] for item in added), Decimal(0))
-                    - sum(
-                        (item["increase_usd"] for item in extras if action != "add"),
-                        Decimal(0),
-                    )
+            total: Decimal = (
+                policy["total_limit_usd"]
+                + sum((item["increase_usd"] for item in added), Decimal(0))
+                - sum(
+                    (
+                        item["increase_usd"]
+                        for item in extras
+                        if action != TemporaryIncreaseAction.ADD
+                    ),
+                    Decimal(0),
                 )
-                if total <= 0:
-                    raise ValueError("project total must stay above zero")
-                values["total_limit_usd"] = total
+            )
+            if total <= 0:
+                raise ValueError("project total must stay above zero")
             row = (
                 (
                     await connection.execute(
                         update(t.project_policies)
                         .where(t.project_policies.c.project_id == project_id)
-                        .values(**values)
+                        .values(
+                            total_limit_usd=total,
+                            revision=expected_revision + 1,
+                            updated_at=now,
+                        )
                         .returning(t.project_policies)
                     )
                 )
                 .mappings()
                 .one()
             )
-            after_extras = (extras if action == "add" else ()) + added
             await self._audit(
                 connection,
                 actor,
-                "project_policy",
+                PROJECT_POLICY_AUDIT,
                 project_id,
                 {
-                    "add": "temporary_added",
-                    "set": "temporary_set",
-                    "remove": "temporary_removed",
+                    TemporaryIncreaseAction.ADD: "temporary_added",
+                    TemporaryIncreaseAction.SET: "temporary_set",
+                    TemporaryIncreaseAction.REMOVE: "temporary_removed",
                 }[action],
                 detail={
                     "reason": reason,
-                    "before": before,
-                    "after": self._allowance_state(
-                        policy["period"], policy["base_limit_usd"], now, after_extras
-                    ),
+                    "before": _total_state(policy["total_limit_usd"]),
+                    "after": _total_state(total),
                     "affected_request_ids": [
                         *(str(item) for item in cancelled_ids),
                         *(str(item["id"]) for item in added),
                     ],
                     "direct_request_ids": [str(item["id"]) for item in added],
+                    "total_before_usd": str(policy["total_limit_usd"]),
+                    "total_after_usd": str(total),
                 },
                 occurred_at=now,
             )
@@ -1458,7 +1362,11 @@ class ManagedAuthStore:
                 )
             )
             await self._audit(
-                connection, creator, "project_limit_request", request_id, "submitted"
+                connection,
+                creator,
+                PROJECT_LIMIT_REQUEST_AUDIT,
+                request_id,
+                "submitted",
             )
         request = await self.get_limit_request(request_id)
         assert request is not None
@@ -1508,7 +1416,7 @@ class ManagedAuthStore:
                 insert(t.project_limit_requests).values(
                     id=request_id,
                     project_id=project_id,
-                    kind=PERMANENT_INCREASE,
+                    kind=LimitRequestKind.PERMANENT,
                     increase_usd=target_total_usd - policy["total_limit_usd"],
                     target_total_usd=target_total_usd,
                     source_revision=expected_revision + 1,
@@ -1519,7 +1427,11 @@ class ManagedAuthStore:
                 )
             )
             await self._audit(
-                connection, creator, "project_limit_request", request_id, "submitted"
+                connection,
+                creator,
+                PROJECT_LIMIT_REQUEST_AUDIT,
+                request_id,
+                "submitted",
             )
         request = await self.get_limit_request(request_id)
         assert request is not None
@@ -1571,77 +1483,50 @@ class ManagedAuthStore:
                     "project budget changed after this raise was filed; file it again"
                 )
             now = datetime.now(UTC)
-            extras = await self._active_extras(connection, request["project_id"], now)
-            before = self._allowance_state(
-                policy["period"], policy["base_limit_usd"], now, extras
+            total: Decimal = (
+                request["target_total_usd"]
+                or policy["total_limit_usd"] + request["increase_usd"]
             )
-            decision = {
-                "status": LimitRequestStatus.APPROVED,
-                **_identity(actor, "decided_by_"),
-                "decided_at": now,
-            }
-            values: dict[str, Decimal | int | datetime]
-            base_after: Decimal = policy["base_limit_usd"]
-            if request["kind"] == TEMPORARY_INCREASE:
-                start, end = period_bounds(policy["period"], now)
-                decision.update(period_start=start, period_end=end)
-            if policy["total_limit_usd"] is not None:
-                values = {
-                    "total_limit_usd": request["target_total_usd"]
-                    or policy["total_limit_usd"] + request["increase_usd"],
-                    "revision": expected_revision + 1,
-                    "updated_at": now,
-                }
-            elif request["kind"] == TEMPORARY_INCREASE:
-                values = {"revision": expected_revision + 1, "updated_at": now}
-            else:
-                new_base: Decimal = policy["base_limit_usd"] + request["increase_usd"]
-                base_after = new_base
-                values = {
-                    "base_limit_usd": new_base,
-                    "revision": expected_revision + 1,
-                    "updated_at": now,
-                }
             await connection.execute(
                 update(t.project_policies)
                 .where(
                     t.project_policies.c.project_id == request["project_id"],
                     t.project_policies.c.revision == expected_revision,
                 )
-                .values(**values)
+                .values(
+                    total_limit_usd=total,
+                    revision=expected_revision + 1,
+                    updated_at=now,
+                )
             )
             await connection.execute(
                 update(t.project_limit_requests)
                 .where(t.project_limit_requests.c.id == request_id)
-                .values(**decision)
+                .values(
+                    status=LimitRequestStatus.APPROVED,
+                    **_identity(actor, "decided_by_"),
+                    decided_at=now,
+                )
             )
             await self._audit(
                 connection,
                 actor,
-                "project_policy",
+                PROJECT_POLICY_AUDIT,
                 request["project_id"],
                 "increase_approved",
                 detail={
                     "reason": request["reason"],
-                    "before": before,
-                    "after": self._allowance_state(
-                        policy["period"],
-                        base_after,
-                        now,
-                        extras
-                        + (
-                            (dict(request) | decision,)
-                            if request["kind"] == TEMPORARY_INCREASE
-                            else ()
-                        ),
-                    ),
+                    "before": _total_state(policy["total_limit_usd"]),
+                    "after": _total_state(total),
                     "affected_request_ids": [str(request_id)],
                     "request_id": str(request_id),
+                    "total_before_usd": str(policy["total_limit_usd"]),
+                    "total_after_usd": str(total),
                 },
                 occurred_at=now,
             )
             await self._audit(
-                connection, actor, "project_limit_request", request_id, "approved"
+                connection, actor, PROJECT_LIMIT_REQUEST_AUDIT, request_id, "approved"
             )
         result = await self.get_limit_request(request_id)
         assert result is not None
@@ -1662,7 +1547,7 @@ class ManagedAuthStore:
                 )
             )
             await self._audit(
-                connection, actor, "project_limit_request", request_id, "denied"
+                connection, actor, PROJECT_LIMIT_REQUEST_AUDIT, request_id, "denied"
             )
         result = await self.get_limit_request(request_id)
         assert result is not None

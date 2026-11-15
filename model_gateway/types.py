@@ -194,22 +194,11 @@ def query_result_response_body(
     data = QueryResult.model_dump(
         result,
         mode="json",
-        exclude={"history": True, "metadata": {"performance": True}},
+        exclude={"history"},
         exclude_none=True,
         exclude_unset=failed,
         exclude_computed_fields=failed,
     )
-    performance = result.metadata.performance
-    if performance is not None:
-        # Deployed clients reject unknown performance fields; the ledger keeps the rest.
-        data["metadata"]["performance"] = {
-            "time_to_first_token_ms": performance.time_to_first_token_ms.model_dump(
-                mode="json",
-                exclude_none=True,
-                exclude_unset=failed,
-                exclude_computed_fields=failed,
-            )
-        }
     data["signed_history"] = signed_history
     return data
 

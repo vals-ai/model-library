@@ -16,7 +16,7 @@ from openai import (
 from openai.types.create_embedding_response import CreateEmbeddingResponse
 from openai.types.moderation_create_response import ModerationCreateResponse
 from pydantic import BaseModel
-from typing_extensions import deprecated, override
+from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
@@ -26,7 +26,6 @@ from model_library.base import (
     LLM,
     LLMConfig,
     ProviderConfig,
-    PydanticT,
     QueryResult,
     QueryResultCost,
     QueryResultMetadata,
@@ -244,19 +243,6 @@ class OpenAIModel(LLM):
     @override
     async def get_rate_limit(self) -> RateLimit | None:
         return await self._api.get_rate_limit(self)
-
-    @deprecated("Use query(output_schema=...) instead")
-    @override
-    async def query_json(
-        self,
-        input: Sequence[InputItem],
-        pydantic_model: type[PydanticT],
-        output_schema: dict[str, Any] | type[BaseModel] | None = None,
-        **kwargs: object,
-    ) -> PydanticT:
-        return await responses.query_json(
-            self, input, pydantic_model, output_schema=output_schema, **kwargs
-        )
 
     async def get_embedding(
         self, text: str, model: str = "text-embedding-3-small"

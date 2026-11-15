@@ -343,10 +343,10 @@ def normalize_query_input(
     else:
         input_items = list(input)
 
-    # Back-compat: system_prompt kwarg is deprecated; prefer a leading SystemInput.
-    system_prompt = kwargs.pop("system_prompt", None) if kwargs is not None else None
-    if system_prompt is not None:
-        input_items = [SystemInput(text=str(system_prompt)), *input_items]
+    if kwargs is not None and "system_prompt" in kwargs:
+        raise TypeError(
+            "system_prompt kwarg was removed; pass SystemInput as the first input item"
+        )
 
     all_input = [*list(history), *input_items]
     validate_query_input(all_input)

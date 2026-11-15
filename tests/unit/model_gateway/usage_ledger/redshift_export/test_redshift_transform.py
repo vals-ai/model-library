@@ -10,7 +10,10 @@ from typing import cast
 import pytest
 
 from model_gateway.usage_ledger import redshift_schema
-from model_gateway.usage_ledger.redshift_transform import redshift_rows_from_usage_event
+from model_gateway.usage_ledger.redshift_transform import (
+    redshift_export_source_paths,
+    redshift_rows_from_usage_event,
+)
 
 
 _TIMELINE = {"encoding": "gzip+base64", "data": "opaque"}
@@ -103,6 +106,7 @@ def test_redshift_rows_from_usage_event_maps_v3_fact_and_performance_rows() -> N
         "query_id_normalized": None,
         "attempt_id": "attempt-1",
         "requested_model_key": "openai/gpt-4.1-mini",
+        "served_model_key": None,
         "provider": "openai",
         "provider_endpoint": "default",
         "param_group": "pg",
@@ -130,6 +134,7 @@ def test_redshift_rows_from_usage_event_maps_v3_fact_and_performance_rows() -> N
         "total_output_tokens": 25,
         "duration_seconds": Decimal("1.234567"),
         "cost_usd": Decimal("0.123456789012"),
+        "standard_cost_usd": None,
         "finish_reason": "stop",
         "finish_reason_raw": "stop",
         "schema_version": 3,
@@ -147,6 +152,28 @@ def test_redshift_rows_from_usage_event_maps_v3_fact_and_performance_rows() -> N
         "performance_truncated": False,
         "loaded_at": datetime(2026, 5, 29, 12, 35, 1, tzinfo=UTC),
     }
+
+
+def test_redshift_rows_record_the_fallback_model_that_served() -> None:
+    details = _details()
+    details["result"]["metadata"]["fallback"] = {  # pyright: ignore[reportIndexIssue]
+        "requested_model": "anthropic/requested",
+        "served_model": "anthropic/fallback",
+        "hops": [],
+    }
+
+    served = redshift_rows_from_usage_event(_usage_event(details=details), batch_id="b")
+    unserved = redshift_rows_from_usage_event(_usage_event(), batch_id="b")
+
+    assert served.fact["served_model_key"] == "anthropic/fallback"
+    assert unserved.fact["served_model_key"] is None
+    assert (
+        "details",
+        "result",
+        "metadata",
+        "fallback",
+        "served_model",
+    ) in redshift_export_source_paths()
 
 
 @pytest.mark.parametrize(
@@ -230,6 +257,7 @@ def test_redshift_rows_from_usage_event_handles_optional_root_and_performance() 
     assert rows.fact["api_key_name"] is None
     assert rows.fact["finish_reason"] == "length"
     assert rows.fact["finish_reason_raw"] is None
+    assert rows.fact["standard_cost_usd"] is None
     assert rows.performance["timeline"] is None
     assert not rows.performance["performance_truncated"]
 
@@ -263,6 +291,7 @@ def test_v4_failed_result_preserves_unknown_measurements_and_explicit_zero() -> 
     assert rows.fact["error_type"] == "InvalidStructuredOutputError"
     assert rows.fact["input_tokens"] == 0
     assert rows.fact["cost_usd"] == Decimal("0")
+    assert rows.fact["standard_cost_usd"] is None
     assert all(rows.fact[field] is None for field in (
         "output_tokens", "reasoning_tokens", "cache_read_tokens",
         "cache_write_tokens", "total_input_tokens", "total_output_tokens",

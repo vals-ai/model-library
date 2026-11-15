@@ -60,15 +60,15 @@ async def test_approval_collection_rotation_limit_and_immutable_audit():
         )
         assert await store.get_project_policy(project.project_id) is None
         results = await asyncio.gather(
-            store.decide_request(request_id, person, key_id, ("monthly", Decimal("35.00")), None),
-            store.decide_request(request_id, person, key_id, ("monthly", Decimal("35.00")), None),
+            store.decide_request(request_id, person, key_id, Decimal("35.00"), None),
+            store.decide_request(request_id, person, key_id, Decimal("35.00"), None),
             return_exceptions=True,
         )
         assert len([result for result in results if not isinstance(result, Exception)]) == 1
         assert len([result for result in results if isinstance(result, ValueError)]) == 1
         policy = await store.get_project_policy(project.project_id)
-        assert policy.project == project and policy.period == "monthly"
-        assert policy.base_limit_usd == Decimal("35.00") and policy.revision == 1
+        assert policy.project == project
+        assert policy.total_limit_usd == Decimal("35.00") and policy.revision == 1
         key = await store.get_key(key_id)
         assert key.status == "pending_collection" and key.verifier_hash is None
         assert key.project == project
@@ -145,9 +145,9 @@ async def test_service_owner_project_policy():
             request_id, "worker key", "deployment", creator, owner, None, project, None, None,
         )
         assert await store.get_project_policy(project.project_id) is None
-        await store.decide_request(request_id, creator, key_id, ("monthly", Decimal("10")), None)
+        await store.decide_request(request_id, creator, key_id, Decimal("10"), None)
         policy = await store.get_project_policy(project.project_id)
-        assert policy.period == "monthly" and policy.base_limit_usd == Decimal("10")
+        assert policy.total_limit_usd == Decimal("10")
         key = await store.get_key(key_id)
         assert key.creator == creator and key.owner == owner and key.project == project
         await store.collect_key(key_id, key.revision, str(uuid4()), creator)

@@ -6,6 +6,7 @@ import os
 import threading
 from collections.abc import Iterator
 from contextlib import nullcontext
+from decimal import Decimal
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Literal, cast
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -35,9 +36,12 @@ from model_library.base import (
     dump_gateway_config,
 )
 from model_library.base.gateway import _decode_gateway_success
-from model_library.base.output import QueryResultCost
+from model_library.base.output import QueryResult, QueryResultCost, QueryResultMetadata
 from model_library.exceptions import GatewayProviderError
+from model_library.providers.openai import OpenAIModel
 from model_library.register_models import (
+    CacheCost,
+    CostProperties,
     get_model_registry,
     get_transcription_registry,
     model_config_from_json,
@@ -329,7 +333,6 @@ def test_metrics_http_span_uses_method_and_route_name():
 def test_create_app_requires_gateway_keys_and_hmac_secret(
     settings: dict[str, str], message: str
 ):
-    from model_gateway import main
 
     class GatewaySettings:
         def get(self, name: str, default: str | None = None) -> str | None:
@@ -343,7 +346,7 @@ def test_create_app_requires_gateway_keys_and_hmac_secret(
         patch.dict(os.environ, {}, clear=True),
         pytest.raises(RuntimeError, match=message),
     ):
-        main.create_app()
+        gateway_app.create_app()
 
     client = _make_client(runtime_role="query")
     cast(Any, client.app).state.managed_authority_ready.set()
@@ -353,7 +356,6 @@ def test_create_app_requires_gateway_keys_and_hmac_secret(
 
 
 def test_lifespan_survives_malformed_otel_env():
-    from model_gateway import main
     from model_library import telemetry
 
     class ServerSettings:
@@ -394,7 +396,7 @@ def test_lifespan_survives_malformed_otel_env():
         patch.object(gateway_app, "set_redis_client"),
         patch.object(gateway_app, "RateLimitMonitor", return_value=rate_limit_monitor),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         with TestClient(app) as client:
             resp = client.get("/health/live")
 
@@ -629,7 +631,6 @@ def test_health_ready_waits_for_enabled_startup_canary():
 
 
 def test_lifespan_loads_model_registry_at_startup():
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -669,7 +670,7 @@ def test_lifespan_loads_model_registry_at_startup():
         patch.object(gateway_app, "set_redis_client"),
         patch.object(gateway_app, "RateLimitMonitor", return_value=rate_limit_monitor),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         with TestClient(app):
             mock_get_model_names.assert_called_once_with()
 
@@ -782,6 +783,192 @@ def test_registry_snapshot_requires_auth_and_returns_full_configs():
     )
 
 
+def test_registry_hides_off_peak_unless_excluded_fields_are_requested() -> None:
+    key = "deepseek/deepseek-v4-flash"
+    config = get_model_registry()[key]
+
+    with patch(
+        "model_gateway.routes.models.get_registries",
+        return_value=({key: config}, {}),
+    ):
+        client = _make_client()
+        legacy = client.get("/registry", headers=OPERATIONAL_HEADERS)
+        full = client.get(
+            "/registry",
+            params={"include_excluded_fields": "true"},
+            headers=OPERATIONAL_HEADERS,
+        )
+
+    assert legacy.status_code == 200, legacy.text
+    assert "off_peak" not in legacy.json()["models"][key]["costs_per_million_token"]
+    assert full.status_code == 200, full.text
+    full_config = full.json()["models"][key]
+    off_peak = dict(full_config["costs_per_million_token"]["off_peak"])
+    assert "2026-10-01" in off_peak.pop("discount_days")
+    assert off_peak == {
+        "discount": 50.0,
+        "discount_hours_utc": {
+            "mon-fri": [[0, 1], [4, 6], [10, 24]],
+            "sat-sun": [[0, 24]],
+        },
+        "starts_at": "2026-08-16T16:00:00Z",
+        "weekday_peak_hours_utc": [
+            {"start_hour": 1, "end_hour": 4},
+            {"start_hour": 6, "end_hour": 10},
+        ],
+    }
+    parsed = model_config_from_json(full_config).costs_per_million_token
+    assert parsed is not None
+    assert parsed.off_peak == config.costs_per_million_token.off_peak
+
+
+@pytest.mark.parametrize(
+    ("discount", "reported_bill"),
+    [(None, None), (50, None), (100, None), (50, 0.0123), (50, 0.0)],
+)
+def test_gateway_registry_discount_matches_query_and_ledger(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    discount: int | None,
+    reported_bill: float | None,
+) -> None:
+    import model_library.registry_utils as registry_utils
+    from model_gateway import metrics
+
+    metrics.flush_metrics()
+    capsys.readouterr()
+
+    key = "openai/gpt-4o"
+    config = get_model_registry()[key].model_copy(deep=True)
+    config.costs_per_million_token = CostProperties(
+        input=2.0,
+        output=8.0,
+        cache=CacheCost(read=1.0, write=3.0, write_1h_markup=2.0),
+        current_discount=discount,
+    )
+    monkeypatch.setattr(registry_utils, "get_model_registry", lambda: {key: config})
+    model = OpenAIModel(
+        key.split("/", 1)[1], config=LLMConfig(native=False, registry_key=key)
+    )
+    provider_usage = QueryResultMetadata(
+        in_tokens=1000,
+        out_tokens=2000,
+        reasoning_tokens=250,
+        cache_read_tokens=500,
+        cache_write_tokens=100,
+        cache_write_1h_tokens=25,
+        web_search_requests=2,
+        extra={"upstream_cost": reported_bill} if reported_bill is not None else {},
+    )
+    ledger = MagicMock(enabled=True)
+    ledger.start = AsyncMock()
+    ledger.close = AsyncMock()
+    ledger.write_event = AsyncMock()
+
+    with (
+        patch(
+            "model_gateway.routes.models.get_registries",
+            return_value=({key: config}, {}),
+        ),
+        patch.object(model_helpers, "get_registry_model", return_value=model),
+        patch.object(
+            model,
+            "_query_impl",
+            return_value=QueryResult(output_text="priced", metadata=provider_usage),
+        ) as provider_call,
+        patch.object(gateway_app, "create_usage_ledger_from_env", return_value=ledger),
+    ):
+        client = _make_client()
+        legacy_response = client.get("/registry", headers=OPERATIONAL_HEADERS)
+        registry_response = client.get(
+            "/registry",
+            params={"include_excluded_fields": "true"},
+            headers=OPERATIONAL_HEADERS,
+        )
+        query_response = client.post(
+            "/query",
+            json={"model": key, "inputs": [{"kind": "text", "text": "hi"}]},
+            headers=HEADERS,
+        )
+    capsys.readouterr()
+    metrics.flush_metrics()
+    metric_payloads = [
+        _load_json(line) for line in capsys.readouterr().out.splitlines()
+    ]
+    query_metrics = [
+        payload
+        for payload in metric_payloads
+        if payload.get("Operation") == "query"
+        and payload.get("Model") == key
+        and "ParamGroup" in payload
+    ]
+    assert len(query_metrics) == 1
+
+    assert legacy_response.status_code == 200, legacy_response.text
+    assert (
+        "current_discount"
+        not in legacy_response.json()["models"][key]["costs_per_million_token"]
+    )
+    assert registry_response.status_code == 200, registry_response.text
+    published = registry_response.json()["models"][key]["costs_per_million_token"]
+    assert published["input"] == 2.0
+    assert published["output"] == 8.0
+    assert published["cache"]["read"] == 1.0
+    assert published["cache"]["write"] == 3.0
+    if discount is None:
+        assert "current_discount" not in published
+    else:
+        assert published["current_discount"] == discount
+    assert query_response.status_code == 200, query_response.text
+    provider_call.assert_awaited_once()
+    returned_metadata = query_response.json()["metadata"]
+    returned_cost = returned_metadata["cost"]
+    effective_cost = returned_metadata["effective_cost"]
+    assert query_metrics[0]["CostUsd"] == pytest.approx(effective_cost["total"])
+    assert returned_cost["input"] == pytest.approx(0.002)
+    assert returned_cost["output"] == pytest.approx(0.016)
+    assert returned_cost["reasoning"] == pytest.approx(0.002)
+    assert returned_cost["cache_read"] == pytest.approx(0.0005)
+    assert returned_cost["cache_write"] == pytest.approx(0.000325)
+    assert returned_cost["web_search"] == pytest.approx(0.02)
+    assert returned_cost["total"] == pytest.approx(0.040825)
+    if reported_bill is not None:
+        assert effective_cost["input"] == 0
+        assert effective_cost["output"] == 0
+        assert effective_cost["total_override"] == pytest.approx(reported_bill)
+        assert effective_cost["total"] == pytest.approx(reported_bill)
+    else:
+        factor = 1 - (discount or 0) / 100
+        for component in ("input", "output", "reasoning", "cache_read", "cache_write"):
+            assert effective_cost[component] == pytest.approx(
+                returned_cost[component] * factor
+            )
+        assert effective_cost["web_search"] == pytest.approx(0.02)
+        assert effective_cost["total"] == pytest.approx(0.02 + 0.020825 * factor)
+        if discount is None:
+            assert effective_cost == returned_cost
+        if discount == 100:
+            for component in (
+                "input",
+                "output",
+                "reasoning",
+                "cache_read",
+                "cache_write",
+            ):
+                assert effective_cost[component] == 0
+    ledger.write_event.assert_awaited_once()
+    event = ledger.write_event.await_args.args[0]
+    assert event["cost_usd"] == Decimal(str(effective_cost["total"])).quantize(
+        Decimal("0.000000000001")
+    )
+    assert event["standard_cost_usd"] == Decimal(str(returned_cost["total"])).quantize(
+        Decimal("0.000000000001")
+    )
+    details_metadata = event["details"]["result"]["metadata"]
+    assert details_metadata["cost"] == {**returned_cost, "total_override": None}
+    assert details_metadata["effective_cost"] == QueryResultCost.model_validate(
+        effective_cost
+    ).model_dump(mode="json")
 def test_registry_snapshot_can_exclude_same_provider_alternative_keys():
     client = _make_client()
 
@@ -1079,7 +1266,6 @@ def test_token_retry_status_returns_503_when_redis_is_not_configured():
 
 
 def test_lifespan_starts_and_closes_usage_ledger():
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -1121,7 +1307,7 @@ def test_lifespan_starts_and_closes_usage_ledger():
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         with TestClient(app):
             assert fake_ledger.started == 1
             assert fake_ledger.closed == 0
@@ -1131,7 +1317,6 @@ def test_lifespan_starts_and_closes_usage_ledger():
 
 
 def test_lifespan_close_continues_after_usage_ledger_close_failure():
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -1184,7 +1369,7 @@ def test_lifespan_close_continues_after_usage_ledger_close_failure():
         patch.object(gateway_app, "get_model_names", return_value=["openai/gpt-4o"]),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         with TestClient(app):
             pass
 
@@ -1193,7 +1378,6 @@ def test_lifespan_close_continues_after_usage_ledger_close_failure():
 
 
 def test_lifespan_flushes_delivery_metrics_after_telemetry_shutdown():
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -1259,7 +1443,7 @@ def test_lifespan_flushes_delivery_metrics_after_telemetry_shutdown():
             side_effect=publish_until_stopped,
         ),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         with TestClient(app):
             pass
 
@@ -1267,7 +1451,6 @@ def test_lifespan_flushes_delivery_metrics_after_telemetry_shutdown():
 
 
 def test_lifespan_closes_owned_redis_client():
-    from model_gateway import main
 
     class ServerSettings:
         MODEL_GATEWAY_API_KEYS = '{"test":"sk-test"}'
@@ -1303,7 +1486,7 @@ def test_lifespan_closes_owned_redis_client():
         patch.object(gateway_app, "RateLimitMonitor", return_value=rate_limit_monitor),
         patch.object(gateway_app, "model_library_settings", ServerSettings()),
     ):
-        app = main.create_app()
+        app = gateway_app.create_app()
         with TestClient(app):
             mock_set_redis_client.assert_called_once_with(fake_redis)
 
@@ -2006,9 +2189,18 @@ def test_query_metrics_param_group_uses_bounded_config_and_request_context(capsy
     from model_gateway import metrics
     from model_library.base.output import QueryResult
 
+    metrics.flush_metrics()
+    capsys.readouterr()
+
     class FakeLLM:
         async def query(self, inputs: Any, **kwargs: Any):
-            return QueryResult(output_text="ok", history=cast(Any, inputs))
+            return QueryResult(
+                output_text="ok",
+                history=cast(Any, inputs),
+                metadata=QueryResultMetadata(
+                    cost=QueryResultCost(input=0.1, output=0.2)
+                ),
+            )
 
     client = _make_client()
     with patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()):
@@ -2025,6 +2217,7 @@ def test_query_metrics_param_group_uses_bounded_config_and_request_context(capsy
             )
             assert resp.status_code == 200
 
+    capsys.readouterr()
     metrics.flush_metrics()
     payloads = [_load_json(line) for line in capsys.readouterr().out.splitlines()]
     model_payloads = [
@@ -2036,6 +2229,7 @@ def test_query_metrics_param_group_uses_bounded_config_and_request_context(capsy
     ]
     assert len(model_payloads) == 1
     assert model_payloads[0]["ModelRequestCount"] == 2
+    assert "CostUsd" not in model_payloads[0]
 
 
 def test_query_rejects_extra_params():
@@ -2165,7 +2359,6 @@ def _decode_otlp_payloads(
 
 
 def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
-    from model_gateway import main
     from model_library import telemetry
     from model_library.base.output import QueryResult
 
@@ -2246,7 +2439,7 @@ def test_query_enabled_otel_exports_config_hash_and_redacted_lookup():
                 ),
             ),
         ):
-            app = main.create_app()
+            app = gateway_app.create_app()
             with TestClient(app) as client:
                 _attach_query_authority(
                     client,
@@ -2890,7 +3083,8 @@ def test_query_marks_sign_history_phase_when_signing_fails():
     with (
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
         patch(
-            "model_gateway.routes.query.sign_history", side_effect=RuntimeError("boom")
+            "model_gateway.routes.query.LLM.serialize_input",
+            side_effect=RuntimeError("boom"),
         ),
         patch.object(gateway_app.telemetry, "record_exception") as record_exception,
     ):
@@ -2947,7 +3141,8 @@ def test_query_sign_history_failure_does_not_write_usage_ledger():
         ),
         patch.object(model_helpers, "get_registry_model", return_value=FakeLLM()),
         patch(
-            "model_gateway.routes.query.sign_history", side_effect=RuntimeError("boom")
+            "model_gateway.routes.query.LLM.serialize_input",
+            side_effect=RuntimeError("boom"),
         ),
     ):
         client = _make_client()
@@ -3224,3 +3419,55 @@ def test_invalid_decision_request_is_not_a_retriable_5xx():
 
     assert resp.status_code < 500
     assert "not valid JSON" in resp.text
+
+
+def test_query_content_filter_with_result_transports_refusal_metadata():
+    from model_library.exceptions import ContentFilterError
+
+    stop_details = {
+        "category": "cyber",
+        "recommended_model": "claude-fallback-test",
+        "has_fallback_credit_token": True,
+    }
+
+    class RefusingLLM:
+        async def query(self, inputs, **kwargs):
+            raise ContentFilterError(
+                "refused",
+                query_result=QueryResult(
+                    metadata=QueryResultMetadata(
+                        in_tokens=12,
+                        out_tokens=0,
+                        extra={"anthropic_refusal_stop_details": stop_details},
+                    )
+                ),
+            )
+
+    ledger = MagicMock(enabled=True)
+    ledger.start = AsyncMock()
+    ledger.close = AsyncMock()
+    ledger.write_event = AsyncMock()
+    with (
+        patch.object(model_helpers, "get_registry_model", return_value=RefusingLLM()),
+        patch.object(gateway_app, "create_usage_ledger_from_env", return_value=ledger),
+        patch.object(route_helpers, "emit_model_success") as emit_success,
+    ):
+        client = _make_client()
+        resp = client.post(
+            "/query",
+            json={
+                "model": "anthropic/claude-sonnet-4-6",
+                "inputs": [{"kind": "text", "text": "hi"}],
+            },
+            headers=HEADERS,
+        )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert set(payload) == {"error", "result"}
+    assert payload["error"]["exception_type"] == "ContentFilterError"
+    assert payload["result"]["metadata"]["extra"] == {
+        "anthropic_refusal_stop_details": stop_details
+    }
+    ledger.write_event.assert_awaited_once()
+    emit_success.assert_not_called()

@@ -5,7 +5,11 @@ from uuid import UUID
 from model_gateway.run_tokens import RunTokenClaims
 from model_gateway.valsmith_catalog import VALSMITH_OVERRIDES, ValSmithPolicy
 from model_library.register_models import get_model_registry, model_config_from_json
-from tests.unit.model_gateway._support import HEADERS, _make_client, attach_run_authority
+from tests.unit.model_gateway._support import (
+    HEADERS,
+    _make_client,
+    attach_run_authority,
+)
 
 
 def test_catalog_preserves_prices_families_and_caller_scope(monkeypatch):
@@ -14,9 +18,11 @@ def test_catalog_preserves_prices_families_and_caller_scope(monkeypatch):
         "openai/future-high",
         "openai/future-alias",
     )
-    template = get_model_registry()["openai/gpt-4o"]
+    template = get_model_registry()["openai/gpt-4.1-2025-04-14"]
     registry = {
-        key: template.model_copy(deep=True, update={"full_key": key, "alternative_keys": []})
+        key: template.model_copy(
+            deep=True, update={"full_key": key, "alternative_keys": []}
+        )
         for key in (root_key, high_key, alias_key)
     }
     registry[root_key].alternative_keys = [high_key, alias_key]
@@ -46,7 +52,11 @@ def test_catalog_preserves_prices_families_and_caller_scope(monkeypatch):
     catalog = response.json()
     models = catalog["models"]
     assert set(models) == set(registry)
-    for key, rate in ((root_key, base_rate), (high_key, base_rate), (alias_key, alias_rate)):
+    for key, rate in (
+        (root_key, base_rate),
+        (high_key, base_rate),
+        (alias_key, alias_rate),
+    ):
         assert models[key]["valsmith"] == {
             "credits_per_task": rate,
             "required_plan": "enterprise",
@@ -93,3 +103,72 @@ def test_catalog_preserves_prices_families_and_caller_scope(monkeypatch):
         "family_key": high_key,
         "thinking_options": [],
     }
+
+
+def test_catalog_omits_models_without_tool_calls(monkeypatch):
+    template = get_model_registry()["openai/gpt-4.1-2025-04-14"]
+    registry = {
+        key: template.model_copy(
+            deep=True, update={"full_key": key, "alternative_keys": []}
+        )
+        for key in ("openai/coder", "decision/answerer")
+    }
+    registry["decision/answerer"].supports.tools = False
+    monkeypatch.setattr(
+        "model_gateway.routes.models.get_registries", lambda: (registry, {})
+    )
+
+    response = _make_client().get("/registry?include_valsmith=true", headers=HEADERS)
+
+    assert set(response.json()["models"]) == {"openai/coder"}
+
+
+def test_catalog_lists_fireworks_only_labs_through_fireworks(monkeypatch):
+    template = get_model_registry()["openai/gpt-4.1-2025-04-14"]
+    registry = {
+        key: template.model_copy(
+            deep=True, update={"full_key": key, "alternative_keys": []}
+        )
+        for key in ("kimi/k", "fireworks/k", "openai/coder")
+    }
+    monkeypatch.setattr(
+        "model_gateway.routes.models.get_registries", lambda: (registry, {})
+    )
+
+    response = _make_client().get("/registry?include_valsmith=true", headers=HEADERS)
+
+    assert set(response.json()["models"]) == {"fireworks/k", "openai/coder"}
+
+
+def test_catalog_groups_thinking_toggle_with_its_own_sampling(monkeypatch):
+    base_key, off_key = "fireworks/future", "fireworks/future-nonthinking"
+    template = get_model_registry()["openai/gpt-4.1-2025-04-14"]
+    registry = {
+        key: template.model_copy(
+            deep=True, update={"full_key": key, "alternative_keys": []}
+        )
+        for key in (base_key, off_key)
+    }
+    registry[base_key].alternative_keys = [off_key]
+    registry[base_key].properties.reasoning_model = True
+    registry[base_key].default_parameters.reasoning_effort = "max"
+    registry[off_key].properties.reasoning_model = False
+    registry[off_key].default_parameters.reasoning_effort = None
+    registry[off_key].supports.temperature = True
+    registry[off_key].default_parameters.temperature = 1
+    registry[off_key].default_parameters.top_p = 0.95
+    monkeypatch.setattr(
+        "model_gateway.routes.models.get_registries", lambda: (registry, {})
+    )
+
+    models = (
+        _make_client()
+        .get("/registry?include_valsmith=true", headers=HEADERS)
+        .json()["models"]
+    )
+
+    assert models[off_key]["catalog"]["family_key"] == base_key
+    assert models[base_key]["catalog"]["thinking_options"] == [
+        {"value": "off", "label": "Off", "model_key": off_key},
+        {"value": "max", "label": "Max", "model_key": base_key},
+    ]

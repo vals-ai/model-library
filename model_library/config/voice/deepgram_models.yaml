@@ -18,7 +18,7 @@ transcription-models:
     release_date: 2025-10-02
     documentation_url: https://developers.deepgram.com/docs/flux
     transcription_cost:
-      usd_per_minute: 0.0065
+      usd_per_minute: 0.0077
       billing_basis: audio
 
   deepgram/nova-3-streaming:
@@ -27,5 +27,5 @@ transcription-models:
     provider_endpoint: nova-3
     documentation_url: https://developers.deepgram.com/docs/live-streaming-audio
     transcription_cost:
-      usd_per_minute: 0.0048
+      usd_per_minute: 0.0077
       billing_basis: audio

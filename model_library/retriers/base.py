@@ -12,10 +12,13 @@ from model_library.exceptions import (
     ImmediateRetryException,
     ImmediateRetryExhaustedError,
     MaxContextWindowExceededError,
+    ModelLibraryException,
+    RateLimitError,
     exception_http_status_code,
     exception_message,
     is_content_filter_error,
     is_context_window_error,
+    is_rate_limit_error,
     is_retriable_error,
 )
 
@@ -291,7 +294,16 @@ class BaseRetrier(ABC):
 
             except Exception as e:
                 if is_content_filter_error(e):
-                    e = ContentFilterError(exception_message(e))
+                    e = ContentFilterError(
+                        exception_message(e),
+                        query_result=getattr(e, "query_result", None),
+                    )
+                elif not isinstance(e, ModelLibraryException) and is_rate_limit_error(
+                    e
+                ):
+                    rate_limit = RateLimitError(exception_message(e))
+                    rate_limit.__cause__ = e
+                    e = rate_limit
                 elapsed = time.time() - self.start_time
 
                 self.attempts += 1

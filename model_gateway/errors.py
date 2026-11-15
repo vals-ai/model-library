@@ -3,6 +3,8 @@
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from model_library.exceptions import error_text, is_context_window_error
+
 
 class RunTokenAuthorizationError(Exception):
     """A run token was presented for work its claims do not cover."""
@@ -53,7 +55,7 @@ def _extract_provider(msg: str) -> str | None:
 def map_exception_to_error(
     exc: Exception, *, provider: str | None = None
 ) -> ErrorResponse:
-    msg = str(exc)
+    msg = error_text(exc)
     if isinstance(exc, EgressPolicyError):
         return ErrorResponse(403, ErrorBody(code="egress_denied", message=msg))
     if isinstance(exc, AssignedKeyUnavailableError):
@@ -103,11 +105,7 @@ def map_exception_to_error(
             400, ErrorBody(code="hmac_verification_failed", message=msg)
         )
 
-    if (
-        "context window" in lower
-        or "prompt is too long" in lower
-        or "maximum context length" in lower
-    ):
+    if is_context_window_error(exc):
         return ErrorResponse(
             400,
             ErrorBody(code="context_window_exceeded", message=msg, provider=provider),

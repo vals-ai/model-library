@@ -13,6 +13,8 @@ base-config:
 
 command-a-plus-models:
   cohere/command-a-plus-05-2026:
+    metadata:
+      available_for_everyone: false
     label: Command A+
     release_date: 2026-05-20
     open_source: true
@@ -32,6 +34,8 @@ command-a-plus-models:
 
 north-mini-code-models:
   cohere/north-mini-code-1-0:
+    metadata:
+      available_for_everyone: false
     label: North Mini Code
     release_date: 2026-06-09
     open_source: true
@@ -73,6 +77,8 @@ command-models:
     default_parameters:
       temperature: 0.3
   cohere/command-a-03-2025:
+    metadata:
+      available_for_everyone: false
     label: Command A
     release_date: 2025-03-13
     properties:
@@ -83,6 +89,8 @@ command-models:
       output: 10.0
 
   cohere/command-r7b-12-2024:
+    metadata:
+      available_for_everyone: false
     label: Command R7B
     release_date: 2024-12-13
     properties:

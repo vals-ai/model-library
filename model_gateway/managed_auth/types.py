@@ -112,13 +112,11 @@ class AuditEvent:
 @dataclass(frozen=True)
 class ProjectPolicy:
     project: ProjectReference
-    period: BudgetPeriod
-    base_limit_usd: Decimal
+    total_limit_usd: Decimal
+    total_started_at: datetime
     revision: int
     created_at: datetime
     updated_at: datetime
-    total_limit_usd: Decimal | None = None
-    total_started_at: datetime | None = None
     budget_reason: str | None = None
     archived_at: datetime | None = None
 
@@ -129,7 +127,9 @@ class ProjectAlertIdentity:
     handle: str | None
 
 
-LimitRequestKind = Literal["temporary", "permanent"]
+class LimitRequestKind(StrEnum):
+    TEMPORARY = "temporary"
+    PERMANENT = "permanent"
 
 
 class LimitRequestStatus(StrEnum):
@@ -138,9 +138,14 @@ class LimitRequestStatus(StrEnum):
     DENIED = "denied"
 
 
-TEMPORARY_INCREASE: LimitRequestKind = "temporary"
-PERMANENT_INCREASE: LimitRequestKind = "permanent"
 PROJECT_POLICY_AUDIT: Final = "project_policy"
+PROJECT_LIMIT_REQUEST_AUDIT: Final = "project_limit_request"
+
+
+class TemporaryIncreaseAction(StrEnum):
+    ADD = "add"
+    SET = "set"
+    REMOVE = "remove"
 
 
 @dataclass(frozen=True)
@@ -149,8 +154,6 @@ class ProjectLimitRequest:
     project: ProjectReference
     kind: LimitRequestKind
     increase_usd: Decimal
-    period_start: datetime | None
-    period_end: datetime | None
     reason: str
     creator: HumanIdentity
     status: LimitRequestStatus

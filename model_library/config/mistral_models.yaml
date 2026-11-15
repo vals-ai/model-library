@@ -28,6 +28,8 @@ mistral-models:
       temperature: 0.7
 
   mistralai/mistral-small-2603:
+    metadata:
+      available_for_everyone: false
     label: Mistral Small 4
     open_source: true
     release_date: 2026-03-16
@@ -44,6 +46,8 @@ mistral-models:
     default_parameters:
       reasoning_effort: "high"
   mistralai/mistral-large-2512:
+    metadata:
+      available_for_everyone: false
     label: Mistral Large 3
     open_source: true
     release_date: 2025-12-02
@@ -58,6 +62,8 @@ mistral-models:
     default_parameters:
       temperature: 0.065
   mistralai/mistral-medium-3.5:
+    metadata:
+      available_for_everyone: false
     label: Mistral Medium 3.5
     open_source: true
     release_date: 2026-04-29
@@ -76,6 +82,28 @@ mistral-models:
       temperature: 0.7
       top_p: 0.95
       reasoning_effort: "high"
+  mistralai/mistral-large-4-0:
+    metadata:
+      available_for_everyone: false
+    label: Mistral Large 4.0
+    open_source: true
+    release_date: 2026-10-06
+    documentation_url: "https://docs.mistral.ai/models/mistral-large-4-0"
+    supports:
+      images: true
+    properties:
+      context_window: 1_048_576
+      max_tokens: 262_144
+      reasoning_model: true
+    costs_per_million_token:
+      input: 0.70
+      output: 2.10
+      cache:
+        read: 0.07
+    default_parameters:
+      reasoning_effort: "high"
+      temperature: 1.0
+      top_p: 0.95
 transcription-models:
   base-config:
     rate_limit:

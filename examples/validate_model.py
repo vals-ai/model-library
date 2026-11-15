@@ -10,13 +10,16 @@ import argparse
 import asyncio
 import json
 import logging
+import os
+import re
 import sys
 import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
+from functools import cache
 from typing import Literal, cast
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, SecretStr
 from rich.console import Console
 
 from examples.inputs import (
@@ -31,7 +34,7 @@ from examples.inputs import (
 from examples.quickstart import basic_agent
 from examples.setup import setup
 from model_library.agent import AgentResult
-from model_library.base import LLM, SystemInput, TextInput
+from model_library.base import LLM, LLMConfig, SystemInput, TextInput
 from model_library.base.delegate_only import DelegateOnlyException
 from model_library.base.output import QueryResult, QueryResultMetadata
 from model_library.exceptions import (
@@ -78,8 +81,19 @@ class PricingProbeResult:
     pricing: dict[str, object]
 
 
+@dataclass(frozen=True, slots=True)
+class ConversationProbeResult:
+    turns: list[QueryResult]
+
+
 ProbeValue = (
-    QueryResult | AgentResult | RateLimit | CacheProbeResult | PricingProbeResult | None
+    QueryResult
+    | AgentResult
+    | RateLimit
+    | CacheProbeResult
+    | PricingProbeResult
+    | ConversationProbeResult
+    | None
 )
 Probe = Callable[[], Awaitable[ProbeValue]]
 Predicate = Callable[[ProbeValue], tuple[bool, str | None]]
@@ -170,11 +184,6 @@ def _text_contains(expected: str) -> Predicate:
     return predicate
 
 
-def _non_empty_text(result: ProbeValue) -> tuple[bool, str | None]:
-    errors = _query_result_errors(result)
-    return not errors, _detail(errors)
-
-
 def _router_capture_valid(result: ProbeValue) -> tuple[bool, str | None]:
     errors = _query_result_errors(result)
     if not isinstance(result, QueryResult):
@@ -182,14 +191,80 @@ def _router_capture_valid(result: ProbeValue) -> tuple[bool, str | None]:
     metadata = result.metadata
     if metadata.served_model is None:
         errors.append("router did not report a served model")
-    if metadata.cost is None:
-        errors.append("router did not report a bill (cost is None)")
+    effective_cost = metadata.effective_cost
+    if effective_cost is None:
+        errors.append("router effective cost unavailable (effective_cost is None)")
     detail = (
         f"served_model={metadata.served_model}; "
         f"upstream_provider={metadata.extra.get('upstream_provider')}; "
-        f"cost={metadata.cost.total if metadata.cost else None}"
+        f"effective_cost={effective_cost.total if effective_cost is not None else None}"
     )
     return not errors, detail if not errors else _detail([*errors, detail])
+
+
+DATE_SUFFIX = re.compile(r"-(\d{4}-\d{2}-\d{2}|\d{8})$")
+
+
+def _served_model_matches(model_name: str) -> Predicate:
+    def predicate(result: ProbeValue) -> tuple[bool, str | None]:
+        errors = _query_result_errors(result)
+        if not isinstance(result, QueryResult) or result.metadata.served_model is None:
+            return not errors, _detail(errors)
+        served = result.metadata.served_model
+        requested, reported = (
+            DATE_SUFFIX.sub("", name.lower().rsplit("/", 1)[-1])
+            for name in (model_name, served)
+        )
+        if requested != reported:
+            errors.append(f"requested {model_name} but provider served {served}")
+        return not errors, _detail(errors) or f"served_model={served}"
+
+    return predicate
+
+
+REASONING_TURNS = (
+    "Work this out carefully, then answer with only the number: the smallest "
+    "positive integer n where n mod 5 = 2, n mod 7 = 3, and n mod 9 = 4.",
+    "How many integers from 1 to your last answer are coprime to it? "
+    "Answer with only the number.",
+    "How many positive divisors does your last answer have? "
+    "Answer with only the number.",
+    "What is the digit sum of your last answer raised to the fifth power? "
+    "Answer with only the number.",
+    "Add up your four previous answers. Answer with only the number.",
+)
+REASONING_ANSWER = "352"
+
+
+def _reasoning_conversation(
+    predicate: Predicate, turns: slice, *, check_answer: bool = False
+) -> Predicate:
+    def check(result: ProbeValue) -> tuple[bool, str | None]:
+        conversation = cast(ConversationProbeResult, result).turns
+        verdicts = [
+            (f"turn {i}", *predicate(turn)) for i, turn in enumerate(conversation, 1)
+        ][turns]
+        if check_answer and REASONING_ANSWER not in conversation[-1].output_text_str:
+            verdicts.append(
+                ("history", False, f"final answer is not {REASONING_ANSWER}")
+            )
+        detail = "; ".join(f"{label}: {detail}" for label, _, detail in verdicts)
+        return all(passed for _, passed, _ in verdicts), detail
+
+    return check
+
+
+class StructuredAnswer(BaseModel):
+    city: str
+    temperature_c: int
+
+
+def _structured_output_valid(result: ProbeValue) -> tuple[bool, str | None]:
+    errors = _query_result_errors(result)
+    parsed = result.output_parsed if isinstance(result, QueryResult) else None
+    if parsed != StructuredAnswer(city="Tokyo", temperature_c=21):
+        errors.append(f"wrong structured answer: {parsed!r}")
+    return not errors, _detail(errors)
 
 
 def _agent_tool_use_valid(result: ProbeValue) -> tuple[bool, str | None]:
@@ -360,6 +435,8 @@ def _metadata_from_probe(result: ProbeValue) -> QueryResultMetadata | None:
     if isinstance(result, AgentResult):
         agent_result = cast(AgentResult, result)  # pyright: ignore[reportUnnecessaryCast]
         return agent_result.final_aggregated_metadata
+    if isinstance(result, ConversationProbeResult):
+        return sum((turn.metadata for turn in result.turns), QueryResultMetadata())
     return None
 
 
@@ -578,23 +655,46 @@ def _capability_case(
     )
 
 
-def _build_cases(model: LLM) -> list[ValidationCase]:
-    async def core_probe() -> QueryResult:
-        return await model.query(
-            [TextInput(text="Reply with exactly: ok")], logger=QUIET_QUERY_LOGGER
+def _build_cases(
+    model: LLM, key_models: Mapping[str, LLM] = {}
+) -> list[ValidationCase]:
+    def core_case(section: str, name: str, llm: LLM) -> ValidationCase:
+        async def probe() -> QueryResult:
+            return await llm.query(
+                [TextInput(text="Reply with exactly: ok")], logger=QUIET_QUERY_LOGGER
+            )
+
+        return ValidationCase(
+            section=section,
+            name=name,
+            expected="required",
+            severity="fail",
+            runner=probe,
+            predicate=(
+                _router_capture_valid
+                if llm.is_router
+                else _served_model_matches(llm.model_name)
+            ),
         )
 
-    async def reasoning_probe() -> QueryResult:
-        return await model.query(
-            [
-                TextInput(
-                    text=(
-                        "Use your reasoning capability to solve this, then answer "
-                        "with only the number: the smallest positive integer n "
-                        "where n mod 5 = 2, n mod 7 = 3, and n mod 9 = 4."
-                    )
+    @cache  # both Reasoning cases share one conversation
+    def reasoning_probe() -> asyncio.Task[ConversationProbeResult]:
+        async def conversation() -> ConversationProbeResult:
+            turns: list[QueryResult] = []
+            for prompt in REASONING_TURNS:
+                history = turns[-1].history if turns else []
+                turns.append(
+                    await model.query([TextInput(text=prompt)], history=history)
                 )
-            ]
+            return ConversationProbeResult(turns)
+
+        return asyncio.create_task(conversation())
+
+    async def structured_output_probe() -> QueryResult:
+        return await model.query(
+            [TextInput(text="Return Tokyo with a temperature of 21 degrees Celsius.")],
+            output_schema=StructuredAnswer,
+            logger=QUIET_QUERY_LOGGER,
         )
 
     async def caching_probe() -> CacheProbeResult:
@@ -637,14 +737,8 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
         )
 
     cases = [
-        ValidationCase(
-            section="Core",
-            name="text query",
-            expected="required",
-            severity="fail",
-            runner=core_probe,
-            predicate=_router_capture_valid if model.is_router else _non_empty_text,
-        ),
+        core_case("Core", "text query", model),
+        *(core_case("Keys", name, llm) for name, llm in key_models.items()),
         semantic_transport_case(
             section="Images",
             name="base64 transport",
@@ -753,12 +847,30 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
             predicate=_agent_tool_use_valid,
             capability_name="supports_tools",
         ),
+        _capability_case(
+            section="Structured Output",
+            name="output schema",
+            declared=model.supports_output_schema,
+            severity="warn",
+            runner=structured_output_probe,
+            predicate=_structured_output_valid,
+            capability_name="supports_output_schema",
+        ),
     ]
 
     if model.is_router:
         # Routers skip reasoning (the served model may reason) and the caching, rate-limit and pricing probes.
         return cases
 
+    later_turns = ValidationCase(
+        section="Reasoning",
+        name="later turns",
+        expected="diagnostic",
+        severity="warn",
+        runner=reasoning_probe,
+        predicate=_reasoning_conversation(_reasoning_evidence_seen, slice(1, None)),
+        declared=True,
+    )
     cases.extend(
         [
             ValidationCase(
@@ -767,13 +879,16 @@ def _build_cases(model: LLM) -> list[ValidationCase]:
                 expected="required",
                 severity="fail",
                 runner=reasoning_probe,
-                predicate=(
+                predicate=_reasoning_conversation(
                     _reasoning_evidence_seen
                     if model.reasoning
-                    else _no_undeclared_reasoning
+                    else _no_undeclared_reasoning,
+                    slice(1) if model.reasoning else slice(None),
+                    check_answer=True,
                 ),
                 declared=model.reasoning,
             ),
+            *([later_turns] if model.reasoning else []),
             ValidationCase(
                 section="Caching",
                 name="prompt cache read",
@@ -1021,10 +1136,25 @@ async def main() -> int:
         action="store_true",
         help="Emit structured JSON instead of a human-readable table",
     )
+    parser.add_argument(
+        "--key-env",
+        action="append",
+        default=[],
+        help="Env var holding another API key to run the core check with (repeatable)",
+    )
     args = parser.parse_args()
 
     try:
         model = get_registry_model(args.model)
+        key_models = {
+            env_name: get_registry_model(
+                args.model,
+                override_config=LLMConfig(
+                    custom_api_key=SecretStr(os.environ[env_name])
+                ),
+            )
+            for env_name in args.key_env
+        }
     except Exception as e:
         if args.json:
             print(
@@ -1043,7 +1173,7 @@ async def main() -> int:
         return 2 if "not found in registry" in str(e) else 3
 
     try:
-        results = await _run_cases(_build_cases(model))
+        results = await _run_cases(_build_cases(model, key_models=key_models))
     except Exception as e:
         if args.json:
             print(

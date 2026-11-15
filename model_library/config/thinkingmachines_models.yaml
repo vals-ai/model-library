@@ -1,0 +1,38 @@
+base-config:
+  company: Thinking Machines
+  country: United States
+  documentation_url: https://tinker-docs.thinkingmachines.ai/tinker/compatible-apis/openai/
+  open_source: true
+  supports:
+    images: true
+    files: false
+    tools: true
+    temperature: true
+
+inkling-models:
+  base-config:
+    metadata:
+      internal_only: true
+      ignored_for_cost: false
+  thinkingmachines/inkling-2-small:
+    label: Inkling 2 Small
+    release_date: 2026-11-05
+    open_source: false
+    provider_endpoint: thinkingmachines/Inkling-2-Small:peft:262144
+    metadata:
+      internal_only: false
+    properties:
+      reasoning_model: true
+      context_window: 262_000
+      max_tokens: 262_000
+    default_parameters:
+      temperature: 1.0
+      top_p: 1.0
+      max_tokens: 262_000
+      reasoning_effort: "0.99"
+    costs_per_million_token:
+      # Tinker serverless inference (beta) pricing, 256K context.
+      input: 0.30
+      output: 1.00
+      cache:
+        read: 0.03
