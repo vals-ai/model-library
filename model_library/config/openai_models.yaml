@@ -19,6 +19,111 @@ base-config:
       cache_discount: 0.5
   default_parameters:
     reasoning_effort: "high"
+
+internal-models:
+  base-config:
+    documentation_url: ""
+    supports:
+      images: true
+      files: true
+      temperature: false
+    metadata:
+      available_for_everyone: false
+      internal_only: true
+    properties:
+      context_window: 1_000_000
+      max_tokens: 128_000
+      reasoning_model: true
+    provider_properties:
+      verbosity: "medium"
+  openai/gpt-6.2-astra:
+
+    label: GPT-6.2 Astra
+    provider_endpoint: gpt-6.2-astra
+    documentation_url: https://developers.openai.com/api/docs/models/gpt-6.2-astra
+    release_date: 2026-11-17
+    metadata:
+      internal_only: false
+    costs_per_million_token:
+      input: 8
+      output: 40
+      cache:
+        read_discount: 0.05
+        write_markup: 1.25
+      context:
+        threshold: 272_000
+        input: 16
+        output: 60
+        cache:
+          read_discount: 0.05
+          write_markup: 1.25
+    default_parameters:
+      reasoning_effort: "max"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-6.2-astra-max:
+          label: GPT-6.2 Astra (Max)
+      - openai/gpt-6.2-astra-low:
+          label: GPT-6.2 Astra (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - openai/gpt-6.2-astra-medium:
+          label: GPT-6.2 Astra (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
+      - openai/gpt-6.2-astra-high:
+          label: GPT-6.2 Astra (High)
+          default_parameters:
+            reasoning_effort: "high"
+      - openai/gpt-6.2-astra-xhigh:
+          label: GPT-6.2 Astra (Extra High)
+          default_parameters:
+            reasoning_effort: "xhigh"
+  openai/gpt-6.2-sol:
+
+    label: GPT-6.2 Sol
+    provider_endpoint: gpt-6.2-sol
+    documentation_url: https://developers.openai.com/api/docs/models/gpt-6.2-sol
+    release_date: 2026-11-17
+    metadata:
+      internal_only: false
+    costs_per_million_token:
+      input: 2
+      output: 10
+      cache:
+        read_discount: 0.05
+        write_markup: 1.25
+      context:
+        threshold: 272_000
+        input: 4
+        output: 15
+        cache:
+          read_discount: 0.05
+          write_markup: 1.25
+    default_parameters:
+      reasoning_effort: "max"
+    provider_properties:
+      reasoning_context: all_turns
+    alternative_keys:
+      - openai/gpt-6.2-sol-max:
+          label: GPT-6.2 Sol (Max)
+      - openai/gpt-6.2-sol-low:
+          label: GPT-6.2 Sol (Low)
+          default_parameters:
+            reasoning_effort: "low"
+      - openai/gpt-6.2-sol-medium:
+          label: GPT-6.2 Sol (Medium)
+          default_parameters:
+            reasoning_effort: "medium"
+      - openai/gpt-6.2-sol-high:
+          label: GPT-6.2 Sol (High)
+          default_parameters:
+            reasoning_effort: "high"
+      - openai/gpt-6.2-sol-xhigh:
+          label: GPT-6.2 Sol (Extra High)
+          default_parameters:
+            reasoning_effort: "xhigh"
 gpt-6-models:
   base-config:
     documentation_url: "https://developers.openai.com/api/docs/models/\

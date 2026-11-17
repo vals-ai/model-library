@@ -24,10 +24,12 @@ from model_gateway.managed_auth.schemas import (
     ProjectHistoryEventDTO,
     ProjectBudgetChangeDTO,
     ProjectBudgetInput,
+    ProjectBudgetPutInput,
     ProjectPolicyDTO,
     RequestDTO,
     RequestInput,
     RevisionInput,
+    VerifierInput,
     SecretDTO,
     ServiceDTO,
     ServiceInput,
@@ -152,6 +154,19 @@ async def collect(
     )
     assert secret is not None
     return SecretDTO(key=key_dto(key), secret=secret)
+
+
+@router.post("/machine/keys/{key_id}/verifier", response_model=KeyDTO)
+async def machine_set_verifier(
+    key_id: UUID,
+    body: VerifierInput,
+    principal: VerifiedMachine = Depends(machine),
+    svc: ManagedAuthService = Depends(service),
+):
+    key = await svc.machine_set_verifier(
+        principal, key_id, body.expected_revision, body.verifier_hash
+    )
+    return key_dto(key)
 
 
 @router.post("/keys/{key_id}/rotate", response_model=SecretDTO)
@@ -313,7 +328,9 @@ async def machine_collect(
 async def _set_archived(
     project_id: UUID, archived: bool, principal: VerifiedMachine, db: ManagedAuthStore
 ) -> ProjectPolicyDTO:
-    if not await db.owns_project_key(ServiceOwner(principal.service_id), project_id):
+    if not await db.owns_project_key(
+        ServiceOwner(principal.service_id), project_id, include_revoked=True
+    ):
         raise HTTPException(403, "Project belongs to another service")
     policy = await db.set_project_archived(project_id, archived, principal.identity)
     if policy is None:
@@ -339,6 +356,25 @@ async def machine_unarchive_project(
     db: ManagedAuthStore = Depends(store),
 ):
     return await _set_archived(project_id, False, principal, db)
+
+
+@router.put("/machine/projects/{project_id}/budget", response_model=ProjectPolicyDTO)
+async def machine_put_project_budget(
+    project_id: UUID,
+    body: ProjectBudgetPutInput,
+    principal: VerifiedMachine = Depends(machine),
+    db: ManagedAuthStore = Depends(store),
+):
+    project = ProjectReference(
+        project_id, str(body.project_organization_id), body.project_environment
+    )
+    try:
+        policy = await db.put_project_budget(
+            project, body.limit_usd, body.version, body.reason, principal.identity
+        )
+    except ValueError as error:
+        raise HTTPException(409, str(error)) from error
+    return policy_dto(policy)
 
 
 @router.get("/projects/policies", response_model=list[ProjectPolicyDTO])

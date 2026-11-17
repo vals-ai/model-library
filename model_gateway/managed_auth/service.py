@@ -1,7 +1,9 @@
+import hmac
 from decimal import Decimal
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 
 from model_gateway.managed_auth.credentials import create_managed_key_secret
 from model_gateway.managed_auth.identity import VerifiedHuman, VerifiedMachine
@@ -20,6 +22,7 @@ from model_gateway.managed_auth.types import (
 
 
 PLATFORM_ADMIN = "platform-admin"
+ANOTHER_VERIFIER = "Key is active with another verifier"
 
 
 class ManagedAuthService:
@@ -74,10 +77,12 @@ class ManagedAuthService:
         project_id: UUID,
     ) -> KeyRequest:
         self.require_owner(human, owner)
-        approved_project = await self.store.get_project_policy(project_id)
-        if approved_project is None:
+        existing_policy = await self.store.get_project_policy(project_id)
+        if existing_policy is None or not await self.store.has_approved_key_request(
+            project_id
+        ):
             raise HTTPException(409, "Project is not approved")
-        project = approved_project.project
+        project = existing_policy.project
         try:
             request = await self.store.create_request(
                 uuid4(),
@@ -106,8 +111,8 @@ class ManagedAuthService:
         requested_budget: Decimal,
         budget_reason: str,
     ) -> KeyRequest:
-        approved_project = await self.store.get_project_policy(project.project_id)
-        if approved_project is not None and approved_project.project != project:
+        existing_policy = await self.store.get_project_policy(project.project_id)
+        if existing_policy is not None and existing_policy.project != project:
             raise HTTPException(409, "Project reference differs from approved policy")
         request = await self.store.create_request(
             uuid4(),
@@ -120,17 +125,31 @@ class ManagedAuthService:
             requested_budget,
             budget_reason,
         )
-        if approved_project:
+        if existing_policy and await self.store.has_approved_key_request(
+            project.project_id
+        ):
             await self.store.issue_additional_key(request.id, uuid4(), machine.identity)
-        elif requested_budget <= self.auto_approval_threshold_usd:
-            await self._auto_approve(request.id, requested_budget)
+        elif self._within_auto_approval(requested_budget, existing_policy):
+            await self._auto_approve(
+                request.id, None if existing_policy else requested_budget
+            )
         else:
             return request
         updated = await self.store.get_request(request.id)
         assert updated is not None
         return updated
 
-    async def _auto_approve(self, request_id: UUID, requested_budget: Decimal) -> None:
+    def _within_auto_approval(
+        self, requested_budget: Decimal, policy: ProjectPolicy | None
+    ) -> bool:
+        threshold = self.auto_approval_threshold_usd
+        return requested_budget <= threshold and (
+            policy is None or policy.total_limit_usd <= threshold
+        )
+
+    async def _auto_approve(
+        self, request_id: UUID, requested_budget: Decimal | None
+    ) -> None:
         await self.store.decide_request(
             request_id,
             SystemIdentity("managed-auth-system", "requested-budget-auto-approval"),
@@ -168,6 +187,25 @@ class ManagedAuthService:
         if result is None:
             raise HTTPException(409, "Key state or revision changed")
         return result, secret
+
+    async def machine_set_verifier(
+        self, machine: VerifiedMachine, key_id: UUID, revision: int, verifier_hash: str
+    ) -> ManagedKey:
+        await self.machine_key(machine, key_id)
+        try:
+            result = await self.store.collect_key(
+                key_id, revision, verifier_hash, machine.identity
+            )
+        except IntegrityError:
+            raise HTTPException(409, "Verifier hash is already in use") from None
+        if result is not None:
+            return result
+        key = await self.machine_key(machine, key_id)
+        if key.status != "active" or key.verifier_hash is None:
+            raise HTTPException(409, "Key state or revision changed")
+        if not hmac.compare_digest(key.verifier_hash, verifier_hash):
+            raise HTTPException(409, ANOTHER_VERIFIER)
+        return key
 
     async def key(self, key_id: UUID) -> ManagedKey:
         key = await self.store.get_key(key_id)

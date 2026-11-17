@@ -24,6 +24,42 @@ base-config:
     output: 0.0
 
 decision-models:
+  decision/joey-1:
+    provider_endpoint: baseten/joey-1-20261029
+    label: Joey 1
+    company: Baseten
+    country: United States
+    documentation_url: https://openrouter.ai/baseten/joey-1
+    release_date: 2026-10-29
+    properties:
+      context_window: 16_384
+    costs_per_million_token:
+      input: 0.01
+
+  decision/mammoth-1:
+    provider_endpoint: baseten/mammoth-1-20261021
+    label: Mammoth 1
+    company: Baseten
+    country: United States
+    documentation_url: https://openrouter.ai/baseten/mammoth-1
+    release_date: 2026-10-21
+    properties:
+      context_window: 16_384
+    costs_per_million_token:
+      input: 0.10
+
+  decision/elephant-1:
+    provider_endpoint: baseten/elephant-1-20261021
+    label: Elephant 1
+    company: Baseten
+    country: United States
+    documentation_url: https://openrouter.ai/baseten/elephant-1
+    release_date: 2026-10-21
+    properties:
+      context_window: 16_384
+    costs_per_million_token:
+      input: 0.035
+
   decision/jev-1.13.0:
     provider_endpoint: typesafe/jev-1.13-20260917  # pinned, dated; never an alias
     label: Jev 1.13.0
@@ -125,6 +161,36 @@ decision-models:
     costs_per_million_token:
       input: 0.01
 
+  decision/decider-v1.3:
+    provider_endpoint: pplx-decider-v1.3  # Perplexity serves no dated snapshot; never the -latest alias
+    label: Decider V1.3
+    company: Perplexity
+    country: United States
+    documentation_url: https://docs.perplexity.ai/docs/decisions/quickstart
+    release_date: 2026-11-12
+    open_source: true
+    provider_properties:
+      decision_api: perplexity
+    properties:
+      context_window: 262_144
+    costs_per_million_token:
+      input: 0.02
+
+  decision/decider-flash-v1.3:
+    provider_endpoint: pplx-decider-flash-v1.3  # Perplexity serves no dated snapshot; never the -latest alias
+    label: Decider Flash V1.3
+    company: Perplexity
+    country: United States
+    documentation_url: https://docs.perplexity.ai/docs/decisions/quickstart
+    release_date: 2026-11-12
+    open_source: true
+    provider_properties:
+      decision_api: perplexity
+    properties:
+      context_window: 262_144
+    costs_per_million_token:
+      input: 0.01
+
   decision/drex-v1.5:
     provider_endpoint: nace-ai/drex-v1.5-20261009  # pinned, dated; never an alias
     label: Drex v1.5
@@ -185,6 +251,30 @@ decision-models:
     release_date: 2026-10-15
     properties:
       context_window: 32_768
+    costs_per_million_token:
+      input: 0.042
+
+  decision/d1.2:
+    provider_endpoint: liquid/d1.2-20261116  # pinned, dated; never an alias
+    label: d1.2
+    company: Liquid AI
+    country: United States
+    documentation_url: https://openrouter.ai/liquid/d1.2
+    release_date: 2026-11-16
+    properties:
+      context_window: 65_536
+    costs_per_million_token:
+      input: 0.02
+
+  decision/d1.2-ultra:
+    provider_endpoint: liquid/d1.2-ultra-20261116  # pinned, dated; never an alias
+    label: d1.2-ultra
+    company: Liquid AI
+    country: United States
+    documentation_url: https://openrouter.ai/liquid/d1.2-ultra
+    release_date: 2026-11-16
+    properties:
+      context_window: 65_536
     costs_per_million_token:
       input: 0.042
 

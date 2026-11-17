@@ -1,6 +1,5 @@
 import asyncio
 import os
-from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
 from uuid import UUID, uuid4
@@ -15,7 +14,7 @@ from model_gateway.managed_auth.api import router
 from model_gateway.managed_auth.credentials import managed_key_verifier
 from model_gateway.managed_auth.database import create_engine
 from model_gateway.managed_auth.identity import HumanVerifier, MachineVerifier
-from model_gateway.managed_auth.service import ManagedAuthService
+from model_gateway.managed_auth.service import ANOTHER_VERIFIER, ManagedAuthService
 from model_gateway.managed_auth.store import ManagedAuthStore
 from model_gateway.managed_auth.tables import audit
 from model_gateway.managed_auth.types import HumanIdentity
@@ -365,6 +364,32 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
             assert (await call("machine-access-key", "POST",
                                f"/machine/keys/{additional_key_id}/collect",
                                json={"expected_revision": 2})).status_code == 403
+            other_pending = await call(
+                "admin",
+                "POST",
+                "/requests",
+                json={**additional_body, "display_name": "other service pending key"},
+            )
+            other_pending_id = other_pending.json()["key_id"]
+            other_pending_key = (
+                await call("admin", "GET", f"/keys/{other_pending_id}")
+            ).json()
+            assert (
+                await call(
+                    "machine-access-key",
+                    "POST",
+                    f"/machine/keys/{other_pending_id}/verifier",
+                    json={
+                        "expected_revision": other_pending_key["revision"],
+                        "verifier_hash": managed_key_verifier(
+                            f"mgwk_cross-service-{uuid4()}"
+                        ),
+                    },
+                )
+            ).status_code == 403
+            assert (await call("admin", "GET", f"/keys/{other_pending_id}")).json()[
+                "status"
+            ] == "pending_collection"
             assert (await call("machine-access-key", "GET",
                                f"/machine/requests/{additional.json()['id']}")).status_code == 403
             machine_key_response = await call("machine-access-key", "GET",
@@ -425,6 +450,134 @@ async def test_http_management_project_keys_limits_and_restricted_machine():
             assert (await call("machine-access-key", "POST",
                                f"/machine/keys/{next_machine_key_id}/collect",
                                json={"expected_revision": next_machine_metadata.json()["revision"]})).status_code == 200
+            after_collect = await call(
+                "machine-access-key",
+                "POST",
+                f"/machine/keys/{next_machine_key_id}/verifier",
+                json={
+                    "expected_revision": next_machine_metadata.json()["revision"] + 1,
+                    "verifier_hash": managed_key_verifier(
+                        f"mgwk_after-collect-{uuid4()}"
+                    ),
+                },
+            )
+            assert (after_collect.status_code, after_collect.json()["detail"]) == (
+                409,
+                ANOTHER_VERIFIER,
+            )
+            hashed_machine = await call(
+                "machine-access-key",
+                "POST",
+                "/machine/requests",
+                json={
+                    **machine_body,
+                    "display_name": "machine hashed key",
+                },
+            )
+            hashed_key_id = (
+                await call(
+                    "machine-access-key",
+                    "GET",
+                    f"/machine/requests/{hashed_machine.json()['id']}",
+                )
+            ).json()["key_id"]
+            hashed_revision = (
+                await call(
+                    "machine-access-key",
+                    "GET",
+                    f"/machine/keys/{hashed_key_id}",
+                )
+            ).json()["revision"]
+            minted_elsewhere = f"mgwk_minted-elsewhere-{uuid4()}"
+            verifier_path = f"/machine/keys/{hashed_key_id}/verifier"
+            assert (
+                await call(
+                    "machine-access-key",
+                    "POST",
+                    verifier_path,
+                    json={
+                        "expected_revision": hashed_revision,
+                        "verifier_hash": minted_elsewhere,
+                    },
+                )
+            ).status_code == 422
+            reused = await call(
+                "machine-access-key",
+                "POST",
+                verifier_path,
+                json={
+                    "expected_revision": hashed_revision,
+                    "verifier_hash": managed_key_verifier(
+                        machine_collected.json()["secret"]
+                    ),
+                },
+            )
+            assert (reused.status_code, reused.json()["detail"]) == (
+                409,
+                "Verifier hash is already in use",
+            )
+            stale = await call(
+                "machine-access-key",
+                "POST",
+                verifier_path,
+                json={
+                    "expected_revision": hashed_revision + 1,
+                    "verifier_hash": managed_key_verifier(f"mgwk_stale-{uuid4()}"),
+                },
+            )
+            assert (stale.status_code, stale.json()["detail"]) == (
+                409,
+                "Key state or revision changed",
+            )
+            hashed = await call(
+                "machine-access-key",
+                "POST",
+                verifier_path,
+                json={
+                    "expected_revision": hashed_revision,
+                    "verifier_hash": managed_key_verifier(minted_elsewhere),
+                },
+            )
+            assert hashed.status_code == 200, hashed.text
+            assert hashed.json()["status"] == "active" and "secret" not in hashed.json()
+            assert (
+                await db.get_key_by_verifier(managed_key_verifier(minted_elsewhere))
+            ).id == UUID(hashed_key_id)
+            twin = await call(
+                "machine-access-key",
+                "POST",
+                verifier_path,
+                json={
+                    "expected_revision": hashed_revision,
+                    "verifier_hash": managed_key_verifier(minted_elsewhere),
+                },
+            )
+            assert (twin.status_code, twin.json()["id"], twin.json()["revision"]) == (
+                200,
+                hashed_key_id,
+                hashed.json()["revision"],
+            )
+            other = await call(
+                "machine-access-key",
+                "POST",
+                verifier_path,
+                json={
+                    "expected_revision": hashed.json()["revision"],
+                    "verifier_hash": managed_key_verifier(f"mgwk_other-{uuid4()}"),
+                },
+            )
+            assert (other.status_code, other.json()["detail"]) == (
+                409,
+                ANOTHER_VERIFIER,
+            )
+            assert (
+                await call(
+                    "machine-access-key",
+                    "POST",
+                    f"/machine/keys/{hashed_key_id}/collect",
+                    json={"expected_revision": hashed_revision},
+                )
+            ).status_code == 409
     finally:
         await engine.dispose()
 

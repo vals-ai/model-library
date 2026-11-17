@@ -4,6 +4,9 @@ Models that take a `state` and typed `questions` and return a typed answer for e
 
 | Key | Sends (pinned OpenRouter slug) | Input price / 1M tokens | Context |
 | --- | --- | --- | --- |
+| `decision/joey-1` | `baseten/joey-1-20261029` | $0.01 | 16,384 |
+| `decision/mammoth-1` | `baseten/mammoth-1-20261021` | $0.10 | 16,384 |
+| `decision/elephant-1` | `baseten/elephant-1-20261021` | $0.035 | 16,384 |
 | `decision/jev-1.13.0` | `typesafe/jev-1.13-20260917` | $0.042 | 64,000 |
 | `decision/jev-1.14` | `typesafe/jev-1.14-20261014` | $0.042 | 262,144 |
 | `decision/microsoft-decision-1` | `microsoft/microsoft-decision-1-20261009` | $0.042 | 32,768 |
@@ -11,11 +14,15 @@ Models that take a `state` and typed `questions` and return a typed answer for e
 | `decision/gemini-decision-1` | `gemini-decision-1` on Google (no dated snapshot exists) | $0.10 | 262,144 |
 | `decision/decider-v1.2` | `pplx-decider-v1.2` on Perplexity (no dated snapshot exists) | $0.02 | 262,144 |
 | `decision/decider-flash-v1.2` | `pplx-decider-flash-v1.2` on Perplexity (no dated snapshot exists) | $0.01 | 262,144 |
+| `decision/decider-v1.3` | `pplx-decider-v1.3` on Perplexity (no dated snapshot exists) | $0.02 | 262,144 |
+| `decision/decider-flash-v1.3` | `pplx-decider-flash-v1.3` on Perplexity (no dated snapshot exists) | $0.01 | 262,144 |
 | `decision/drex-v1.5` | `nace-ai/drex-v1.5-20261009` | $0.04 | 131,072 |
 | `decision/drex-v2.0` | `nace-ai/drex-v2.0-20261009` | $0.06 | 131,072 |
 | `decision/drex-max` | `nace-ai/drex-max-20261016` | $0.06 | 262,144 |
 | `decision/d1` | `liquid/d1-20260930` | $0.02 | 65,536 |
 | `decision/d1-ultra` | `liquid/d1-ultra-20261015` | $0.042 | 32,768 |
+| `decision/d1.2` | `liquid/d1.2-20261116` | $0.02 | 65,536 |
+| `decision/d1.2-ultra` | `liquid/d1.2-ultra-20261116` | $0.042 | 65,536 |
 | `decision/kev-4b` | `jaredpalmer/kev-4b-20260924` | $0.042 | 8,192 |
 | `decision/tev1-4b-experimental` | `togethercomputer/tev1-4b-experimental-20260923` | $0.042 | 32,768 |
 | `decision/classify-1` | `scaledown/classify-1-20260928` | $0.04 | 1,000,000 |

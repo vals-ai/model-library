@@ -88,6 +88,20 @@ def _human_id(identity: HumanIdentity) -> UUID:
     return uuid5(NAMESPACE_URL, f"{identity.issuer}\0{identity.subject}")
 
 
+def _auto_approval_lapsed(
+    policy: RowMapping, first_total_usd: Decimal | None, threshold: Decimal | None
+) -> bool:
+    """An auto-approval read a policy that has since been created or raised."""
+    if threshold is None:
+        return False
+    return first_total_usd is not None or policy["total_limit_usd"] > threshold
+
+
+def _stale_source_version(policy: RowMapping, version: int) -> bool:
+    """The policy already holds this project-service version or a newer one."""
+    return policy["source_version"] is not None and version <= policy["source_version"]
+
+
 def _total_state(total_usd: Decimal) -> dict[str, object]:
     return {
         "period": None,
@@ -411,6 +425,10 @@ class ManagedAuthStore:
                 or policy["project_environment"] != row["project_environment"]
             ):
                 raise ValueError("project reference changed since request")
+            elif _auto_approval_lapsed(
+                policy, first_total_usd, auto_approval_threshold_usd
+            ):
+                return None
             elif first_total_usd is not None:
                 raise ValueError("project is already approved")
             created = (
@@ -922,7 +940,20 @@ class ManagedAuthStore:
             )
             return self._policy(row) if row is not None else None
 
-    async def owns_project_key(self, owner: KeyOwner, project_id: UUID) -> bool:
+    async def has_approved_key_request(self, project_id: UUID) -> bool:
+        async with self.engine.connect() as connection:
+            approved = await connection.execute(
+                select(t.requests.c.id)
+                .where(t.requests.c.project_id == project_id)
+                .where(t.requests.c.status == "approved")
+                .limit(1)
+            )
+            return approved.first() is not None
+
+    async def owns_project_key(
+        self, owner: KeyOwner, project_id: UUID, include_revoked: bool = False
+    ) -> bool:
+        statuses = () if include_revoked else (t.keys.c.status != KeyStatus.REVOKED,)
         async with self.engine.connect() as connection:
             row = (
                 await connection.execute(
@@ -933,7 +964,7 @@ class ManagedAuthStore:
                             t.keys.c[column] == value
                             for column, value in _owner(owner).items()
                         ),
-                        t.keys.c.status != KeyStatus.REVOKED,
+                        *statuses,
                     )
                     .limit(1)
                 )
@@ -957,18 +988,9 @@ class ManagedAuthStore:
                     .with_for_update()
                 )
             ).scalar_one_or_none()
-            temporary = sum(
-                (
-                    item["increase_usd"]
-                    for item in await self._active_extras(connection, project_id)
-                ),
-                Decimal(0),
+            await self._check_above_temporary_increases(
+                connection, project_id, total_limit_usd
             )
-            if total_limit_usd <= temporary:
-                raise ValueError(
-                    f"The new budget ${total_limit_usd} must stay above the "
-                    f"${temporary} of temporary increases; remove them first"
-                )
             row = (
                 (
                     await connection.execute(
@@ -1040,6 +1062,140 @@ class ManagedAuthStore:
                 occurred_at=now,
             )
             return self._policy(row)
+
+    async def put_project_budget(
+        self,
+        project: ProjectReference,
+        base_usd: Decimal,
+        version: int,
+        reason: str | None,
+        actor: ActorIdentity,
+    ) -> ProjectPolicy:
+        now = datetime.now(UTC)
+        async with self.engine.begin() as connection:
+            row = await self._create_policy_if_missing(
+                connection, project, base_usd, version, reason, now
+            )
+            if row is not None:
+                await self._audit_total_set(connection, actor, None, row, now)
+                return self._policy(row)
+            current = await self._lock_owned_policy(connection, project)
+            if _stale_source_version(current, version):
+                return self._policy(current)
+            total = base_usd + await self._temporary_total(
+                connection, project.project_id
+            )
+            row = await self._next_policy_revision(
+                connection, current, total, version, reason, now
+            )
+            await self._audit_total_set(connection, actor, current, row, now)
+            return self._policy(row)
+
+    async def _create_policy_if_missing(
+        self,
+        connection: AsyncConnection,
+        project: ProjectReference,
+        total_limit_usd: Decimal,
+        version: int,
+        reason: str | None,
+        now: datetime,
+    ) -> RowMapping | None:
+        result = await connection.execute(
+            pg_insert(t.project_policies)
+            .values(
+                project_id=project.project_id,
+                project_organization=project.organization,
+                project_environment=project.environment,
+                total_limit_usd=total_limit_usd,
+                total_started_at=now,
+                revision=1,
+                created_at=now,
+                updated_at=now,
+                budget_reason=reason,
+                source_version=version,
+            )
+            .on_conflict_do_nothing(index_elements=[t.project_policies.c.project_id])
+            .returning(t.project_policies)
+        )
+        return result.mappings().first()
+
+    async def _lock_owned_policy(
+        self, connection: AsyncConnection, project: ProjectReference
+    ) -> RowMapping:
+        result = await connection.execute(
+            select(t.project_policies)
+            .where(t.project_policies.c.project_id == project.project_id)
+            .with_for_update()
+        )
+        current = result.mappings().one()
+        if _project(current) != project:
+            raise ValueError("Project belongs to another organization or environment")
+        return current
+
+    async def _temporary_total(
+        self, connection: AsyncConnection, project_id: UUID
+    ) -> Decimal:
+        extras = await self._active_extras(connection, project_id)
+        return sum((item["increase_usd"] for item in extras), Decimal(0))
+
+    async def _check_above_temporary_increases(
+        self, connection: AsyncConnection, project_id: UUID, total_limit_usd: Decimal
+    ) -> None:
+        temporary = await self._temporary_total(connection, project_id)
+        if total_limit_usd <= temporary:
+            raise ValueError(
+                f"The new budget ${total_limit_usd} must stay above the "
+                f"${temporary} of temporary increases; remove them first"
+            )
+
+    async def _next_policy_revision(
+        self,
+        connection: AsyncConnection,
+        current: RowMapping,
+        total_limit_usd: Decimal,
+        version: int,
+        reason: str | None,
+        now: datetime,
+    ) -> RowMapping:
+        result = await connection.execute(
+            update(t.project_policies)
+            .where(t.project_policies.c.project_id == current["project_id"])
+            .values(
+                total_limit_usd=total_limit_usd,
+                budget_reason=reason,
+                source_version=version,
+                revision=current["revision"] + 1,
+                updated_at=now,
+            )
+            .returning(t.project_policies)
+        )
+        return result.mappings().one()
+
+    async def _audit_total_set(
+        self,
+        connection: AsyncConnection,
+        actor: ActorIdentity,
+        before: RowMapping | None,
+        after: RowMapping,
+        now: datetime,
+    ) -> None:
+        before_usd = None if before is None else before["total_limit_usd"]
+        await self._audit(
+            connection,
+            actor,
+            PROJECT_POLICY_AUDIT,
+            after["project_id"],
+            "total_set",
+            detail={
+                "reason": after["budget_reason"],
+                "before": None if before_usd is None else _total_state(before_usd),
+                "after": _total_state(after["total_limit_usd"]),
+                "affected_request_ids": [],
+                "total_before_usd": None if before_usd is None else str(before_usd),
+                "total_after_usd": str(after["total_limit_usd"]),
+            },
+            occurred_at=now,
+        )
 
     async def list_project_policies(self) -> tuple[ProjectPolicy, ...]:
         async with self.engine.connect() as connection:

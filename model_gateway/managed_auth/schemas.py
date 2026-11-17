@@ -87,6 +87,14 @@ class MachineRequestInput(StrictModel):
     budget_reason: str = Field(pattern=r"\S")
 
 
+class ProjectBudgetPutInput(StrictModel):
+    project_organization_id: UUID
+    project_environment: Literal["dev", "bench", "prod"]
+    limit_usd: Decimal = Field(gt=0)
+    version: int = Field(ge=1)
+    reason: str | None = None
+
+
 class InitialPolicyInput(StrictModel):
     limit_usd: Decimal | None = Field(default=None, gt=0)
     period: BudgetPeriod | None = None
@@ -128,6 +136,10 @@ class ApprovalInput(StrictModel):
 
 class RevisionInput(StrictModel):
     expected_revision: int = Field(ge=1)
+
+
+class VerifierInput(RevisionInput):
+    verifier_hash: str = Field(pattern="^[0-9a-f]{64}$")
 
 
 class KeyLimitChangeInput(StrictModel):

@@ -107,6 +107,8 @@ Set `provider_endpoint` when the registry key differs from the model ID sent to 
 
 Set `metadata.internal_only: true` on a model, `alternative_keys` entry, or block/provider `base-config` to limit it to internal orgs and keep it out of the public export.
 
+Token pricing supports `cache.write_markup` and full-request `context` rates above `context.threshold`. Cache writes have only a default rate and `write_1h_markup`; 30-minute/12-hour TTL selection and Fast/Ultrafast service-tier pricing are not represented.
+
 Company icons live in `model_library/config/icons/`. Name the light asset exactly `<company>.svg|png` and an optional dark asset `<company>-dark.svg|png`. Add a separate exact-name asset when two company labels use the same artwork; registry configs and `/registry` payloads contain only `company`, not icon filenames. Call `get_company_icon(company)` to resolve the bundled filenames; it returns `None` when no exact light asset exists and leaves `dark=None` when there is no dark asset. PNG and SVG files are bundled in the Python package.
 
 See the [field reference](../model_library/config/README.md#fields) for the `rate_limit` YAML shape. This field stores accounting policy and optional static retry/admission capacity. Live provider observations are separate and never rewrite YAML. Omit `rate_limit` when neither policy nor static capacity is known; public exports strip static capacity and retain policy.

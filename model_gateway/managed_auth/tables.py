@@ -51,6 +51,7 @@ project_policies = Table(
     Column("updated_at", DateTime(timezone=True), nullable=False),
     Column("budget_reason", String),
     Column("archived_at", DateTime(timezone=True)),
+    Column("source_version", Integer),
     CheckConstraint(
         "total_limit_usd IS NULL OR total_limit_usd > 0",
         name="project_policy_positive_total",

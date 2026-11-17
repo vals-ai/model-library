@@ -27,7 +27,9 @@ from model_gateway.managed_auth.store import ManagedAuthStore
 from model_gateway.managed_auth.types import (
     LimitRequestStatus,
     HumanIdentity,
+    MachineIdentity,
     PersonalOwner,
+    ServiceOwner,
 )
 
 ISSUER = "https://identity.example"
@@ -468,6 +470,26 @@ async def test_a_machine_archives_only_projects_its_service_holds_keys_in():
 
 
 @pytest.mark.asyncio
+async def test_a_machine_archives_and_unarchives_its_project_after_revoking_its_key():
+    async with project_with_member() as project:
+        key = next(
+            key
+            for key in await project.store.list_keys()
+            if isinstance(key.owner, ServiceOwner)
+        )
+        assert (
+            await project.store.revoke_key(key.id, key.revision, project.member)
+            is not None
+        )
+        for action in ("archive", "unarchive"):
+            changed = await project.call(
+                "machine-access-key", "POST", f"/machine{project.path}/{action}"
+            )
+            assert changed.status_code == 200, changed.text
+        assert (await project.policy())["archived_at"] is None
+
+
+@pytest.mark.asyncio
 async def test_a_member_whose_key_is_revoked_cannot_edit():
     async with project_with_member() as project:
         key = next(
@@ -678,3 +700,270 @@ async def test_new_approvals_and_increases_leave_the_period_columns_empty():
             ).one()
         assert tuple(policy) == (None, None)
         assert tuple(window) == (None, None)
+
+
+async def _put_budget(
+    project: Project,
+    project_id: str,
+    limit_usd: str,
+    environment: str = "dev",
+    organization: str | None = None,
+    version: int = 1,
+    reason: str | None = None,
+):
+    organization = organization or (await project.policy())["project"]["organization"]
+    return await project.call(
+        "machine-access-key",
+        "PUT",
+        f"/machine/projects/{project_id}/budget",
+        json={
+            "project_organization_id": organization,
+            "project_environment": environment,
+            "limit_usd": limit_usd,
+            "version": version,
+            "reason": reason,
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_machine_sets_a_project_budget_only_through_its_route():
+    async with project_with_member() as project:
+        human_route = await project.call(
+            "machine-access-key",
+            "PUT",
+            f"{project.path}/budget",
+            json={"expected_revision": 1, "limit_usd": "80.00", "reason": "service"},
+        )
+        assert human_route.status_code == 401, human_route.text
+        project_id = project.path.removeprefix("/projects/")
+        route = f"{PREFIX}/machine/projects/{project_id}/budget"
+        anonymous = await project.client.put(route, json={"limit_usd": "80.00"})
+        assert anonymous.status_code == 401, anonymous.text
+        assert (await _put_budget(project, project_id, "0")).status_code == 422
+        assert (await _put_budget(project, project_id, "80", "test")).status_code == 422
+        bad_org = await _put_budget(project, project_id, "80", organization="org")
+        assert bad_org.status_code == 422, bad_org.text
+        extra = await project.call(
+            "machine-access-key",
+            "PUT",
+            f"/machine/projects/{project_id}/budget",
+            json={
+                "project_organization_id": (await project.policy())["project"]["organization"],
+                "project_environment": "dev",
+                "limit_usd": "80",
+                "version": 1,
+                "total_usd": "80",
+            },
+        )
+        assert extra.status_code == 422, extra.text
+        zero_version = await _put_budget(project, project_id, "80", version=0)
+        assert zero_version.status_code == 422, zero_version.text
+        before = await project.policy()
+        lowered = await _put_budget(project, project_id, "80.00")
+        assert lowered.status_code == 200, lowered.text
+        assert Decimal(lowered.json()["total_limit_usd"]) == Decimal("80")
+        assert lowered.json()["revision"] == before["revision"] + 1
+        events = await project.store.audit_for("project_policy", UUID(project_id))
+        assert events[-1].change == "total_set"
+        machine = project.app.state.managed_machine_verifier
+        assert events[-1].actor == MachineIdentity(
+            ISSUER, machine._registered_access_key_id
+        )
+        retried = await _put_budget(project, project_id, "80.00")
+        assert retried.json()["revision"] == lowered.json()["revision"]
+        spec = project.app.openapi()["paths"][
+            f"{PREFIX}/machine/projects/{{project_id}}/budget"
+        ]["put"]["responses"]["200"]["content"]["application/json"]["schema"]
+        assert spec["$ref"].endswith("/ProjectPolicyDTO")
+        moved = await _put_budget(project, project_id, "90.00", "prod")
+        assert moved.status_code == 409, moved.text
+        assert moved.json()["detail"] == (
+            "Project belongs to another organization or environment"
+        )
+        assert Decimal((await project.policy())["total_limit_usd"]) == Decimal("80")
+        history = await project.call("admin", "GET", f"{project.path}/history")
+        total_set = next(i for i in history.json() if i["event"] == "total_set")
+        assert total_set["before"]["effective_limit_usd"] == before["total_limit_usd"]
+        assert total_set["after"]["effective_limit_usd"] == "80.00"
+
+
+@pytest.mark.asyncio
+async def test_a_stale_budget_push_leaves_the_newer_budget():
+    async with project_with_member() as project:
+        project_id = project.path.removeprefix("/projects/")
+        newer = await _put_budget(project, project_id, "90.00", version=2)
+        stale = await _put_budget(project, project_id, "80.00", version=1)
+        assert stale.status_code == 200, stale.text
+        assert stale.json() == newer.json()
+        assert Decimal((await project.policy())["total_limit_usd"]) == Decimal("90")
+
+
+@pytest.mark.asyncio
+async def test_a_retried_budget_push_changes_nothing():
+    async with project_with_member() as project:
+        project_id = project.path.removeprefix("/projects/")
+        first = await _put_budget(project, project_id, "80.00", version=3)
+        retried = await _put_budget(project, project_id, "80.00", version=3)
+        assert retried.status_code == 200, retried.text
+        assert retried.json() == first.json()
+        events = await project.store.audit_for("project_policy", UUID(project_id))
+        assert [event.change for event in events].count("total_set") == 1
+
+
+@pytest.mark.asyncio
+async def test_a_budget_push_keeps_an_active_temporary_increase():
+    async with project_with_member() as project:
+        project_id = project.path.removeprefix("/projects/")
+        await _put_budget(project, project_id, "80.00", version=1)
+        assert (await _add_temporary(project, "40.00")).status_code == 200
+        pushed = await _put_budget(project, project_id, "80.00", version=2)
+        assert Decimal(pushed.json()["total_limit_usd"]) == Decimal("120")
+        removed = await project.call(
+            "admin",
+            "DELETE",
+            f"{project.path}/temporary-increases",
+            json={"expected_revision": pushed.json()["revision"], "reason": "done"},
+        )
+        assert Decimal(removed.json()["total_limit_usd"]) == Decimal("80"), removed.text
+
+
+@pytest.mark.asyncio
+async def test_a_budget_push_stores_its_reason():
+    async with project_with_member() as project:
+        project_id = project.path.removeprefix("/projects/")
+        reason = "full rerun of the legal set"
+        pushed = await _put_budget(project, project_id, "80.00", reason=reason)
+        assert pushed.json()["budget_reason"] == reason
+        history = await project.call("admin", "GET", f"{project.path}/history")
+        total_set = next(i for i in history.json() if i["event"] == "total_set")
+        assert total_set["reason"] == reason
+        cleared = await _put_budget(project, project_id, "80.00", version=2)
+        assert cleared.json()["budget_reason"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_first_budget_creates_the_project_policy():
+    async with project_with_member() as project:
+        project_id = str(uuid4())
+        created = await _put_budget(project, project_id, "40.00", "bench")
+        assert created.status_code == 200, created.text
+        policy = await project.store.get_project_policy(UUID(project_id))
+        assert policy is not None and policy.project.environment == "bench"
+        assert policy.total_limit_usd == Decimal("40") and policy.revision == 1
+        events = await project.store.audit_for("project_policy", UUID(project_id))
+        assert [event.change for event in events] == ["total_set"]
+        path = f"/projects/{project_id}/history"
+        history = (await project.call("admin", "GET", path)).json()
+        assert history[0]["before"] is None
+        assert history[0]["after"]["effective_limit_usd"] == "40.00"
+
+
+async def _machine_request(
+    project: Project, project_id: UUID, organization: UUID, requested_budget: str
+):
+    return await project.call(
+        "machine-access-key",
+        "POST",
+        "/machine/requests",
+        json={
+            "project_id": str(project_id),
+            "project_organization_id": str(organization),
+            "project_environment": "dev",
+            "display_name": "second project",
+            "description": "worker",
+            "requested_budget": requested_budget,
+            "budget_reason": "full rerun",
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_project_policy_waits_for_its_first_key_approval():
+    async with project_with_member() as project:
+        project_id = uuid4()
+        requested = await _machine_request(project, project_id, uuid4(), "5000")
+        assert requested.json()["status"] == "pending", requested.text
+        policy = await project.call("admin", "GET", f"/projects/{project_id}/policy")
+        assert policy.status_code == 404, policy.text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("limit_usd", "requested_budget"), [("40.00", "5000"), ("1000.00", "5")]
+)
+async def test_a_budget_set_by_the_route_still_waits_for_a_platform_admin(
+    limit_usd: str, requested_budget: str
+):
+    async with project_with_member() as project:
+        project_id, organization = uuid4(), uuid4()
+        await _put_budget(
+            project, str(project_id), limit_usd, organization=str(organization)
+        )
+        requested = await _machine_request(
+            project, project_id, organization, requested_budget
+        )
+        assert requested.json()["status"] == "pending", requested.text
+        identity = {"issuer": ISSUER, "subject": project.member.subject}
+        human = await project.call(
+            "member",
+            "POST",
+            "/requests",
+            json={
+                "project_id": str(project_id),
+                "display_name": "member key",
+                "description": "research",
+                "key_limit": None,
+                "owner": {"kind": "personal", "identity": identity},
+            },
+        )
+        assert human.status_code == 409, human.text
+        set_budget = await project.store.get_project_policy(project_id)
+        approved = await project.call(
+            "admin", "POST", f"/requests/{requested.json()['id']}/approve", json={}
+        )
+        assert approved.status_code == 200, approved.text
+        assert await project.store.get_project_policy(project_id) == set_budget
+
+
+@pytest.mark.asyncio
+async def test_a_small_ask_on_a_small_set_budget_is_approved_as_today():
+    async with project_with_member() as project:
+        project_id, organization = uuid4(), uuid4()
+        await _put_budget(
+            project, str(project_id), "80.00", organization=str(organization)
+        )
+        set_budget = await project.store.get_project_policy(project_id)
+        requested = await _machine_request(project, project_id, organization, "5")
+        assert requested.json()["status"] == "approved", requested.text
+        assert await project.store.get_project_policy(project_id) == set_budget
+        assert set_budget is not None and set_budget.revision == 1
+        assert set_budget.total_limit_usd == Decimal("80")
+        assert set_budget.budget_reason is None
+        key = await project.store.get_key(UUID(requested.json()["key_id"]))
+        assert key is not None and key.status == "pending_collection"
+
+
+@pytest.mark.asyncio
+async def test_a_budget_raised_during_a_small_ask_leaves_it_pending(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async with project_with_member() as project:
+        project_id, organization = uuid4(), str(uuid4())
+        await _put_budget(project, str(project_id), "40.00", organization=organization)
+        decide = project.store.decide_request
+
+        async def raise_then_decide(*args: Any):
+            await _put_budget(
+                project,
+                str(project_id),
+                "1000.00",
+                organization=organization,
+                version=2,
+            )
+            return await decide(*args)
+
+        monkeypatch.setattr(project.store, "decide_request", raise_then_decide)
+        requested = await _machine_request(project, project_id, UUID(organization), "5")
+        assert requested.json()["status"] == "pending", requested.text
+        assert requested.json()["key_id"] is None

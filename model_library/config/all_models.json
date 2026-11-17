@@ -1,4 +1,1135 @@
 {
+    "openai/gpt-6.2-sol-xhigh": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Sol (Extra High)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-6.2-sol",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-sol-xhigh",
+        "slug": "openai_gpt-6.2-sol-xhigh"
+    },
+    "openai/gpt-6.2-sol-medium": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Sol (Medium)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "gpt-6.2-sol",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-sol-medium",
+        "slug": "openai_gpt-6.2-sol-medium"
+    },
+    "openai/gpt-6.2-sol-max": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Sol (Max)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6.2-sol",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-sol-max",
+        "slug": "openai_gpt-6.2-sol-max"
+    },
+    "openai/gpt-6.2-sol-low": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Sol (Low)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "gpt-6.2-sol",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-sol-low",
+        "slug": "openai_gpt-6.2-sol-low"
+    },
+    "openai/gpt-6.2-sol-high": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Sol (High)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-6.2-sol",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-sol-high",
+        "slug": "openai_gpt-6.2-sol-high"
+    },
+    "openai/gpt-6.2-sol": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Sol",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-sol",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-6.2-sol-max": {
+                    "label": "GPT-6.2 Sol (Max)"
+                }
+            },
+            {
+                "openai/gpt-6.2-sol-low": {
+                    "label": "GPT-6.2 Sol (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.2-sol-medium": {
+                    "label": "GPT-6.2 Sol (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.2-sol-high": {
+                    "label": "GPT-6.2 Sol (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.2-sol-xhigh": {
+                    "label": "GPT-6.2 Sol (Extra High)",
+                    "default_parameters": {
+                        "reasoning_effort": "xhigh"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6.2-sol",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 2.0,
+            "output": 10.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 4.0,
+                "output": 15.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-sol",
+        "slug": "openai_gpt-6.2-sol"
+    },
+    "openai/gpt-6.2-astra-xhigh": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Astra (Extra High)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gpt-6.2-astra",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 8.0,
+            "output": 40.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 16.0,
+                "output": 60.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-astra-xhigh",
+        "slug": "openai_gpt-6.2-astra-xhigh"
+    },
+    "openai/gpt-6.2-astra-medium": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Astra (Medium)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "gpt-6.2-astra",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 8.0,
+            "output": 40.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 16.0,
+                "output": 60.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-astra-medium",
+        "slug": "openai_gpt-6.2-astra-medium"
+    },
+    "openai/gpt-6.2-astra-max": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Astra (Max)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6.2-astra",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 8.0,
+            "output": 40.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 16.0,
+                "output": 60.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-astra-max",
+        "slug": "openai_gpt-6.2-astra-max"
+    },
+    "openai/gpt-6.2-astra-low": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Astra (Low)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "gpt-6.2-astra",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 8.0,
+            "output": 40.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 16.0,
+                "output": 60.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-astra-low",
+        "slug": "openai_gpt-6.2-astra-low"
+    },
+    "openai/gpt-6.2-astra-high": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Astra (High)",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gpt-6.2-astra",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 8.0,
+            "output": 40.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 16.0,
+                "output": 60.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-astra-high",
+        "slug": "openai_gpt-6.2-astra-high"
+    },
+    "openai/gpt-6.2-astra": {
+        "company": "OpenAI",
+        "country": "United States",
+        "label": "GPT-6.2 Astra",
+        "release_date": "2026-11-17",
+        "open_source": false,
+        "documentation_url": "https://developers.openai.com/api/docs/models/gpt-6.2-astra",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "verbosity": "medium",
+            "reasoning_context": "all_turns"
+        },
+        "rate_limit": {
+            "supports_live_monitoring": true,
+            "cache_read_counts_toward_limit": true
+        },
+        "alternative_keys": [
+            {
+                "openai/gpt-6.2-astra-max": {
+                    "label": "GPT-6.2 Astra (Max)"
+                }
+            },
+            {
+                "openai/gpt-6.2-astra-low": {
+                    "label": "GPT-6.2 Astra (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.2-astra-medium": {
+                    "label": "GPT-6.2 Astra (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.2-astra-high": {
+                    "label": "GPT-6.2 Astra (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "openai/gpt-6.2-astra-xhigh": {
+                    "label": "GPT-6.2 Astra (Extra High)",
+                    "default_parameters": {
+                        "reasoning_effort": "xhigh"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "max"
+        },
+        "provider_endpoint": "gpt-6.2-astra",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 128000,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 8.0,
+            "output": 40.0,
+            "cache": {
+                "read_discount": 0.05,
+                "write_markup": 1.25
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            },
+            "context": {
+                "threshold": 272000.0,
+                "input": 16.0,
+                "output": 60.0,
+                "cache": {
+                    "read_discount": 0.05,
+                    "write_markup": 1.25
+                }
+            }
+        },
+        "provider_name": "openai",
+        "full_key": "openai/gpt-6.2-astra",
+        "slug": "openai_gpt-6.2-astra"
+    },
+    "openrouter/tencent/hy4-flash": {
+        "company": "Tencent",
+        "country": "China",
+        "label": "Hy4 Flash (OpenRouter)",
+        "release_date": "2026-11-16",
+        "open_source": true,
+        "documentation_url": "https://hy.tencent.ai/research/hy4-flash",
+        "supports": {
+            "images": true,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": true,
+            "temperature": true,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": false,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "openrouter_provider_only": [
+                "tencent"
+            ]
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "temperature": 0.9,
+            "top_p": 1.0
+        },
+        "provider_endpoint": "tencent/hy4-flash",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 65536,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 0.07,
+            "output": 0.281,
+            "cache": {
+                "read": 0.003,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
+            "current_discount": 50.0
+        },
+        "provider_name": "openrouter",
+        "full_key": "openrouter/tencent/hy4-flash",
+        "slug": "openrouter_tencent_hy4-flash"
+    },
+    "decision/d1.2-ultra": {
+        "company": "Liquid AI",
+        "country": "United States",
+        "label": "d1.2-ultra",
+        "release_date": "2026-11-16",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/liquid/d1.2-ultra",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "liquid/d1.2-ultra-20261116",
+        "properties": {
+            "context_window": 65536,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.042,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/d1.2-ultra",
+        "slug": "decision_d1.2-ultra"
+    },
+    "decision/d1.2": {
+        "company": "Liquid AI",
+        "country": "United States",
+        "label": "d1.2",
+        "release_date": "2026-11-16",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/liquid/d1.2",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "liquid/d1.2-20261116",
+        "properties": {
+            "context_window": 65536,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.02,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/d1.2",
+        "slug": "decision_d1.2"
+    },
+    "decision/decider-v1.3": {
+        "company": "Perplexity",
+        "country": "United States",
+        "label": "Decider V1.3",
+        "release_date": "2026-11-12",
+        "open_source": true,
+        "documentation_url": "https://docs.perplexity.ai/docs/decisions/quickstart",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "decision_api": "perplexity"
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "pplx-decider-v1.3",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.02,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/decider-v1.3",
+        "slug": "decision_decider-v1.3"
+    },
+    "decision/decider-flash-v1.3": {
+        "company": "Perplexity",
+        "country": "United States",
+        "label": "Decider Flash V1.3",
+        "release_date": "2026-11-12",
+        "open_source": true,
+        "documentation_url": "https://docs.perplexity.ai/docs/decisions/quickstart",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "decision_api": "perplexity"
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "pplx-decider-flash-v1.3",
+        "properties": {
+            "context_window": 262144,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.01,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/decider-flash-v1.3",
+        "slug": "decision_decider-flash-v1.3"
+    },
     "decision/gemini-decision-1": {
         "company": "Google",
         "country": "United States",
@@ -1175,6 +2306,48 @@
         "full_key": "fireworks/kimi-k3p1-pro",
         "slug": "fireworks_kimi-k3p1-pro"
     },
+    "decision/joey-1": {
+        "company": "Baseten",
+        "country": "United States",
+        "label": "Joey 1",
+        "release_date": "2026-10-29",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/baseten/joey-1",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "baseten/joey-1-20261029",
+        "properties": {
+            "context_window": 16384,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.01,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/joey-1",
+        "slug": "decision_joey-1"
+    },
     "openai/gpt-6.1-terra-xhigh": {
         "company": "OpenAI",
         "country": "United States",
@@ -1896,6 +3069,90 @@
         "provider_name": "kimi",
         "full_key": "kimi/kimi-k3.1-pro",
         "slug": "kimi_kimi-k3.1-pro"
+    },
+    "decision/mammoth-1": {
+        "company": "Baseten",
+        "country": "United States",
+        "label": "Mammoth 1",
+        "release_date": "2026-10-21",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/baseten/mammoth-1",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "baseten/mammoth-1-20261021",
+        "properties": {
+            "context_window": 16384,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.1,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/mammoth-1",
+        "slug": "decision_mammoth-1"
+    },
+    "decision/elephant-1": {
+        "company": "Baseten",
+        "country": "United States",
+        "label": "Elephant 1",
+        "release_date": "2026-10-21",
+        "open_source": false,
+        "documentation_url": "https://openrouter.ai/baseten/elephant-1",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {},
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "baseten/elephant-1-20261021",
+        "properties": {
+            "context_window": 16384,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.035,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/elephant-1",
+        "slug": "decision_elephant-1"
     },
     "decision/drex-max": {
         "company": "Nace.AI",

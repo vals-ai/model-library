@@ -496,7 +496,7 @@ async def test_positive_project_policy_upgrade_refuses_invalid_rows_until_correc
                     "revision, created_at, updated_at) "
                     "VALUES (:id, 'org', 'dev', 'monthly', 0, 1, now(), now())"
                 ), {"id": uuid4()})
-        await _revision(engine, "head")
+        await _revision(engine, "d7e3f9a2b6c1")
         async with engine.connect() as connection:
             assert (await connection.execute(text(
                 "SELECT version_num FROM alembic_version"
@@ -546,3 +546,22 @@ async def test_requested_budget_reason_pair_rejects_a_reason_without_a_budget():
                 })
         assert reason_only.value.orig.sqlstate == "23514"
         assert "requested_budget_reason_pair" in str(reason_only.value)
+
+
+@pytest.mark.asyncio
+async def test_source_version_upgrade_leaves_existing_policies_without_a_version():
+    async with _isolated_database() as engine:
+        await _revision(engine, "d7e3f9a2b6c1")
+        project_id = uuid4()
+        async with engine.begin() as connection:
+            await connection.execute(text(
+                "INSERT INTO managed_project_policies "
+                "(project_id, project_organization, project_environment, total_limit_usd, "
+                "total_started_at, revision, created_at, updated_at) "
+                "VALUES (:id, 'org', 'dev', 80, now(), 1, now(), now())"
+            ), {"id": project_id})
+        await _revision(engine, "head")
+        async with engine.connect() as connection:
+            assert (await connection.execute(text(
+                "SELECT source_version FROM managed_project_policies WHERE project_id = :id"
+            ), {"id": project_id})).scalar_one() is None

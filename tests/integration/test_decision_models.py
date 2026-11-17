@@ -25,10 +25,17 @@ REQUEST = decision_request(
 @pytest.mark.parametrize(
     ("model_key", "key_env"),
     [
+        ("decision/joey-1", "OPENROUTER_API_KEY"),
+        ("decision/mammoth-1", "OPENROUTER_API_KEY"),
+        ("decision/elephant-1", "OPENROUTER_API_KEY"),
         ("decision/jev-1.13.0", "OPENROUTER_API_KEY"),
         ("decision/microsoft-decision-1", "OPENROUTER_API_KEY"),
+        ("decision/d1.2", "OPENROUTER_API_KEY"),
+        ("decision/d1.2-ultra", "OPENROUTER_API_KEY"),
         ("decision/gpt-6-luna", "OPENAI_API_KEY"),
         ("decision/gemini-decision-1", "GOOGLE_API_KEY"),
+        ("decision/decider-v1.3", "PERPLEXITY_API_KEY"),
+        ("decision/decider-flash-v1.3", "PERPLEXITY_API_KEY"),
     ],
 )
 async def test_live_decision_call(model_key: str, key_env: str) -> None:
