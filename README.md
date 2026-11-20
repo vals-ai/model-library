@@ -114,7 +114,7 @@ The model registry holds model attributes such as reasoning, file support, tool 
 from model_library import raw_model
 from model_library.base import LLMConfig
 
-llm = raw_model("grok/grok-code-fast", LLMConfig(max_tokens=10000))
+llm = raw_model("grok/grok-4.3", LLMConfig(max_tokens=10000))
 ```
 
 You can extend the registry with custom configs from a local YAML file or URL using the same format as the bundled provider configs:

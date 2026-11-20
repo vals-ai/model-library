@@ -8,12 +8,15 @@ from typing import Any, Literal, Sequence, cast
 from google.genai import Client
 from google.genai.types import (
     BlockedReason,
+    ComputerUse,
     Content,
     CountTokensConfig,
+    Environment,
     File,
     FinishReason,
     FunctionDeclaration,
     FunctionResponse,
+    FunctionResponsePart,
     GenerateContentConfig,
     GenerateContentResponse,
     GenerateContentResponseUsageMetadata,
@@ -35,12 +38,14 @@ from google.genai.types import (
     UploadFileConfig,
 )
 from google.oauth2 import service_account
-from pydantic import BaseModel, JsonValue, SecretStr
+from pydantic import BaseModel, JsonValue, SecretStr, ValidationError
 from typing_extensions import override
 
 from model_library import model_library_settings
 from model_library.base import (
     LLM,
+    ComputerCall,
+    ComputerCallOutput,
     FileBase,
     FileInput,
     FileWithBase64,
@@ -69,6 +74,7 @@ from model_library.base.output.result import ProviderToolEvent
 from model_library.base import (
     FinishReason as StandardFinishReason,
 )
+from model_library.base.computer import is_computer_tool
 from model_library.base.output.builder import QueryResultBuilder
 from model_library.base.input import normalize_query_input
 from model_library.exceptions import (
@@ -126,6 +132,101 @@ def map_google_finish_reason(
 
 def generate_tool_call_id(tool_name: str) -> str:
     return str(tool_name + "_" + str(uuid.uuid4()))
+
+
+COMPUTER_ENVIRONMENTS = {
+    "desktop": Environment.ENVIRONMENT_DESKTOP,
+    "browser": Environment.ENVIRONMENT_BROWSER,
+    "mobile": Environment.ENVIRONMENT_MOBILE,
+}
+
+
+def computer_use_tool(body: dict[str, Any]) -> Tool:
+    """The native computer tool. Other body keys, such as the display size, are not sent."""
+    environment = body.get("environment", "desktop")
+    if environment not in COMPUTER_ENVIRONMENTS:
+        raise BadInputError(f"Unknown Gemini computer environment: {environment}")
+    return Tool(
+        computer_use=ComputerUse(
+            environment=COMPUTER_ENVIRONMENTS[environment],
+            excluded_predefined_functions=body.get("excluded_predefined_functions"),
+        )
+    )
+
+
+def decode_data_url(url: str) -> tuple[str, bytes]:
+    header, data = url.split(",", 1)
+    return header[5:].split(";", 1)[0], base64.b64decode(data)
+
+
+def order_function_responses(parts: list[Part], turn: RawResponse | None) -> list[Part]:
+    if turn is None or not isinstance(turn.response, list):
+        return parts
+    try:
+        contents = [
+            raw if isinstance(raw, Content) else Content.model_validate(raw)
+            for raw in cast(list[object], turn.response)
+        ]
+    except ValidationError:
+        return parts
+    # A streamed turn stores one Content per chunk, so its calls can span chunks.
+    model_contents = [c for c in contents if c.role == "model"]
+    if not model_contents:
+        return parts
+    calls = [
+        part.function_call
+        for content in model_contents
+        for part in content.parts or []
+        if part.function_call
+    ]
+    remaining = list(parts)
+    ordered: list[Part] = []
+    provider_ids = {call.id for call in calls if call.id}
+    for call in calls:
+        match = next(
+            (
+                reply
+                for reply in remaining
+                if (response := reply.function_response) is not None
+                and (
+                    response.id == call.id
+                    if call.id
+                    else response.id not in provider_ids and response.name == call.name
+                )
+            ),
+            None,
+        )
+        if match is not None:
+            remaining.remove(match)
+            assert match.function_response is not None
+            match.function_response.id = call.id
+            match.function_response.name = call.name
+            ordered.append(match)
+    for reply in remaining:
+        if reply.function_response is not None:
+            reply.function_response.id = None
+    return ordered + remaining
+
+
+def computer_call_response(item: ComputerCallOutput) -> FunctionResponse:
+    """A screenshot reply. A generated call ID starts with the function name."""
+    response: dict[str, Any] = {}
+    if item.output_text is not None:
+        response["output"] = item.output_text
+    if item.acknowledged_safety_checks:
+        response["safety_acknowledgement"] = True
+    parts: list[FunctionResponsePart] = []
+    if item.screenshot_url is not None:
+        if item.screenshot_url[:5].lower() != "data:":
+            raise BadInputError("Gemini computer use needs a data: screenshot URL")
+        mime, data = decode_data_url(item.screenshot_url)
+        parts.append(FunctionResponsePart.from_bytes(mime_type=mime, data=data))
+    return FunctionResponse(
+        id=item.call_id,
+        name=item.call_id.rsplit("_", 1)[0],
+        response=response,
+        parts=parts or None,
+    )
 
 
 class GoogleConfig(ProviderConfig):
@@ -274,54 +375,64 @@ class GoogleModel(LLM):
     ) -> list[Content]:
         new_input: list[Content] = []
 
-        content_user: list[Part] = []
+        buffer: list[Part] = []
+        kind: str | None = None
+        turn: RawResponse | None = None
 
-        def flush_content_user():
-            if content_user:
-                new_input.append(Content(parts=content_user, role="user"))
-                content_user.clear()
+        def flush():
+            if buffer:
+                parts = (
+                    order_function_responses(buffer, turn)
+                    if kind == "function"
+                    else list(buffer)
+                )
+                new_input.append(Content(parts=parts, role="user"))
+                buffer.clear()
 
         for item in input:
+            next_kind = (
+                "function"
+                if isinstance(item, ToolResult | ComputerCallOutput)
+                else "user"
+                if isinstance(item, TextInput | FileBase)
+                else None
+            )
+            if next_kind != kind or next_kind is None:
+                flush()
+                kind = next_kind
+            if isinstance(item, ToolResult | ComputerCallOutput):
+                buffer.append(
+                    Part(
+                        function_response=FunctionResponse(
+                            id=item.tool_call.id,
+                            name=item.tool_call.name,
+                            response={"result": item.result},
+                        )
+                        if isinstance(item, ToolResult)
+                        else computer_call_response(item)
+                    )
+                )
+                continue
+
             if isinstance(item, TextInput):
-                content_user.append(Part.from_text(text=item.text))
+                buffer.append(Part.from_text(text=item.text))
                 continue
 
             if isinstance(item, FileBase):
                 parsed = await self.parse_file(item)
-                content_user.append(parsed)
+                buffer.append(parsed)
                 continue
 
-            # non content user item
-            flush_content_user()
-
             match item:
-                case ToolResult():
-                    new_input.append(
-                        Content(
-                            role="user",
-                            parts=[
-                                Part(
-                                    function_response=FunctionResponse(
-                                        id=item.tool_call.id,
-                                        name=item.tool_call.name,
-                                        response={"result": item.result},
-                                    )
-                                )
-                            ],
-                        )
-                    )
-
                 case RawResponse():
+                    turn = item
                     new_input.extend(item.response)
                 case RawInput():
                     new_input.append(item.input)
                 case SystemInput():
                     raise UnexpectedSystemInputError()
-                case _:
-                    raise AssertionError(type(item))
 
-        # in case content user item is the last item
-        flush_content_user()
+        flush()
 
         return new_input
 
@@ -338,6 +449,9 @@ class GoogleModel(LLM):
                 return Part.from_bytes(mime_type=file.mime, data=file.data)
             case FileWithId():
                 return Part.from_uri(file_uri=file.file_id, mime_type=file.mime)
+            case FileWithUrl() if file.url[:5].lower() == "data:":
+                mime, data = decode_data_url(file.url)
+                return Part.from_bytes(mime_type=mime, data=data)
             case FileWithUrl():
                 raise BadInputError(
                     "Gemini does not support URL. Please fetch the file, convert it to bytes, and pass it as a FileWithBase64 object."
@@ -363,6 +477,9 @@ class GoogleModel(LLM):
                 continue
             if isinstance(body, Tool):
                 parsed_tools.append(body)
+                continue
+            if is_computer_tool(tool):
+                parsed_tools.append(computer_use_tool(cast(dict[str, Any], body)))
                 continue
             if isinstance(body, ToolBody):
                 fn = FunctionDeclaration(
@@ -510,6 +627,18 @@ class GoogleModel(LLM):
 
         result_builder = QueryResultBuilder()
         tool_calls: list[ToolCall] = []
+        computer_calls: list[ComputerCall] = []
+        # With a computer tool, a call to any other name is a predefined UI action.
+        computer = any(is_computer_tool(tool) for tool in tools)
+        declared: set[str | None] = (
+            {
+                declaration.name
+                for tool in cast(list[Tool], body["config"].tools or [])
+                for declaration in tool.function_declarations or []
+            }
+            if computer
+            else set()
+        )
 
         metadata: GenerateContentResponseUsageMetadata | None = None
         response_id: str | None = None
@@ -558,6 +687,23 @@ class GoogleModel(LLM):
 
                         call_args = part.function_call.args or {}
                         result_builder.start_tool_call_segment().record_tool_call_delta()
+                        if computer and part.function_call.name not in declared:
+                            safety = call_args.get("safety_decision")
+                            computer_calls.append(
+                                ComputerCall(
+                                    call_id=part.function_call.id
+                                    or generate_tool_call_id(part.function_call.name),
+                                    provider="google",
+                                    actions=[
+                                        {
+                                            "name": part.function_call.name,
+                                            "args": call_args,
+                                        }
+                                    ],
+                                    pending_safety_checks=[safety] if safety else [],
+                                )
+                            )
+                            continue
                         tool_calls.append(
                             # Weirdly, id is not required. If not provided, we generate one.
                             ToolCall(
@@ -631,12 +777,13 @@ class GoogleModel(LLM):
                 )
 
         mapped_finish_reason = map_google_finish_reason(
-            finish_reason, has_tool_calls=bool(tool_calls)
+            finish_reason, has_tool_calls=bool(tool_calls or computer_calls)
         )
         if (
             not result_builder.has_output_text
             and not result_builder.has_reasoning
             and not tool_calls
+            and not computer_calls
             and not provider_tool_events
         ):
             query_logger.error(f"Empty response. Chunks: {chunks}")
@@ -675,6 +822,7 @@ class GoogleModel(LLM):
             finish_reason=mapped_finish_reason,
             history=[*input, RawResponse(response=contents)],
             tool_calls=tool_calls,
+            computer_calls=computer_calls,
             provider_tool_events=provider_tool_events,
             metadata=result_metadata,
             extras=QueryResultExtras(

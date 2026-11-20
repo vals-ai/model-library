@@ -256,7 +256,7 @@ nvidia-models:
       input: 0.6
       output: 2.4
       cache:
-        read: 0.119
+        read: 0.12
 
 
   fireworks/nemotron-lightning-3p5-30b-a3b:

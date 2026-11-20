@@ -732,6 +732,7 @@ def parse_yaml_blocks(
             current_model_config = deep_update(current_model_config, model_config)
 
             provider_properties = current_model_config.pop("provider_properties", {})
+            slug = current_model_config.pop("public_slug", model_name.replace("/", "_"))
             if (
                 "rate_limit" in current_model_config
                 and current_model_config["rate_limit"] is None
@@ -753,7 +754,7 @@ def parse_yaml_blocks(
                     "provider_name": model_name.split("/")[0],
                     "provider_endpoint": provider_endpoint,
                     "full_key": model_name,
-                    "slug": model_name.replace("/", "_"),
+                    "slug": slug,
                 }
             )
             # load provider properties separately since the model was generated at runtime

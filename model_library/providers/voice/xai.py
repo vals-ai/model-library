@@ -17,7 +17,6 @@ from model_library.base.transcription import (
     parse_mono_pcm16_wav,
     stream_audio_chunks,
 )
-from model_library.register_models import register_provider
 
 
 _XAI_STT_ENDPOINT = "wss://api.x.ai/v1/stt"
@@ -35,9 +34,8 @@ def _add_query_params(url: str, params: Mapping[str, str]) -> str:
     )
 
 
-@register_provider("xai")
 class XAITranscriptionModel(TranscriptionOnly):
-    provider_name = "xai"
+    provider_name = "grok"
 
     @override
     def _get_default_api_key(self) -> str:

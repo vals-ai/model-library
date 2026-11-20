@@ -332,76 +332,6 @@ grok-4-models:
       training_cutoff: null
     alternative_keys:
       - grok/grok-4-fast-non-reasoning-latest
-
-grok-code-models:
-  base-config:
-    supports:
-      files: true
-      temperature: true
-    costs_per_million_token:
-      cache:
-        read_discount: 0.1
-    default_parameters:
-      temperature: 0.7
-      top_p: 0.95
-
-  grok/grok-code-fast-1:
-    label: Grok Code Fast
-    release_date: 2025-08-25
-    documentation_url: https://docs.x.ai/docs/models/grok-code-fast-1
-    supports:
-      images: false
-    properties:
-      context_window: 256_000
-      max_tokens: 40_000
-      reasoning_model: true
-    costs_per_million_token:
-      input: 1.00
-      output: 2.00
-      cache:
-        read: 0.20
-      context:
-        threshold: 199_999
-        input: 2.00
-        output: 4.00
-        cache:
-          read: 0.40
-    alternative_keys:
-      - grok/grok-code-fast
-      - grok/grok-code-fast-1-0825
-
-grok-build-models:
-  base-config:
-    supports:
-      files: true
-      temperature: true
-    costs_per_million_token:
-      cache:
-        read_discount: 0.2
-    default_parameters:
-      temperature: 0.7
-      top_p: 0.95
-
-  grok/grok-build-0.1:
-    label: Grok Build 0.1
-    release_date: 2026-05-20
-    documentation_url: ""
-    properties:
-      context_window: 256_000
-      max_tokens: 256_000
-      training_cutoff: null
-      reasoning_model: true
-    costs_per_million_token:
-      input: 1.00
-      output: 2.00
-      cache:
-        read: 0.20
-      context:
-        threshold: 199_999
-        input: 2.00
-        output: 4.00
-        cache:
-          read: 0.40
 transcription-models:
   base-config:
     rate_limit:
@@ -419,7 +349,7 @@ transcription-models:
       format: iso-639-1
       default: en
 
-  xai/grok-voice-transcribe-2.0:
+  grok/grok-voice-transcribe-2.0:
     label: Grok Voice Transcribe 2.0
     release_date: 2026-09-18
     documentation_url: "https://docs.x.ai/developers/model-capabilities/\
@@ -428,7 +358,7 @@ transcription-models:
       usd_per_minute: 0.0033333333333333335
       billing_basis: audio
 
-  xai/grok-voice-transcribe-1.0:
+  grok/grok-voice-transcribe-1.0:
     label: Grok Voice Transcribe 1.0
     release_date: 2026-04-17
     documentation_url: "https://docs.x.ai/developers/model-capabilities/\
@@ -436,8 +366,6 @@ transcription-models:
     transcription_cost:
       usd_per_minute: 0.0033333333333333335
       billing_basis: audio
-    alternative_keys:
-      - xai/grok-stt
 
 
 grok-3-models:

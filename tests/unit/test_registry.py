@@ -28,8 +28,6 @@ from model_library.register_models import (
     register_provider,
 )
 from model_library.registry_utils import TokenDict, get_registry_model, recompute_cost
-
-
 @pytest.mark.parametrize("concurrency_type", ["threads", "async"])
 async def test_concurrent_access(concurrency_type: Literal["threads", "async"]) -> None:
     """

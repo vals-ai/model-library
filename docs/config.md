@@ -104,10 +104,15 @@ Provider-specific `provider_properties` are validated by each provider:
 Set `country` to the model creator's country, not the hosting provider's country. Declare it wherever `company` is defined.
 
 Set `provider_endpoint` when the registry key differs from the model ID sent to the provider.
+Set `public_slug` when the public URL stub differs from the default derived from the registry key.
 
 Set `metadata.internal_only: true` on a model, `alternative_keys` entry, or block/provider `base-config` to limit it to internal orgs and keep it out of the public export.
 
+When an early-access model goes public, add the public entry and move the early-access key under it as an `alternative_keys` entry with its own `provider_endpoint` and `metadata.internal_only: true`, so calls to that key still reach the early-access endpoint (for example, an early-access key `acme/early-preview` under the public `acme/model-2`).
+
 Token pricing supports `cache.write_markup` and full-request `context` rates above `context.threshold`. Cache writes have only a default rate and `write_1h_markup`; 30-minute/12-hour TTL selection and Fast/Ultrafast service-tier pricing are not represented.
+
+Set `metadata.ignored_for_cost: true` to exclude a model from Gateway spend totals without removing its list prices from the registry.
 
 Company icons live in `model_library/config/icons/`. Name the light asset exactly `<company>.svg|png` and an optional dark asset `<company>-dark.svg|png`. Add a separate exact-name asset when two company labels use the same artwork; registry configs and `/registry` payloads contain only `company`, not icon filenames. Call `get_company_icon(company)` to resolve the bundled filenames; it returns `None` when no exact light asset exists and leaves `dark=None` when there is no dark asset. PNG and SVG files are bundled in the Python package.
 

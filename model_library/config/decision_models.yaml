@@ -227,6 +227,8 @@ decision-models:
     properties:
       context_window: 262_144
     costs_per_million_token:
+      cache:
+        read: 0.12
       input: 0.12
       current_discount: 50
 
@@ -240,6 +242,8 @@ decision-models:
     properties:
       context_window: 65_536
     costs_per_million_token:
+      cache:
+        read: 0.02
       input: 0.02
 
   decision/d1-ultra:
@@ -252,6 +256,8 @@ decision-models:
     properties:
       context_window: 32_768
     costs_per_million_token:
+      cache:
+        read: 0.042
       input: 0.042
 
   decision/d1.2:
@@ -373,6 +379,8 @@ decision-models:
     properties:
       context_window: 524_288
     costs_per_million_token:
+      cache:
+        read: 0.1
       input: 0.1
       current_discount: 50
 
@@ -389,6 +397,8 @@ decision-models:
     properties:
       context_window: 524_288
     costs_per_million_token:
+      cache:
+        read: 0.1
       input: 0.1
       current_discount: 50
 

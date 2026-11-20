@@ -110,6 +110,9 @@ async def test_client_uses_model_transport_and_run_id_contract(
     assert [request.headers["Authorization"] for request in requests] == [
         "Bearer operator-key"
     ] * 4
+    assert [request.headers["Content-Type"] for request in requests] == [
+        "application/json"
+    ] * 4
     assert [request.url.path for request in requests] == [
         "/benchmark-runs/acquire",
         "/benchmark-runs/wait",

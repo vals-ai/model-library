@@ -11,7 +11,7 @@
 | `finish_reason` | Normalized stop/length/tool-call/error reason plus raw provider value |
 | `metadata` | `QueryResultMetadata`: token usage, cost, duration, and per-query performance telemetry |
 | `tool_calls` | Normalized tool calls returned by the model for local/tool-call execution |
-| `computer_calls` | Native OpenAI or Anthropic computer actions, call IDs, and pending safety checks. |
+| `computer_calls` | Native OpenAI, Anthropic or Google computer actions, call IDs, and pending safety checks. |
 | `history` | Provider-ready conversation history for follow-up calls |
 | `extras.response_id` | Legacy compatibility field for provider response/body/message IDs, when available. Prefer `provider_response_id` / `provider_request_id`. |
 | `extras.provider_response_id` | Canonical provider response/body/message ID, when available. |

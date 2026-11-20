@@ -32,8 +32,6 @@ _ALLOWED_UNREGISTERED_PROVIDERS = {"cursor", "devin", "factory"}
 
 def _registry_entry(key: str) -> RegistryEntry:
     return get_model_registry().get(key) or get_transcription_registry()[key]
-
-
 @pytest.mark.unit
 def test_package_discovery_pattern_includes_runtime_subpackages() -> None:
     pyproject = tomllib.loads((ROOT / "pyproject.toml").read_text())

@@ -1,12 +1,12 @@
 # Computer use
 
-OpenAI and Anthropic native computer tools are supported. Other providers reject them.
+OpenAI, Anthropic and Google native computer tools are supported. Other providers reject them.
 
 ## Results
 
 `result.computer_calls` lists the actions the model wants. Each call has its provider,
 call ID, actions, and pending safety checks. An OpenAI call can hold several actions;
-an Anthropic call holds one. Run the actions as the provider defines them.
+an Anthropic or Google call holds one. Run the actions as the provider defines them.
 
 ## A session
 
@@ -51,9 +51,17 @@ result = await llm.query(
   The tool body also needs `display_width_px` and `display_height_px`.
   Other tool options, such as `enable_zoom`, are sent only when you set them.
   A reply can have text, a screenshot, or both.
+- Google: the tool body is `{"type": "computer"}`. It sets `environment` (`desktop`, the
+  default, `browser` or `mobile`) and `excluded_predefined_functions`. Other keys are not sent.
+  Each action is `{"name": ..., "args": ...}`, one predefined UI function call; any call to a
+  name that is not a declared function tool is an action. `x` and `y` are on a 0-999 grid.
+  A `safety_decision` in the args is the pending safety check. The proxy only forwards the
+  caller's acknowledgement; the executor must get approval for `require_confirmation`.
+  Signed history does not establish operator approval. Screenshots must be `data:` URLs,
+  not HTTPS URLs.
 - Do not change the history between turns. The gateway signs it.
 
 ## Through the gateway
 
-- Send screenshots as `image_url`, either a `data:` URL or an https URL.
+- Send screenshots as `image_url`: a `data:` URL, or an HTTPS URL except for Google.
 - Usage records keep no actions, screenshots, or safety-check text.

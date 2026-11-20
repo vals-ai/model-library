@@ -34,7 +34,7 @@ from tests.unit.providers.transcription_test_support import (
             "universal-3-5-pro",
             "assemblyai/universal-3-5-pro",
         ),
-        (XAITranscriptionModel, "grok-voice-transcribe-2.0", "xai/grok-voice-transcribe-2.0"),
+        (XAITranscriptionModel, "grok-voice-transcribe-2.0", "grok/grok-voice-transcribe-2.0"),
         (InworldModel, "inworld-stt-1", "inworld/inworld-stt-1"),
         (Reson8Model, "resonant-1", "reson8/resonant-1"),
         (GroqModel, "whisper-large-v3-turbo", "groq/whisper-large-v3-turbo"),

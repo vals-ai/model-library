@@ -31,7 +31,7 @@ because it uses Meta's fixed realtime WebSocket protocol.
 | `deepseek/*` | DeepSeek | `DEEPSEEK_API_KEY` |
 | `fireworks/*` | Fireworks | `FIREWORKS_API_KEY` |
 | `google/*` | Google Gemini | `GOOGLE_API_KEY`; requests with `config.provider_config.use_vertex=true` use `GCP_REGION`, `GCP_PROJECT_ID`, `GCP_CREDS` |
-| `grok/*`, `xai/*` | xAI | `XAI_API_KEY` |
+| `grok/*` | xAI | `XAI_API_KEY` |
 | `inception/*` | Inception Mercury | `MERCURY_API_KEY` |
 | `kimi/*` | Moonshot AI Kimi | `KIMI_API_KEY` |
 | `minimax/*` | MiniMax | `MINIMAX_API_KEY` |
@@ -65,7 +65,7 @@ because it uses Meta's fixed realtime WebSocket protocol.
 | `reson8/*` | Reson8 | `RESON8_API_KEY` |
 
 Transcription models served by providers in the table above (`cohere/*`,
-`google/*`, `mistral/*`, `openai/*`, `xai/*`) use that provider's key.
+`google/*`, `grok/*`, `mistral/*`, `openai/*`) use that provider's key.
 
 ## Amazon Bedrock
 

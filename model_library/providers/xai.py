@@ -13,9 +13,12 @@ from model_library.base import (
     LLMConfig,
     ProviderConfig,
     ToolDefinition,
+    TranscriptionResult,
 )
 from model_library.base.query_ids import PromptCacheKeyMode
+from model_library.base.transcription import TranscriptionRequest
 from model_library.providers.openai import OpenAIConfig
+from model_library.providers.voice.xai import XAITranscriptionModel
 from model_library.rate_limits import RateLimit
 from model_library.rate_limits.probe import probe_chat_completions_rate_limit
 from model_library.register_models import register_provider
@@ -49,6 +52,10 @@ class XAIModel(DelegateOnly):
         config = config or LLMConfig()
         super().__init__(model_name, provider, config=config)
         self._custom_api_key = config.custom_api_key
+        self._transcriber = XAITranscriptionModel(model_name, provider, config=config)
+        if config.supports_transcription:
+            self.delegate = self._transcriber
+            return
 
         delegate_config = config.model_copy(
             update={
@@ -67,6 +74,14 @@ class XAIModel(DelegateOnly):
         )
 
     @override
+    async def _transcribe_audio(
+        self, request: TranscriptionRequest
+    ) -> TranscriptionResult:
+        return await self._transcriber._transcribe_audio(  # pyright: ignore[reportPrivateUsage]
+            request
+        )
+
+    @override
     async def upload_file(
         self,
         name: str,
@@ -79,7 +94,7 @@ class XAIModel(DelegateOnly):
 
     @override
     async def get_rate_limit(self) -> RateLimit | None:
-        if self.custom_endpoint is not None:
+        if self.custom_endpoint is not None or self.supports_transcription:
             return None
 
         return await probe_chat_completions_rate_limit(

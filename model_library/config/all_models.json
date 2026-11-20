@@ -958,6 +958,319 @@
         "full_key": "openrouter/tencent/hy4-flash",
         "slug": "openrouter_tencent_hy4-flash"
     },
+    "google/gemini-4-neon-xhigh": {
+        "company": "Google",
+        "country": "United States",
+        "label": "Gemini 4 Neon (xHigh)",
+        "release_date": "2026-11-16",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models/gemini-4-neon",
+        "supports": {
+            "images": true,
+            "audio": true,
+            "transcription": false,
+            "videos": true,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "automatic_continuation": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "xhigh"
+        },
+        "provider_endpoint": "gemini-4-neon",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            }
+        },
+        "provider_name": "google",
+        "full_key": "google/gemini-4-neon-xhigh",
+        "slug": "google_gemini-4-neon-xhigh"
+    },
+    "google/gemini-4-neon-medium": {
+        "company": "Google",
+        "country": "United States",
+        "label": "Gemini 4 Neon (Medium)",
+        "release_date": "2026-11-16",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models/gemini-4-neon",
+        "supports": {
+            "images": true,
+            "audio": true,
+            "transcription": false,
+            "videos": true,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "automatic_continuation": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "medium"
+        },
+        "provider_endpoint": "gemini-4-neon",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            }
+        },
+        "provider_name": "google",
+        "full_key": "google/gemini-4-neon-medium",
+        "slug": "google_gemini-4-neon-medium"
+    },
+    "google/gemini-4-neon-low": {
+        "company": "Google",
+        "country": "United States",
+        "label": "Gemini 4 Neon (Low)",
+        "release_date": "2026-11-16",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models/gemini-4-neon",
+        "supports": {
+            "images": true,
+            "audio": true,
+            "transcription": false,
+            "videos": true,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "automatic_continuation": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "low"
+        },
+        "provider_endpoint": "gemini-4-neon",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            }
+        },
+        "provider_name": "google",
+        "full_key": "google/gemini-4-neon-low",
+        "slug": "google_gemini-4-neon-low"
+    },
+    "google/gemini-4-neon-high": {
+        "company": "Google",
+        "country": "United States",
+        "label": "Gemini 4 Neon (High)",
+        "release_date": "2026-11-16",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models/gemini-4-neon",
+        "supports": {
+            "images": true,
+            "audio": true,
+            "transcription": false,
+            "videos": true,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "automatic_continuation": true
+        },
+        "alternative_keys": [],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-4-neon",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            }
+        },
+        "provider_name": "google",
+        "full_key": "google/gemini-4-neon-high",
+        "slug": "google_gemini-4-neon-high"
+    },
+    "google/gemini-4-neon": {
+        "company": "Google",
+        "country": "United States",
+        "label": "Gemini 4 Neon",
+        "release_date": "2026-11-16",
+        "open_source": false,
+        "documentation_url": "https://ai.google.dev/gemini-api/docs/models/gemini-4-neon",
+        "supports": {
+            "images": true,
+            "audio": true,
+            "transcription": false,
+            "videos": true,
+            "files": true,
+            "temperature": false,
+            "tools": true,
+            "output_schema": true
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "automatic_continuation": true
+        },
+        "alternative_keys": [
+            {
+                "google/gemini-4-neon-low": {
+                    "label": "Gemini 4 Neon (Low)",
+                    "default_parameters": {
+                        "reasoning_effort": "low"
+                    }
+                }
+            },
+            {
+                "google/gemini-4-neon-medium": {
+                    "label": "Gemini 4 Neon (Medium)",
+                    "default_parameters": {
+                        "reasoning_effort": "medium"
+                    }
+                }
+            },
+            {
+                "google/gemini-4-neon-high": {
+                    "label": "Gemini 4 Neon (High)",
+                    "default_parameters": {
+                        "reasoning_effort": "high"
+                    }
+                }
+            },
+            {
+                "google/gemini-4-neon-xhigh": {
+                    "label": "Gemini 4 Neon (xHigh)",
+                    "default_parameters": {
+                        "reasoning_effort": "xhigh"
+                    }
+                }
+            }
+        ],
+        "default_parameters": {
+            "reasoning_effort": "high"
+        },
+        "provider_endpoint": "gemini-4-neon",
+        "properties": {
+            "context_window": 1048576,
+            "max_tokens": 1048576,
+            "training_cutoff": null,
+            "reasoning_model": true
+        },
+        "costs_per_million_token": {
+            "input": 3.0,
+            "output": 15.0,
+            "cache": {
+                "read": 0.15,
+                "read_discount": 0.1,
+                "write_markup": 1.0
+            },
+            "batch": {
+                "input_discount": 0.5,
+                "output_discount": 0.5,
+                "cache_discount": 0.5
+            }
+        },
+        "provider_name": "google",
+        "full_key": "google/gemini-4-neon",
+        "slug": "google_gemini-4-neon"
+    },
     "decision/d1.2-ultra": {
         "company": "Liquid AI",
         "country": "United States",
@@ -1997,7 +2310,12 @@
         },
         "costs_per_million_token": {
             "input": 0.3,
-            "output": 0.807
+            "output": 0.807,
+            "cache": {
+                "read": 0.06,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
         },
         "provider_name": "tinker_decision",
         "full_key": "tinker_decision/qwen3.5-9b",
@@ -2041,7 +2359,12 @@
         },
         "costs_per_million_token": {
             "input": 0.33,
-            "output": 1.005
+            "output": 1.005,
+            "cache": {
+                "read": 0.066,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
         },
         "provider_name": "tinker_decision",
         "full_key": "tinker_decision/qwen3.5-4b-256k",
@@ -2085,7 +2408,12 @@
         },
         "costs_per_million_token": {
             "input": 0.33,
-            "output": 1.005
+            "output": 1.005,
+            "cache": {
+                "read": 0.066,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
         },
         "provider_name": "tinker_decision",
         "full_key": "tinker_decision/qwen3.5-4b",
@@ -2129,7 +2457,12 @@
         },
         "costs_per_million_token": {
             "input": 0.195,
-            "output": 0.6
+            "output": 0.6,
+            "cache": {
+                "read": 0.039,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
         },
         "provider_name": "tinker_decision",
         "full_key": "tinker_decision/qwen3-8b",
@@ -2140,7 +2473,7 @@
         "country": "United States",
         "label": "Inkling 2 Small",
         "release_date": "2026-11-05",
-        "open_source": false,
+        "open_source": true,
         "documentation_url": "https://tinker-docs.thinkingmachines.ai/tinker/compatible-apis/openai/",
         "supports": {
             "images": true,
@@ -3191,6 +3524,11 @@
         "costs_per_million_token": {
             "input": 0.12,
             "output": 0.0,
+            "cache": {
+                "read": 0.12,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
             "current_discount": 50.0
         },
         "provider_name": "decision",
@@ -4189,7 +4527,12 @@
         },
         "costs_per_million_token": {
             "input": 0.042,
-            "output": 0.0
+            "output": 0.0,
+            "cache": {
+                "read": 0.042,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
         },
         "provider_name": "decision",
         "full_key": "decision/d1-ultra",
@@ -5178,6 +5521,11 @@
         "costs_per_million_token": {
             "input": 0.1,
             "output": 0.0,
+            "cache": {
+                "read": 0.1,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
             "current_discount": 50.0
         },
         "provider_name": "decision",
@@ -5772,7 +6120,12 @@
         },
         "costs_per_million_token": {
             "input": 0.02,
-            "output": 0.0
+            "output": 0.0,
+            "cache": {
+                "read": 0.02,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            }
         },
         "provider_name": "decision",
         "full_key": "decision/d1",
@@ -6464,6 +6817,11 @@
         "costs_per_million_token": {
             "input": 0.1,
             "output": 0.0,
+            "cache": {
+                "read": 0.1,
+                "read_discount": 1.0,
+                "write_markup": 1.0
+            },
             "current_discount": 50.0
         },
         "provider_name": "decision",
@@ -17310,7 +17668,7 @@
             "input": 0.6,
             "output": 2.4,
             "cache": {
-                "read": 0.119,
+                "read": 0.12,
                 "read_discount": 0.5,
                 "write_markup": 1.0
             },
@@ -17762,70 +18120,6 @@
         "provider_name": "devin",
         "full_key": "devin/adaptive",
         "slug": "devin_adaptive"
-    },
-    "grok/grok-build-0.1": {
-        "company": "xAI",
-        "country": "United States",
-        "label": "Grok Build 0.1",
-        "release_date": "2026-05-20",
-        "open_source": false,
-        "documentation_url": "",
-        "supports": {
-            "images": true,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "grok-build-0.1",
-        "properties": {
-            "context_window": 256000,
-            "max_tokens": 256000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.0,
-            "output": 2.0,
-            "cache": {
-                "read": 0.2,
-                "read_discount": 0.2,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 199999.0,
-                "input": 2.0,
-                "output": 4.0,
-                "cache": {
-                    "read": 0.4,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "provider_name": "grok",
-        "full_key": "grok/grok-build-0.1",
-        "slug": "grok_grok-build-0.1"
     },
     "cohere/command-a-plus-05-2026": {
         "company": "Cohere",
@@ -22914,201 +23208,6 @@
         "provider_name": "grok",
         "full_key": "grok/grok-4-fast",
         "slug": "grok_grok-4-fast"
-    },
-    "grok/grok-code-fast-1-0825": {
-        "company": "xAI",
-        "country": "United States",
-        "label": "Grok Code Fast",
-        "release_date": "2025-08-25",
-        "open_source": false,
-        "documentation_url": "https://docs.x.ai/docs/models/grok-code-fast-1",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "grok-code-fast-1",
-        "properties": {
-            "context_window": 256000,
-            "max_tokens": 40000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.0,
-            "output": 2.0,
-            "cache": {
-                "read": 0.2,
-                "read_discount": 0.1,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 199999.0,
-                "input": 2.0,
-                "output": 4.0,
-                "cache": {
-                    "read": 0.4,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "provider_name": "grok",
-        "full_key": "grok/grok-code-fast-1-0825",
-        "slug": "grok_grok-code-fast-1-0825"
-    },
-    "grok/grok-code-fast-1": {
-        "company": "xAI",
-        "country": "United States",
-        "label": "Grok Code Fast",
-        "release_date": "2025-08-25",
-        "open_source": false,
-        "documentation_url": "https://docs.x.ai/docs/models/grok-code-fast-1",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [
-            "grok/grok-code-fast",
-            "grok/grok-code-fast-1-0825"
-        ],
-        "default_parameters": {
-            "temperature": 0.7,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "grok-code-fast-1",
-        "properties": {
-            "context_window": 256000,
-            "max_tokens": 40000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.0,
-            "output": 2.0,
-            "cache": {
-                "read": 0.2,
-                "read_discount": 0.1,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 199999.0,
-                "input": 2.0,
-                "output": 4.0,
-                "cache": {
-                    "read": 0.4,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "provider_name": "grok",
-        "full_key": "grok/grok-code-fast-1",
-        "slug": "grok_grok-code-fast-1"
-    },
-    "grok/grok-code-fast": {
-        "company": "xAI",
-        "country": "United States",
-        "label": "Grok Code Fast",
-        "release_date": "2025-08-25",
-        "open_source": false,
-        "documentation_url": "https://docs.x.ai/docs/models/grok-code-fast-1",
-        "supports": {
-            "images": false,
-            "audio": false,
-            "transcription": false,
-            "videos": false,
-            "files": true,
-            "temperature": true,
-            "tools": true,
-            "output_schema": false
-        },
-        "metadata": {
-            "deprecated": false,
-            "available_for_everyone": true,
-            "internal_only": false,
-            "available_as_evaluator": false,
-            "ignored_for_cost": false
-        },
-        "provider_properties": {},
-        "rate_limit": {
-            "supports_live_monitoring": true,
-            "cache_read_counts_toward_limit": true
-        },
-        "alternative_keys": [],
-        "default_parameters": {
-            "temperature": 0.7,
-            "top_p": 0.95
-        },
-        "provider_endpoint": "grok-code-fast-1",
-        "properties": {
-            "context_window": 256000,
-            "max_tokens": 40000,
-            "training_cutoff": null,
-            "reasoning_model": true
-        },
-        "costs_per_million_token": {
-            "input": 1.0,
-            "output": 2.0,
-            "cache": {
-                "read": 0.2,
-                "read_discount": 0.1,
-                "write_markup": 1.0
-            },
-            "context": {
-                "threshold": 199999.0,
-                "input": 2.0,
-                "output": 4.0,
-                "cache": {
-                    "read": 0.4,
-                    "read_discount": 1.0,
-                    "write_markup": 1.0
-                }
-            }
-        },
-        "provider_name": "grok",
-        "full_key": "grok/grok-code-fast",
-        "slug": "grok_grok-code-fast"
     },
     "openai/gpt-5-nano-2025-08-07": {
         "company": "OpenAI",

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 from collections.abc import Iterator, Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -27,14 +26,6 @@ from model_library.exceptions import NoMatchingToolCallError
 
 if TYPE_CHECKING:
     from .openai import OpenAIModel
-
-
-def replayable_arguments(arguments: str) -> str:
-    try:
-        json.loads(arguments)
-    except json.JSONDecodeError:
-        return "{}"
-    return arguments
 
 
 def iter_input_groups(

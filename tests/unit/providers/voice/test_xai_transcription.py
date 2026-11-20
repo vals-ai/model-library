@@ -8,8 +8,14 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from pydantic import SecretStr
+
+from model_library import raw_model
+from model_library.base import LLMConfig
 from model_library.exceptions import ModelNoOutputError
 from model_library.providers.voice.xai import XAITranscriptionModel
+from model_library.providers.xai import XAIModel
+from model_library.registry_utils import get_transcription_model
 from tests.unit.providers.transcription_test_support import (
     AUDIO,
     Connection,
@@ -111,7 +117,7 @@ async def test_xai_accepts_documented_final_transcript_events(
 ) -> None:
     stream = _XAIStream(responses)
     model = XAITranscriptionModel(
-        "grok-voice-transcribe-2.0", config=config("xai/grok-voice-transcribe-2.0")
+        "grok-voice-transcribe-2.0", config=config("grok/grok-voice-transcribe-2.0")
     )
 
     with (
@@ -144,7 +150,7 @@ async def test_xai_rejects_empty_done_transcript() -> None:
         ]
     )
     model = XAITranscriptionModel(
-        "grok-voice-transcribe-1.0", config=config("xai/grok-voice-transcribe-1.0")
+        "grok-voice-transcribe-1.0", config=config("grok/grok-voice-transcribe-1.0")
     )
 
     with (
@@ -155,3 +161,53 @@ async def test_xai_rejects_empty_done_transcript() -> None:
         pytest.raises(ModelNoOutputError, match="did not include a final transcript"),
     ):
         await model.transcribe_audio(name="clip.wav", mime="audio/wav", audio=AUDIO)
+
+
+@pytest.mark.parametrize(
+    "key", ["grok/grok-voice-transcribe-2.0", "grok/grok-voice-transcribe-1.0"]
+)
+def test_transcription_keys_build_the_grok_model_without_a_key(
+    monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    monkeypatch.delenv("XAI_API_KEY", raising=False)
+    with patch("model_library.providers.xai.model_library_settings", new=object()):
+        model = get_transcription_model(key)
+
+    assert isinstance(model, XAIModel)
+    assert model.provider == "grok"
+    assert isinstance(model.delegate, XAITranscriptionModel)
+
+
+async def test_transcription_model_skips_the_chat_rate_limit_probe() -> None:
+    model = get_transcription_model("grok/grok-voice-transcribe-2.0")
+
+    with patch(
+        "model_library.providers.xai.probe_chat_completions_rate_limit"
+    ) as probe:
+        assert await model.get_rate_limit() is None
+
+    probe.assert_not_called()
+
+
+async def test_raw_grok_model_transcribes_over_the_socket() -> None:
+    stream = _XAIStream([{"type": "transcript.done", "text": "hello"}])
+    model = raw_model(
+        "grok/grok-voice-transcribe-2.0",
+        config=LLMConfig(custom_api_key=SecretStr("provider-key")),
+    )
+
+    with (
+        patch(
+            "model_library.providers.voice.xai.connect",
+            return_value=Connection(stream),
+        ) as connect,
+        patch("model_library.base.transcription.asyncio.sleep", new=AsyncMock()),
+    ):
+        result = await model.transcribe_audio(
+            name="clip.wav", mime="audio/wav", audio=AUDIO
+        )
+
+    assert result.text == "hello"
+    endpoint = cast(str, connect.call_args.args[0])
+    assert endpoint.startswith("wss://api.x.ai/v1/stt")
+    assert "model=grok-voice-transcribe-2.0" in endpoint

@@ -17,7 +17,7 @@ inkling-models:
   thinkingmachines/inkling-2-small:
     label: Inkling 2 Small
     release_date: 2026-11-05
-    open_source: false
+    open_source: true
     provider_endpoint: thinkingmachines/Inkling-2-Small:peft:262144
     metadata:
       internal_only: false

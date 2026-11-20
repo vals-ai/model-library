@@ -24,6 +24,116 @@ deprecated:
     metadata:
       deprecated: true
 
+  grok/grok-build-0.1:
+    company: xAI
+    country: United States
+    label: Grok Build 0.1
+    release_date: 2026-05-20
+    open_source: false
+    documentation_url: ''
+    supports:
+      images: true
+      audio: false
+      transcription: false
+      videos: false
+      files: true
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: true
+      cache_read_counts_toward_limit: true
+    alternative_keys: []
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.95
+    provider_endpoint: grok-build-0.1
+    properties:
+      context_window: 256000
+      max_tokens: 256000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.0
+      output: 2.0
+      cache:
+        read: 0.2
+        write: null
+        read_discount: 0.2
+        write_markup: 1.0
+        write_1h_markup: null
+      batch: null
+      context:
+        threshold: 199999.0
+        input: 2.0
+        output: 4.0
+        cache:
+          read: 0.4
+          write: null
+          read_discount: 1.0
+          write_markup: 1.0
+          write_1h_markup: null
+
+  grok/grok-code-fast-1:
+    company: xAI
+    country: United States
+    label: Grok Code Fast
+    release_date: 2025-08-25
+    open_source: false
+    documentation_url: https://docs.x.ai/docs/models/grok-code-fast-1
+    supports:
+      images: false
+      audio: false
+      transcription: false
+      videos: false
+      files: true
+      temperature: true
+      tools: true
+      output_schema: false
+    metadata:
+      available_for_everyone: true
+      internal_only: false
+      available_as_evaluator: false
+      ignored_for_cost: false
+    rate_limit:
+      supports_live_monitoring: true
+      cache_read_counts_toward_limit: true
+    alternative_keys:
+    - grok/grok-code-fast
+    - grok/grok-code-fast-1-0825
+    default_parameters:
+      temperature: 0.7
+      top_p: 0.95
+    provider_endpoint: grok-code-fast-1
+    properties:
+      context_window: 256000
+      max_tokens: 40000
+      reasoning_model: true
+    costs_per_million_token:
+      input: 1.0
+      output: 2.0
+      cache:
+        read: 0.2
+        write: null
+        read_discount: 0.1
+        write_markup: 1.0
+        write_1h_markup: null
+      batch: null
+      context:
+        threshold: 199999.0
+        input: 2.0
+        output: 4.0
+        cache:
+          read: 0.4
+          write: null
+          read_discount: 1.0
+          write_markup: 1.0
+          write_1h_markup: null
+
   grok/grok-3-mini:
     label: Grok 3 Mini Reasoning
     release_date: 2025-04-09

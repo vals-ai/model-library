@@ -62,7 +62,6 @@ from ._shared import (
     function_tool_payload,
     iter_input_groups,
     output_schema_value,
-    replayable_arguments,
     user_content,
     validate_tool_result,
 )
@@ -776,19 +775,7 @@ async def query(
         tool_calls=tool_calls,
         computer_calls=computer_calls,
         provider_tool_events=provider_tool_events,
-        history=[
-            *input,
-            RawResponse(
-                response=[
-                    output.model_copy(
-                        update={"arguments": replayable_arguments(output.arguments)}
-                    )
-                    if output.type == "function_call"
-                    else output
-                    for output in response.output
-                ]
-            ),
-        ],
+        history=[*input, RawResponse(response=response.output)],
         extras=QueryResultExtras(
             provider_response_id=response.id,
             provider_request_id=provider_request_id,

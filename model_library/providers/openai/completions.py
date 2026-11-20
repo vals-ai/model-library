@@ -57,7 +57,6 @@ from ._shared import (
     function_tool_payload,
     iter_input_groups,
     output_schema_value,
-    replayable_arguments,
     user_content,
     validate_tool_result,
 )
@@ -625,21 +624,7 @@ async def query(
     )
     if raw_tool_calls:
         final_message.tool_calls = cast(
-            list[ChatCompletionMessageToolCallUnion],
-            [
-                tool_call.model_copy(
-                    update={
-                        "function": tool_call.function.model_copy(
-                            update={
-                                "arguments": replayable_arguments(
-                                    tool_call.function.arguments
-                                )
-                            }
-                        )
-                    }
-                )
-                for tool_call in raw_tool_calls
-            ],
+            list[ChatCompletionMessageToolCallUnion], raw_tool_calls
         )
     elif not omit_null_message_fields:
         final_message.tool_calls = None

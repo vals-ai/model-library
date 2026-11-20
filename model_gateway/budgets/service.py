@@ -140,6 +140,17 @@ class BudgetService:
             return None
         return totals.get(str(project_id), Decimal(0))
 
+    async def data_through(self) -> datetime | None:
+        if self.redis is None:
+            return None
+        try:
+            payload = await self.redis.get(self.redis_key)
+            if payload is not None:
+                return self._parse_snapshot(payload).data_through
+        except (RedisError, ValidationError, ValueError):
+            logger.exception("Managed budget snapshot unreadable stage=%s", self.stage)
+        return None
+
     async def refresh_control_once(self) -> None:
         if self.bucket is None or self.key is None or self.redis is None:
             return

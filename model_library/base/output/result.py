@@ -421,7 +421,7 @@ class ProviderToolEvent(ValsModel):
 
 class ComputerCall(ValsModel):
     call_id: str
-    provider: Literal["openai", "anthropic"]
+    provider: Literal["openai", "anthropic", "google"]
     actions: list[dict[str, Any]]
     pending_safety_checks: list[dict[str, Any]] = Field(default_factory=list)
 

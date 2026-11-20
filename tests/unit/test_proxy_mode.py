@@ -1344,7 +1344,7 @@ async def test_proxy_query_sends_only_query_id_without_env_ids():
     body = _load_json(mock_post.call_args[1]["content"])
     assert not {"run_id", "question_id", "attempt_id"} & set(body)
     assert len(body["query_id"]) == 14
-    assert set(mock_post.call_args[1]["headers"]) == {"X-Query-Id"}
+    assert set(mock_post.call_args[1]["headers"]) == {"X-Query-Id", "Content-Type"}
 
 
 @pytest.mark.parametrize(
@@ -1603,6 +1603,7 @@ async def test_proxy_query_explicit_ids_override_settings_ids():
         "X-Question-Id": "question-explicit",
         "X-Query-Id": "query-explicit",
         "X-Attempt-Id": "attempt-explicit",
+        "Content-Type": "application/json",
     }
 
 
@@ -1631,6 +1632,7 @@ async def test_proxy_query_bounds_correlation_headers():
         "X-Question-Id": "q" * 128,
         "X-Query-Id": "z" * 128,
         "X-Attempt-Id": "a" * 128,
+        "Content-Type": "application/json",
     }
 
 

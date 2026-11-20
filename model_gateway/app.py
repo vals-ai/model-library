@@ -75,6 +75,8 @@ from model_gateway.routes.rate_limit import (
     register_rate_limit_route,
 )
 from model_gateway.routes.query import register_query_routes
+from model_gateway.routes.run_sums import router as run_sums_router
+from model_gateway.routes.run_sums import usage_redshift_from_env
 from model_gateway.routes.run_tokens import register_run_token_routes
 from model_gateway.routes.token_retry import register_token_retry_routes
 from model_gateway.runtime_config import (
@@ -265,6 +267,7 @@ def create_app() -> FastAPI:
                 management_credential=descope_credential,
                 registered_machine_key_id=registered_machine_key_id,
             )
+            app.state.usage_redshift = usage_redshift_from_env()
             app.state.managed_machine_verifier = MachineVerifier(
                 project_id=descope_project_id,
                 expected_issuer=descope_project_id,
@@ -517,6 +520,7 @@ def create_app() -> FastAPI:
     if control_enabled:
         register_benchmark_admission_routes(app, cache=cache)
         app.include_router(managed_auth_router)
+        app.include_router(run_sums_router)
         register_run_token_routes(app)
         register_rate_limit_monitor_routes(app)
     if control_enabled:

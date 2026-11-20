@@ -391,6 +391,7 @@ class GatewayLLM(LLM):
         url = f"{model_library.model_library_settings.MODEL_GATEWAY_URL.rstrip('/')}{path}"
 
         headers = _gateway_correlation_headers(body) if path == "/query" else {}
+        headers["Content-Type"] = "application/json"
         scoped_token = current_gateway_token()
         if scoped_token is not None:
             headers["Authorization"] = f"Bearer {scoped_token}"

@@ -30,5 +30,5 @@ def validate_computer_provider(
     uses_computer = has_computer_tool or any(
         isinstance(item, ComputerCallOutput) for item in input
     )
-    if uses_computer and provider not in {"anthropic", "openai"}:
+    if uses_computer and provider not in {"anthropic", "google", "openai"}:
         raise BadInputError(f"{provider} does not support native computer use")
