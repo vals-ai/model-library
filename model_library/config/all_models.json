@@ -1443,6 +1443,50 @@
         "full_key": "decision/decider-flash-v1.3",
         "slug": "decision_decider-flash-v1.3"
     },
+    "decision/aplomb-1": {
+        "company": "EmpirioLabs AI",
+        "country": "United States",
+        "label": "Aplomb 1",
+        "release_date": "2026-09-29",
+        "open_source": true,
+        "documentation_url": "https://docs.empiriolabs.ai/decisions",
+        "supports": {
+            "images": false,
+            "audio": false,
+            "transcription": false,
+            "videos": false,
+            "files": false,
+            "temperature": false,
+            "tools": false,
+            "output_schema": false
+        },
+        "metadata": {
+            "deprecated": false,
+            "available_for_everyone": true,
+            "internal_only": false,
+            "available_as_evaluator": false,
+            "ignored_for_cost": false
+        },
+        "provider_properties": {
+            "decision_api": "empiriolabs"
+        },
+        "alternative_keys": [],
+        "default_parameters": {},
+        "provider_endpoint": "aplomb-1",
+        "properties": {
+            "context_window": 1000000,
+            "max_tokens": 0,
+            "training_cutoff": null,
+            "reasoning_model": false
+        },
+        "costs_per_million_token": {
+            "input": 0.02,
+            "output": 0.0
+        },
+        "provider_name": "decision",
+        "full_key": "decision/aplomb-1",
+        "slug": "decision_aplomb-1"
+    },
     "decision/gemini-decision-1": {
         "company": "Google",
         "country": "United States",

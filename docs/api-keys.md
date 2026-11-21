@@ -27,7 +27,7 @@ because it uses Meta's fixed realtime WebSocket protocol.
 | `azure/*` | Azure OpenAI | `AZURE_API_KEY`, `AZURE_ENDPOINT`; optional `AZURE_API_VERSION` |
 | `baseten/*` | Baseten | `BASETEN_API_KEY`; dedicated deployments also require `BASETEN_API_BASE_URL` (full OpenAI-compatible `/v1` base URL) |
 | `cohere/*` | Cohere | `COHERE_API_KEY` |
-| `decision/*` | Typed-decision models: Jev (TypeSafe), Mercury Decide (Inception), Microsoft-Decision-1 (Microsoft) through OpenRouter's Decisions API; GPT-6 Luna through OpenAI's; Gemini Decision 1 through Google's | `OPENROUTER_API_KEY`; `OPENAI_API_KEY` for `decision/gpt-6-luna`; `GOOGLE_API_KEY` for `decision/gemini-decision-1`. See [decision-models.md](decision-models.md) |
+| `decision/*` | Typed-decision models: Jev (TypeSafe), Mercury Decide (Inception), Microsoft-Decision-1 (Microsoft) through OpenRouter's Decisions API; GPT-6 Luna through OpenAI's; Gemini Decision 1 through Google's; Aplomb 1 through EmpirioLabs AI's | `OPENROUTER_API_KEY`; `OPENAI_API_KEY` for `decision/gpt-6-luna`; `GOOGLE_API_KEY` for `decision/gemini-decision-1`; `EMPIRIOLABS_API_KEY` for `decision/aplomb-1`. See [decision-models.md](decision-models.md) |
 | `deepseek/*` | DeepSeek | `DEEPSEEK_API_KEY` |
 | `fireworks/*` | Fireworks | `FIREWORKS_API_KEY` |
 | `google/*` | Google Gemini | `GOOGLE_API_KEY`; requests with `config.provider_config.use_vertex=true` use `GCP_REGION`, `GCP_PROJECT_ID`, `GCP_CREDS` |

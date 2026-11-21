@@ -70,6 +70,7 @@ DECISION_APIS = {
         openai_shapes=True,
     ),
     "perplexity": DecisionAPI("https://api.perplexity.ai/v1", "PERPLEXITY_API_KEY"),
+    "empiriolabs": DecisionAPI("https://api.empiriolabs.ai/v1", "EMPIRIOLABS_API_KEY"),
     # Google rejects an API key sent as a bearer token.
     "google": DecisionAPI(
         "https://generativelanguage.googleapis.com/v1beta",
@@ -82,7 +83,7 @@ DECISION_APIS = {
 
 
 class DecisionConfig(OpenRouterConfig):
-    decision_api: Literal["openrouter", "openai", "perplexity", "google"] = "openrouter"
+    decision_api: Literal["openrouter", "openai", "perplexity", "google", "empiriolabs"] = "openrouter"
 
 
 class DecisionError(NoRetryException):

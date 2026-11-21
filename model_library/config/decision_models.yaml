@@ -1,8 +1,9 @@
 # Typed-decision models: one call takes a state and typed questions and returns a typed answer for each (a choice
 # with a probability for every option, a probability, or a score). They do not generate text. Served by the
 # `decision` provider (providers/delegates/openrouter/decision.py) through OpenRouter's Decisions API with OPENROUTER_API_KEY, or
-# OpenAI's with OPENAI_API_KEY (`decision_api: openai`), Perplexity's with PERPLEXITY_API_KEY (`decision_api: perplexity`) or
-# Google's with GOOGLE_API_KEY (`decision_api: google`). See docs/decision-models.md.
+# OpenAI's with OPENAI_API_KEY (`decision_api: openai`), Perplexity's with PERPLEXITY_API_KEY (`decision_api: perplexity`),
+# Google's with GOOGLE_API_KEY (`decision_api: google`) or EmpirioLabs AI's with EMPIRIOLABS_API_KEY
+# (`decision_api: empiriolabs`). See docs/decision-models.md.
 # Prices are USD per million input tokens, output is free. OpenRouter context windows are from its decision-model
 # catalog.
 base-config:
@@ -190,6 +191,22 @@ decision-models:
       context_window: 262_144
     costs_per_million_token:
       input: 0.01
+
+  # https://docs.empiriolabs.ai/decisions; price and context window from https://api.empiriolabs.ai/v1/models/aplomb-1.
+  decision/aplomb-1:
+    provider_endpoint: aplomb-1  # EmpirioLabs AI serves no dated snapshot
+    label: Aplomb 1
+    company: EmpirioLabs AI
+    country: United States
+    documentation_url: https://docs.empiriolabs.ai/decisions
+    release_date: 2026-09-29
+    open_source: true
+    provider_properties:
+      decision_api: empiriolabs
+    properties:
+      context_window: 1_000_000
+    costs_per_million_token:
+      input: 0.02
 
   decision/drex-v1.5:
     provider_endpoint: nace-ai/drex-v1.5-20261009  # pinned, dated; never an alias

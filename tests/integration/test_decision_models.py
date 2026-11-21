@@ -36,6 +36,7 @@ REQUEST = decision_request(
         ("decision/gemini-decision-1", "GOOGLE_API_KEY"),
         ("decision/decider-v1.3", "PERPLEXITY_API_KEY"),
         ("decision/decider-flash-v1.3", "PERPLEXITY_API_KEY"),
+        ("decision/aplomb-1", "EMPIRIOLABS_API_KEY"),
     ],
 )
 async def test_live_decision_call(model_key: str, key_env: str) -> None:
