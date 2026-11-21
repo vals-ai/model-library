@@ -328,6 +328,37 @@ async def test_perplexity_gets_the_openrouter_request_at_its_own_url_and_key(
     assert result.metadata.cost.total == pytest.approx(500 * 0.02 / 1_000_000)
 
 
+async def test_empiriolabs_gets_the_openrouter_request_at_its_own_url_and_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = {
+        "model": "aplomb-1",
+        "answers": ANSWERS,
+        "usage": {
+            "input_tokens": 500,
+            "output_tokens": 0,
+            "input_tokens_details": {"text_tokens": 500, "image_tokens": 0},
+        },
+    }
+    seen = serve(monkeypatch, lambda _: httpx.Response(200, json=payload))
+
+    result = await get_registry_model("decision/aplomb-1").query(
+        decision_request(STATE, QUESTIONS)
+    )
+
+    assert str(seen[0].url) == "https://api.empiriolabs.ai/v1/decisions"
+    assert seen[0].headers["authorization"] == "Bearer mock_ENV_EMPIRIOLABS_API_KEY"
+    assert json.loads(seen[0].content) == {
+        "model": "aplomb-1",
+        "state": STATE,
+        "questions": QUESTIONS,
+    }
+    assert parse_decision_output(result.output_text) == ANSWERS
+    assert result.metadata.served_model == "aplomb-1"
+    assert result.metadata.cost is not None
+    assert result.metadata.cost.total == pytest.approx(500 * 0.02 / 1_000_000)
+
+
 async def test_google_gets_the_state_as_input_and_its_key_as_a_goog_header(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
